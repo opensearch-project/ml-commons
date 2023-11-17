@@ -14,9 +14,12 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -34,6 +37,7 @@ import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -59,12 +63,12 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-@Ignore
 public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
@@ -110,6 +114,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     private ShardId shardId;
 
+    private Settings settings;
+
     UpdateResponse updateResponse;
 
     UpdateModelTransportAction transportUpdateModelAction;
@@ -127,11 +133,14 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     MLModel localModel;
 
     ThreadContext threadContext;
+
     @Mock
     ClusterService clusterService;
 
     @Mock
     MLEngine mlEngine;
+
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
 
     @Before
     public void setup() throws IOException {
@@ -164,7 +173,21 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .modelState(MLModelState.REGISTERED)
             .build();
 
-        Settings settings = Settings.builder().build();
+        settings = Settings
+            .builder()
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
+
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX);
+
+        localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        threadContext = new ThreadContext(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        shardId = new ShardId(new Index("indexName", "uuid"), 1);
+        updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
         transportUpdateModelAction = spy(
             new UpdateModelTransportAction(
@@ -180,14 +203,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 mlEngine
             )
         );
-
-        localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        threadContext = new ThreadContext(settings);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(clusterService.getSettings()).thenReturn(settings);
-        shardId = new ShardId(new Index("indexName", "uuid"), 1);
-        updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -249,6 +264,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(updateResponse);
     }
 
+    @Ignore
     @Test
     public void testUpdateModelStateLoadedException() {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
@@ -263,126 +279,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
         doReturn(MLModelState.LOADED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStateLoadingException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.LOADING).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStatePartiallyLoadedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.PARTIALLY_LOADED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStateDeployedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.DEPLOYED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStateDeployingException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.DEPLOYING).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStatePartiallyDeployedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.PARTIALLY_DEPLOYED).when(mockModel).getModelState();
 
         transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -626,7 +522,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Trying to update the connector or connector_id field on a local model", argumentCaptor.getValue().getMessage());
+        assertEquals("Trying to update the connector or connector_id field on a local model.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -856,5 +752,130 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStateLoadingException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.LOADING).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStatePartiallyLoadedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.PARTIALLY_LOADED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStateDeployedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.DEPLOYED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStateDeployingException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.DEPLOYING).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStatePartiallyDeployedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.PARTIALLY_DEPLOYED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 }
