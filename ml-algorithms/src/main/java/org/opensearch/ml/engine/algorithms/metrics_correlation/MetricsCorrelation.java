@@ -5,20 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
-import static org.opensearch.index.query.QueryBuilders.termQuery;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
-
+import ai.djl.modality.Output;
+import ai.djl.translate.TranslateException;
+import com.google.common.annotations.VisibleForTesting;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.get.GetRequest;
@@ -70,11 +60,19 @@ import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.annotations.VisibleForTesting;
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
-import ai.djl.modality.Output;
-import ai.djl.translate.TranslateException;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.index.query.QueryBuilders.termQuery;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
 
 @Log4j2
 @Function(FunctionName.METRICS_CORRELATION)
@@ -175,9 +173,7 @@ public class MetricsCorrelation extends DLModelExecute {
                                     )
                             );
                         }
-                    }, e-> {
-                        log.error("Failed to get model", e);
-                    });
+                    }, e -> { log.error("Failed to get model", e); });
                     client.get(getModelRequest, ActionListener.runBefore(listener, context::restore));
                 }
             }
@@ -199,12 +195,19 @@ public class MetricsCorrelation extends DLModelExecute {
         waitUntil(() -> {
             if (modelId != null) {
                 MLModelState modelState = getModel(modelId).getModelState();
-                if (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED){
+                if (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED) {
                     log.info("Model deployed: " + modelState);
                     return true;
                 } else if (modelState == MLModelState.UNDEPLOYED || modelState == MLModelState.DEPLOY_FAILED) {
                     log.info("Model not deployed: " + modelState);
-                    deployModel(modelId, ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
+                    deployModel(
+                        modelId,
+                        ActionListener
+                            .wrap(
+                                deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(),
+                                e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)
+                            )
+                    );
                     return false;
                 }
             }
