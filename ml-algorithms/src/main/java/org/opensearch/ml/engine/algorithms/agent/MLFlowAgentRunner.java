@@ -66,6 +66,12 @@ public class MLFlowAgentRunner {
         for (int i = 0 ;i<toolSpecs.size(); i++) {
             MLToolSpec toolSpec = toolSpecs.get(i);
             Tool tool = createTool(toolSpec);
+            Map<String, String> map = new HashMap<>();
+            map.put("index", "employee");
+            map.put("question", "How many employee with the age greater than 56?");
+            StepListener<Object> nextStepListener2 = new StepListener<>();
+            tool.run(map, nextStepListener2);
+
             if (i == 0) {
                 firstStepListener = new StepListener();
                 lastStepListener = firstStepListener;

@@ -80,8 +80,8 @@ public class MLIndicesHandler {
 
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
-        String mapping = index.getMapping();
-
+        //String mapping = index.getMapping();
+        String mapping = "{\n    \"_meta\": {\"schema_version\": " + "1" + "},\n    \"properties\": {\n      \"name\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n      \"type\" : {\"type\":\"keyword\"},\n      \"description\" : {\"type\": \"text\"},\n      \"llm\" : {\"type\": \"flat_object\"},\n      \"tools\" : {\"type\": \"flat_object\"},\n      \"parameters\" : {\"type\": \"flat_object\"},\n      \"memory\" : {\"type\": \"flat_object\"},\n      \"date\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n      \"last_updated_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n    }\n}";
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             if (!clusterService.state().metadata().hasIndex(indexName)) {

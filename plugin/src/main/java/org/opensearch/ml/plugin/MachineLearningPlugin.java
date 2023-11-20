@@ -142,6 +142,7 @@ import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.MathTool;
+import org.opensearch.ml.engine.tools.PPLTool;
 import org.opensearch.ml.engine.tools.PainlessScriptTool;
 import org.opensearch.ml.engine.tools.VectorDBTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -474,12 +475,14 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         AgentTool.Factory.getInstance().init(client);
         CatIndexTool.Factory.getInstance().init(client, clusterService);
         PainlessScriptTool.Factory.getInstance().init(client, scriptService);
+        PPLTool.Factory.getInstance().init(client);
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
         toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
         toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
+        toolFactories.put(PPLTool.TYPE, PPLTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
