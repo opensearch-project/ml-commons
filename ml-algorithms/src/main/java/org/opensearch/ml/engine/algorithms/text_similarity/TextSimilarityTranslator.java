@@ -37,7 +37,7 @@ import ai.djl.ndarray.types.DataType;
 import ai.djl.translate.TranslatorContext;
 
 public class TextSimilarityTranslator extends SentenceTransformerTranslator {
-
+    public final String SIMILARITY_NAME = "similarity";
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
         String sentence = input.getAsString(0);
@@ -72,7 +72,7 @@ public class TextSimilarityTranslator extends SentenceTransformerTranslator {
         Iterator<NDArray> iterator = list.iterator();
         while (iterator.hasNext()) {
             NDArray ndArray = iterator.next();
-            String name = ndArray.getName();
+            String name = SIMILARITY_NAME;
             Number[] data = ndArray.toArray();
             long[] shape = ndArray.getShape().getShape();
             DataType dataType = ndArray.getDataType();
