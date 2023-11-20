@@ -108,6 +108,14 @@ public interface Tool {
     }
 
     /**
+     * Whether we should include tool's output in agent response
+     * @return true/false
+     */
+    default boolean includeOutputInAgentResponse() {
+        return false;
+    }
+
+    /**
      * Tool factory which can create instance of {@link Tool}.
      * @param <T> The subclass this factory produces
      */

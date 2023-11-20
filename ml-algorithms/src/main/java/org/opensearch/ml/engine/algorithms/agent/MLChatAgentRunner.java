@@ -5,9 +5,12 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -15,6 +18,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -29,6 +33,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -51,6 +56,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -118,6 +124,11 @@ public class MLChatAgentRunner {
                     Interaction next = iterator.next();
                     String question = next.getInput();
                     String response = next.getResponse();
+                    // As we store the conversation with empty response first and then update when have final answer,
+                    // filter out those in-flight requests when run in parallel
+                    if (Strings.isNullOrEmpty(response)) {
+                        continue;
+                    }
                     messageList
                         .add(
                             ConversationIndexMessage
@@ -170,7 +181,9 @@ public class MLChatAgentRunner {
                 }
             }
             Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
-            tool.setName(toolSpec.getName());
+            if (toolSpec.getName() != null) {
+                tool.setName(toolSpec.getName());
+            }
 
             if (toolSpec.getDescription() != null) {
                 tool.setDescription(toolSpec.getDescription());
@@ -310,6 +323,7 @@ public class MLChatAgentRunner {
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastActionResult = new AtomicReference<>();
+        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
 
         StepListener<?> lastStepListener = null;
         int maxIterations = Integer.parseInt(maxIteration) * 2;
@@ -401,7 +415,7 @@ public class MLChatAgentRunner {
                                     .getMemoryManager()
                                     .updateInteraction(
                                         r.getId(),
-                                        ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1),
+                                        ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
                                         ActionListener.<UpdateResponse>wrap(updateResponse -> {
                                             log.info("Updated final answer into interaction id: {}", r.getId());
                                             log.info("Final answer: {}", finalAnswer1);
@@ -418,19 +432,14 @@ public class MLChatAgentRunner {
                             );
 
                         List<ModelTensors> finalModelTensors = new ArrayList<>();
+                        Map<String, Object> additionalInfoMap = new HashMap<>(additionalInfo);
+                        additionalInfoMap.put("response", finalAnswer);
                         finalModelTensors
                             .add(
                                 ModelTensors
                                     .builder()
                                     .mlModelTensors(
-                                        Arrays
-                                            .asList(
-                                                ModelTensor
-                                                    .builder()
-                                                    .name("response")
-                                                    .dataAsMap(ImmutableMap.of("response", finalAnswer))
-                                                    .build()
-                                            )
+                                        Arrays.asList(ModelTensor.builder().name("response").dataAsMap(additionalInfoMap).build())
                                     )
                                     .build()
                             );
@@ -559,6 +568,21 @@ public class MLChatAgentRunner {
                     }
                 } else {
                     Object result = output;
+                    Tool tool = tools.get(lastAction.get());
+                    if (tool != null && tool.includeOutputInAgentResponse()) {
+                        String outputString = output instanceof String
+                            ? (String) output
+                            : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+
+                        String toolOutputKey = String.format("%s.output", tool.getType());
+                        if (additionalInfo.get(toolOutputKey) != null) {
+                            List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
+                            list.add(outputString);
+                        } else {
+                            additionalInfo.put(toolOutputKey, Lists.newArrayList(outputString));
+                        }
+
+                    }
                     modelTensors
                         .add(
                             ModelTensors
