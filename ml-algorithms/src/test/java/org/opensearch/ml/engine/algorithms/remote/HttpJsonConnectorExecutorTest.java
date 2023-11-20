@@ -27,7 +27,6 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.cluster.ClusterStateTaskConfig;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -134,11 +133,18 @@ public class HttpJsonConnectorExecutorTest {
         when(response.getEntity()).thenReturn(entity);
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
-        ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+        ModelTensorOutput modelTensorOutput = executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
         Assert.assertEquals(2, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
@@ -153,18 +159,25 @@ public class HttpJsonConnectorExecutorTest {
     public void executePredict_TextDocsInput_LimitExceed() throws IOException {
         exceptionRule.expect(OpenSearchStatusException.class);
         exceptionRule.expectMessage("{\"message\": \"Too many requests\"}");
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": ${parameters.input}}")
-                .build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .build();
         when(httpClient.execute(any())).thenReturn(response);
         HttpEntity entity = new StringEntity("{\"message\": \"Too many requests\"}");
         when(response.getEntity()).thenReturn(entity);
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 429, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
@@ -198,14 +211,34 @@ public class HttpJsonConnectorExecutorTest {
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setScriptService(scriptService);
         when(httpClient.execute(any())).thenReturn(response);
-        String modelResponse = "{\n" + "    \"object\": \"list\",\n" + "    \"data\": [\n" + "        {\n"
-            + "            \"object\": \"embedding\",\n" + "            \"index\": 0,\n" + "            \"embedding\": [\n"
-            + "                -0.014555434,\n" + "                -0.002135904,\n" + "                0.0035105038\n" + "            ]\n"
-            + "        },\n" + "        {\n" + "            \"object\": \"embedding\",\n" + "            \"index\": 1,\n"
-            + "            \"embedding\": [\n" + "                -0.014555434,\n" + "                -0.002135904,\n"
-            + "                0.0035105038\n" + "            ]\n" + "        }\n" + "    ],\n"
-            + "    \"model\": \"text-embedding-ada-002-v2\",\n" + "    \"usage\": {\n" + "        \"prompt_tokens\": 5,\n"
-            + "        \"total_tokens\": 5\n" + "    }\n" + "}";
+        String modelResponse = "{\n"
+            + "    \"object\": \"list\",\n"
+            + "    \"data\": [\n"
+            + "        {\n"
+            + "            \"object\": \"embedding\",\n"
+            + "            \"index\": 0,\n"
+            + "            \"embedding\": [\n"
+            + "                -0.014555434,\n"
+            + "                -0.002135904,\n"
+            + "                0.0035105038\n"
+            + "            ]\n"
+            + "        },\n"
+            + "        {\n"
+            + "            \"object\": \"embedding\",\n"
+            + "            \"index\": 1,\n"
+            + "            \"embedding\": [\n"
+            + "                -0.014555434,\n"
+            + "                -0.002135904,\n"
+            + "                0.0035105038\n"
+            + "            ]\n"
+            + "        }\n"
+            + "    ],\n"
+            + "    \"model\": \"text-embedding-ada-002-v2\",\n"
+            + "    \"usage\": {\n"
+            + "        \"prompt_tokens\": 5,\n"
+            + "        \"total_tokens\": 5\n"
+            + "    }\n"
+            + "}";
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
         HttpEntity entity = new StringEntity(modelResponse);
