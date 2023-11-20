@@ -147,7 +147,7 @@ public class VisualizationsTool implements Tool {
             if (INSTANCE != null) {
                 return INSTANCE;
             }
-            synchronized (VectorDBTool.class) {
+            synchronized (VisualizationsTool.class) {
                 if (INSTANCE != null) {
                     return INSTANCE;
                 }
