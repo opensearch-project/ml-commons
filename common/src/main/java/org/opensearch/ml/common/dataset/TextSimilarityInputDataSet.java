@@ -36,9 +36,9 @@ import lombok.experimental.FieldDefaults;
 @InputDataSet(MLInputDataType.TEXT_SIMILARITY)
 public class TextSimilarityInputDataSet extends MLInputDataset {
     
-    private List<String> textDocs;
+   List<String> textDocs;
 
-    private String queryText;
+   String queryText;
 
     @Builder(toBuilder = true)
     public TextSimilarityInputDataSet(String queryText, List<String> textDocs) {
