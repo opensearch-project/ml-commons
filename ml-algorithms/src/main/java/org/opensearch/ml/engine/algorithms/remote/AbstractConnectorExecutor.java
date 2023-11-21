@@ -3,15 +3,11 @@ package org.opensearch.ml.engine.algorithms.remote;
 import lombok.Getter;
 import lombok.Setter;
 
+@Setter
+@Getter
 public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor{
-    @Setter
-    @Getter
     private Integer maxConnections;
-    @Setter
-    @Getter
     private Integer connectionTimeoutInMillis;
-    @Setter
-    @Getter
     private Integer readTimeoutInMillis;
 
     public void validate() {
