@@ -71,7 +71,7 @@ public class PPLTool implements Tool {
         SearchRequest searchRequest = buildSearchRequest(indexName);
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(indexName);
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.<GetMappingsResponse>wrap(getMappingsResponse -> {
-            Map<String, MappingMetadata> mappings = getMappingsResponse.mappings();
+            Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
             client.search(searchRequest, ActionListener.<SearchResponse>wrap(searchResponse -> {
                 SearchHit[] searchHits = searchResponse.getHits().getHits();
                 String tableInfo = constructTableInfo(searchHits, mappings, indexName);
@@ -84,6 +84,7 @@ public class PPLTool implements Tool {
                     ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
                     Map<String, String> dataAsMap = (Map<String, String>) modelTensor.getDataAsMap();
                     String ppl = dataAsMap.get("output");
+
                     //Execute output here
                     listener.onResponse((T) ppl);
                         }, e -> {
