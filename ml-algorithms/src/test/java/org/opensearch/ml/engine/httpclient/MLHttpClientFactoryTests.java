@@ -124,6 +124,30 @@ public class MLHttpClientFactoryTests {
         }
 
         try {
+            MLHttpClientFactory.validateIp("10.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.0.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.0.2.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.255.255.254");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
             MLHttpClientFactory.validateIp("172.16.0.1");
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
@@ -182,7 +206,6 @@ public class MLHttpClientFactoryTests {
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
         }
-
     }
 
     @Test
