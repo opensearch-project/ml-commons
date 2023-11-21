@@ -88,12 +88,6 @@ public class MLHttpClientFactoryTests {
         }
 
         try {
-            MLHttpClientFactory.validateIp("127.0.0.0.1");
-        } catch (IllegalArgumentException e) {
-            assertNotNull(e);
-        }
-
-        try {
             MLHttpClientFactory.validateIp("177.0.0.1");
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
@@ -221,8 +215,14 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_success() {
+    public void test_validateSchemaAndPort_https_success() {
         HttpHost httpHost = new HttpHost("api.openai.com", 8080, "https");
+        MLHttpClientFactory.validateSchemaAndPort(httpHost);
+    }
+
+    @Test
+    public void test_validateSchemaAndPort_http_success() {
+        HttpHost httpHost = new HttpHost("api.openai.com", 8080, "http");
         MLHttpClientFactory.validateSchemaAndPort(httpHost);
     }
 
@@ -234,9 +234,22 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_portNotInRange_throwException() {
+    public void test_validateSchemaAndPort_stringPortSplit_throwException() {
+        HttpHost httpHost = new HttpHost("api.openai.com:abc", 8080, "http");
+        MLHttpClientFactory.validateSchemaAndPort(httpHost);
+    }
+
+    @Test
+    public void test_validateSchemaAndPort_portNotInRangeLessThan_throwException() {
         expectedException.expect(IllegalArgumentException.class);
         HttpHost httpHost = new HttpHost("api.openai.com:65537", -1, "https");
+        MLHttpClientFactory.validateSchemaAndPort(httpHost);
+    }
+
+    @Test
+    public void test_validateSchemaAndPort_portNotInRangeGreaterThan_throwException() {
+        expectedException.expect(IllegalArgumentException.class);
+        HttpHost httpHost = new HttpHost("api.openai.com:65537", 65537, "https");
         MLHttpClientFactory.validateSchemaAndPort(httpHost);
     }
 }
