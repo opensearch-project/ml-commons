@@ -19,7 +19,8 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 /**
  * This tool supports neural_sparse search with sparse encoding models and rank_features field.
- */@Log4j2
+ */
+@Log4j2
 @ToolAnnotation(NeuralSparseTool.TYPE)
 public class NeuralSparseTool extends AbstractRetrieverTool {
     public static final String TYPE = "NeuralSparseTool";
