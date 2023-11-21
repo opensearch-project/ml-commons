@@ -45,6 +45,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
@@ -288,6 +289,8 @@ public class ConversationMetaIndex {
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
                     throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
                 }
+                log.info(userstr);
+                log.info(User.parse(userstr));
                 // If security is off - User doesn't exist - you have permission
                 if (userstr == null || User.parse(userstr) == null) {
                     internalListener.onResponse(true);
@@ -309,6 +312,36 @@ public class ConversationMetaIndex {
                     log.error("Failed to refresh conversations index during check access ", e);
                     internalListener.onFailure(e);
                 }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Search over the conversations in the index by wrapping the original search request
+     * If security is enabled, add a {"term": {"user": username}} to the wrapper must clause
+     * @param request original search request
+     * @param listener receives the search response for the wrapped query
+     */
+    public void searchConversations(SearchRequest request, ActionListener<SearchResponse> listener) {
+        request.indices(indexName);
+        QueryBuilder originalQuery = request.source().query();
+        BoolQueryBuilder newQuery = new BoolQueryBuilder();
+        newQuery.must(originalQuery);
+        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        if (userstr != null) {
+            String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+            newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, user));
+        }
+        request.source().query(newQuery);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<SearchResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> {
+                client.search(request, internalListener);
+            }, e -> {
+                log.error("Failed to refresh conversations index during search conversations ", e);
+                internalListener.onFailure(e);
+            }));
         } catch (Exception e) {
             listener.onFailure(e);
         }

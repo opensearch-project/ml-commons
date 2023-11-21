@@ -42,6 +42,8 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
@@ -372,4 +374,41 @@ public class InteractionsIndex {
         }
     }
 
+    /**
+     * Execute a search query over the interactions of a conversation by constructing a wrapper
+     * boolean query around the original query, AND a term query over conversation id
+     * @param conversationId the id of the conversation to query over
+     * @param request the original search request
+     * @param listener receives the search response from this query
+     */
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
+            if (access) {
+                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<SearchResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+                    request.indices(indexName);
+                    QueryBuilder originalQuery = request.source().query();
+                    BoolQueryBuilder newQuery = new BoolQueryBuilder();
+                    newQuery.must(originalQuery);
+                    newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId));
+                    request.source().query(newQuery);
+                    client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> {
+                        client.search(request, internalListener);
+                    }, e -> {
+                        log.error("Failed to refresh interactions index during search interactions ", e);
+                        internalListener.onFailure(e);
+                    }));
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
+            } else {
+                String userstr = client
+                    .threadPool()
+                    .getThreadContext()
+                    .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+            }
+        }, e -> { listener.onFailure(e); }));
+    }
 }
