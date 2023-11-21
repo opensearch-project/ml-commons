@@ -92,6 +92,97 @@ public class MLHttpClientFactoryTests {
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
         }
+
+        try {
+            MLHttpClientFactory.validateIp("127.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.0.0.2");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.0.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.1.0.0");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.255.255.254");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.16.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.17.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.16.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.16.2.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.31.255.255");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.2.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.100.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.200.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
     }
 
     @Test
