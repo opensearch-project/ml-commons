@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.engine.utils;
 
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -25,20 +29,12 @@ import org.tribuo.impl.ArrayExample;
 import org.tribuo.regression.RegressionFactory;
 import org.tribuo.regression.Regressor;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-
 public class TribuoUtilTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private DataFrame dataFrame;
-    private Double[][] rawData = {
-        {0.1, 0.2},
-        {1.1, 1.2},
-        {2.1, 2.2}
-    };
+    private Double[][] rawData = { { 0.1, 0.2 }, { 1.1, 1.2 }, { 2.1, 2.2 } };
 
     @Before
     public void setUp() {
@@ -48,27 +44,28 @@ public class TribuoUtilTest {
     @Test
     public void transformDataFrame() {
         Tuple<String[], double[][]> featureNamesValues = TribuoUtil.transformDataFrame(dataFrame);
-        Assert.assertArrayEquals(new String[]{"f1", "f2"}, featureNamesValues.v1());
+        Assert.assertArrayEquals(new String[] { "f1", "f2" }, featureNamesValues.v1());
         Assert.assertEquals(3, (featureNamesValues.v2()).length);
-        for (int i=0; i<rawData.length; ++i) {
-            Assert.assertArrayEquals(new double[]{0.1+i, 0.2+i}, ((double[][]) featureNamesValues.v2())[i], 0.01);
+        for (int i = 0; i < rawData.length; ++i) {
+            Assert.assertArrayEquals(new double[] { 0.1 + i, 0.2 + i }, ((double[][]) featureNamesValues.v2())[i], 0.01);
         }
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void generateDataset() {
-        MutableDataset<ClusterID> dataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(), "test", TribuoOutputType.CLUSTERID);
+        MutableDataset<ClusterID> dataset = TribuoUtil
+            .generateDataset(dataFrame, new ClusteringFactory(), "test", TribuoOutputType.CLUSTERID);
         List<Example<ClusterID>> examples = dataset.getData();
         Assert.assertEquals(rawData.length, examples.size());
-        for (int i=0; i<rawData.length; ++i){
+        for (int i = 0; i < rawData.length; ++i) {
             ArrayExample arrayExample = (ArrayExample) examples.get(i);
             Iterator<Feature> iterator = arrayExample.iterator();
             int idx = 1;
             while (iterator.hasNext()) {
                 Feature feature = iterator.next();
-                Assert.assertEquals("f"+idx, feature.getName());
-                Assert.assertEquals(i+idx/10.0, feature.getValue(), 0.01);
+                Assert.assertEquals("f" + idx, feature.getName());
+                Assert.assertEquals(i + idx / 10.0, feature.getValue(), 0.01);
                 ++idx;
             }
         }
@@ -77,17 +74,18 @@ public class TribuoUtilTest {
     @SuppressWarnings("unchecked")
     @Test
     public void generateDatasetWithTarget() {
-        MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f2");
+        MutableDataset<Regressor> dataset = TribuoUtil
+            .generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f2");
         List<Example<Regressor>> examples = dataset.getData();
         Assert.assertEquals(rawData.length, examples.size());
-        for (int i=0; i<rawData.length; ++i){
+        for (int i = 0; i < rawData.length; ++i) {
             ArrayExample arrayExample = (ArrayExample) examples.get(i);
             Iterator<Feature> iterator = arrayExample.iterator();
             int idx = 1;
             while (iterator.hasNext()) {
                 Feature feature = iterator.next();
-                Assert.assertEquals("f"+idx, feature.getName());
-                Assert.assertEquals(i+idx/10.0, feature.getValue(), 0.01);
+                Assert.assertEquals("f" + idx, feature.getName());
+                Assert.assertEquals(i + idx / 10.0, feature.getValue(), 0.01);
                 ++idx;
             }
         }
@@ -108,7 +106,7 @@ public class TribuoUtilTest {
     }
 
     private void constructDataFrame() {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE)};
+        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE) };
         dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
         Arrays.stream(rawData).forEach(e -> dataFrame.appendRow(e));
     }

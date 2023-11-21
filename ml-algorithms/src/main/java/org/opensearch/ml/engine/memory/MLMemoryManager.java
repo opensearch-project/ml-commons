@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.engine.memory;
 
-import lombok.AllArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -40,10 +43,8 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Memory manager for Memories. It contains ML memory related operations like create, read interactions etc.
@@ -66,7 +67,7 @@ public class MLMemoryManager {
     public void createConversation(String name, String applicationType, ActionListener<CreateConversationResponse> actionListener) {
         try {
             client.execute(CreateConversationAction.INSTANCE, new CreateConversationRequest(name, applicationType), actionListener);
-        } catch(RuntimeException exception) {
+        } catch (RuntimeException exception) {
             actionListener.onFailure(exception);
         }
     }
@@ -84,27 +85,37 @@ public class MLMemoryManager {
      * @param actionListener gets the ID of the new interaction
      */
     public void createInteraction(
-            String conversationId,
-            String input,
-            String promptTemplate,
-            String response,
-            String origin,
-            Map<String, String> additionalInfo,
-            String parentIntId,
-            Integer traceNum,
-            ActionListener<CreateInteractionResponse> actionListener
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        String parentIntId,
+        Integer traceNum,
+        ActionListener<CreateInteractionResponse> actionListener
     ) {
         Preconditions.checkNotNull(conversationId);
         Preconditions.checkNotNull(input);
         Preconditions.checkNotNull(response);
         // additionalInfo cannot be null as flat object
-        additionalInfo = (additionalInfo == null)? new HashMap<>():additionalInfo;
+        additionalInfo = (additionalInfo == null) ? new HashMap<>() : additionalInfo;
         try {
-            client.execute(
+            client
+                .execute(
                     CreateInteractionAction.INSTANCE,
-                    new CreateInteractionRequest(conversationId, input, promptTemplate, response, origin, additionalInfo, parentIntId, traceNum),
+                    new CreateInteractionRequest(
+                        conversationId,
+                        input,
+                        promptTemplate,
+                        response,
+                        origin,
+                        additionalInfo,
+                        parentIntId,
+                        traceNum
+                    ),
                     actionListener
-            );
+                );
         } catch (RuntimeException exception) {
             actionListener.onFailure(exception);
         }
@@ -130,9 +141,9 @@ public class MLMemoryManager {
                     innerGetFinalInteractions(conversationId, lastNInteraction, actionListener);
                 } else {
                     String userstr = client
-                            .threadPool()
-                            .getThreadContext()
-                            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                        .threadPool()
+                        .getThreadContext()
+                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                     String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                     throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
@@ -155,7 +166,8 @@ public class MLMemoryManager {
         boolQueryBuilder.mustNot(existsQueryBuilder);
 
         // Add the TermQueryBuilder for another field
-        TermQueryBuilder termQueryBuilder = QueryBuilders.termQuery(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
         boolQueryBuilder.must(termQueryBuilder);
 
         // Set the query to the search source
@@ -176,11 +188,11 @@ public class MLMemoryManager {
                 internalListener.onResponse(result);
             }, e -> { internalListener.onFailure(e); });
             client
-                    .admin()
-                    .indices()
-                    .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(searchRequest, al); }, e -> {
-                        internalListener.onFailure(e);
-                    }));
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(searchRequest, al); }, e -> {
+                    internalListener.onFailure(e);
+                }));
         } catch (Exception e) {
             listener.onFailure(e);
         }
@@ -215,7 +227,8 @@ public class MLMemoryManager {
         boolQueryBuilder.must(existsQueryBuilder);
 
         // Add the TermQueryBuilder for another field
-        TermQueryBuilder termQueryBuilder = QueryBuilders.termQuery(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parentInteractionId);
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parentInteractionId);
         boolQueryBuilder.must(termQueryBuilder);
 
         // Set the query to the search source
@@ -234,11 +247,11 @@ public class MLMemoryManager {
                 internalListener.onResponse(result);
             }, e -> { internalListener.onFailure(e); });
             client
-                    .admin()
-                    .indices()
-                    .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(searchRequest, al); }, e -> {
-                        internalListener.onFailure(e);
-                    }));
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(searchRequest, al); }, e -> {
+                    internalListener.onFailure(e);
+                }));
         } catch (Exception e) {
             listener.onFailure(e);
         }

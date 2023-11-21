@@ -9,6 +9,7 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
+    id 'com.diffplug.spotless' version '6.18.0'
 }
 
 repositories {
@@ -103,3 +104,12 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 compileJava.dependsOn(':opensearch-ml-common:shadowJar')
+
+spotless {
+    java {
+        removeUnusedImports()
+        importOrder 'java', 'javax', 'org', 'com'
+
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    }
+}

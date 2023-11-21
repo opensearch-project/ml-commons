@@ -5,32 +5,35 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.ml.engine.utils.ScriptUtils.executeScript;
+
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.ScriptService;
 
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static org.opensearch.ml.engine.utils.ScriptUtils.executeScript;
+import lombok.Getter;
+import lombok.Setter;
 
 @ToolAnnotation(MathTool.TYPE)
 public class MathTool implements Tool {
     public static final String TYPE = "MathTool";
 
-    @Setter @Getter
+    @Setter
+    @Getter
     private String name = TYPE;
 
     @Setter
     private ScriptService scriptService;
 
     private static String DEFAULT_DESCRIPTION = "Use this tool to calculate any math problem.";
-    @Getter @Setter
+    @Getter
+    @Setter
     private String description = DEFAULT_DESCRIPTION;
 
     public MathTool(ScriptService scriptService) {
@@ -49,11 +52,11 @@ public class MathTool implements Tool {
             if (matcher.find()) {
                 String match = matcher.group(0);
                 double result = Double.parseDouble(match);
-                input = input.replaceFirst(patternStr, result+"");
+                input = input.replaceFirst(patternStr, result + "");
             }
         }
         String result = executeScript(scriptService, input + "+ \"\"", ImmutableMap.of());
-        listener.onResponse((T)result);
+        listener.onResponse((T) result);
     }
 
     @Override
@@ -90,6 +93,7 @@ public class MathTool implements Tool {
         private ScriptService scriptService;
 
         private static Factory INSTANCE;
+
         public static Factory getInstance() {
             if (INSTANCE != null) {
                 return INSTANCE;

@@ -5,7 +5,9 @@
 package org.opensearch.ml.engine.algorithms.clustering;
 
 import java.io.Serializable;
+
 import com.amazon.randomcutforest.returntypes.SampleSummary;
+
 import lombok.Data;
 
 @Data
@@ -18,9 +20,8 @@ public class SerializableSummary implements Serializable {
     private float[] upper;
     private float[] relativeWeight;
     private double weightOfSamples;
-    
-    public SerializableSummary() {
-    }
+
+    public SerializableSummary() {}
 
     public SerializableSummary(SampleSummary s) {
         summaryPoints = s.summaryPoints;

@@ -12,6 +12,9 @@
  */
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import java.io.IOException;
+import java.util.Map;
+
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.ndarray.NDArray;
@@ -23,13 +26,10 @@ import ai.djl.translate.Batchifier;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorContext;
 
-import java.io.IOException;
-import java.util.Map;
-
 /** The translator for Huggingface text embedding model. */
 public class HuggingfaceTextEmbeddingTranslator implements Translator<String, float[]> {
 
-    private static final int[] AXIS = {0};
+    private static final int[] AXIS = { 0 };
 
     private HuggingFaceTokenizer tokenizer;
     private Batchifier batchifier;
@@ -38,11 +38,12 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
     private boolean inputTokenTypeIds;
 
     HuggingfaceTextEmbeddingTranslator(
-            HuggingFaceTokenizer tokenizer,
-            Batchifier batchifier,
-            String pooling,
-            boolean normalize,
-            boolean inputTokenTypeIds) {
+        HuggingFaceTokenizer tokenizer,
+        Batchifier batchifier,
+        String pooling,
+        boolean normalize,
+        boolean inputTokenTypeIds
+    ) {
         this.tokenizer = tokenizer;
         this.batchifier = batchifier;
         this.pooling = pooling;
@@ -212,13 +213,14 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
          */
         public HuggingfaceTextEmbeddingTranslator.Builder optPoolingMode(String poolingMode) {
             if (!"mean".equals(poolingMode)
-                    && !"max".equals(poolingMode)
-                    && !"cls".equals(poolingMode)
-                    && !"mean_sqrt_len".equals(poolingMode)
-                    && !"weightedmean".equals(poolingMode)) {
+                && !"max".equals(poolingMode)
+                && !"cls".equals(poolingMode)
+                && !"mean_sqrt_len".equals(poolingMode)
+                && !"weightedmean".equals(poolingMode)) {
                 throw new IllegalArgumentException(
-                        "Invalid pooling model, must be one of [mean_tokens, max_tokens,"
-                                + " cls_token, mean_sqrt_len_tokens, weightedmean_tokens].");
+                    "Invalid pooling model, must be one of [mean_tokens, max_tokens,"
+                        + " cls_token, mean_sqrt_len_tokens, weightedmean_tokens]."
+                );
             }
             this.pooling = poolingMode;
             return this;
@@ -228,7 +230,6 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
             this.inputTokenTypeIds = inputTokenTypeIds;
             return this;
         }
-
 
         /**
          * Configures the builder with the model arguments.

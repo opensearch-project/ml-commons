@@ -5,21 +5,20 @@
 
 package org.opensearch.ml.engine.algorithms.clustering;
 
+import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-
-import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
-
 
 public class KMeansTest {
     @Rule
@@ -37,11 +36,7 @@ public class KMeansTest {
 
     @Before
     public void setUp() {
-        parameters = KMeansParams.builder()
-                .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
-                .iterations(10)
-                .centroids(2)
-                .build();
+        parameters = KMeansParams.builder().distanceType(KMeansParams.DistanceType.EUCLIDEAN).iterations(10).centroids(2).build();
 
         kMeans = new KMeans(parameters);
         constructKMeansTrainDataFrame();
@@ -74,11 +69,12 @@ public class KMeansTest {
 
     @Test
     public void trainAndPredict() {
-        KMeansParams parameters = KMeansParams.builder()
-                .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
-                .iterations(10)
-                .centroids(2)
-                .build();
+        KMeansParams parameters = KMeansParams
+            .builder()
+            .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
+            .iterations(10)
+            .centroids(2)
+            .build();
         KMeans kMeans = new KMeans(parameters);
         MLPredictionOutput output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInput);
         DataFrame predictions = output.getPredictionResult();

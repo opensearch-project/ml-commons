@@ -6,12 +6,12 @@
 package org.opensearch.ml.engine.contants;
 
 public enum TribuoOutputType {
-    //for tribuo clustering
+    // for tribuo clustering
     CLUSTERID,
-    //for tribuo regression
+    // for tribuo regression
     REGRESSOR,
-    //for anomaly detection based on libSVM
+    // for anomaly detection based on libSVM
     ANOMALY_DETECTION_LIBSVM,
-    //for tribuo classification
+    // for tribuo classification
     LABEL;
 }

@@ -5,16 +5,13 @@
 
 package org.opensearch.ml.engine.tools;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.index.Index;
-import org.opensearch.core.index.shard.ShardId;
-import org.opensearch.index.shard.ShardPath;
-import org.opensearch.ml.common.spi.tools.Tool;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +22,11 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.opensearch.action.admin.cluster.state.ClusterStateResponse;
@@ -32,9 +34,9 @@ import org.opensearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.opensearch.action.admin.indices.stats.CommonStats;
 import org.opensearch.action.admin.indices.stats.CommonStatsFlags;
 import org.opensearch.action.admin.indices.stats.IndexStats;
+import org.opensearch.action.admin.indices.stats.IndexStats.IndexStatsBuilder;
 import org.opensearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.opensearch.action.admin.indices.stats.ShardStats;
-import org.opensearch.action.admin.indices.stats.IndexStats.IndexStatsBuilder;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.ClusterAdminClient;
@@ -52,13 +54,11 @@ import org.opensearch.cluster.routing.TestShardRouting;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.settings.Settings;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.Index;
+import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.index.shard.ShardPath;
+import org.opensearch.ml.common.spi.tools.Tool;
 
 public class CatIndexToolTests {
 
@@ -103,7 +103,7 @@ public class CatIndexToolTests {
 
         when(indexMetadata.getState()).thenReturn(State.OPEN);
         when(indexMetadata.getCreationVersion()).thenReturn(Version.CURRENT);
-        
+
         when(metadata.index(any(String.class))).thenReturn(indexMetadata);
         when(clusterState.metadata()).thenReturn(metadata);
         when(clusterService.state()).thenReturn(clusterState);
@@ -126,15 +126,13 @@ public class CatIndexToolTests {
         doNothing().when(indicesAdminClient).stats(any(), statsActionListenerCaptor.capture());
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<ClusterStateResponse>> clusterStateActionListenerCaptor = ArgumentCaptor.forClass(
-            ActionListener.class
-        );
+        ArgumentCaptor<ActionListener<ClusterStateResponse>> clusterStateActionListenerCaptor = ArgumentCaptor
+            .forClass(ActionListener.class);
         doNothing().when(clusterAdminClient).state(any(), clusterStateActionListenerCaptor.capture());
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthActionListenerCaptor = ArgumentCaptor.forClass(
-            ActionListener.class
-        );
+        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthActionListenerCaptor = ArgumentCaptor
+            .forClass(ActionListener.class);
         doNothing().when(clusterAdminClient).health(any(), clusterHealthActionListenerCaptor.capture());
 
         when(getSettingsResponse.getIndexToSettings()).thenReturn(Collections.emptyMap());
@@ -173,15 +171,13 @@ public class CatIndexToolTests {
         doNothing().when(indicesAdminClient).stats(any(), statsActionListenerCaptor.capture());
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<ClusterStateResponse>> clusterStateActionListenerCaptor = ArgumentCaptor.forClass(
-            ActionListener.class
-        );
+        ArgumentCaptor<ActionListener<ClusterStateResponse>> clusterStateActionListenerCaptor = ArgumentCaptor
+            .forClass(ActionListener.class);
         doNothing().when(clusterAdminClient).state(any(), clusterStateActionListenerCaptor.capture());
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthActionListenerCaptor = ArgumentCaptor.forClass(
-            ActionListener.class
-        );
+        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthActionListenerCaptor = ArgumentCaptor
+            .forClass(ActionListener.class);
         doNothing().when(clusterAdminClient).health(any(), clusterHealthActionListenerCaptor.capture());
 
         when(getSettingsResponse.getIndexToSettings()).thenReturn(Map.of("foo", Settings.EMPTY));
@@ -192,9 +188,9 @@ public class CatIndexToolTests {
         ShardPath shardPath = new ShardPath(false, path, path, shId);
         ShardRouting routing = TestShardRouting.newShardRouting(shId, "node", true, ShardRoutingState.STARTED);
         CommonStats commonStats = new CommonStats(CommonStatsFlags.ALL);
-        IndexStats fooStats = new IndexStatsBuilder(index.getName(), index.getUUID()).add(
-            new ShardStats(routing, shardPath, commonStats, null, null, null)
-        ).build();
+        IndexStats fooStats = new IndexStatsBuilder(index.getName(), index.getUUID())
+            .add(new ShardStats(routing, shardPath, commonStats, null, null, null))
+            .build();
         when(indicesStatsResponse.getIndices()).thenReturn(Map.of(indexName, fooStats));
 
         when(indexMetadata.getIndex()).thenReturn(index);
@@ -202,9 +198,7 @@ public class CatIndexToolTests {
         when(indexMetadata.getNumberOfReplicas()).thenReturn(1);
         when(clusterStateResponse.getState()).thenReturn(clusterState);
         when(clusterState.getMetadata()).thenReturn(metadata);
-        when(metadata.spliterator()).thenReturn(
-            Arrays.spliterator(new IndexMetadata[] { indexMetadata })
-        );
+        when(metadata.spliterator()).thenReturn(Arrays.spliterator(new IndexMetadata[] { indexMetadata }));
         @SuppressWarnings("unchecked")
         Iterator<IndexShardRoutingTable> iterator = (Iterator<IndexShardRoutingTable>) mock(Iterator.class);
         when(iterator.hasNext()).thenReturn(false);
@@ -224,7 +218,7 @@ public class CatIndexToolTests {
         clusterHealthActionListenerCaptor.getValue().onResponse(clusterHealthResponse);
 
         future.orTimeout(10, TimeUnit.SECONDS).join();
-        String response = future.get();        
+        String response = future.get();
         String[] responseRows = response.trim().split("\\n");
 
         assertEquals(2, responseRows.length);

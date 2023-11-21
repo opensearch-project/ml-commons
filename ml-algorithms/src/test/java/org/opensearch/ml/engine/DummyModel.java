@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine;
 
-import lombok.EqualsAndHashCode;
-
 import java.io.Serializable;
+
+import lombok.EqualsAndHashCode;
 
 @EqualsAndHashCode
 public class DummyModel implements Serializable {

@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.engine;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Test;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
@@ -15,15 +24,6 @@ import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalcul
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
 public class MLEngineClassLoaderTests {
 
@@ -45,15 +45,14 @@ public class MLEngineClassLoaderTests {
 
         // set properties
         MLEngineClassLoader.deregister(FunctionName.LOCAL_SAMPLE_CALCULATOR);
-        final LocalSampleCalculator instance = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
+        final LocalSampleCalculator instance = MLEngineClassLoader
+            .initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
         ActionListener<Output> actionListener = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             assertEquals(d1 + d2, output.getResult(), 1e-6);
             assertEquals(client, instance.getClient());
             assertEquals(settings, instance.getSettings());
-        }, e -> {
-            fail("Test failed: " + e.getMessage());
-        });
+        }, e -> { fail("Test failed: " + e.getMessage()); });
         instance.execute(input, actionListener);
 
         // don't set properties

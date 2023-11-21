@@ -5,13 +5,18 @@
 
 package org.opensearch.ml.engine.algorithms.rcf;
 
-import com.amazon.randomcutforest.config.ForestMode;
-import com.amazon.randomcutforest.config.Precision;
-import com.amazon.randomcutforest.parkservices.AnomalyDescriptor;
-import com.amazon.randomcutforest.parkservices.ThresholdedRandomCutForest;
-import com.amazon.randomcutforest.parkservices.state.ThresholdedRandomCutForestMapper;
-import com.amazon.randomcutforest.parkservices.state.ThresholdedRandomCutForestState;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.encodeBase64;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TimeZone;
+
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
@@ -32,17 +37,14 @@ import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.TimeZone;
+import com.amazon.randomcutforest.config.ForestMode;
+import com.amazon.randomcutforest.config.Precision;
+import com.amazon.randomcutforest.parkservices.AnomalyDescriptor;
+import com.amazon.randomcutforest.parkservices.ThresholdedRandomCutForest;
+import com.amazon.randomcutforest.parkservices.state.ThresholdedRandomCutForestMapper;
+import com.amazon.randomcutforest.parkservices.state.ThresholdedRandomCutForestState;
 
-import static org.opensearch.ml.engine.utils.ModelSerDeSer.encodeBase64;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * MLCommons doesn't support update trained model. So the trained RCF model in MLCommons
@@ -78,10 +80,10 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
 
     private ThresholdedRandomCutForest forest;
 
-    public FixedInTimeRandomCutForest(){}
+    public FixedInTimeRandomCutForest() {}
 
     public FixedInTimeRandomCutForest(MLAlgoParams parameters) {
-        FitRCFParams rcfParams = parameters == null ? FitRCFParams.builder().build() : (FitRCFParams)parameters;
+        FitRCFParams rcfParams = parameters == null ? FitRCFParams.builder().build() : (FitRCFParams) parameters;
         this.numberOfTrees = Optional.ofNullable(rcfParams.getNumberOfTrees()).orElse(DEFAULT_NUMBER_OF_TREES);
         this.shingleSize = Optional.ofNullable(rcfParams.getShingleSize()).orElse(DEFAULT_SHINGLE_SIZE);
         this.sampleSize = Optional.ofNullable(rcfParams.getSampleSize()).orElse(DEFAULT_SAMPLES_SIZE);
@@ -97,7 +99,6 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
             simpleDateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
         }
     }
-
 
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
@@ -117,7 +118,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
 
     @Override
     public MLOutput predict(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         List<Map<String, Object>> predictResult = process(dataFrame, forest, mlInput.getParameters());
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
     }
@@ -134,24 +135,25 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
 
     @Override
     public MLModel train(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         ThresholdedRandomCutForest forest = createThresholdedRandomCutForest(dataFrame);
         process(dataFrame, forest, mlInput.getParameters());
 
         ThresholdedRandomCutForestState state = trcfMapper.toState(forest);
-        MLModel model = MLModel.builder()
-                .name(FunctionName.FIT_RCF.name())
-                .algorithm(FunctionName.FIT_RCF)
-                .version(VERSION)
-                .content(encodeBase64(RCFModelSerDeSer.serializeTRCF(state)))
-                .modelState(MLModelState.TRAINED)
-                .build();
+        MLModel model = MLModel
+            .builder()
+            .name(FunctionName.FIT_RCF.name())
+            .algorithm(FunctionName.FIT_RCF)
+            .version(VERSION)
+            .content(encodeBase64(RCFModelSerDeSer.serializeTRCF(state)))
+            .modelState(MLModelState.TRAINED)
+            .build();
         return model;
     }
 
     @Override
     public MLOutput trainAndPredict(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         ThresholdedRandomCutForest forest = createThresholdedRandomCutForest(dataFrame);
         List<Map<String, Object>> predictResult = process(dataFrame, forest, null);
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
@@ -168,22 +170,20 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
             dateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
         }
 
-
         List<Double> pointList = new ArrayList<>();
         ColumnMeta[] columnMetas = dataFrame.columnMetas();
         List<Map<String, Object>> predictResult = new ArrayList<>();
-        for (int rowNum = 0; rowNum< dataFrame.size(); rowNum++) {
+        for (int rowNum = 0; rowNum < dataFrame.size(); rowNum++) {
             Row row = dataFrame.getRow(rowNum);
             long timestamp = -1;
             for (int i = 0; i < columnMetas.length; i++) {
                 ColumnMeta columnMeta = columnMetas[i];
                 ColumnValue value = row.getValue(i);
 
-
                 // TODO: sort dataframe by time field with asc order. Currently consider the date already sorted by time.
                 if (timeField != null && timeField.equals(columnMeta.getName())) {
                     ColumnType columnType = columnMeta.getColumnType();
-                    if (columnType == ColumnType.LONG ) {
+                    if (columnType == ColumnType.LONG) {
                         timestamp = value.longValue();
                     } else if (columnType == ColumnType.STRING) {
                         try {
@@ -192,7 +192,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
                             log.error("Failed to parse timestamp " + value.stringValue(), e);
                             throw new MLValidationException("Failed to parse timestamp " + value.stringValue());
                         }
-                    } else  {
+                    } else {
                         throw new MLValidationException("Wrong data type of time field. Should use LONG or STRING, but got " + columnType);
                     }
                 } else {
@@ -213,23 +213,24 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
     }
 
     private ThresholdedRandomCutForest createThresholdedRandomCutForest(DataFrame dataFrame) {
-        //TODO: add memory estimation of RCF. Will be better if support memory estimation in RCF
-        ThresholdedRandomCutForest forest = ThresholdedRandomCutForest.builder()
-                .dimensions(shingleSize * (dataFrame.columnMetas().length - 1))
-                .sampleSize(sampleSize)
-                .numberOfTrees(numberOfTrees)
-                .timeDecay(timeDecay)
-                .outputAfter(outputAfter)
-                .initialAcceptFraction(outputAfter * 1.0d / sampleSize)
-                .parallelExecutionEnabled(false)
-                .compact(true)
-                .precision(Precision.FLOAT_32)
-                .boundingBoxCacheFraction(1)
-                .shingleSize(shingleSize)
-                .internalShinglingEnabled(true)
-                .anomalyRate(anomalyRate)
-                .forestMode(ForestMode.STANDARD) //TODO: support different ForestMode
-                .build();
+        // TODO: add memory estimation of RCF. Will be better if support memory estimation in RCF
+        ThresholdedRandomCutForest forest = ThresholdedRandomCutForest
+            .builder()
+            .dimensions(shingleSize * (dataFrame.columnMetas().length - 1))
+            .sampleSize(sampleSize)
+            .numberOfTrees(numberOfTrees)
+            .timeDecay(timeDecay)
+            .outputAfter(outputAfter)
+            .initialAcceptFraction(outputAfter * 1.0d / sampleSize)
+            .parallelExecutionEnabled(false)
+            .compact(true)
+            .precision(Precision.FLOAT_32)
+            .boundingBoxCacheFraction(1)
+            .shingleSize(shingleSize)
+            .internalShinglingEnabled(true)
+            .anomalyRate(anomalyRate)
+            .forestMode(ForestMode.STANDARD) // TODO: support different ForestMode
+            .build();
         return forest;
     }
 
