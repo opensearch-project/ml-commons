@@ -89,20 +89,20 @@ public class PPLTool implements Tool {
                         }, e -> {
                     log.info("predict problem");
                     log.info(e);
-                    listener.onResponse();
+                    listener.onFailure(e);
                         }
                 ));
                     }, e -> {
                 log.info("search problem");
                 log.info(e);
-                listener.onResponse();
+                listener.onFailure(e);
                     }
 
             ));
             }, e -> {
             log.info("mapping problem");
             log.info(e);
-            listener.onResponse();
+            listener.onFailure(e);
                 })
         );
 
