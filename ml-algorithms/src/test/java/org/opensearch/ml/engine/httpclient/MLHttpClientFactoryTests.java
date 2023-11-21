@@ -82,6 +82,12 @@ public class MLHttpClientFactoryTests {
         }
 
         try {
+            MLHttpClientFactory.validateIp("2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
             MLHttpClientFactory.validateIp("177.0.0.1");
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
