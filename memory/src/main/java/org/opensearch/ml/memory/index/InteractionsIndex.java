@@ -43,13 +43,16 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
 import lombok.AllArgsConstructor;
@@ -265,8 +268,70 @@ public class InteractionsIndex {
     @VisibleForTesting
     void innerGetInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
         SearchRequest request = Requests.searchRequest(indexName);
-        TermQueryBuilder builder = new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
-        request.source().query(builder);
+
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+        // Add the ExistsQueryBuilder for checking null values
+        ExistsQueryBuilder existsQueryBuilder = QueryBuilders.existsQuery(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD);
+        boolQueryBuilder.mustNot(existsQueryBuilder);
+
+        // Add the TermQueryBuilder for another field
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+        boolQueryBuilder.must(termQueryBuilder);
+
+        // Set the query to the search source
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQueryBuilder);
+
+        request.source(searchSourceBuilder);
+        request.source().from(from).size(maxResults);
+        request.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
+                List<Interaction> result = new LinkedList<Interaction>();
+                for (SearchHit hit : response.getHits()) {
+                    result.add(Interaction.fromSearchHit(hit));
+                }
+                internalListener.onResponse(result);
+            }, e -> { internalListener.onFailure(e); });
+            client
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
+                    internalListener.onFailure(e);
+                }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Gets a list of interactions belonging to a conversation
+     * @param interactionId the interaction to read from
+     * @param from where to start in the reading
+     * @param maxResults how many interactions to return
+     * @param listener gets the list, sorted by recency, of interactions
+     */
+    public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
+        SearchRequest request = Requests.searchRequest(indexName);
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+        // Add the ExistsQueryBuilder for checking null values
+        ExistsQueryBuilder existsQueryBuilder = QueryBuilders.existsQuery(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD);
+        boolQueryBuilder.must(existsQueryBuilder);
+
+        // Add the TermQueryBuilder for another field
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, interactionId);
+        boolQueryBuilder.must(termQueryBuilder);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQueryBuilder);
+
+        request.source(searchSourceBuilder);
         request.source().from(from).size(maxResults);
         request.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {

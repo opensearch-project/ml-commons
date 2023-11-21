@@ -153,6 +153,8 @@ public interface ConversationalMemoryHandler {
      */
     public void getInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener);
 
+    public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener);
+
     /**
      * Get the interactions associate with this conversation, sorted by recency
      * @param conversationId the conversation whose interactions to get
