@@ -5,8 +5,19 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Spliterators;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -35,18 +46,9 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Spliterators;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
-import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.Getter;
+import lombok.Setter;
 
 @ToolAnnotation(CatIndexTool.TYPE)
 public class CatIndexTool implements Tool {
@@ -61,7 +63,7 @@ public class CatIndexTool implements Tool {
     private String description = DEFAULT_DESCRIPTION;
     @Getter
     private String version;
-    
+
     private Client client;
     @Setter
     private Parser<?, ?> inputParser;
@@ -264,16 +266,14 @@ public class CatIndexTool implements Tool {
             public void onResponse(final Collection<ActionResponse> responses) {
                 try {
                     GetSettingsResponse settingsResponse = extractResponse(responses, GetSettingsResponse.class);
-                    Map<String, Settings> indicesSettings = StreamSupport.stream(
-                            Spliterators.spliterator(settingsResponse.getIndexToSettings().entrySet(), 0),
-                            false
-                    ).collect(Collectors.toMap(cursor -> cursor.getKey(), cursor -> cursor.getValue()));
+                    Map<String, Settings> indicesSettings = StreamSupport
+                        .stream(Spliterators.spliterator(settingsResponse.getIndexToSettings().entrySet(), 0), false)
+                        .collect(Collectors.toMap(cursor -> cursor.getKey(), cursor -> cursor.getValue()));
 
                     ClusterStateResponse stateResponse = extractResponse(responses, ClusterStateResponse.class);
-                    Map<String, IndexMetadata> indicesStates = StreamSupport.stream(
-                            stateResponse.getState().getMetadata().spliterator(),
-                            false
-                    ).collect(Collectors.toMap(indexMetadata -> indexMetadata.getIndex().getName(), Function.identity()));
+                    Map<String, IndexMetadata> indicesStates = StreamSupport
+                        .stream(stateResponse.getState().getMetadata().spliterator(), false)
+                        .collect(Collectors.toMap(indexMetadata -> indexMetadata.getIndex().getName(), Function.identity()));
 
                     ClusterHealthResponse healthResponse = extractResponse(responses, ClusterHealthResponse.class);
                     Map<String, ClusterIndexHealth> indicesHealths = healthResponse.getIndices();
@@ -374,7 +374,7 @@ public class CatIndexTool implements Tool {
         table.addCell("docs.deleted", "alias:dd,docsDeleted;text-align:right;desc:deleted docs");
         table.addCell("store.size", "sibling:pri;alias:ss,storeSize;text-align:right;desc:store size of primaries & replicas");
         table.addCell("pri.store.size", "text-align:right;desc:store size of primaries");
-        // Above includes all the default fields for cat indices.  See RestIndicesAction for a lot more that could be included.
+        // Above includes all the default fields for cat indices. See RestIndicesAction for a lot more that could be included.
         table.endHeaders();
         return table;
     }

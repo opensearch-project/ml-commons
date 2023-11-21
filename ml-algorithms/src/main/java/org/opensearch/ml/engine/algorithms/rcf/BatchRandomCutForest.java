@@ -5,10 +5,14 @@
 
 package org.opensearch.ml.engine.algorithms.rcf;
 
-import com.amazon.randomcutforest.RandomCutForest;
-import com.amazon.randomcutforest.state.RandomCutForestMapper;
-import com.amazon.randomcutforest.state.RandomCutForestState;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.encodeBase64;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
@@ -27,13 +31,11 @@ import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import com.amazon.randomcutforest.RandomCutForest;
+import com.amazon.randomcutforest.state.RandomCutForestMapper;
+import com.amazon.randomcutforest.state.RandomCutForestState;
 
-import static org.opensearch.ml.engine.utils.ModelSerDeSer.encodeBase64;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Use RCF to detect non-time-series data.
@@ -57,7 +59,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
 
     private RandomCutForest forest;
 
-    public BatchRandomCutForest(){}
+    public BatchRandomCutForest() {}
 
     public BatchRandomCutForest(MLAlgoParams parameters) {
         rcfMapper.setSaveExecutorContextEnabled(true);
@@ -89,7 +91,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
 
     @Override
     public MLOutput predict(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         List<Map<String, Object>> predictResult = process(dataFrame, forest, 0);
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
     }
@@ -106,25 +108,26 @@ public class BatchRandomCutForest implements TrainAndPredictable {
 
     @Override
     public MLModel train(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         RandomCutForest forest = createRandomCutForest(dataFrame);
         Integer actualTrainingDataSize = trainingDataSize == null ? dataFrame.size() : trainingDataSize;
         process(dataFrame, forest, actualTrainingDataSize);
 
         RandomCutForestState state = rcfMapper.toState(forest);
-        MLModel model = MLModel.builder()
-                .name(FunctionName.BATCH_RCF.name())
-                .algorithm(FunctionName.BATCH_RCF)
-                .version(VERSION)
-                .content(encodeBase64(RCFModelSerDeSer.serializeRCF(state)))
-                .modelState(MLModelState.TRAINED)
-                .build();
+        MLModel model = MLModel
+            .builder()
+            .name(FunctionName.BATCH_RCF.name())
+            .algorithm(FunctionName.BATCH_RCF)
+            .version(VERSION)
+            .content(encodeBase64(RCFModelSerDeSer.serializeRCF(state)))
+            .modelState(MLModelState.TRAINED)
+            .build();
         return model;
     }
 
     @Override
     public MLOutput trainAndPredict(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         RandomCutForest forest = createRandomCutForest(dataFrame);
         Integer actualTrainingDataSize = trainingDataSize == null ? dataFrame.size() : trainingDataSize;
         List<Map<String, Object>> predictResult = process(dataFrame, forest, actualTrainingDataSize);
@@ -136,7 +139,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
         ColumnMeta[] columnMetas = dataFrame.columnMetas();
         List<Map<String, Object>> predictResult = new ArrayList<>();
 
-        for (int rowNum = 0; rowNum< dataFrame.size(); rowNum++) {
+        for (int rowNum = 0; rowNum < dataFrame.size(); rowNum++) {
             for (int i = 0; i < columnMetas.length; i++) {
                 Row row = dataFrame.getRow(rowNum);
                 ColumnValue value = row.getValue(i);
@@ -157,15 +160,15 @@ public class BatchRandomCutForest implements TrainAndPredictable {
     }
 
     private RandomCutForest createRandomCutForest(DataFrame dataFrame) {
-        //TODO: add memory estimation of RCF. Will be better if support memory estimation in RCF
+        // TODO: add memory estimation of RCF. Will be better if support memory estimation in RCF
         RandomCutForest forest = RandomCutForest
-                .builder()
-                .dimensions(dataFrame.columnMetas().length)
-                .numberOfTrees(numberOfTrees)
-                .sampleSize(sampleSize)
-                .outputAfter(outputAfter)
-                .parallelExecutionEnabled(false)
-                .build();
+            .builder()
+            .dimensions(dataFrame.columnMetas().length)
+            .numberOfTrees(numberOfTrees)
+            .sampleSize(sampleSize)
+            .outputAfter(outputAfter)
+            .parallelExecutionEnabled(false)
+            .build();
         return forest;
     }
 

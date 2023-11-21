@@ -5,15 +5,6 @@
 
 package org.opensearch.ml.engine;
 
-import org.apache.commons.beanutils.BeanUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.annotation.Function;
-import org.reflections.Reflections;
-
 import java.lang.reflect.Constructor;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -22,6 +13,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.ml.engine.annotation.Function;
+import org.reflections.Reflections;
 
 public class MLEngineClassLoader {
 
@@ -138,7 +137,7 @@ public class MLEngineClassLoader {
         } catch (Exception e) {
             Throwable cause = e.getCause();
             if (cause instanceof MLException) {
-                throw (MLException)cause;
+                throw (MLException) cause;
             } else {
                 logger.error("Failed to init instance for type " + type, e);
                 return null;

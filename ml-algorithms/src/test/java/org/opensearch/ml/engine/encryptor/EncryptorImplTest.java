@@ -1,6 +1,16 @@
 package org.opensearch.ml.engine.encryptor;
 
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
+
+import java.time.Instant;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -10,7 +20,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.Version;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
@@ -20,18 +29,9 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.threadpool.ThreadPool;
-
-import java.time.Instant;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
-import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
 
 public class EncryptorImplTest {
     @Rule
@@ -62,24 +62,33 @@ public class EncryptorImplTest {
             GetResponse response = mock(GetResponse.class);
             when(response.isExists()).thenReturn(true);
             when(response.getSourceAsMap())
-                    .thenReturn(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+                .thenReturn(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
             listener.onResponse(response);
             return null;
         }).when(client).get(any(), any());
 
-
         when(clusterService.state()).thenReturn(clusterState);
 
         Metadata metadata = new Metadata.Builder()
-                .indices(ImmutableMap
-                        .<String, IndexMetadata>builder()
-                        .put(ML_CONFIG_INDEX, IndexMetadata.builder(ML_CONFIG_INDEX)
-                                .settings(Settings.builder()
-                                        .put("index.number_of_shards", 1)
-                                        .put("index.number_of_replicas", 1)
-                                        .put("index.version.created", Version.CURRENT.id))
-                                .build())
-                        .build()).build();
+            .indices(
+                ImmutableMap
+                    .<String, IndexMetadata>builder()
+                    .put(
+                        ML_CONFIG_INDEX,
+                        IndexMetadata
+                            .builder(ML_CONFIG_INDEX)
+                            .settings(
+                                Settings
+                                    .builder()
+                                    .put("index.number_of_shards", 1)
+                                    .put("index.number_of_replicas", 1)
+                                    .put("index.version.created", Version.CURRENT.id)
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
         when(clusterState.metadata()).thenReturn(metadata);
 
         Settings settings = Settings.builder().build();

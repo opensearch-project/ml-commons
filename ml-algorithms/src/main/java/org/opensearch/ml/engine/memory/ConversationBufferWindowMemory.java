@@ -5,13 +5,14 @@
 
 package org.opensearch.ml.engine.memory;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.ml.common.spi.memory.Message;
-
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+
+import org.opensearch.ml.common.spi.memory.Message;
+
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * This memory is for storing conversation history in memory.
@@ -20,7 +21,8 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 public class ConversationBufferWindowMemory extends BufferMemory {
     public static final String TYPE = "conversation_buffer_window";
 
-    @Getter @Setter
+    @Getter
+    @Setter
     private int windowSize = 10;
 
     public ConversationBufferWindowMemory() {

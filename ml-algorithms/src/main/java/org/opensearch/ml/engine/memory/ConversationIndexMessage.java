@@ -5,12 +5,13 @@
 
 package org.opensearch.ml.engine.memory;
 
-import lombok.Builder;
-import lombok.Data;
-import org.opensearch.core.xcontent.XContentBuilder;
-
 import java.io.IOException;
 import java.time.Instant;
+
+import org.opensearch.core.xcontent.XContentBuilder;
+
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class ConversationIndexMessage extends BaseMessage {

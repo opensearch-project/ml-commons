@@ -5,36 +5,40 @@
 
 package org.opensearch.ml.engine.encryptor;
 
-import com.amazonaws.encryptionsdk.AwsCrypto;
-import com.amazonaws.encryptionsdk.CommitmentPolicy;
-import com.amazonaws.encryptionsdk.CryptoResult;
-import com.amazonaws.encryptionsdk.jce.JceMasterKey;
-import lombok.extern.log4j.Log4j2;
-import org.opensearch.ResourceNotFoundException;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
-import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.ml.common.exception.MLException;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import javax.crypto.spec.SecretKeySpec;
+
+import org.opensearch.ResourceNotFoundException;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.exception.MLException;
+
+import com.amazonaws.encryptionsdk.AwsCrypto;
+import com.amazonaws.encryptionsdk.CommitmentPolicy;
+import com.amazonaws.encryptionsdk.CryptoResult;
+import com.amazonaws.encryptionsdk.jce.JceMasterKey;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class EncryptorImpl implements Encryptor {
 
-    public static final String MASTER_KEY_NOT_READY_ERROR = "The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.";
+    public static final String MASTER_KEY_NOT_READY_ERROR =
+        "The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.";
     private ClusterService clusterService;
     private Client client;
     private volatile String masterKey;
@@ -62,33 +66,25 @@ public class EncryptorImpl implements Encryptor {
     @Override
     public String encrypt(String plainText) {
         initMasterKey();
-        final AwsCrypto crypto = AwsCrypto.builder()
-                .withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt)
-                .build();
+        final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
         byte[] bytes = Base64.getDecoder().decode(masterKey);
-        JceMasterKey jceMasterKey
-                = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "",
-                "AES/GCM/NoPadding");
+        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NoPadding");
 
-        final CryptoResult<byte[], JceMasterKey> encryptResult = crypto.encryptData(jceMasterKey,
-                plainText.getBytes(StandardCharsets.UTF_8));
+        final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
+            .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
         return Base64.getEncoder().encodeToString(encryptResult.getResult());
     }
 
     @Override
     public String decrypt(String encryptedText) {
         initMasterKey();
-        final AwsCrypto crypto = AwsCrypto.builder()
-                .withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt)
-                .build();
+        final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
 
         byte[] bytes = Base64.getDecoder().decode(masterKey);
-        JceMasterKey jceMasterKey
-                = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "",
-                "AES/GCM/NoPadding");
+        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NoPadding");
 
-        final CryptoResult<byte[], JceMasterKey> decryptedResult
-                = crypto.decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
+        final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
+            .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
         return new String(decryptedResult.getResult());
     }
 

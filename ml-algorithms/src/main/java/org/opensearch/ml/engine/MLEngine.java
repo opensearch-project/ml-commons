@@ -5,8 +5,10 @@
 
 package org.opensearch.ml.engine;
 
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Map;
+
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -14,15 +16,15 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-import java.nio.file.Path;
-import java.util.Locale;
-import java.util.Map;
+
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This is the interface to all ml algorithms.
@@ -93,10 +95,7 @@ public class MLEngine {
     }
 
     public Path getDeployModelChunkPath(String modelId, Integer chunkNumber) {
-        return mlModelsCachePath.resolve(DEPLOY_MODEL_FOLDER)
-                .resolve(modelId)
-                .resolve("chunks")
-                .resolve(chunkNumber + "");
+        return mlModelsCachePath.resolve(DEPLOY_MODEL_FOLDER).resolve(modelId).resolve("chunks").resolve(chunkNumber + "");
     }
 
     public Path getModelCachePath(String modelId, String modelName, String version) {
@@ -146,7 +145,8 @@ public class MLEngine {
     public MLOutput trainAndPredict(Input input) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
-        TrainAndPredictable trainAndPredictable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
+        TrainAndPredictable trainAndPredictable = MLEngineClassLoader
+            .initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
         if (trainAndPredictable == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
         }
@@ -181,7 +181,7 @@ public class MLEngine {
             throw new IllegalArgumentException("Input data set should not be null");
         }
         if (inputDataset instanceof DataFrameInputDataset) {
-            DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+            DataFrame dataFrame = ((DataFrameInputDataset) inputDataset).getDataFrame();
             if (dataFrame == null || dataFrame.size() == 0) {
                 throw new IllegalArgumentException("Input data frame should not be null or empty");
             }

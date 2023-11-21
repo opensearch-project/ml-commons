@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,24 +25,11 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.json.JsonXContent;
-import org.opensearch.common.xcontent.json.JsonXContentParser;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.spi.tools.Tool;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
 
 public class VisualizationToolTests {
     @Mock
@@ -95,7 +92,10 @@ public class VisualizationToolTests {
 
         tool.run(params, listener);
 
-        SearchResponse response = SearchResponse.fromXContent(JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, searchResponse));
+        SearchResponse response = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, searchResponse)
+            );
         searchResponseListener.getValue().onResponse(response);
 
         future.join();
@@ -115,7 +115,11 @@ public class VisualizationToolTests {
 
         tool.run(params, listener);
 
-        SearchResponse response = SearchResponse.fromXContent(JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, searchResponseNotFound));
+        SearchResponse response = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, searchResponseNotFound)
+            );
         searchResponseListener.getValue().onResponse(response);
 
         future.join();
