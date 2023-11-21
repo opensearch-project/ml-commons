@@ -38,14 +38,14 @@ public abstract class AbstractRetrieverTool implements Tool {
     protected String description = DEFAULT_DESCRIPTION;
 
     protected Client client;
-    protected final NamedXContentRegistry xContentRegistry;
-    protected final String index;
-    protected final String embeddingField;
-    protected final String[] sourceFields;
-    protected final String modelId;
-    protected final Integer docSize;
+    protected NamedXContentRegistry xContentRegistry;
+    protected String index;
+    protected String embeddingField;
+    protected String[] sourceFields;
+    protected String modelId;
+    protected Integer docSize;
 
-    protected AbstractRetrieverTool(Client client, NamedXContentRegistry xContentRegistry, String index, String embeddingField, String[] sourceFields, Integer k, Integer docSize, String modelId) {
+    protected AbstractRetrieverTool(Client client, NamedXContentRegistry xContentRegistry, String index, String embeddingField, String[] sourceFields, Integer docSize, String modelId) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.index = index;
