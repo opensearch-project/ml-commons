@@ -1,8 +1,11 @@
 package org.opensearch.ml.engine.tools;
 
+import lombok.extern.log4j.Log4j2;
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
@@ -13,6 +16,12 @@ import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.json.JSONObject;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -24,13 +33,16 @@ import software.amazon.awssdk.utils.ImmutableMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+@Log4j2
 public class PPLToolTests {
     @Mock
     private Client client;
@@ -38,31 +50,33 @@ public class PPLToolTests {
     private AdminClient adminClient;
     @Mock
     private IndicesAdminClient indicesAdminClient;
-
     @Mock
     private GetMappingsResponse getMappingsResponse;
-
     @Mock
     private MappingMetadata mappingMetadata;
-
     private Map<String, MappingMetadata> mockedMappings;
     private Map<String, Object> indexMappings;
-    @Mock
+
+
     private SearchHits searchHits;
 
-    @Mock
     private SearchHit hit;
+    @Mock
+    private SearchResponse searchResponse;
 
     private Map<String, Object> sampleMapping;
 
 
     @Mock
-    private SearchResponse searchResponse;
-
-
-    @Mock
     private MLTaskResponse mlTaskResponse;
+    @Mock
+    private ModelTensorOutput modelTensorOutput;
+    @Mock
+    private ModelTensors modelTensors;
 
+    private ModelTensor modelTensor;
+
+    private Map<String, ?> pplReturns;
 
     private String mockedIndexName = "demo";
     @Before
@@ -82,10 +96,8 @@ public class PPLToolTests {
         //mockedMappings (index name, mappingmetadata)
 
 
-
         //search result
-        when(hit.getSourceAsMap()).thenReturn(sampleMapping);
-        when(searchHits.getHits()).thenReturn(new SearchHit[] {hit});
+
         when(searchResponse.getHits()).thenReturn(searchHits);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
@@ -93,14 +105,19 @@ public class PPLToolTests {
             return null;
         }).when(client).search(any(), any());
 
-
+        when(modelTensors.getMlModelTensors()).thenReturn(Collections.singletonList(modelTensor));
+        //when(modelTensors.getMlModelTensors()).thenReturn(Collections.singletonList(modelTensor));
+        when(modelTensorOutput.getMlModelOutputs()).thenReturn(Collections.singletonList(modelTensors));
+        when(mlTaskResponse.getOutput()).thenReturn(modelTensorOutput);
 
         // call model
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = (ActionListener<MLTaskResponse>) invocation.getArguments()[2];
             listener.onResponse(mlTaskResponse);
             return null;
-        }).when(client).execute(MLPredictionTaskAction.INSTANCE, any(), any());
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        PPLTool.Factory.getInstance().init(client);
     }
 
     @Test
@@ -108,15 +125,47 @@ public class PPLToolTests {
         Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(PPLTool.TYPE, tool.getName());
 
+        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
+            assertEquals(ppl, "source=demo | head 1");
+        }, e -> {
+            log.info(e);
+        }));
+
+    }
+
+    @Test
+    public void testTool_getMappingFailure(){
+        Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
+        assertEquals(PPLTool.TYPE, tool.getName());
+        Exception exception = new Exception("get mapping error");
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = (ActionListener<GetMappingsResponse>) invocation.getArguments()[1];
+            listener.onFailure(exception);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(), any());
+
+        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
+            assertEquals(ppl, "source=demo | head 1");
+        }, e -> {
+            log.info(e);
+        }));
+
     }
 
     private void createMappings()
     {
         indexMappings = new HashMap<>();
-        indexMappings.put("demoFields", ImmutableMap.of("type", "text"));
+        indexMappings.put("properties", ImmutableMap.of("demoFields", ImmutableMap.of("type", "text")));
         mockedMappings = new HashMap<>();
         mockedMappings.put(mockedIndexName, mappingMetadata);
 
+
+        BytesReference bytesArray = new BytesArray("{\"demoFields\":\"111\"}");
+        hit = new SearchHit(1);
+        hit.sourceRef(bytesArray);
+        searchHits = new SearchHits(new SearchHit[] {hit}, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        pplReturns = Collections.singletonMap("output", "source=demo | head 1");
+        modelTensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, pplReturns);
 
     }
 }

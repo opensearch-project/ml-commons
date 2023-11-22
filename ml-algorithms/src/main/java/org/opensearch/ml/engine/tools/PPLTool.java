@@ -88,21 +88,18 @@ public class PPLTool implements Tool {
                     //Execute output here
                     listener.onResponse((T) ppl);
                         }, e -> {
-                    log.info("predict problem");
-                    log.info(e);
+                    log.info("fail to predict model: " + e);
                     listener.onFailure(e);
                         }
                 ));
                     }, e -> {
-                log.info("search problem");
-                log.info(e);
+                log.info("fail to search: " + e);
                 listener.onFailure(e);
                     }
 
             ));
             }, e -> {
-            log.info("mapping problem");
-            log.info(e);
+            log.info("fail to get mapping: " + e);
             listener.onFailure(e);
                 })
         );
