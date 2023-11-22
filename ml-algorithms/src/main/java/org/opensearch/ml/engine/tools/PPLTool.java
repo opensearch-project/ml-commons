@@ -133,20 +133,12 @@ public class PPLTool implements Tool {
         return name;
     }
 
-    @Override
-    public void setName(String s) {
-
-    }
 
     @Override
     public String getDescription() {
         return null;
     }
 
-    @Override
-    public void setDescription(String s) {
-
-    }
 
     @Override
     public boolean validate(Map<String, String> map) {

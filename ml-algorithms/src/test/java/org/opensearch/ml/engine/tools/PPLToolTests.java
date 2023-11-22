@@ -149,7 +149,42 @@ public class PPLToolTests {
         }, e -> {
             log.info(e);
         }));
+    }
 
+    @Test
+    public void testTool_searchFailure(){
+        Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
+        assertEquals(PPLTool.TYPE, tool.getName());
+        Exception exception = new Exception("predict model error");
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = (ActionListener<MLTaskResponse>) invocation.getArguments()[2];
+            listener.onFailure(exception);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
+            assertEquals(ppl, "source=demo | head 1");
+        }, e -> {
+            log.info(e);
+        }));
+    }
+
+    @Test
+    public void testTool_predictModelFailure(){
+        Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
+        assertEquals(PPLTool.TYPE, tool.getName());
+        Exception exception = new Exception("search error");
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onFailure(exception);
+            return null;
+        }).when(client).search(any(), any());
+
+        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
+            assertEquals(ppl, "source=demo | head 1");
+        }, e -> {
+            log.info(e);
+        }));
     }
 
     private void createMappings()
