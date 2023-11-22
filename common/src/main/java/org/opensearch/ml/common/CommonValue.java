@@ -222,6 +222,15 @@ public class CommonValue {
             + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
             + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
             + "      \""
+            + MLModel.QUOTA_FLAG_FIELD
+            + "\" : {\"type\": \"boolean\"},\n"
+            + "      \""
+            + MLModel.RATE_LIMIT_NUMBER_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.RATE_LIMIT_UNIT_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
             + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
