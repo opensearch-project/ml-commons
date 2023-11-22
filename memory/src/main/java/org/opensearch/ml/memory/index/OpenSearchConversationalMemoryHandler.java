@@ -379,4 +379,8 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         return fut;
     }
 
+    public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
+        interactionsIndex.getTraces(interactionId, from, maxResults, listener);
+    }
+
 }
