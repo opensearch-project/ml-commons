@@ -190,12 +190,14 @@ public class PPLToolTests {
     private void createMappings()
     {
         indexMappings = new HashMap<>();
-        indexMappings.put("properties", ImmutableMap.of("demoFields", ImmutableMap.of("type", "text")));
+        indexMappings.put("properties", ImmutableMap.of("demoFields", ImmutableMap.of("type", "text"),
+                "demoNested", ImmutableMap.of("properties", ImmutableMap.of("nest1", ImmutableMap.of("type", "text"),
+                        "nest2", ImmutableMap.of("type", "text")))));
         mockedMappings = new HashMap<>();
         mockedMappings.put(mockedIndexName, mappingMetadata);
 
 
-        BytesReference bytesArray = new BytesArray("{\"demoFields\":\"111\"}");
+        BytesReference bytesArray = new BytesArray("{\"demoFields\":\"111\", \"demoNested\": {\"nest1\": \"222\", \"nest2\": \"333\"}}");
         hit = new SearchHit(1);
         hit.sourceRef(bytesArray);
         searchHits = new SearchHits(new SearchHit[] {hit}, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);

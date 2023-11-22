@@ -25,6 +25,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -41,6 +42,7 @@ import java.util.StringJoiner;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
+@ToolAnnotation(PPLTool.TYPE)
 public class PPLTool implements Tool {
     public static final String TYPE = "PPLTool";
 
@@ -108,24 +110,10 @@ public class PPLTool implements Tool {
         //client.admin().indices().getMappings(ActionListener< GetMappingsResponse >);
     }
 
-    @Override
-    public void setInputParser(Parser<?, ?> parser) {
-        Tool.super.setInputParser(parser);
-    }
-
-    @Override
-    public void setOutputParser(Parser<?, ?> parser) {
-        Tool.super.setOutputParser(parser);
-    }
 
     @Override
     public String getType() {
         return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return version;
     }
 
     @Override
@@ -134,15 +122,13 @@ public class PPLTool implements Tool {
     }
 
 
-    @Override
-    public String getDescription() {
-        return null;
-    }
-
 
     @Override
-    public boolean validate(Map<String, String> map) {
-        return false;
+    public boolean validate(Map<String, String> parameters) {
+        if (parameters == null || parameters.size() == 0) {
+            return false;
+        }
+        return true;
     }
 
     public static class Factory implements Tool.Factory<PPLTool> {
