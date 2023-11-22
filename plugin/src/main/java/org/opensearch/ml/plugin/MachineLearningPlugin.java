@@ -468,7 +468,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             threadPool,
             nodeHelper,
             mlIndicesHandler,
-            encryptor
+            encryptor,
+            mlModelAutoRedeployer
         );
 
         // TODO move this into MLFeatureEnabledSetting
@@ -685,6 +686,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO,
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,

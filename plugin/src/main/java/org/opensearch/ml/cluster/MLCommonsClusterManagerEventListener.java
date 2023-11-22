@@ -8,12 +8,16 @@ package org.opensearch.ml.cluster;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 
+import java.util.List;
+
 import org.opensearch.client.Client;
 import org.opensearch.cluster.LocalNodeClusterManagerListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.threadpool.Scheduler;
@@ -35,6 +39,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     private volatile Integer jobInterval;
 
+    private final MLModelAutoReDeployer mlModelAutoReDeployer;
+
     public MLCommonsClusterManagerEventListener(
         ClusterService clusterService,
         Client client,
@@ -42,7 +48,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         ThreadPool threadPool,
         DiscoveryNodeHelper nodeHelper,
         MLIndicesHandler mlIndicesHandler,
-        Encryptor encryptor
+        Encryptor encryptor,
+        MLModelAutoReDeployer modelAutoReDeployer
     ) {
         this.clusterService = clusterService;
         this.client = client;
@@ -51,6 +58,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         this.nodeHelper = nodeHelper;
         this.mlIndicesHandler = mlIndicesHandler;
         this.encryptor = encryptor;
+        this.mlModelAutoReDeployer = modelAutoReDeployer;
 
         this.jobInterval = ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS, it -> {
@@ -62,13 +70,28 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     @Override
     public void onClusterManager() {
-        if (syncModelRoutingCron == null) {
-            startSyncModelRoutingCron();
-        }
+        ActionListener<Boolean> listener = ActionListener.wrap(r -> {
+            if (syncModelRoutingCron == null) {
+                startSyncModelRoutingCron();
+            }
+        }, e -> {
+            if (syncModelRoutingCron == null) {
+                startSyncModelRoutingCron();
+            }
+        });
+        mlModelAutoReDeployer.setStartCronJobListener(listener);
+        String localNodeId = clusterService.localNode().getId();
+        threadPool
+            .schedule(
+                () -> mlModelAutoReDeployer.buildAutoReloadArrangement(List.of(localNodeId), localNodeId),
+                TimeValue.timeValueSeconds(jobInterval),
+                GENERAL_THREAD_POOL
+            );
     }
 
     private void startSyncModelRoutingCron() {
         if (jobInterval > 0) {
+            log.info("Starting ML sync up job...");
             syncModelRoutingCron = threadPool
                 .scheduleWithFixedDelay(
                     new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor),
