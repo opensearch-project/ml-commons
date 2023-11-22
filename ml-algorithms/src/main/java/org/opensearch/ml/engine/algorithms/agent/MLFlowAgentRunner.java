@@ -26,6 +26,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -93,12 +94,16 @@ public class MLFlowAgentRunner {
                         : previousToolSpec.getType() + ".output";
 
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
-                        String result = output instanceof String
-                            ? (String) output
-                            : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                        if (output instanceof ModelTensorOutput) {
+                            flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+                        } else {
+                            String result = output instanceof String
+                                ? (String) output
+                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
 
-                        ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
-                        flowAgentOutput.add(stepOutput);
+                            ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
+                            flowAgentOutput.add(stepOutput);
+                        }
                     }
 
                     if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {

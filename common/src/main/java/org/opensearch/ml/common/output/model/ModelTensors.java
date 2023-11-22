@@ -8,6 +8,7 @@ package org.opensearch.ml.common.output.model;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -22,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+@ToString
 @Getter
 public class ModelTensors implements Writeable, ToXContentObject {
     public static final String OUTPUT_FIELD = "output";
