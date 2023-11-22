@@ -14,8 +14,6 @@ plugins {
 }
 
 apply plugin: 'opensearch.java'
-apply plugin: 'opensearch.testclusters'
-apply plugin: 'opensearch.java-rest-test'
 
 repositories {
     mavenLocal()
@@ -78,10 +76,6 @@ task integTest(type: RestIntegTestTask) {
     dependsOn test
 }
 check.dependsOn integTest
-
-testClusters.javaRestTest {
-    testDistribution = 'INTEG_TEST'
-}
 
 task sourcesJar(type: Jar) {
     archiveClassifier.set 'sources'
