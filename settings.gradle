@@ -7,6 +7,8 @@ rootProject.name = 'opensearch-ml'
 
 include 'client'
 project(":client").name = rootProject.name + "-client"
+include 'spi'
+project(":spi").name = rootProject.name + "-spi"
 include 'common'
 project(":common").name = rootProject.name + "-common"
 include 'plugin'
