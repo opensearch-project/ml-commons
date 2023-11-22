@@ -5,14 +5,14 @@
 
 package org.opensearch.ml.common.connector;
 
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class MLPostProcessFunction {
 
@@ -24,7 +24,6 @@ public class MLPostProcessFunction {
     private static final Map<String, String> JSON_PATH_EXPRESSION = new HashMap<>();
 
     private static final Map<String, Function<List<List<Float>>, List<ModelTensor>>> POST_PROCESS_FUNCTIONS = new HashMap<>();
-
 
     static {
         JSON_PATH_EXPRESSION.put(OPENAI_EMBEDDING, "$.data[*].embedding");
@@ -41,15 +40,19 @@ public class MLPostProcessFunction {
             if (embeddings == null) {
                 throw new IllegalArgumentException("The list of embeddings is null when using the built-in post-processing function.");
             }
-            embeddings.forEach(embedding -> modelTensors.add(
-                ModelTensor
-                    .builder()
-                    .name("sentence_embedding")
-                    .dataType(MLResultDataType.FLOAT32)
-                    .shape(new long[]{embedding.size()})
-                    .data(embedding.toArray(new Number[0]))
-                    .build()
-            ));
+            embeddings
+                .forEach(
+                    embedding -> modelTensors
+                        .add(
+                            ModelTensor
+                                .builder()
+                                .name("sentence_embedding")
+                                .dataType(MLResultDataType.FLOAT32)
+                                .shape(new long[] { embedding.size() })
+                                .data(embedding.toArray(new Number[0]))
+                                .build()
+                        )
+                );
             return modelTensors;
         };
     }

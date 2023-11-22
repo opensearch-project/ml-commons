@@ -5,7 +5,8 @@
 
 package org.opensearch.ml.common.transport.sync;
 
-import lombok.Getter;
+import java.io.IOException;
+
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -13,7 +14,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
+import lombok.Getter;
 
 @Getter
 public class MLSyncUpResponse extends ActionResponse implements ToXContentObject {
@@ -27,7 +28,7 @@ public class MLSyncUpResponse extends ActionResponse implements ToXContentObject
     }
 
     public MLSyncUpResponse(String status) {
-        this.status= status;
+        this.status = status;
     }
 
     @Override

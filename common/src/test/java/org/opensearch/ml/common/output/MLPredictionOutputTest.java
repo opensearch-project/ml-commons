@@ -5,13 +5,17 @@
 
 package org.opensearch.ml.common.output;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -22,12 +26,6 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.IntValue;
 import org.opensearch.ml.common.dataframe.Row;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
 
 public class MLPredictionOutputTest {
 
@@ -40,11 +38,7 @@ public class MLPredictionOutputTest {
         rows.add(new Row(new ColumnValue[] { new IntValue(1) }));
         rows.add(new Row(new ColumnValue[] { new IntValue(2) }));
         DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
-        output = MLPredictionOutput.builder()
-                .taskId("test_task_id")
-                .status("test_status")
-                .predictionResult(dataFrame)
-                .build();
+        output = MLPredictionOutput.builder().taskId("test_task_id").status("test_status").predictionResult(dataFrame).build();
     }
 
     @Test
@@ -52,10 +46,13 @@ public class MLPredictionOutputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":" +
-                "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":" +
-                "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\"," +
-                "\"value\":2}]}]}}", jsonStr);
+        assertEquals(
+            "{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":"
+                + "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":"
+                + "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\","
+                + "\"value\":2}]}]}}",
+            jsonStr
+        );
     }
 
     @Test

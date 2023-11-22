@@ -5,9 +5,11 @@
 
 package org.opensearch.ml.common.output.model;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -17,10 +19,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.exception.MLException;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 public class ModelTensors implements Writeable, ToXContentObject {
@@ -56,7 +57,7 @@ public class ModelTensors implements Writeable, ToXContentObject {
         if (in.readBoolean()) {
             mlModelTensors = new ArrayList<>();
             int size = in.readInt();
-            for (int i=0; i<size; i++) {
+            for (int i = 0; i < size; i++) {
                 mlModelTensors.add(new ModelTensor(in));
             }
         }
@@ -83,19 +84,19 @@ public class ModelTensors implements Writeable, ToXContentObject {
         List<String> targetResponse = resultFilter.getTargetResponse();
         List<Integer> targetResponsePositions = resultFilter.getTargetResponsePositions();
         if ((targetResponse == null || targetResponse.size() == 0)
-                && (targetResponsePositions == null || targetResponsePositions.size() == 0)) {
-            mlModelTensors.forEach(output -> filter(output, returnBytes,  returnNumber));
+            && (targetResponsePositions == null || targetResponsePositions.size() == 0)) {
+            mlModelTensors.forEach(output -> filter(output, returnBytes, returnNumber));
             return;
         }
         List<ModelTensor> targetOutput = new ArrayList<>();
         if (mlModelTensors != null) {
-            for (int i = 0 ; i<mlModelTensors.size(); i++) {
+            for (int i = 0; i < mlModelTensors.size(); i++) {
                 ModelTensor output = mlModelTensors.get(i);
                 if (targetResponse != null && targetResponse.contains(output.getName())) {
-                    filter(output, returnBytes,  returnNumber);
+                    filter(output, returnBytes, returnNumber);
                     targetOutput.add(output);
                 } else if (targetResponsePositions != null && targetResponsePositions.contains(i)) {
-                    filter(output, returnBytes,  returnNumber);
+                    filter(output, returnBytes, returnNumber);
                     targetOutput.add(output);
                 }
             }
@@ -103,7 +104,7 @@ public class ModelTensors implements Writeable, ToXContentObject {
         this.mlModelTensors = targetOutput;
     }
 
-    private void filter(ModelTensor output, boolean returnBytes,  boolean returnNUmber) {
+    private void filter(ModelTensor output, boolean returnBytes, boolean returnNUmber) {
         if (!returnBytes) {
             output.setByteBuffer(null);
         }

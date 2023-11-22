@@ -5,11 +5,13 @@
 
 package org.opensearch.ml.common.output.execute.metrics_correlation;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
-import org.opensearch.core.common.bytes.BytesReference;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -18,10 +20,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Getter
@@ -48,7 +49,7 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
         if (in.readBoolean()) {
             mCorrModelTensors = new ArrayList<>();
             int size = in.readInt();
-            for (int i=0; i<size; i++) {
+            for (int i = 0; i < size; i++) {
                 mCorrModelTensors.add(new MCorrModelTensor(in));
             }
         }
@@ -72,19 +73,19 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
         List<String> targetResponse = resultFilter.getTargetResponse();
         List<Integer> targetResponsePositions = resultFilter.getTargetResponsePositions();
         if ((targetResponse == null || targetResponse.size() == 0)
-                && (targetResponsePositions == null || targetResponsePositions.size() == 0)) {
-            mCorrModelTensors.forEach(output -> filter(output,  returnNumber));
+            && (targetResponsePositions == null || targetResponsePositions.size() == 0)) {
+            mCorrModelTensors.forEach(output -> filter(output, returnNumber));
             return;
         }
         List<MCorrModelTensor> targetOutput = new ArrayList<>();
         if (mCorrModelTensors != null) {
-            for (int i = 0 ; i<mCorrModelTensors.size(); i++) {
+            for (int i = 0; i < mCorrModelTensors.size(); i++) {
                 MCorrModelTensor output = mCorrModelTensors.get(i);
                 if (targetResponse != null && targetResponse.contains(output.getEvent_window())) {
-                    filter(output,  returnNumber);
+                    filter(output, returnNumber);
                     targetOutput.add(output);
                 } else if (targetResponsePositions != null && targetResponsePositions.contains(i)) {
-                    filter(output,  returnNumber);
+                    filter(output, returnNumber);
                     targetOutput.add(output);
                 }
             }

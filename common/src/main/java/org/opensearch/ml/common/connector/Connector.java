@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -16,12 +18,13 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -32,27 +35,31 @@ import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-
 /**
  * Connector defines how to connect to a remote service.
  */
 public interface Connector extends ToXContentObject, Writeable {
 
     String getName();
+
     String getProtocol();
+
     User getOwner();
+
     void setOwner(User user);
 
     AccessMode getAccess();
+
     void setAccess(AccessMode access);
+
     List<String> getBackendRoles();
 
     void setBackendRoles(List<String> backendRoles);
+
     Map<String, String> getParameters();
 
     List<ConnectorAction> getActions();
+
     String getPredictEndpoint(Map<String, String> parameters);
 
     String getPredictHttpMethod();
@@ -60,6 +67,7 @@ public interface Connector extends ToXContentObject, Writeable {
     <T> T createPredictPayload(Map<String, String> parameters);
 
     void decrypt(Function<String, String> function);
+
     void encrypt(Function<String, String> function);
 
     Connector cloneConnector();
@@ -92,7 +100,8 @@ public interface Connector extends ToXContentObject, Writeable {
     static Connector fromStream(StreamInput in) throws IOException {
         try {
             String connectorProtocol = in.readString();
-            return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, in}, String.class, StreamInput.class);
+            return MLCommonsClassLoader
+                .initConnector(connectorProtocol, new Object[] { connectorProtocol, in }, String.class, StreamInput.class);
         } catch (IllegalArgumentException illegalArgumentException) {
             throw illegalArgumentException;
         }
@@ -115,25 +124,30 @@ public interface Connector extends ToXContentObject, Writeable {
         } catch (PrivilegedActionException e) {
             throw new IllegalArgumentException("wrong connector");
         }
-        String connectorProtocol = (String)connectorMap.get("protocol");
+        String connectorProtocol = (String) connectorMap.get("protocol");
 
         return createConnector(jsonStr, connectorProtocol);
     }
 
     private static Connector createConnector(String jsonStr, String connectorProtocol) throws IOException {
-        try (XContentParser connectorParser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr)) {
+        try (
+            XContentParser connectorParser = XContentType.JSON
+                .xContent()
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr)
+        ) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, connectorParser.nextToken(), connectorParser);
 
             if (connectorProtocol == null) {
                 throw new IllegalArgumentException("connector protocol is null");
             }
-            return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, connectorParser}, String.class, XContentParser.class);
+            return MLCommonsClassLoader
+                .initConnector(connectorProtocol, new Object[] { connectorProtocol, connectorParser }, String.class, XContentParser.class);
         } catch (Exception ex) {
             if (ex instanceof IllegalArgumentException) {
                 throw ex;
             }
             return null;
-	    }
+        }
     }
 
     default void validateConnectorURL(List<String> urlRegexes) {

@@ -5,11 +5,13 @@
 
 package org.opensearch.ml.common.input.parameter.sample;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
+import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -17,18 +19,17 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
-@MLAlgoParameter(algorithms={FunctionName.SAMPLE_ALGO})
+@MLAlgoParameter(algorithms = { FunctionName.SAMPLE_ALGO })
 public class SampleAlgoParams implements MLAlgoParams {
     public static final String PARSE_FIELD_NAME = FunctionName.SAMPLE_ALGO.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            MLAlgoParams.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        MLAlgoParams.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String SAMPLE_PARAM_FIELD = "sample_param";

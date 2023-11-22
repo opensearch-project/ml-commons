@@ -64,12 +64,12 @@ public class Interaction implements Writeable, ToXContentObject {
      */
     public static Interaction fromMap(String id, Map<String, Object> fields) {
         Instant createTime = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD));
-        String conversationId   = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD);
-        String input     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD);
+        String conversationId = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD);
+        String input = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD);
         String promptTemplate = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD);
-        String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
-        String origin     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
-        String additionalInfo  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
+        String response = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
+        String origin = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
+        String additionalInfo = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
         return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
@@ -101,7 +101,6 @@ public class Interaction implements Writeable, ToXContentObject {
         return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
-
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
@@ -124,7 +123,7 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD, promptTemplate);
         builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
         builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
-        if(additionalInfo != null) {
+        if (additionalInfo != null) {
             builder.field(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
         }
         builder.endObject();
@@ -133,33 +132,38 @@ public class Interaction implements Writeable, ToXContentObject {
 
     @Override
     public boolean equals(Object other) {
-        return (
-            other instanceof Interaction &&
-            ((Interaction) other).id.equals(this.id) &&
-            ((Interaction) other).conversationId.equals(this.conversationId) &&
-            ((Interaction) other).createTime.equals(this.createTime) &&
-            ((Interaction) other).input.equals(this.input) &&
-            ((Interaction) other).promptTemplate.equals(this.promptTemplate) &&
-            ((Interaction) other).response.equals(this.response) &&
-            ((Interaction) other).origin.equals(this.origin) && 
-            ( (((Interaction) other).additionalInfo == null && this.additionalInfo == null) ||
-              ((Interaction) other).additionalInfo.equals(this.additionalInfo))
-        );
+        return (other instanceof Interaction
+            && ((Interaction) other).id.equals(this.id)
+            && ((Interaction) other).conversationId.equals(this.conversationId)
+            && ((Interaction) other).createTime.equals(this.createTime)
+            && ((Interaction) other).input.equals(this.input)
+            && ((Interaction) other).promptTemplate.equals(this.promptTemplate)
+            && ((Interaction) other).response.equals(this.response)
+            && ((Interaction) other).origin.equals(this.origin)
+            && ((((Interaction) other).additionalInfo == null && this.additionalInfo == null)
+                || ((Interaction) other).additionalInfo.equals(this.additionalInfo)));
     }
 
     @Override
     public String toString() {
         return "Interaction{"
-            + "id=" + id
-            + ",cid=" + conversationId
-            + ",create_time=" + createTime
-            + ",origin=" + origin
-            + ",input=" + input
-            + ",promt_template=" + promptTemplate
-            + ",response=" + response
-            + ",additional_info=" + additionalInfo
+            + "id="
+            + id
+            + ",cid="
+            + conversationId
+            + ",create_time="
+            + createTime
+            + ",origin="
+            + origin
+            + ",input="
+            + input
+            + ",promt_template="
+            + promptTemplate
+            + ",response="
+            + response
+            + ",additional_info="
+            + additionalInfo
             + "}";
     }
-    
 
 }

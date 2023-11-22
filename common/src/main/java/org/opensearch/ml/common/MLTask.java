@@ -5,18 +5,8 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.dataset.MLInputDataType;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -24,8 +14,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.USER;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.dataset.MLInputDataType;
+
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
@@ -279,21 +280,22 @@ public class MLTask implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return MLTask.builder()
-                .taskId(taskId)
-                .modelId(modelId)
-                .taskType(taskType)
-                .functionName(functionName)
-                .state(state)
-                .inputType(inputType)
-                .progress(progress)
-                .outputIndex(outputIndex)
-                .workerNodes(workerNodes)
-                .createTime(createTime)
-                .lastUpdateTime(lastUpdateTime)
-                .error(error)
-                .user(user)
-                .async(async)
-                .build();
+        return MLTask
+            .builder()
+            .taskId(taskId)
+            .modelId(modelId)
+            .taskType(taskType)
+            .functionName(functionName)
+            .state(state)
+            .inputType(inputType)
+            .progress(progress)
+            .outputIndex(outputIndex)
+            .workerNodes(workerNodes)
+            .createTime(createTime)
+            .lastUpdateTime(lastUpdateTime)
+            .error(error)
+            .user(user)
+            .async(async)
+            .build();
     }
 }

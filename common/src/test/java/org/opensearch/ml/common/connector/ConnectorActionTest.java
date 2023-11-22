@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.common.connector;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -18,11 +23,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 public class ConnectorActionTest {
     @Rule
@@ -81,7 +81,15 @@ public class ConnectorActionTest {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
 
-        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
+        ConnectorAction action = new ConnectorAction(
+            actionType,
+            method,
+            url,
+            headers,
+            requestBody,
+            preProcessFunction,
+            postProcessFunction
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         action.writeTo(output);
         ConnectorAction action2 = new ConnectorAction(output.bytes().streamInput());
@@ -112,25 +120,42 @@ public class ConnectorActionTest {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
 
-        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
+        ConnectorAction action = new ConnectorAction(
+            actionType,
+            method,
+            url,
+            headers,
+            requestBody,
+            preProcessFunction,
+            postProcessFunction
+        );
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         action.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals("{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\"," +
-                "\"headers\":{\"key1\":\"value1\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-                "\"post_process_function\":\"connector.post_process.openai.embedding\"}", content);
+        Assert
+            .assertEquals(
+                "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\","
+                    + "\"headers\":{\"key1\":\"value1\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+                    + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+                    + "\"post_process_function\":\"connector.post_process.openai.embedding\"}",
+                content
+            );
     }
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\"," +
-                "\"headers\":{\"key1\":\"value1\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-                "\"post_process_function\":\"connector.post_process.openai.embedding\"}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        String jsonStr = "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"key1\":\"value1\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+            + "\"post_process_function\":\"connector.post_process.openai.embedding\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         ConnectorAction action = ConnectorAction.parse(parser);
         Assert.assertEquals("http", action.getMethod());

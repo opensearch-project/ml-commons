@@ -11,5 +11,7 @@ public class MLTaskGetAction extends ActionType<MLTaskGetResponse> {
     public static final MLTaskGetAction INSTANCE = new MLTaskGetAction();
     public static final String NAME = "cluster:admin/opensearch/ml/tasks/get";
 
-    private MLTaskGetAction() { super(NAME, MLTaskGetResponse::new);}
+    private MLTaskGetAction() {
+        super(NAME, MLTaskGetResponse::new);
+    }
 }

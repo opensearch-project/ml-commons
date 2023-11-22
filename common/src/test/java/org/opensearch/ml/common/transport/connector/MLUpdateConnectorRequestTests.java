@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.common.transport.connector;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Collections;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockitoAnnotations;
@@ -18,16 +28,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Collections;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-
 public class MLUpdateConnectorRequestTests {
     private String connectorId;
     private MLCreateConnectorInput updateContent;
@@ -38,10 +38,7 @@ public class MLUpdateConnectorRequestTests {
         MockitoAnnotations.openMocks(this);
         this.connectorId = "test-connector_id";
         this.updateContent = MLCreateConnectorInput.builder().description("new description").updateConnector(true).build();
-        mlUpdateConnectorRequest = MLUpdateConnectorRequest.builder()
-            .connectorId(connectorId)
-            .updateContent(updateContent)
-            .build();
+        mlUpdateConnectorRequest = MLUpdateConnectorRequest.builder().connectorId(connectorId).updateContent(updateContent).build();
     }
 
     @Test
@@ -63,14 +60,22 @@ public class MLUpdateConnectorRequestTests {
         MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.builder().build();
         Exception exception = updateConnectorRequest.validate();
 
-        assertEquals("Validation Failed: 1: ML connector id can't be null;2: Update connector content can't be null;", exception.getMessage());
+        assertEquals(
+            "Validation Failed: 1: ML connector id can't be null;2: Update connector content can't be null;",
+            exception.getMessage()
+        );
     }
 
     @Test
     public void parse_success() throws IOException {
         String jsonStr = "{\"version\":\"new version\",\"description\":\"new description\"}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.parse(parser, connectorId);
         assertEquals(updateConnectorRequest.getConnectorId(), connectorId);
@@ -81,7 +86,8 @@ public class MLUpdateConnectorRequestTests {
 
     @Test
     public void fromActionRequest_Success() {
-        MLUpdateConnectorRequest mlUpdateConnectorRequest = MLUpdateConnectorRequest.builder()
+        MLUpdateConnectorRequest mlUpdateConnectorRequest = MLUpdateConnectorRequest
+            .builder()
             .connectorId(connectorId)
             .updateContent(updateContent)
             .build();
@@ -90,7 +96,8 @@ public class MLUpdateConnectorRequestTests {
 
     @Test
     public void fromActionRequest_Success_fromActionRequest() {
-        MLUpdateConnectorRequest mlUpdateConnectorRequest = MLUpdateConnectorRequest.builder()
+        MLUpdateConnectorRequest mlUpdateConnectorRequest = MLUpdateConnectorRequest
+            .builder()
             .connectorId(connectorId)
             .updateContent(updateContent)
             .build();

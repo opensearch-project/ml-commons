@@ -5,13 +5,14 @@
 
 package org.opensearch.ml.common.output;
 
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 
-import java.io.IOException;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 
 /**
  * ML output data. Must specify output type and

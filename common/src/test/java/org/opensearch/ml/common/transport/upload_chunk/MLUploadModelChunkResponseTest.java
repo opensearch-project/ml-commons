@@ -20,28 +20,28 @@ import org.opensearch.ml.common.TestHelper;
 
 public class MLUploadModelChunkResponseTest {
 
-	MLUploadModelChunkResponse mlUploadModelChunkResponse;
+    MLUploadModelChunkResponse mlUploadModelChunkResponse;
 
-	@Before
-	public void setup() {
-		mlUploadModelChunkResponse = new MLUploadModelChunkResponse("Status");
-	}
+    @Before
+    public void setup() {
+        mlUploadModelChunkResponse = new MLUploadModelChunkResponse("Status");
+    }
 
-	@Test
-	public void writeTo_Success() throws IOException {
-		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-		mlUploadModelChunkResponse.writeTo(bytesStreamOutput);
-		MLUploadModelChunkResponse newResponse = new MLUploadModelChunkResponse(bytesStreamOutput.bytes().streamInput());
-		assertEquals(mlUploadModelChunkResponse.getStatus(), newResponse.getStatus());
-	}
+    @Test
+    public void writeTo_Success() throws IOException {
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        mlUploadModelChunkResponse.writeTo(bytesStreamOutput);
+        MLUploadModelChunkResponse newResponse = new MLUploadModelChunkResponse(bytesStreamOutput.bytes().streamInput());
+        assertEquals(mlUploadModelChunkResponse.getStatus(), newResponse.getStatus());
+    }
 
-	@Test
-	public void testToXContent() throws IOException {
-		XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
-		mlUploadModelChunkResponse.toXContent(builder, EMPTY_PARAMS);
-		assertNotNull(builder);
-		String jsonStr = TestHelper.xContentBuilderToString(builder);
-		final String expected = "{\"status\":\"Status\"}";
-		assertEquals(expected, jsonStr);
-	}
+    @Test
+    public void testToXContent() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        mlUploadModelChunkResponse.toXContent(builder, EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = TestHelper.xContentBuilderToString(builder);
+        final String expected = "{\"status\":\"Status\"}";
+        assertEquals(expected, jsonStr);
+    }
 }

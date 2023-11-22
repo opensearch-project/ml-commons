@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.transport.deploy;
 
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
+import java.util.Map;
+
 import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -13,8 +15,8 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
-import java.util.Map;
+import lombok.extern.log4j.Log4j2;
+
 @Log4j2
 public class MLDeployModelNodeResponse extends BaseNodeResponse implements ToXContentFragment {
 
@@ -27,6 +29,7 @@ public class MLDeployModelNodeResponse extends BaseNodeResponse implements ToXCo
         super(node);
         this.modelDeployStatus = modelDeployStatus;
     }
+
     /**
      * Constructor
      *
@@ -36,7 +39,7 @@ public class MLDeployModelNodeResponse extends BaseNodeResponse implements ToXCo
     public MLDeployModelNodeResponse(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
-            this.modelDeployStatus = in.readMap(s -> s.readString(), s-> s.readString());
+            this.modelDeployStatus = in.readMap(s -> s.readString(), s -> s.readString());
         }
 
     }

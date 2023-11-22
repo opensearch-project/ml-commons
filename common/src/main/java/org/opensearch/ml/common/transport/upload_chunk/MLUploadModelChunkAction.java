@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
-
 import org.opensearch.action.ActionType;
 
 public class MLUploadModelChunkAction extends ActionType<MLUploadModelChunkResponse> {

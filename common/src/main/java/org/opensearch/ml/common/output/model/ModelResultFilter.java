@@ -1,19 +1,20 @@
 package org.opensearch.ml.common.output.model;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.experimental.FieldDefaults;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.xcontent.XContentParser;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.XContentParser;
+
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.experimental.FieldDefaults;
 
 /**
  * This class is to filter model results.
@@ -47,10 +48,11 @@ public class ModelResultFilter implements Writeable {
     protected List<Integer> targetResponsePositions;
 
     @Builder
-    public ModelResultFilter(boolean returnBytes,
-                             boolean returnNumber,
-                             List<String> targetResponse,
-                             List<Integer> targetResponsePositions
+    public ModelResultFilter(
+        boolean returnBytes,
+        boolean returnNumber,
+        List<String> targetResponse,
+        List<Integer> targetResponsePositions
     ) {
         this.returnBytes = returnBytes;
         this.returnNumber = returnNumber;
@@ -65,7 +67,7 @@ public class ModelResultFilter implements Writeable {
         if (streamInput.readBoolean()) {
             int size = streamInput.readInt();
             targetResponsePositions = new ArrayList<>();
-            for (int i=0;i<size;i++) {
+            for (int i = 0; i < size; i++) {
                 targetResponsePositions.add(streamInput.readInt());
             }
         } else {

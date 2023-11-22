@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.transport.undeploy;
 
-import lombok.Getter;
+import java.io.IOException;
+import java.util.Map;
+
 import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -14,8 +16,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
-import java.util.Map;
+import lombok.Getter;
 
 @Getter
 public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToXContentFragment {
@@ -26,9 +27,10 @@ public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToX
     // This is to record before undeploy the model, which nodes are working nodes.
     private Map<String, String[]> modelWorkerNodeBeforeRemoval;
 
-    public MLUndeployModelNodeResponse(DiscoveryNode node,
-                                       Map<String, String> modelUndeployStatus,
-                                       Map<String, String[]> modelWorkerNodeBeforeRemoval
+    public MLUndeployModelNodeResponse(
+        DiscoveryNode node,
+        Map<String, String> modelUndeployStatus,
+        Map<String, String[]> modelWorkerNodeBeforeRemoval
     ) {
         super(node);
         this.modelUndeployStatus = modelUndeployStatus;
@@ -39,10 +41,10 @@ public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToX
     public MLUndeployModelNodeResponse(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
-            this.modelUndeployStatus = in.readMap(s -> s.readString(), s-> s.readString());
+            this.modelUndeployStatus = in.readMap(s -> s.readString(), s -> s.readString());
         }
         if (in.readBoolean()) {
-            this.modelWorkerNodeBeforeRemoval = in.readMap(s -> s.readString(), s-> s.readOptionalStringArray());
+            this.modelWorkerNodeBeforeRemoval = in.readMap(s -> s.readString(), s -> s.readOptionalStringArray());
         }
     }
 

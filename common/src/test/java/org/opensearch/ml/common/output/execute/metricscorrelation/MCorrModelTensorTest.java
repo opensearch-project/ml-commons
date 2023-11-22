@@ -5,24 +5,21 @@
 
 package org.opensearch.ml.common.output.execute.metricscorrelation;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class MCorrModelTensorTest {
 
@@ -33,11 +30,12 @@ public class MCorrModelTensorTest {
 
     @Before
     public void setUp() {
-        mCorrModelTensor = MCorrModelTensor.builder()
-                .event_pattern(new float[]{1.0f, 2.0f, 3.0f})
-                .event_window(new float[]{4.0f, 5.0f, 6.0f})
-                .suspected_metrics(new long[]{1, 2})
-                .build();
+        mCorrModelTensor = MCorrModelTensor
+            .builder()
+            .event_pattern(new float[] { 1.0f, 2.0f, 3.0f })
+            .event_window(new float[] { 4.0f, 5.0f, 6.0f })
+            .suspected_metrics(new long[] { 1, 2 })
+            .build();
     }
 
     @Test
@@ -78,4 +76,3 @@ public class MCorrModelTensorTest {
         assertEquals(parsedTensor, tensor);
     }
 }
-

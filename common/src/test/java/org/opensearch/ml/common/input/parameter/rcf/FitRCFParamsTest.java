@@ -5,17 +5,17 @@
 
 package org.opensearch.ml.common.input.parameter.rcf;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
 
 public class FitRCFParamsTest {
 
@@ -30,17 +30,18 @@ public class FitRCFParamsTest {
 
     @Before
     public void setUp() {
-        params = FitRCFParams.builder()
-                .numberOfTrees(10)
-                .shingleSize(8)
-                .sampleSize(256)
-                .outputAfter(32)
-                .timeDecay(0.001)
-                .anomalyRate(0.005)
-                .timeField("timestamp")
-                .dateFormat("yyyy-mm-dd")
-                .timeZone("UTC")
-                .build();
+        params = FitRCFParams
+            .builder()
+            .numberOfTrees(10)
+            .shingleSize(8)
+            .sampleSize(256)
+            .outputAfter(32)
+            .timeDecay(0.001)
+            .anomalyRate(0.005)
+            .timeField("timestamp")
+            .dateFormat("yyyy-mm-dd")
+            .timeZone("UTC")
+            .build();
     }
 
     @Test

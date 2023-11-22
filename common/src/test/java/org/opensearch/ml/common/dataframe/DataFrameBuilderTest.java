@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,8 +18,6 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 
-import static org.junit.Assert.assertEquals;
-
 public class DataFrameBuilderTest {
 
     @Rule
@@ -25,10 +25,7 @@ public class DataFrameBuilderTest {
 
     @Test
     public void emptyDataFrame_Success() {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{ColumnMeta.builder()
-                .name("k1")
-                .columnType(ColumnType.DOUBLE)
-                .build()};
+        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build() };
         DataFrame dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
         assertEquals(0, dataFrame.size());
     }
@@ -68,9 +65,7 @@ public class DataFrameBuilderTest {
     public void load_Success_ColumnMetasAndInputMapList() {
         Map<String, Object> map = new HashMap<>();
         map.put("k1", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[]{
-                ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build()
-        };
+        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build() };
         DataFrame dataFrame = DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
         assertEquals(1, dataFrame.size());
     }
@@ -91,17 +86,13 @@ public class DataFrameBuilderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void load_Exception_ColumnMetasAndEmptyInputMapList() {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{
-                ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build()
-        };
+        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build() };
         DataFrameBuilder.load(columnMetas, Collections.emptyList());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void load_Exception_ColumnMetasAndNullInputMapList() {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{
-                ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build()
-        };
+        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build() };
         DataFrameBuilder.load(columnMetas, null);
     }
 
@@ -112,10 +103,9 @@ public class DataFrameBuilderTest {
 
         Map<String, Object> map = new HashMap<>();
         map.put("k1", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[]{
-                ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build(),
-                ColumnMeta.builder().name("k2").columnType(ColumnType.DOUBLE).build()
-        };
+        ColumnMeta[] columnMetas = new ColumnMeta[] {
+            ColumnMeta.builder().name("k1").columnType(ColumnType.DOUBLE).build(),
+            ColumnMeta.builder().name("k2").columnType(ColumnType.DOUBLE).build() };
         DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
     }
 
@@ -126,9 +116,7 @@ public class DataFrameBuilderTest {
 
         Map<String, Object> map = new HashMap<>();
         map.put("k1", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[]{
-                ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build()
-        };
+        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build() };
         DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
     }
 
@@ -139,9 +127,7 @@ public class DataFrameBuilderTest {
 
         Map<String, Object> map = new HashMap<>();
         map.put("k2", 2.3D);
-        ColumnMeta[] columnMetas = new ColumnMeta[]{
-                ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build()
-        };
+        ColumnMeta[] columnMetas = new ColumnMeta[] { ColumnMeta.builder().name("k1").columnType(ColumnType.INTEGER).build() };
         DataFrameBuilder.load(columnMetas, Collections.singletonList(map));
     }
 

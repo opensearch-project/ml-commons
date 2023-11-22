@@ -1,5 +1,8 @@
 package org.opensearch.ml.common.input.remote;
 
+import java.io.IOException;
+import java.util.Collections;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -12,9 +15,6 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.util.Collections;
-
 public class RemoteInferenceMLInputTest {
 
     @Test
@@ -22,7 +22,7 @@ public class RemoteInferenceMLInputTest {
         RemoteInferenceMLInput input = createRemoteInferenceMLInput();
         Assert.assertNotNull(input.getInputDataset());
         Assert.assertEquals(MLInputDataType.REMOTE, input.getInputDataset().getInputDataType());
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet)input.getInputDataset();
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) input.getInputDataset();
         Assert.assertEquals(1, inputDataSet.getParameters().size());
         Assert.assertEquals("hello world", inputDataSet.getParameters().get("prompt"));
     }
@@ -36,15 +36,20 @@ public class RemoteInferenceMLInputTest {
         RemoteInferenceMLInput input = new RemoteInferenceMLInput(output.bytes().streamInput());
         Assert.assertNotNull(input.getInputDataset());
         Assert.assertEquals(MLInputDataType.REMOTE, input.getInputDataset().getInputDataType());
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet)input.getInputDataset();
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) input.getInputDataset();
         Assert.assertEquals(1, inputDataSet.getParameters().size());
         Assert.assertEquals("hello world", inputDataSet.getParameters().get("prompt"));
     }
 
     private static RemoteInferenceMLInput createRemoteInferenceMLInput() throws IOException {
         String jsonStr = "{ \"parameters\": { \"prompt\": \"hello world\" } }";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         RemoteInferenceMLInput input = new RemoteInferenceMLInput(parser, FunctionName.REMOTE);
         return input;

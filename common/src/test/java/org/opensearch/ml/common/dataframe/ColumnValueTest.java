@@ -5,11 +5,11 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import static org.junit.Assert.assertTrue;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-
-import static org.junit.Assert.assertTrue;
 
 public class ColumnValueTest {
 

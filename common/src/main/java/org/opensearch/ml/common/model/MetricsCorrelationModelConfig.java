@@ -5,18 +5,18 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 
-import java.io.IOException;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Setter
 @Getter
@@ -29,7 +29,7 @@ public class MetricsCorrelationModelConfig extends MLModelConfig {
         super(modelType, allConfig);
     }
 
-    public MetricsCorrelationModelConfig(StreamInput in) throws IOException{
+    public MetricsCorrelationModelConfig(StreamInput in) throws IOException {
         super(in);
     }
 

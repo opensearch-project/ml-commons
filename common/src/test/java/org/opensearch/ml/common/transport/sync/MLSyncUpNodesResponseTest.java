@@ -1,5 +1,11 @@
 package org.opensearch.ml.common.transport.sync;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -7,13 +13,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-
-import java.io.IOException;
-import java.util.*;
-
-import static org.junit.Assert.assertEquals;
-
-import java.util.List;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLSyncUpNodesResponseTest {

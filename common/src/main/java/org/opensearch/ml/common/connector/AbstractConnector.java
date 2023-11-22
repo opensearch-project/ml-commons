@@ -5,8 +5,16 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
@@ -16,15 +24,8 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.utils.StringUtils;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
-import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 public abstract class AbstractConnector implements Connector {
@@ -101,7 +102,7 @@ public abstract class AbstractConnector implements Connector {
             }
             return;
         }
-        if (response instanceof String && isJson((String)response)) {
+        if (response instanceof String && isJson((String) response)) {
             Map<String, Object> data = StringUtils.fromJson((String) response, ML_MAP_RESPONSE_KEY);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
         } else {

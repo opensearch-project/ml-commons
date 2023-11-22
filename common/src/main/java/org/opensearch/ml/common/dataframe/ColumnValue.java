@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import java.io.IOException;
+import java.util.Objects;
+
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
-import java.util.Objects;
 
 public interface ColumnValue extends Writeable, ToXContentObject {
 

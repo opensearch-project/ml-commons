@@ -1,11 +1,11 @@
 package org.opensearch.ml.common.utils;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.junit.Assert;
+import org.junit.Test;
 
 public class StringUtilsTest {
 
@@ -45,12 +45,13 @@ public class StringUtilsTest {
 
     @Test
     public void fromJson_NestedMap() {
-        Map<String, Object> response = StringUtils.fromJson("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "response");
+        Map<String, Object> response = StringUtils
+            .fromJson("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "response");
         Assert.assertEquals(1, response.size());
         Assert.assertTrue(response.get("key") instanceof Map);
-        Map nestedMap = (Map)response.get("key");
+        Map nestedMap = (Map) response.get("key");
         Assert.assertEquals("nested_value", nestedMap.get("nested_key"));
-        List list = (List)nestedMap.get("nested_array");
+        List list = (List) nestedMap.get("nested_array");
         Assert.assertEquals(2, list.size());
         Assert.assertEquals(1.0, list.get(0));
         Assert.assertEquals("a", list.get(1));
@@ -61,7 +62,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJson("[1, \"a\"]", "response");
         Assert.assertEquals(1, response.size());
         Assert.assertTrue(response.get("response") instanceof List);
-        List list = (List)response.get("response");
+        List list = (List) response.get("response");
         Assert.assertEquals(1.0, list.get(0));
         Assert.assertEquals("a", list.get(1));
     }
@@ -71,7 +72,7 @@ public class StringUtilsTest {
         Map<String, Object> response = StringUtils.fromJson("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "response");
         Assert.assertEquals(1, response.size());
         Assert.assertTrue(response.get("response") instanceof List);
-        List list = (List)response.get("response");
+        List list = (List) response.get("response");
         Assert.assertEquals(1.0, list.get(0));
         Assert.assertEquals("a", list.get(1));
         Assert.assertTrue(list.get(2) instanceof List);
@@ -84,8 +85,8 @@ public class StringUtilsTest {
         parameters.put("key1", "value1");
         parameters.put("key2", 2);
         parameters.put("key3", 2.1);
-        parameters.put("key4", new int[]{10, 20});
-        parameters.put("key5", new Object[]{1.01, "abc"});
+        parameters.put("key4", new int[] { 10, 20 });
+        parameters.put("key5", new Object[] { 1.01, "abc" });
         Map<String, String> parameterMap = StringUtils.getParameterMap(parameters);
         System.out.println(parameterMap);
         Assert.assertEquals(5, parameterMap.size());

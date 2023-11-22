@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -14,40 +19,35 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
-public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
+public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
-    public static final String MODEL_NAME_FIELD = "name"; //mandatory
-    public static final String DESCRIPTION_FIELD = "description"; //optional
+    public static final String MODEL_NAME_FIELD = "name"; // mandatory
+    public static final String DESCRIPTION_FIELD = "description"; // optional
 
     public static final String VERSION_FIELD = "version";
-    public static final String MODEL_FORMAT_FIELD = "model_format"; //mandatory
+    public static final String MODEL_FORMAT_FIELD = "model_format"; // mandatory
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value"; //mandatory
-    public static final String MODEL_CONFIG_FIELD = "model_config"; //mandatory
-    public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //mandatory
-    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //optional
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String ACCESS_MODE = "access_mode"; //optional
-    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
+    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value"; // mandatory
+    public static final String MODEL_CONFIG_FIELD = "model_config"; // mandatory
+    public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; // mandatory
+    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // optional
+    public static final String ACCESS_MODE = "access_mode"; // optional
+    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; // optional
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
-
 
     private FunctionName functionName;
     private String name;
@@ -70,10 +70,23 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private Boolean doesVersionCreateModelGroup;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
-                                    AccessMode accessMode,
-                                    Boolean isAddAllBackendRoles,
-                                    Boolean doesVersionCreateModelGroup) {
+    public MLRegisterModelMetaInput(
+        String name,
+        FunctionName functionName,
+        String modelGroupId,
+        String version,
+        String description,
+        MLModelFormat modelFormat,
+        MLModelState modelState,
+        Long modelContentSizeInBytes,
+        String modelContentHashValue,
+        MLModelConfig modelConfig,
+        Integer totalChunks,
+        List<String> backendRoles,
+        AccessMode accessMode,
+        Boolean isAddAllBackendRoles,
+        Boolean doesVersionCreateModelGroup
+    ) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -88,7 +101,32 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (modelContentHashValue == null) {
             throw new IllegalArgumentException("model content hash value is null");
         }
-        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently, we only support one type of sparse model, which is pretrained, and it doesn't necessitate a model configuration.
+        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The
+                                                                                                                                   // tokenize
+                                                                                                                                   // model
+                                                                                                                                   // doesn't
+                                                                                                                                   // require
+                                                                                                                                   // a
+                                                                                                                                   // model
+                                                                                                                                   // configuration.
+                                                                                                                                   // Currently,
+                                                                                                                                   // we
+                                                                                                                                   // only
+                                                                                                                                   // support
+                                                                                                                                   // one
+                                                                                                                                   // type
+                                                                                                                                   // of
+                                                                                                                                   // sparse
+                                                                                                                                   // model,
+                                                                                                                                   // which
+                                                                                                                                   // is
+                                                                                                                                   // pretrained,
+                                                                                                                                   // and it
+                                                                                                                                   // doesn't
+                                                                                                                                   // necessitate
+                                                                                                                                   // a
+                                                                                                                                   // model
+                                                                                                                                   // configuration.
             throw new IllegalArgumentException("model config is null");
         }
         if (totalChunks == null) {
@@ -110,7 +148,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
     }
 
-    public MLRegisterModelMetaInput(StreamInput in) throws IOException{
+    public MLRegisterModelMetaInput(StreamInput in) throws IOException {
         this.name = in.readString();
         this.functionName = in.readEnum(FunctionName.class);
         this.modelGroupId = in.readOptionalString();
@@ -296,7 +334,23 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup);
+        return new MLRegisterModelMetaInput(
+            name,
+            functionName,
+            modelGroupId,
+            version,
+            description,
+            modelFormat,
+            modelState,
+            modelContentSizeInBytes,
+            modelContentHashValue,
+            modelConfig,
+            totalChunks,
+            backendRoles,
+            accessMode,
+            isAddAllBackendRoles,
+            doesVersionCreateModelGroup
+        );
     }
 
 }

@@ -5,20 +5,20 @@
 
 package org.opensearch.ml.common.transport.model;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 
 public class MLModelDeleteRequestTest {
     private String modelId;
@@ -30,8 +30,7 @@ public class MLModelDeleteRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
-                .modelId(modelId).build();
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlModelDeleteRequest.writeTo(bytesStreamOutput);
         MLModelDeleteRequest parsedModel = new MLModelDeleteRequest(bytesStreamOutput.bytes().streamInput());
@@ -40,8 +39,7 @@ public class MLModelDeleteRequestTest {
 
     @Test
     public void validate_Success() {
-        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
-                .modelId(modelId).build();
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
         ActionRequestValidationException actionRequestValidationException = mlModelDeleteRequest.validate();
         assertNull(actionRequestValidationException);
     }
@@ -56,8 +54,7 @@ public class MLModelDeleteRequestTest {
 
     @Test
     public void fromActionRequest_Success() {
-        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
-                .modelId(modelId).build();
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -90,11 +87,9 @@ public class MLModelDeleteRequestTest {
         MLModelDeleteRequest.fromActionRequest(actionRequest);
     }
 
-
     @Test
     public void fromActionRequestWithModelDeleteRequest_Success() {
-        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
-                .modelId(modelId).build();
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
         MLModelDeleteRequest mlModelDeleteRequestFromActionRequest = MLModelDeleteRequest.fromActionRequest(mlModelDeleteRequest);
         assertSame(mlModelDeleteRequest, mlModelDeleteRequestFromActionRequest);
         assertEquals(mlModelDeleteRequest.getModelId(), mlModelDeleteRequestFromActionRequest.getModelId());

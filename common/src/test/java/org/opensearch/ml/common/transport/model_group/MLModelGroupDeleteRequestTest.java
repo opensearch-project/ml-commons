@@ -1,17 +1,17 @@
 package org.opensearch.ml.common.transport.model_group;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
 
 public class MLModelGroupDeleteRequestTest {
 
@@ -24,8 +24,7 @@ public class MLModelGroupDeleteRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = MLModelGroupDeleteRequest.builder()
-                .modelGroupId(modelGroupId).build();
+        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = MLModelGroupDeleteRequest.builder().modelGroupId(modelGroupId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlModelGroupDeleteRequest.writeTo(bytesStreamOutput);
         MLModelGroupDeleteRequest parsedModel = new MLModelGroupDeleteRequest(bytesStreamOutput.bytes().streamInput());
@@ -42,8 +41,7 @@ public class MLModelGroupDeleteRequestTest {
 
     @Test
     public void fromActionRequest_Success() {
-        MLModelGroupDeleteRequest mlModelDeleteRequest = MLModelGroupDeleteRequest.builder()
-                .modelGroupId(modelGroupId).build();
+        MLModelGroupDeleteRequest mlModelDeleteRequest = MLModelGroupDeleteRequest.builder().modelGroupId(modelGroupId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

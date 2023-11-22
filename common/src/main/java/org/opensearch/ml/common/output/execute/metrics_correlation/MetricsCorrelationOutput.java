@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.common.output.execute.metrics_correlation;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
@@ -18,9 +18,10 @@ import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.output.MLOutputType;
 import org.opensearch.ml.common.output.Output;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import lombok.Builder;
+import lombok.Data;
+import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Output of metrics correlation algorithm results
@@ -28,7 +29,7 @@ import java.util.List;
 
 @Log4j2
 @Data
-@ExecuteOutput(algorithms={FunctionName.METRICS_CORRELATION})
+@ExecuteOutput(algorithms = { FunctionName.METRICS_CORRELATION })
 public class MetricsCorrelationOutput implements Output {
 
     private static final MLOutputType OUTPUT_TYPE = MLOutputType.MCORR_TENSOR;
@@ -45,7 +46,7 @@ public class MetricsCorrelationOutput implements Output {
         if (in.readBoolean()) {
             modelOutput = new ArrayList<>();
             int size = in.readInt();
-            for (int i=0; i<size; i++) {
+            for (int i = 0; i < size; i++) {
                 modelOutput.add(new MCorrModelTensors(in));
             }
         }

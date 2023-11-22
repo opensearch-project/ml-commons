@@ -9,11 +9,11 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.annotation.InputDataSet;
@@ -60,7 +60,9 @@ public class SearchQueryInputDataset extends MLInputDataset {
     public SearchQueryInputDataset(StreamInput streaminput) throws IOException {
         super(MLInputDataType.SEARCH_QUERY);
         String searchString = streaminput.readString();
-        XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchString);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchString);
         this.searchSourceBuilder = SearchSourceBuilder.fromXContent(parser);
         this.indices = streaminput.readStringList();
     }

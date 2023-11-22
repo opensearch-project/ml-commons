@@ -1,16 +1,16 @@
 package org.opensearch.ml.common.dataset.remote;
 
-import org.junit.Assert;
-import org.junit.Test;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.ml.common.dataset.MLInputDataset;
+import static org.opensearch.ml.common.dataset.MLInputDataType.REMOTE;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.opensearch.ml.common.dataset.MLInputDataType.REMOTE;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 
 public class RemoteInferenceInputDataSetTest {
 

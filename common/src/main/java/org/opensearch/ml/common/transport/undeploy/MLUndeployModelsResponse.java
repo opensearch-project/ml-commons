@@ -5,14 +5,15 @@
 
 package org.opensearch.ml.common.transport.undeploy;
 
-import lombok.Getter;
+import java.io.IOException;
+
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
+import lombok.Getter;
 
 @Getter
 public class MLUndeployModelsResponse extends ActionResponse implements ToXContentObject {

@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.transport.connector;
 
+import java.io.IOException;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -12,8 +14,6 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
 
 public class MLCreateConnectorResponseTests {
 

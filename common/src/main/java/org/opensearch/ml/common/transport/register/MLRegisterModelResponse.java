@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.common.transport.register;
 
-import lombok.Getter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
@@ -14,12 +18,8 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.transport.MLTaskResponse;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import lombok.Getter;
 
 @Getter
 public class MLRegisterModelResponse extends ActionResponse implements ToXContentObject {
@@ -40,12 +40,12 @@ public class MLRegisterModelResponse extends ActionResponse implements ToXConten
 
     public MLRegisterModelResponse(String taskId, String status) {
         this.taskId = taskId;
-        this.status= status;
+        this.status = status;
     }
 
     public MLRegisterModelResponse(String taskId, String status, String modelId) {
         this.taskId = taskId;
-        this.status= status;
+        this.status = status;
         this.modelId = modelId;
     }
 
@@ -73,8 +73,7 @@ public class MLRegisterModelResponse extends ActionResponse implements ToXConten
             return (MLRegisterModelResponse) actionResponse;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionResponse.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLRegisterModelResponse(input);

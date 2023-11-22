@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import lombok.Builder;
-import lombok.Getter;
+import static org.opensearch.action.ValidateActions.addValidationError;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -15,12 +20,8 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
+import lombok.Builder;
+import lombok.Getter;
 
 @Getter
 public class MLUpdateConnectorRequest extends ActionRequest {
@@ -72,8 +73,7 @@ public class MLUpdateConnectorRequest extends ActionRequest {
             return (MLUpdateConnectorRequest) actionRequest;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLUpdateConnectorRequest(input);

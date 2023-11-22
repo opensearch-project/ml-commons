@@ -5,11 +5,14 @@
 
 package org.opensearch.ml.common.input.parameter.regression;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Locale;
+
+import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -17,20 +20,18 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 
-import java.io.IOException;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
-@MLAlgoParameter(algorithms={FunctionName.LINEAR_REGRESSION})
+@MLAlgoParameter(algorithms = { FunctionName.LINEAR_REGRESSION })
 public class LinearRegressionParams implements MLAlgoParams {
 
     public static final String PARSE_FIELD_NAME = FunctionName.LINEAR_REGRESSION.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            MLAlgoParams.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        MLAlgoParams.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String OBJECTIVE_FIELD = "objective";
@@ -64,7 +65,22 @@ public class LinearRegressionParams implements MLAlgoParams {
     private String target;
 
     @Builder(toBuilder = true)
-    public LinearRegressionParams(ObjectiveType objectiveType, OptimizerType optimizerType, Double learningRate, MomentumType momentumType, Double momentumFactor, Double epsilon, Double beta1, Double beta2, Double decayRate, Integer epochs, Integer batchSize, Integer loggingInterval, Long seed, String target) {
+    public LinearRegressionParams(
+        ObjectiveType objectiveType,
+        OptimizerType optimizerType,
+        Double learningRate,
+        MomentumType momentumType,
+        Double momentumFactor,
+        Double epsilon,
+        Double beta1,
+        Double beta2,
+        Double decayRate,
+        Integer epochs,
+        Integer batchSize,
+        Integer loggingInterval,
+        Long seed,
+        String target
+    ) {
         this.objectiveType = objectiveType;
         this.optimizerType = optimizerType;
         this.learningRate = learningRate;
@@ -173,7 +189,22 @@ public class LinearRegressionParams implements MLAlgoParams {
                     break;
             }
         }
-        return new LinearRegressionParams(objective,  optimizerType,  learningRate,  momentumType,  momentumFactor, epsilon, beta1, beta2,decayRate, epochs, batchSize, loggingInterval, seed, target);
+        return new LinearRegressionParams(
+            objective,
+            optimizerType,
+            learningRate,
+            momentumType,
+            momentumFactor,
+            epsilon,
+            beta1,
+            beta2,
+            decayRate,
+            epochs,
+            batchSize,
+            loggingInterval,
+            seed,
+            target
+        );
     }
 
     @Override
@@ -272,8 +303,9 @@ public class LinearRegressionParams implements MLAlgoParams {
         SQUARED_LOSS,
         ABSOLUTE_LOSS,
         HUBER;
+
         public static ObjectiveType from(String value) {
-            try{
+            try {
                 return ObjectiveType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong objective type");
@@ -286,7 +318,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         NESTEROV;
 
         public static MomentumType from(String value) {
-            try{
+            try {
                 return MomentumType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong momentum type");
@@ -304,7 +336,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         RMS_PROP;
 
         public static OptimizerType from(String value) {
-            try{
+            try {
                 return OptimizerType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong optimizer type");

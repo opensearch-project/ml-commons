@@ -5,20 +5,20 @@
 
 package org.opensearch.ml.common.transport.model;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 
 public class MLModelGetRequestTest {
     private String modelId;
@@ -30,8 +30,7 @@ public class MLModelGetRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder()
-                .modelId(modelId).build();
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlModelGetRequest.writeTo(bytesStreamOutput);
         MLModelGetRequest parsedModel = new MLModelGetRequest(bytesStreamOutput.bytes().streamInput());
@@ -48,17 +47,16 @@ public class MLModelGetRequestTest {
 
     @Test
     public void fromActionRequest_Success() {
-        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder()
-                .modelId(modelId).build();
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
-              return null;
+                return null;
             }
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-              mlModelGetRequest.writeTo(out);
+                mlModelGetRequest.writeTo(out);
             }
         };
         MLModelGetRequest result = MLModelGetRequest.fromActionRequest(actionRequest);
@@ -71,12 +69,12 @@ public class MLModelGetRequestTest {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
-              return null;
+                return null;
             }
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-              throw new IOException("test");
+                throw new IOException("test");
             }
         };
         MLModelGetRequest.fromActionRequest(actionRequest);

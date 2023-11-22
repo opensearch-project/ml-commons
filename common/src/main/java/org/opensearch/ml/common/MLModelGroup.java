@@ -5,16 +5,7 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.common.util.CollectionUtils;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -22,21 +13,30 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 public class MLModelGroup implements ToXContentObject {
-    public static final String MODEL_GROUP_NAME_FIELD = "name"; //name of the model group
-    public static final String DESCRIPTION_FIELD = "description"; //description of the model group
-    public static final String LATEST_VERSION_FIELD = "latest_version"; //latest model version added to the model group
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; //back_end roles as specified by the owner/admin
-    public static final String OWNER = "owner"; //user who creates/owns the model group
+    public static final String MODEL_GROUP_NAME_FIELD = "name"; // name of the model group
+    public static final String DESCRIPTION_FIELD = "description"; // description of the model group
+    public static final String LATEST_VERSION_FIELD = "latest_version"; // latest model version added to the model group
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // back_end roles as specified by the owner/admin
+    public static final String OWNER = "owner"; // user who creates/owns the model group
 
-    public static final String ACCESS = "access"; //assigned to public, private, or null when model group created
-    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //unique ID assigned to each model group
-    public static final String CREATED_TIME_FIELD = "created_time"; //model group created time stamp
-    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; //updated whenever a new model version is created
-
+    public static final String ACCESS = "access"; // assigned to public, private, or null when model group created
+    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // unique ID assigned to each model group
+    public static final String CREATED_TIME_FIELD = "created_time"; // model group created time stamp
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // updated whenever a new model version is created
 
     @Setter
     private String name;
@@ -52,13 +52,18 @@ public class MLModelGroup implements ToXContentObject {
     private Instant createdTime;
     private Instant lastUpdatedTime;
 
-
     @Builder(toBuilder = true)
-    public MLModelGroup(String name, String description, int latestVersion,
-                        List<String> backendRoles, User owner, String access,
-                        String modelGroupId,
-                        Instant createdTime,
-                        Instant lastUpdatedTime) {
+    public MLModelGroup(
+        String name,
+        String description,
+        int latestVersion,
+        List<String> backendRoles,
+        User owner,
+        String access,
+        String modelGroupId,
+        Instant createdTime,
+        Instant lastUpdatedTime
+    ) {
         this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
         this.latestVersion = latestVersion;
@@ -70,8 +75,7 @@ public class MLModelGroup implements ToXContentObject {
         this.lastUpdatedTime = lastUpdatedTime;
     }
 
-
-    public MLModelGroup(StreamInput input) throws IOException{
+    public MLModelGroup(StreamInput input) throws IOException {
         name = input.readString();
         description = input.readOptionalString();
         latestVersion = input.readInt();
@@ -194,19 +198,19 @@ public class MLModelGroup implements ToXContentObject {
                     break;
             }
         }
-        return MLModelGroup.builder()
-                .name(name)
-                .description(description)
-                .backendRoles(backendRoles)
-                .latestVersion(latestVersion)
-                .owner(owner)
-                .access(access)
-                .modelGroupId(modelGroupId)
-                .createdTime(createdTime)
-                .lastUpdatedTime(lastUpdateTime)
-                .build();
+        return MLModelGroup
+            .builder()
+            .name(name)
+            .description(description)
+            .backendRoles(backendRoles)
+            .latestVersion(latestVersion)
+            .owner(owner)
+            .access(access)
+            .modelGroupId(modelGroupId)
+            .createdTime(createdTime)
+            .lastUpdatedTime(lastUpdateTime)
+            .build();
     }
-
 
     public static MLModelGroup fromStream(StreamInput in) throws IOException {
         MLModelGroup mlModel = new MLModelGroup(in);

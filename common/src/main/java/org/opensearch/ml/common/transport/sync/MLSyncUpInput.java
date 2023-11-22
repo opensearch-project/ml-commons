@@ -5,15 +5,16 @@
 
 package org.opensearch.ml.common.transport.sync;
 
-import lombok.Builder;
-import lombok.Data;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MLSyncUpInput implements Writeable {
@@ -36,14 +37,16 @@ public class MLSyncUpInput implements Writeable {
     private Map<String, Boolean> deployToAllNodes;
 
     @Builder
-    public MLSyncUpInput(boolean getDeployedModels,
-                         Map<String, String[]> addedWorkerNodes,
-                         Map<String, String[]> removedWorkerNodes,
-                         Map<String, Set<String>> modelRoutingTable,
-                         Map<String, Set<String>> runningDeployModelTasks,
-                         Map<String, Boolean> deployToAllNodes,
-                         boolean clearRoutingTable,
-                         boolean syncRunningDeployModelTasks) {
+    public MLSyncUpInput(
+        boolean getDeployedModels,
+        Map<String, String[]> addedWorkerNodes,
+        Map<String, String[]> removedWorkerNodes,
+        Map<String, Set<String>> modelRoutingTable,
+        Map<String, Set<String>> runningDeployModelTasks,
+        Map<String, Boolean> deployToAllNodes,
+        boolean clearRoutingTable,
+        boolean syncRunningDeployModelTasks
+    ) {
         this.getDeployedModels = getDeployedModels;
         this.addedWorkerNodes = addedWorkerNodes;
         this.removedWorkerNodes = removedWorkerNodes;
@@ -54,7 +57,7 @@ public class MLSyncUpInput implements Writeable {
         this.syncRunningDeployModelTasks = syncRunningDeployModelTasks;
     }
 
-    public MLSyncUpInput(){}
+    public MLSyncUpInput() {}
 
     public MLSyncUpInput(StreamInput in) throws IOException {
         this.getDeployedModels = in.readBoolean();

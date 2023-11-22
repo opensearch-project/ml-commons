@@ -5,28 +5,24 @@
 
 package org.opensearch.ml.common.output.execute.metricscorrelation;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
-import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensors;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class MCorrModelTensorsTest {
 
@@ -39,16 +35,18 @@ public class MCorrModelTensorsTest {
     public void setUp() {
         String column = "model_tensor";
         Integer position = 1;
-        modelResultFilter = ModelResultFilter.builder()
-                .targetResponse(Arrays.asList(column))
-                .targetResponsePositions(Arrays.asList(position))
-                .build();
+        modelResultFilter = ModelResultFilter
+            .builder()
+            .targetResponse(Arrays.asList(column))
+            .targetResponsePositions(Arrays.asList(position))
+            .build();
 
-        MCorrModelTensor mCorrModelTensor = MCorrModelTensor.builder()
-                .event_pattern(new float[]{1.0f, 2.0f, 3.0f})
-                .event_window(new float[]{4.0f, 5.0f, 6.0f})
-                .suspected_metrics(new long[]{1, 2})
-                .build();
+        MCorrModelTensor mCorrModelTensor = MCorrModelTensor
+            .builder()
+            .event_pattern(new float[] { 1.0f, 2.0f, 3.0f })
+            .event_window(new float[] { 4.0f, 5.0f, 6.0f })
+            .suspected_metrics(new long[] { 1, 2 })
+            .build();
 
         mcorrModelTensors = MCorrModelTensors.builder().mCorrModelTensors(Arrays.asList(mCorrModelTensor)).build();
     }
@@ -81,4 +79,3 @@ public class MCorrModelTensorsTest {
         assertEquals(parsedTensors.getMCorrModelTensors(), tensors.getMCorrModelTensors());
     }
 }
-

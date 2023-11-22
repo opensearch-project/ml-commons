@@ -24,7 +24,7 @@ public class DataFrameBuilder {
      * @return empty data frame
      */
     public DataFrame emptyDataFrame(final ColumnMeta[] columnMetas) {
-        if(columnMetas == null || columnMetas.length == 0) {
+        if (columnMetas == null || columnMetas.length == 0) {
             throw new IllegalArgumentException("columnMetas array is null or empty");
         }
         return new DefaultDataFrame(columnMetas);
@@ -37,7 +37,7 @@ public class DataFrameBuilder {
      * @return data frame
      */
     public DataFrame load(final List<Map<String, Object>> input) {
-        if(input == null || input.isEmpty()) {
+        if (input == null || input.isEmpty()) {
             throw new IllegalArgumentException("input is null or empty");
         }
 
@@ -45,11 +45,8 @@ public class DataFrameBuilder {
         ColumnMeta[] columnMetas = new ColumnMeta[element.size()];
 
         int index = 0;
-        for(Map.Entry<String, Object> entry : element.entrySet()) {
-            ColumnMeta columnMeta = ColumnMeta.builder()
-                    .name(entry.getKey())
-                    .columnType(ColumnType.from(entry.getValue()))
-                    .build();
+        for (Map.Entry<String, Object> entry : element.entrySet()) {
+            ColumnMeta columnMeta = ColumnMeta.builder().name(entry.getKey()).columnType(ColumnType.from(entry.getValue())).build();
             columnMetas[index++] = columnMeta;
         }
 
@@ -63,36 +60,36 @@ public class DataFrameBuilder {
      * @param input input list of map objects
      * @return data frame
      */
-    public DataFrame load(final ColumnMeta[] columnMetas, final List<Map<String, Object>> input){
-        if(columnMetas == null || columnMetas.length == 0) {
+    public DataFrame load(final ColumnMeta[] columnMetas, final List<Map<String, Object>> input) {
+        if (columnMetas == null || columnMetas.length == 0) {
             throw new IllegalArgumentException("columnMetas array is null or empty");
         }
-        if(input == null || input.isEmpty()) {
+        if (input == null || input.isEmpty()) {
             throw new IllegalArgumentException("input data list is null or empty");
         }
 
         int columnSize = columnMetas.length;
 
         Map<String, Integer> columnsMap = new HashMap<>();
-        for(int i = 0; i < columnSize; i++) {
+        for (int i = 0; i < columnSize; i++) {
             columnsMap.put(columnMetas[i].getName(), i);
         }
 
         List<Row> rows = input.stream().map(item -> {
             Row row = new Row(columnSize);
-            if(item.size() != columnSize) {
+            if (item.size() != columnSize) {
                 throw new IllegalArgumentException("input item map size is different in the map");
             }
 
-            for(Map.Entry<String, Object> entry : item.entrySet()) {
-                if(!columnsMap.containsKey(entry.getKey())) {
+            for (Map.Entry<String, Object> entry : item.entrySet()) {
+                if (!columnsMap.containsKey(entry.getKey())) {
                     throw new IllegalArgumentException("field of input item doesn't exist in columns, filed:" + entry.getKey());
                 }
                 String columnName = entry.getKey();
                 int index = columnsMap.get(columnName);
                 ColumnType columnType = columnMetas[index].getColumnType();
                 ColumnValue value = ColumnValueBuilder.build(entry.getValue());
-                if(columnType != value.columnType()) {
+                if (columnType != value.columnType()) {
                     throw new IllegalArgumentException("the same field has different data type");
                 }
                 row.setValue(index, value);

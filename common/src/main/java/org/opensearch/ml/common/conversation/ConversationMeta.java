@@ -94,7 +94,6 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         out.writeOptionalString(user);
     }
 
-    
     /**
      * Convert this conversationMeta object into an IndexRequest so it can be indexed
      * @param index the index to send this conversation to. Should usually be .conversational-meta
@@ -102,19 +101,19 @@ public class ConversationMeta implements Writeable, ToXContentObject {
      */
     public IndexRequest toIndexRequest(String index) {
         IndexRequest request = new IndexRequest(index);
-        return request.id(this.id).source(
-            ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime,
-            ConversationalIndexConstants.META_NAME_FIELD, this.name
-        );
+        return request
+            .id(this.id)
+            .source(
+                ConversationalIndexConstants.META_CREATED_FIELD,
+                this.createdTime,
+                ConversationalIndexConstants.META_NAME_FIELD,
+                this.name
+            );
     }
 
     @Override
     public String toString() {
-        return "{id=" + id
-            + ", name=" + name
-            + ", created=" + createdTime.toString()
-            + ", user=" + user
-            + "}";
+        return "{id=" + id + ", name=" + name + ", created=" + createdTime.toString() + ", user=" + user + "}";
     }
 
     @Override
@@ -123,7 +122,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, this.id);
         builder.field(ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime);
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
-        if(this.user != null) {
+        if (this.user != null) {
             builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
         }
         builder.endObject();
@@ -132,14 +131,14 @@ public class ConversationMeta implements Writeable, ToXContentObject {
 
     @Override
     public boolean equals(Object other) {
-        if(!(other instanceof ConversationMeta)) {
+        if (!(other instanceof ConversationMeta)) {
             return false;
         }
         ConversationMeta otherConversation = (ConversationMeta) other;
-        return Objects.equals(this.id, otherConversation.id) &&
-           Objects.equals(this.user, otherConversation.user) &&
-           Objects.equals(this.createdTime, otherConversation.createdTime) &&
-           Objects.equals(this.name, otherConversation.name);
+        return Objects.equals(this.id, otherConversation.id)
+            && Objects.equals(this.user, otherConversation.user)
+            && Objects.equals(this.createdTime, otherConversation.createdTime)
+            && Objects.equals(this.name, otherConversation.name);
     }
-    
+
 }

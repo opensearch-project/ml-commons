@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.common.connector;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -22,16 +32,6 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.function.Function;
-
 public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -41,8 +41,8 @@ public class HttpConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = s -> "encrypted: "+s.toLowerCase(Locale.ROOT);
-        decryptFunction = s -> "decrypted: "+s.toUpperCase(Locale.ROOT);
+        encryptFunction = s -> "encrypted: " + s.toLowerCase(Locale.ROOT);
+        decryptFunction = s -> "decrypted: " + s.toUpperCase(Locale.ROOT);
     }
 
     @Test
@@ -71,33 +71,41 @@ public class HttpConnectorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals("{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
-                "\"protocol\":\"http\"," +
-                "\"parameters\":{\"input\":\"test input value\"}," +
-                "\"credential\":{\"key\":\"test_key_value\"}," +
-                "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
-                "\"headers\":{\"api_key\":\"${credential.key}\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-                "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-                "\"backend_roles\":[\"role1\",\"role2\"]," +
-                "\"access\":\"public\"}", content);
+        Assert
+            .assertEquals(
+                "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\","
+                    + "\"protocol\":\"http\","
+                    + "\"parameters\":{\"input\":\"test input value\"},"
+                    + "\"credential\":{\"key\":\"test_key_value\"},"
+                    + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                    + "\"headers\":{\"api_key\":\"${credential.key}\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+                    + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+                    + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
+                    + "\"backend_roles\":[\"role1\",\"role2\"],"
+                    + "\"access\":\"public\"}",
+                content
+            );
     }
-
 
     @Test
     public void constructor_Parser() throws IOException {
-        String jsonStr = "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
-                "\"protocol\":\"http\"," +
-                "\"parameters\":{\"input\":\"test input value\"}," +
-                "\"credential\":{\"key\":\"test_key_value\"}," +
-                "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
-                "\"headers\":{\"api_key\":\"${credential.key}\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-                "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-                "\"backend_roles\":[\"role1\",\"role2\"]," +
-                "\"access\":\"public\"}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        String jsonStr = "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\","
+            + "\"protocol\":\"http\","
+            + "\"parameters\":{\"input\":\"test input value\"},"
+            + "\"credential\":{\"key\":\"test_key_value\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"api_key\":\"${credential.key}\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+            + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
+            + "\"backend_roles\":[\"role1\",\"role2\"],"
+            + "\"access\":\"public\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
 
         HttpConnector connector = new HttpConnector("http", parser);
@@ -277,7 +285,15 @@ public class HttpConnectorTest {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
 
-        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
+        ConnectorAction action = new ConnectorAction(
+            actionType,
+            method,
+            url,
+            headers,
+            requestBody,
+            preProcessFunction,
+            postProcessFunction
+        );
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
@@ -285,17 +301,18 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        HttpConnector connector = HttpConnector.builder()
-                .name("test_connector_name")
-                .description("this is a test connector")
-                .version("1")
-                .protocol("http")
-                .parameters(parameters)
-                .credential(credential)
-                .actions(Arrays.asList(action))
-                .backendRoles(Arrays.asList("role1", "role2"))
-                .accessMode(AccessMode.PUBLIC)
-                .build();
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(action))
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .accessMode(AccessMode.PUBLIC)
+            .build();
         return connector;
     }
 

@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-
-import static org.junit.Assert.assertEquals;
 
 public class ColumnValueReaderTest {
     ColumnValueReader reader = new ColumnValueReader();
@@ -86,7 +86,7 @@ public class ColumnValueReaderTest {
 
     @Test
     public void read_ShortValue() throws IOException {
-        ColumnValue value = new ShortValue((short)2);
+        ColumnValue value = new ShortValue((short) 2);
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         value.writeTo(bytesStreamOutput);
         value = reader.read(bytesStreamOutput.bytes().streamInput());
@@ -96,7 +96,7 @@ public class ColumnValueReaderTest {
 
     @Test
     public void read_LongValue() throws IOException {
-        ColumnValue value = new LongValue((long)2);
+        ColumnValue value = new LongValue((long) 2);
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         value.writeTo(bytesStreamOutput);
         value = reader.read(bytesStreamOutput.bytes().streamInput());

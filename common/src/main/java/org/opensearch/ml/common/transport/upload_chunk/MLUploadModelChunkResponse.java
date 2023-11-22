@@ -5,7 +5,8 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
-import lombok.Getter;
+import java.io.IOException;
+
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -13,20 +14,20 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
+import lombok.Getter;
 
 public class MLUploadModelChunkResponse extends ActionResponse implements ToXContentObject {
     public static final String STATUS_FIELD = "status";
     @Getter
     private String status;
 
-    public MLUploadModelChunkResponse (StreamInput in) throws IOException {
+    public MLUploadModelChunkResponse(StreamInput in) throws IOException {
         super(in);
         this.status = in.readString();
     }
 
-    public MLUploadModelChunkResponse (String status) {
-        this.status= status;
+    public MLUploadModelChunkResponse(String status) {
+        this.status = status;
     }
 
     @Override
@@ -42,4 +43,3 @@ public class MLUploadModelChunkResponse extends ActionResponse implements ToXCon
         return builder;
     }
 }
-

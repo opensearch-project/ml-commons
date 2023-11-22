@@ -5,8 +5,14 @@
 
 package org.opensearch.ml.common.transport.register;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.Connector.createConnector;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -21,14 +27,8 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
-import static org.opensearch.ml.common.connector.Connector.createConnector;
+import lombok.Builder;
+import lombok.Data;
 
 /**
  * ML input data: algirithm name, parameters and input data set.
@@ -76,23 +76,24 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private Boolean doesVersionCreateModelGroup;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelInput(FunctionName functionName,
-                                String modelName,
-                                String modelGroupId,
-                                String version,
-                                String description,
-                                String url,
-                                String hashValue,
-                                MLModelFormat modelFormat,
-                                MLModelConfig modelConfig,
-                                boolean deployModel,
-                                String[] modelNodeIds,
-                                Connector connector,
-                                String connectorId,
-                                List<String> backendRoles,
-                                Boolean addAllBackendRoles,
-                                AccessMode accessMode,
-                                Boolean doesVersionCreateModelGroup
+    public MLRegisterModelInput(
+        FunctionName functionName,
+        String modelName,
+        String modelGroupId,
+        String version,
+        String description,
+        String url,
+        String hashValue,
+        MLModelFormat modelFormat,
+        MLModelConfig modelConfig,
+        boolean deployModel,
+        String[] modelNodeIds,
+        Connector connector,
+        String connectorId,
+        List<String> backendRoles,
+        Boolean addAllBackendRoles,
+        AccessMode accessMode,
+        Boolean doesVersionCreateModelGroup
     ) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
@@ -106,7 +107,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
             }
-            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently, we only support one type of sparse model, which is pretrained, and it doesn't necessitate a model configuration.
+            if (url != null
+                && modelConfig == null
+                && functionName != FunctionName.SPARSE_TOKENIZE
+                && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently,
+                                                                   // we only support one type of sparse model, which is pretrained, and it
+                                                                   // doesn't necessitate a model configuration.
                 throw new IllegalArgumentException("model config is null");
             }
         }
@@ -127,7 +133,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.accessMode = accessMode;
         this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
     }
-
 
     public MLRegisterModelInput(StreamInput in) throws IOException {
         this.functionName = in.readEnum(FunctionName.class);
@@ -261,7 +266,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel) throws IOException {
+    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel)
+        throws IOException {
         FunctionName functionName = null;
         String modelGroupId = null;
         String url = null;
@@ -335,7 +341,25 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup);
+        return new MLRegisterModelInput(
+            functionName,
+            modelName,
+            modelGroupId,
+            version,
+            description,
+            url,
+            hashValue,
+            modelFormat,
+            modelConfig,
+            deployModel,
+            modelNodeIds.toArray(new String[0]),
+            connector,
+            connectorId,
+            backendRoles,
+            addAllBackendRoles,
+            accessMode,
+            doesVersionCreateModelGroup
+        );
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -421,6 +445,24 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup);
+        return new MLRegisterModelInput(
+            functionName,
+            name,
+            modelGroupId,
+            version,
+            description,
+            url,
+            hashValue,
+            modelFormat,
+            modelConfig,
+            deployModel,
+            modelNodeIds.toArray(new String[0]),
+            connector,
+            connectorId,
+            backendRoles,
+            addAllBackendRoles,
+            accessMode,
+            doesVersionCreateModelGroup
+        );
     }
 }

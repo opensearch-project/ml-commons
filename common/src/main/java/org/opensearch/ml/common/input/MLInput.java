@@ -5,31 +5,32 @@
 
 package org.opensearch.ml.common.input;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.MLCommonsClassLoader;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.search.builder.SearchSourceBuilder;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLCommonsClassLoader;
+import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DefaultDataFrame;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.output.model.ModelResultFilter;
+import org.opensearch.search.builder.SearchSourceBuilder;
+
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * ML input data: algorithm name, parameters and input data set.
@@ -73,8 +74,14 @@ public class MLInput implements Input {
         this.inputDataset = inputDataset;
     }
 
-    public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder,
-                   List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
+    public MLInput(
+        FunctionName algorithm,
+        MLAlgoParams parameters,
+        SearchSourceBuilder searchSourceBuilder,
+        List<String> sourceIndices,
+        DataFrame dataFrame,
+        MLInputDataset inputDataset
+    ) {
         validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
@@ -130,12 +137,12 @@ public class MLInput implements Input {
         if (inputDataset != null) {
             switch (inputDataset.getInputDataType()) {
                 case SEARCH_QUERY:
-                    builder.field(INPUT_INDEX_FIELD, ((SearchQueryInputDataset)inputDataset).getIndices().toArray(new String[0]));
-                    builder.field(INPUT_QUERY_FIELD, ((SearchQueryInputDataset)inputDataset).getSearchSourceBuilder());
+                    builder.field(INPUT_INDEX_FIELD, ((SearchQueryInputDataset) inputDataset).getIndices().toArray(new String[0]));
+                    builder.field(INPUT_QUERY_FIELD, ((SearchQueryInputDataset) inputDataset).getSearchSourceBuilder());
                     break;
                 case DATA_FRAME:
                     builder.startObject(INPUT_DATA_FIELD);
-                    ((DataFrameInputDataset)inputDataset).getDataFrame().toXContent(builder, EMPTY_PARAMS);
+                    ((DataFrameInputDataset) inputDataset).getDataFrame().toXContent(builder, EMPTY_PARAMS);
                     builder.endObject();
                     break;
                 case TEXT_DOCS:
@@ -171,7 +178,8 @@ public class MLInput implements Input {
         FunctionName algorithm = FunctionName.from(algorithmName);
 
         if (MLCommonsClassLoader.canInitMLInput(algorithm)) {
-            MLInput mlInput = MLCommonsClassLoader.initMLInput(algorithm, new Object[]{parser, algorithm}, XContentParser.class, FunctionName.class);
+            MLInput mlInput = MLCommonsClassLoader
+                .initMLInput(algorithm, new Object[] { parser, algorithm }, XContentParser.class, FunctionName.class);
             mlInput.setAlgorithm(algorithm);
             return mlInput;
         }
@@ -239,7 +247,9 @@ public class MLInput implements Input {
             }
         }
         MLInputDataset inputDataSet = null;
-        if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.SPARSE_TOKENIZE) {
+        if (algorithm == FunctionName.TEXT_EMBEDDING
+            || algorithm == FunctionName.SPARSE_ENCODING
+            || algorithm == FunctionName.SPARSE_TOKENIZE) {
             ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
         }

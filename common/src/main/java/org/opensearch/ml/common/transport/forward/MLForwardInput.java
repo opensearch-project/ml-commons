@@ -5,9 +5,8 @@
 
 package org.opensearch.ml.common.transport.forward;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -15,7 +14,9 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Data;
+import lombok.extern.log4j.Log4j2;
 
 @Data
 @Log4j2
@@ -32,9 +33,17 @@ public class MLForwardInput implements Writeable {
     private MLRegisterModelInput registerModelInput;
 
     @Builder(toBuilder = true)
-    public MLForwardInput(String taskId, String modelId, String workerNodeId, MLForwardRequestType requestType,
-                          MLTask mlTask, MLInput modelInput,
-                          String error, String[] workerNodes, MLRegisterModelInput registerModelInput) {
+    public MLForwardInput(
+        String taskId,
+        String modelId,
+        String workerNodeId,
+        MLForwardRequestType requestType,
+        MLTask mlTask,
+        MLInput modelInput,
+        String error,
+        String[] workerNodes,
+        MLRegisterModelInput registerModelInput
+    ) {
         this.taskId = taskId;
         this.modelId = modelId;
         this.workerNodeId = workerNodeId;

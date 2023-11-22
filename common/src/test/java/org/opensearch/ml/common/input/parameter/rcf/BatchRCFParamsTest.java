@@ -5,17 +5,17 @@
 
 package org.opensearch.ml.common.input.parameter.rcf;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
 
 public class BatchRCFParamsTest {
 
@@ -30,13 +30,7 @@ public class BatchRCFParamsTest {
 
     @Before
     public void setUp() {
-        params = BatchRCFParams.builder()
-                .numberOfTrees(10)
-                .shingleSize(8)
-                .sampleSize(256)
-                .outputAfter(32)
-                .trainingDataSize(200)
-                .build();
+        params = BatchRCFParams.builder().numberOfTrees(10).shingleSize(8).sampleSize(256).outputAfter(32).trainingDataSize(200).build();
     }
 
     @Test

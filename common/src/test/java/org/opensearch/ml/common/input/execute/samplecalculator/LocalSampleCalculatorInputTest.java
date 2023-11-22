@@ -5,6 +5,13 @@
 
 package org.opensearch.ml.common.input.execute.samplecalculator;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -13,13 +20,6 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
 
 public class LocalSampleCalculatorInputTest {
 
@@ -42,10 +42,7 @@ public class LocalSampleCalculatorInputTest {
         inputData.add(1.0);
         inputData.add(2.0);
         inputData.add(3.0);
-        input = LocalSampleCalculatorInput.builder()
-                .operation("sum")
-                .inputData(inputData)
-                .build();
+        input = LocalSampleCalculatorInput.builder().operation("sum").inputData(inputData).build();
     }
 
     @Test

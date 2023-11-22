@@ -5,6 +5,20 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -20,20 +34,6 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.function.Function;
-
-import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
-import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
-import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
-
 public class AwsConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -43,8 +43,8 @@ public class AwsConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = s -> "encrypted: "+s.toLowerCase(Locale.ROOT);
-        decryptFunction = s -> "decrypted: "+s.toUpperCase(Locale.ROOT);
+        encryptFunction = s -> "encrypted: " + s.toLowerCase(Locale.ROOT);
+        decryptFunction = s -> "decrypted: " + s.toUpperCase(Locale.ROOT);
     }
 
     @Test
@@ -106,7 +106,12 @@ public class AwsConnectorTest {
         credential.put(REGION_FIELD, "test_region");
         Map<String, String> parameters = new HashMap<>();
         parameters.put(SERVICE_NAME_FIELD, "test_service");
-        AwsConnector connector = AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).parameters(parameters).build();
+        AwsConnector connector = AwsConnector
+            .awsConnectorBuilder()
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .credential(credential)
+            .parameters(parameters)
+            .build();
         Assert.assertNotNull(connector);
 
         connector.encrypt(encryptFunction);
@@ -125,8 +130,13 @@ public class AwsConnectorTest {
         awsConnector.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = TestHelper.xContentBuilderToString(builder);
 
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
 
         AwsConnector connector = new AwsConnector(awsConnector.getProtocol(), parser);
@@ -209,19 +219,28 @@ public class AwsConnectorTest {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
 
-        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
+        ConnectorAction action = new ConnectorAction(
+            actionType,
+            method,
+            url,
+            headers,
+            requestBody,
+            preProcessFunction,
+            postProcessFunction
+        );
 
-        AwsConnector connector = AwsConnector.awsConnectorBuilder()
-                .name("test_connector_name")
-                .description("this is a test connector")
-                .version("1")
-                .protocol(ConnectorProtocols.AWS_SIGV4)
-                .parameters(parameters)
-                .credential(credential)
-                .actions(Arrays.asList(action))
-                .backendRoles(Arrays.asList("role1", "role2"))
-                .accessMode(AccessMode.PUBLIC)
-                .build();
+        AwsConnector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(action))
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .accessMode(AccessMode.PUBLIC)
+            .build();
         return connector;
     }
 

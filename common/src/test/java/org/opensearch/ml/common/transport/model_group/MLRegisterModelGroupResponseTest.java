@@ -5,18 +5,18 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class MLRegisterModelGroupResponseTest {
 
@@ -26,7 +26,6 @@ public class MLRegisterModelGroupResponseTest {
     public void setup() {
         mlRegisterModelGroupResponse = new MLRegisterModelGroupResponse("ModelGroupId", "Status");
     }
-
 
     @Test
     public void writeTo_Success() throws IOException {

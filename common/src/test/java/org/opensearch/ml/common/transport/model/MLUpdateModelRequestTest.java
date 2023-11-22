@@ -5,55 +5,50 @@
 
 package org.opensearch.ml.common.transport.model;
 
-import org.junit.Before;
-import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-
-import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.opensearch.action.ActionRequest;
-import org.opensearch.action.ActionRequestValidationException;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.rest.RestRequest;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.MockitoAnnotations;
+import org.opensearch.action.ActionRequest;
+import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 public class MLUpdateModelRequestTest {
 
     private MLUpdateModelRequest updateModelRequest;
 
     @Before
-    public void setUp(){
+    public void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        MLModelConfig config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(100)
-                .build();
+        MLModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
 
-        MLUpdateModelInput updateModelInput = MLUpdateModelInput.builder()
-                .modelId("test-model_id")
-                .modelGroupId("modelGroupId")
-                .name("name")
-                .description("description")
-                .modelConfig(config)
-                .build();
+        MLUpdateModelInput updateModelInput = MLUpdateModelInput
+            .builder()
+            .modelId("test-model_id")
+            .modelGroupId("modelGroupId")
+            .name("name")
+            .description("description")
+            .modelConfig(config)
+            .build();
 
-        updateModelRequest = MLUpdateModelRequest.builder()
-                .updateModelInput(updateModelInput)
-                .build();
+        updateModelRequest = MLUpdateModelRequest.builder().updateModelInput(updateModelInput).build();
 
     }
 

@@ -5,24 +5,25 @@
 
 package org.opensearch.ml.common.dataset;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.experimental.FieldDefaults;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.annotation.InputDataSet;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.annotation.InputDataSet;
+import org.opensearch.ml.common.output.model.ModelResultFilter;
+
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.experimental.FieldDefaults;
+
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @InputDataSet(MLInputDataType.TEXT_DOCS)
-public class TextDocsInputDataSet extends MLInputDataset{
+public class TextDocsInputDataSet extends MLInputDataset {
 
     private ModelResultFilter resultFilter;
 
@@ -43,7 +44,7 @@ public class TextDocsInputDataSet extends MLInputDataset{
         super(MLInputDataType.TEXT_DOCS);
         docs = new ArrayList<>();
         int size = streamInput.readInt();
-        for (int i=0; i<size; i++) {
+        for (int i = 0; i < size; i++) {
             docs.add(streamInput.readOptionalString());
         }
         if (streamInput.readBoolean()) {

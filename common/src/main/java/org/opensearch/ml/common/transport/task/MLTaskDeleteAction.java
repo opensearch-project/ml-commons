@@ -12,5 +12,7 @@ public class MLTaskDeleteAction extends ActionType<DeleteResponse> {
     public static final MLTaskDeleteAction INSTANCE = new MLTaskDeleteAction();
     public static final String NAME = "cluster:admin/opensearch/ml/tasks/delete";
 
-    private MLTaskDeleteAction() { super(NAME, DeleteResponse::new);}
+    private MLTaskDeleteAction() {
+        super(NAME, DeleteResponse::new);
+    }
 }

@@ -5,11 +5,15 @@
 
 package org.opensearch.ml.common.input.execute.metricscorrelation;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -17,20 +21,17 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.input.Input;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import lombok.Builder;
+import lombok.Data;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
-@ExecuteInput(algorithms={FunctionName.METRICS_CORRELATION})
+@ExecuteInput(algorithms = { FunctionName.METRICS_CORRELATION })
 @Data
 public class MetricsCorrelationInput implements Input {
     public static final String PARSE_FIELD_NAME = FunctionName.METRICS_CORRELATION.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            Input.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        Input.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String METRICS_FIELD = "metrics";

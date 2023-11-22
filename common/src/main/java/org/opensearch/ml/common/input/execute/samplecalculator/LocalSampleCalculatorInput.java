@@ -5,32 +5,33 @@
 
 package org.opensearch.ml.common.input.execute.samplecalculator;
 
-import lombok.Builder;
-import lombok.Data;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.annotation.ExecuteInput;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.input.Input;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.core.ParseField;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.annotation.ExecuteInput;
+import org.opensearch.ml.common.input.Input;
 
-@ExecuteInput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
+import lombok.Builder;
+import lombok.Data;
+
+@ExecuteInput(algorithms = { FunctionName.LOCAL_SAMPLE_CALCULATOR })
 @Data
 public class LocalSampleCalculatorInput implements Input {
     public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            Input.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        Input.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String OPERATION_FIELD = "operation";
@@ -87,7 +88,7 @@ public class LocalSampleCalculatorInput implements Input {
         this.operation = in.readString();
         int size = in.readInt();
         this.inputData = new ArrayList<>();
-        for (int i = 0; i<size; i++) {
+        for (int i = 0; i < size; i++) {
             inputData.add(in.readDouble());
         }
     }

@@ -5,12 +5,19 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
+import static org.opensearch.ml.common.connector.Connector.createConnector;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -19,18 +26,12 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.USER;
-import static org.opensearch.ml.common.connector.Connector.createConnector;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 public class MLModel implements ToXContentObject {
@@ -50,7 +51,7 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    //SHA256 hash value of model content.
+    // SHA256 hash value of model content.
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
 
     public static final String MODEL_CONFIG_FIELD = "model_config";
@@ -115,32 +116,35 @@ public class MLModel implements ToXContentObject {
     private String connectorId;
 
     @Builder(toBuilder = true)
-    public MLModel(String name,
-                   String modelGroupId,
-                   FunctionName algorithm,
-                   String version,
-                   String content,
-                   User user,
-                   String description,
-                   MLModelFormat modelFormat,
-                   MLModelState modelState,
-                   Long modelContentSizeInBytes,
-                   String modelContentHash,
-                   MLModelConfig modelConfig,
-                   Instant createdTime,
-                   Instant lastUpdateTime,
-                   Instant lastRegisteredTime,
-                   Instant lastDeployedTime,
-                   Instant lastUndeployedTime,
-                   Integer autoRedeployRetryTimes,
-                   String modelId, Integer chunkNumber,
-                   Integer totalChunks,
-                   Integer planningWorkerNodeCount,
-                   Integer currentWorkerNodeCount,
-                   String[] planningWorkerNodes,
-                   boolean deployToAllNodes,
-                   Connector connector,
-                   String connectorId) {
+    public MLModel(
+        String name,
+        String modelGroupId,
+        FunctionName algorithm,
+        String version,
+        String content,
+        User user,
+        String description,
+        MLModelFormat modelFormat,
+        MLModelState modelState,
+        Long modelContentSizeInBytes,
+        String modelContentHash,
+        MLModelConfig modelConfig,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        Instant lastRegisteredTime,
+        Instant lastDeployedTime,
+        Instant lastUndeployedTime,
+        Integer autoRedeployRetryTimes,
+        String modelId,
+        Integer chunkNumber,
+        Integer totalChunks,
+        Integer planningWorkerNodeCount,
+        Integer currentWorkerNodeCount,
+        String[] planningWorkerNodes,
+        boolean deployToAllNodes,
+        Connector connector,
+        String connectorId
+    ) {
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.algorithm = algorithm;
@@ -170,7 +174,7 @@ public class MLModel implements ToXContentObject {
         this.connectorId = connectorId;
     }
 
-    public MLModel(StreamInput input) throws IOException{
+    public MLModel(StreamInput input) throws IOException {
         name = input.readOptionalString();
         algorithm = input.readEnum(FunctionName.class);
         version = input.readString();
@@ -371,7 +375,8 @@ public class MLModel implements ToXContentObject {
         String oldContent = null;
         User user = null;
 
-        String description = null;;
+        String description = null;
+        ;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
@@ -511,35 +516,36 @@ public class MLModel implements ToXContentObject {
                     break;
             }
         }
-        return MLModel.builder()
-                .name(name)
-                .modelGroupId(modelGroupId)
-                .algorithm(algorithm)
-                .version(version == null ? oldVersion + "" : version)
-                .content(content == null ? oldContent : content)
-                .user(user)
-                .description(description)
-                .modelFormat(modelFormat)
-                .modelState(modelState)
-                .modelContentSizeInBytes(modelContentSizeInBytes)
-                .modelContentHash(modelContentHash)
-                .modelConfig(modelConfig)
-                .createdTime(createdTime)
-                .lastUpdateTime(lastUpdateTime)
-                .lastRegisteredTime(lastRegisteredTime == null? lastUploadedTime : lastRegisteredTime)
-                .lastDeployedTime(lastDeployedTime == null? lastLoadedTime : lastDeployedTime)
-                .lastUndeployedTime(lastUndeployedTime == null? lastUnloadedTime : lastUndeployedTime)
-                .modelId(modelId)
-                .autoRedeployRetryTimes(autoRedeployRetryTimes)
-                .chunkNumber(chunkNumber)
-                .totalChunks(totalChunks)
-                .planningWorkerNodeCount(planningWorkerNodeCount)
-                .currentWorkerNodeCount(currentWorkerNodeCount)
-                .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
-                .deployToAllNodes(deployToAllNodes)
-                .connector(connector)
-                .connectorId(connectorId)
-                .build();
+        return MLModel
+            .builder()
+            .name(name)
+            .modelGroupId(modelGroupId)
+            .algorithm(algorithm)
+            .version(version == null ? oldVersion + "" : version)
+            .content(content == null ? oldContent : content)
+            .user(user)
+            .description(description)
+            .modelFormat(modelFormat)
+            .modelState(modelState)
+            .modelContentSizeInBytes(modelContentSizeInBytes)
+            .modelContentHash(modelContentHash)
+            .modelConfig(modelConfig)
+            .createdTime(createdTime)
+            .lastUpdateTime(lastUpdateTime)
+            .lastRegisteredTime(lastRegisteredTime == null ? lastUploadedTime : lastRegisteredTime)
+            .lastDeployedTime(lastDeployedTime == null ? lastLoadedTime : lastDeployedTime)
+            .lastUndeployedTime(lastUndeployedTime == null ? lastUnloadedTime : lastUndeployedTime)
+            .modelId(modelId)
+            .autoRedeployRetryTimes(autoRedeployRetryTimes)
+            .chunkNumber(chunkNumber)
+            .totalChunks(totalChunks)
+            .planningWorkerNodeCount(planningWorkerNodeCount)
+            .currentWorkerNodeCount(currentWorkerNodeCount)
+            .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
+            .deployToAllNodes(deployToAllNodes)
+            .connector(connector)
+            .connectorId(connectorId)
+            .build();
     }
 
     public static MLModel fromStream(StreamInput in) throws IOException {

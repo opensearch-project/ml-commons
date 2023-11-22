@@ -36,7 +36,9 @@ public class ConversationalIndexConstants {
     /** Mappings for the conversational metadata index */
     public final static String META_MAPPING = "{\n"
         + "    \"_meta\": {\n"
-        + "        \"schema_version\": " + META_INDEX_SCHEMA_VERSION + "\n" 
+        + "        \"schema_version\": "
+        + META_INDEX_SCHEMA_VERSION
+        + "\n"
         + "    },\n"
         + "    \"properties\": {\n"
         + "        \""
@@ -72,7 +74,9 @@ public class ConversationalIndexConstants {
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"_meta\": {\n"
-        + "        \"schema_version\": " + INTERACTIONS_INDEX_SCHEMA_VERSION + "\n" 
+        + "        \"schema_version\": "
+        + INTERACTIONS_INDEX_SCHEMA_VERSION
+        + "\n"
         + "    },\n"
         + "    \"properties\": {\n"
         + "        \""

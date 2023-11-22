@@ -5,22 +5,22 @@
 
 package org.opensearch.ml.common.model;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class TextEmbeddingModelConfigTests {
 
@@ -31,12 +31,13 @@ public class TextEmbeddingModelConfigTests {
 
     @Before
     public void setUp() {
-        config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(100)
-                .build();
+        config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
         function = parser -> {
             try {
                 return TextEmbeddingModelConfig.parse(parser);
@@ -51,39 +52,37 @@ public class TextEmbeddingModelConfigTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}", configContent);
+        assertEquals(
+            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}",
+            configContent
+        );
     }
 
     @Test
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = TextEmbeddingModelConfig.builder()
-                .build();
+        config = TextEmbeddingModelConfig.builder().build();
     }
-
 
     @Test
     public void nullFields_EmbeddingDimension() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("embedding dimension is null");
-        config = TextEmbeddingModelConfig.builder().modelType("testModelType")
-                .build();
+        config = TextEmbeddingModelConfig.builder().modelType("testModelType").build();
     }
 
     @Test
     public void nullFields_FrameworkType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("framework type is null");
-        config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .embeddingDimension(100)
-                .build();
+        config = TextEmbeddingModelConfig.builder().modelType("testModelType").embeddingDimension(100).build();
     }
 
     @Test
     public void parse() throws IOException {
-        String content = "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
+        String content =
+            "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
         TestHelper.testParseFromString(config, content, function);
     }
 

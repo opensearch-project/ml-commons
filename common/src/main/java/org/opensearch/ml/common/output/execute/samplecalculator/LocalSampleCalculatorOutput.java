@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.common.output.execute.samplecalculator;
 
-import lombok.Builder;
-import lombok.Data;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -14,9 +14,10 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.output.Output;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Data;
 
-@ExecuteOutput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
+@ExecuteOutput(algorithms = { FunctionName.LOCAL_SAMPLE_CALCULATOR })
 @Data
 public class LocalSampleCalculatorOutput implements Output {
 

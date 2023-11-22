@@ -12,5 +12,7 @@ public class MLConnectorDeleteAction extends ActionType<DeleteResponse> {
     public static final MLConnectorDeleteAction INSTANCE = new MLConnectorDeleteAction();
     public static final String NAME = "cluster:admin/opensearch/ml/connectors/delete";
 
-    private MLConnectorDeleteAction() { super(NAME, DeleteResponse::new);}
+    private MLConnectorDeleteAction() {
+        super(NAME, DeleteResponse::new);
+    }
 }

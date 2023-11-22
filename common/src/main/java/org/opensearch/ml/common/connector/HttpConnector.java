@@ -5,18 +5,11 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.extern.log4j.Log4j2;
-import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.AccessMode;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -29,12 +22,20 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
-import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @NoArgsConstructor
@@ -47,12 +48,21 @@ public class HttpConnector extends AbstractConnector {
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
 
-    //TODO: add RequestConfig like request time out,
+    // TODO: add RequestConfig like request time out,
 
     @Builder
-    public HttpConnector(String name, String description, String version, String protocol,
-                         Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
-                         List<String> backendRoles, AccessMode accessMode, User owner) {
+    public HttpConnector(
+        String name,
+        String description,
+        String version,
+        String protocol,
+        Map<String, String> parameters,
+        Map<String, String> credential,
+        List<ConnectorAction> actions,
+        List<String> backendRoles,
+        AccessMode accessMode,
+        User owner
+    ) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -282,7 +292,7 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public  <T> T createPredictPayload(Map<String, String> parameters) {
+    public <T> T createPredictPayload(Map<String, String> parameters) {
         Optional<ConnectorAction> predictAction = findPredictAction();
         if (predictAction.isPresent() && predictAction.get().getRequestBody() != null) {
             String payload = predictAction.get().getRequestBody();
@@ -336,7 +346,7 @@ public class HttpConnector extends AbstractConnector {
 
     @Override
     public Connector cloneConnector() {
-        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
             return new HttpConnector(streamInput);

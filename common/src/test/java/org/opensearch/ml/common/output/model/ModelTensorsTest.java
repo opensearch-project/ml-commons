@@ -5,22 +5,22 @@
 
 package org.opensearch.ml.common.output.model;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.TestHelper;
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.TestHelper;
 
 public class ModelTensorsTest {
 
@@ -34,18 +34,20 @@ public class ModelTensorsTest {
         String sentence = "test sentence";
         String column = "model_tensor";
         Integer position = 1;
-        modelResultFilter = ModelResultFilter.builder()
-                .targetResponse(Arrays.asList(column))
-                .targetResponsePositions(Arrays.asList(position))
-                .build();
+        modelResultFilter = ModelResultFilter
+            .builder()
+            .targetResponse(Arrays.asList(column))
+            .targetResponsePositions(Arrays.asList(position))
+            .build();
 
-        ModelTensor modelTensor = ModelTensor.builder()
-                .name("model_tensor")
-                .data(new Number[]{1, 2, 3})
-                .shape(new long[]{1, 2, 3,})
-                .dataType(MLResultDataType.INT32)
-                .byteBuffer(ByteBuffer.wrap(new byte[]{0,1,0,1}))
-                .build();
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("model_tensor")
+            .data(new Number[] { 1, 2, 3 })
+            .shape(new long[] { 1, 2, 3, })
+            .dataType(MLResultDataType.INT32)
+            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+            .build();
 
         modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
     }
@@ -55,7 +57,10 @@ public class ModelTensorsTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         modelTensors.toXContent(builder, EMPTY_PARAMS);
         String modelTensorContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"output\":[{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}]}", modelTensorContent);
+        assertEquals(
+            "{\"output\":[{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}]}",
+            modelTensorContent
+        );
     }
 
     @Test
@@ -80,14 +85,15 @@ public class ModelTensorsTest {
 
     @Test
     public void test_Filter() {
-        ModelTensor modelTensorFiltered = ModelTensor.builder()
-                .name("model_tensor")
-                .shape(new long[]{1, 2, 3,})
-                .dataType(MLResultDataType.INT32)
-                .build();
+        ModelTensor modelTensorFiltered = ModelTensor
+            .builder()
+            .name("model_tensor")
+            .shape(new long[] { 1, 2, 3, })
+            .dataType(MLResultDataType.INT32)
+            .build();
         modelTensors.filter(modelResultFilter);
         assertEquals(modelTensors.getMlModelTensors().size(), 1);
-        //assertEquals(modelTensors.getMlModelTensors().get(0), modelTensorFiltered);
+        // assertEquals(modelTensors.getMlModelTensors().get(0), modelTensorFiltered);
     }
 
     @Test
@@ -112,7 +118,6 @@ public class ModelTensorsTest {
         assertEquals(bytes.length, bytesStreamOutput.bytes().toBytesRef().bytes.length);
 
         ModelTensors tensors = ModelTensors.fromBytes(bytes);
-        //assertEquals(modelTensors.getMlModelTensors(), tensors.getMlModelTensors());
+        // assertEquals(modelTensors.getMlModelTensors(), tensors.getMlModelTensors());
     }
 }
-

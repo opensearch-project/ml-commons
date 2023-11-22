@@ -5,12 +5,13 @@
 
 package org.opensearch.ml.common.transport.prediction;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import lombok.Setter;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.commons.authuser.User;
@@ -19,15 +20,14 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.transport.MLTaskRequest;
 
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
-import org.opensearch.ml.common.transport.MLTaskRequest;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 @Getter
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -85,14 +85,12 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         return exception;
     }
 
-
     public static MLPredictionTaskRequest fromActionRequest(ActionRequest actionRequest) {
         if (actionRequest instanceof MLPredictionTaskRequest) {
             return (MLPredictionTaskRequest) actionRequest;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLPredictionTaskRequest(input);

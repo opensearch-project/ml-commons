@@ -5,28 +5,26 @@
 
 package org.opensearch.ml.common.transport.model;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
-import java.io.IOException;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.Connector.createConnector;
+import lombok.Builder;
+import lombok.Data;
+import lombok.Getter;
 
 @Data
 public class MLUpdateModelInput implements ToXContentObject, Writeable {
-    
+
     public static final String MODEL_ID_FIELD = "model_id"; // mandatory
     public static final String DESCRIPTION_FIELD = "description"; // optional
     public static final String MODEL_VERSION_FIELD = "model_version"; // optional
@@ -45,7 +43,15 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String connectorId;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId, MLModelConfig modelConfig, String connectorId) {
+    public MLUpdateModelInput(
+        String modelId,
+        String description,
+        String version,
+        String name,
+        String modelGroupId,
+        MLModelConfig modelConfig,
+        String connectorId
+    ) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;

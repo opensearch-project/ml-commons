@@ -5,13 +5,6 @@
 
 package org.opensearch.ml.common.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -20,6 +13,14 @@ import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 public class StringUtils {
 
@@ -71,7 +72,7 @@ public class StringUtils {
             try {
                 AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                     if (value instanceof String) {
-                        parameters.put(key, (String)value);
+                        parameters.put(key, (String) value);
                     } else {
                         parameters.put(key, gson.toJson(value));
                     }

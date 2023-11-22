@@ -54,7 +54,7 @@ public class ActionConstants {
     /** path for create conversation */
     public final static String CREATE_CONVERSATION_REST_PATH = "/_plugins/_ml/memory/conversation";
     /** path for list conversations */
-    public final static String GET_CONVERSATIONS_REST_PATH  = "/_plugins/_ml/memory/conversation";
+    public final static String GET_CONVERSATIONS_REST_PATH = "/_plugins/_ml/memory/conversation";
     /** path for put interaction */
     public final static String CREATE_INTERACTION_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
     /** path for get interactions */
