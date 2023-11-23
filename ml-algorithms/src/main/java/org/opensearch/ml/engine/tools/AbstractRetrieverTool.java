@@ -133,7 +133,7 @@ public abstract class AbstractRetrieverTool implements Tool {
         this.client = client;
     }
 
-    public static abstract class Factory<T extends Tool> implements Tool.Factory<T> {
+    protected static abstract class Factory<T extends Tool> implements Tool.Factory<T> {
         protected Client client;
         protected NamedXContentRegistry xContentRegistry;
 
