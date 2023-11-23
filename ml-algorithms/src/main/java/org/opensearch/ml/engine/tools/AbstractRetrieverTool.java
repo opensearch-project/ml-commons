@@ -5,9 +5,14 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
@@ -20,13 +25,9 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Abstract tool supports search paradigms in neural-search plugin.
@@ -34,7 +35,8 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 @Log4j2
 public abstract class AbstractRetrieverTool implements Tool {
     protected static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
-    @Getter @Setter
+    @Getter
+    @Setter
     protected String description = DEFAULT_DESCRIPTION;
 
     protected Client client;
@@ -45,14 +47,22 @@ public abstract class AbstractRetrieverTool implements Tool {
     protected String modelId;
     protected Integer docSize;
 
-    protected AbstractRetrieverTool(Client client, NamedXContentRegistry xContentRegistry, String index, String embeddingField, String[] sourceFields, Integer docSize, String modelId) {
+    protected AbstractRetrieverTool(
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        String index,
+        String embeddingField,
+        String[] sourceFields,
+        Integer docSize,
+        String modelId
+    ) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.index = index;
         this.embeddingField = embeddingField;
         this.sourceFields = sourceFields;
         this.modelId = modelId;
-        this.docSize = docSize == null? 2 : docSize;
+        this.docSize = docSize == null ? 2 : docSize;
     }
 
     protected abstract String getQueryBody(String queryText);
@@ -64,12 +74,14 @@ public abstract class AbstractRetrieverTool implements Tool {
             try {
                 question = gson.fromJson(question, String.class);
             } catch (Exception e) {
-                //throw new IllegalArgumentException("wrong input");
+                // throw new IllegalArgumentException("wrong input");
             }
             String query = getQueryBody(question);
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-            XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
+            XContentParser queryParser = XContentType.JSON
+                .xContent()
+                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
             searchSourceBuilder.parseXContent(queryParser);
             searchSourceBuilder.fetchSource(sourceFields, null);
             searchSourceBuilder.size(docSize);
@@ -89,9 +101,9 @@ public abstract class AbstractRetrieverTool implements Tool {
                         });
                         contextBuilder.append(doc).append("\n");
                     }
-                    listener.onResponse((T)gson.toJson(contextBuilder.toString()));
+                    listener.onResponse((T) gson.toJson(contextBuilder.toString()));
                 } else {
-                    listener.onResponse((T)"");
+                    listener.onResponse((T) "");
                 }
             }, e -> {
                 log.error("Failed to search index", e);

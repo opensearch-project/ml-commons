@@ -31,15 +31,32 @@ public class VectorDBTool extends AbstractRetrieverTool {
     private Integer k;
 
     @Builder
-    public VectorDBTool(Client client, NamedXContentRegistry xContentRegistry, String index, String embeddingField, String[] sourceFields, Integer k, Integer docSize, String modelId) {
+    public VectorDBTool(
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        String index,
+        String embeddingField,
+        String[] sourceFields,
+        Integer k,
+        Integer docSize,
+        String modelId
+    ) {
         super(client, xContentRegistry, index, embeddingField, sourceFields, docSize, modelId);
-        this.k = k == null? 10 : k;
+        this.k = k == null ? 10 : k;
     }
 
     @Override
-    protected String getQueryBody(String queryText){
-        return "{\"query\":{\"neural\":{\"" + embeddingField + "\":{\"query_text\":\"" + queryText + "\",\"model_id\":\""
-                + modelId + "\",\"k\":" + k + "}}}" + " }";
+    protected String getQueryBody(String queryText) {
+        return "{\"query\":{\"neural\":{\""
+            + embeddingField
+            + "\":{\"query_text\":\""
+            + queryText
+            + "\",\"model_id\":\""
+            + modelId
+            + "\",\"k\":"
+            + k
+            + "}}}"
+            + " }";
     }
 
     @Override
