@@ -13,7 +13,6 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -385,7 +384,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertTrue((Boolean) responseMap.get("violence"));
     }
 
-    @Ignore
     public void testOpenAITextEmbeddingModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -397,9 +395,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  \"version\": 1,\n"
             + "  \"protocol\": \"http\",\n"
             + "  \"parameters\": {\n"
-            + "      \"endpoint\": \"api.openai.com\",\n"
-            + "      \"auth\": \"API_Key\",\n"
-            + "      \"content_type\": \"application/json\",\n"
             + "      \"model\": \"text-embedding-ada-002\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
@@ -415,9 +410,9 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "          \"headers\": { \n"
             + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
             + "          },\n"
-            + "          \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\",   \\\"input\\\": \\\"${parameters.input}\\\" }\",\n"
-            + "          \"pre_process_function\": \"text_docs_to_openai_embedding_input\",\n"
-            + "          \"post_process_function\": \"openai_embedding\"\n"
+            + "          \"request_body\": \"{ \\\"input\\\": ${parameters.input}, \\\"model\\\": \\\"${parameters.model}\\\" }\",\n"
+            + "          \"pre_process_function\": \"connector.pre_process.openai.embedding\",\n"
+            + "          \"post_process_function\": \"connector.post_process.openai.embedding\"\n"
             + "      }\n"
             + "  ]\n"
             + "}";
@@ -435,17 +430,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = parseResponseToMap(response);
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"input\": \"The food was delicious\"\n" + "  }\n" + "}";
+        String predictInput = "{\n"
+            + "  \"parameters\": {\n"
+            + "      \"input\": [\"This is a string containing Moët Hennessy\"]\n"
+            + "  }\n"
+            + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
         List responseList = (List) responseMap.get("inference_results");
         responseMap = (Map) responseList.get(0);
         responseList = (List) responseMap.get("output");
         responseMap = (Map) responseList.get(0);
-        responseMap = (Map) responseMap.get("dataAsMap");
         responseList = (List) responseMap.get("data");
-        responseMap = (Map) responseList.get(0);
-        assertFalse(((List) responseMap.get("embedding")).isEmpty());
+        assertFalse(responseList.isEmpty());
     }
 
     public void testCohereGenerateTextModel() throws IOException, InterruptedException {
