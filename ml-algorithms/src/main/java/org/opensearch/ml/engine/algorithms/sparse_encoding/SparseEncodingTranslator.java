@@ -5,13 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
-import ai.djl.modality.Output;
-import ai.djl.ndarray.NDArray;
-import ai.djl.ndarray.NDList;
-import ai.djl.translate.TranslatorContext;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.engine.algorithms.SentenceTransformerTranslator;
+import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,7 +14,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.algorithms.SentenceTransformerTranslator;
+
+import ai.djl.modality.Output;
+import ai.djl.ndarray.NDArray;
+import ai.djl.ndarray.NDList;
+import ai.djl.translate.TranslatorContext;
 
 public class SparseEncodingTranslator extends SentenceTransformerTranslator {
     @Override
@@ -34,10 +35,7 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
             String name = ndArray.getName();
             Map<String, Float> tokenWeightsMap = convertOutput(ndArray);
             Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeightsMap));
-            ModelTensor tensor = ModelTensor.builder()
-                    .name(name)
-                    .dataAsMap(wrappedMap)
-                    .build();
+            ModelTensor tensor = ModelTensor.builder().name(name).dataAsMap(wrappedMap).build();
             outputs.add(tensor);
         }
 
@@ -45,14 +43,14 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         output.add(modelTensorOutput.toBytes());
         return output;
     }
-    private Map<String, Float>  convertOutput(NDArray array)
-    {
+
+    private Map<String, Float> convertOutput(NDArray array) {
         Map<String, Float> map = new HashMap<>();
         NDArray nonZeroIndices = array.nonzero().squeeze();
 
         for (long index : nonZeroIndices.toLongArray()) {
-            String s = this.tokenizer.decode(new long[]{index}, true);
-            if (!s.isEmpty()){
+            String s = this.tokenizer.decode(new long[] { index }, true);
+            if (!s.isEmpty()) {
                 map.put(s, array.getFloat(index));
             }
         }

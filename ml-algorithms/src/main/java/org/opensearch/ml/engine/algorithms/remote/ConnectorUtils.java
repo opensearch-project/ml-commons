@@ -5,8 +5,23 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import com.jayway.jsonpath.JsonPath;
-import lombok.extern.log4j.Log4j2;
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.utils.ScriptUtils.executeBuildInPostProcessFunction;
+import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
+import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.connector.Connector;
@@ -19,6 +34,10 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
+
+import com.jayway.jsonpath.JsonPath;
+
+import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -26,23 +45,6 @@ import software.amazon.awssdk.auth.signer.Aws4Signer;
 import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.regions.Region;
-
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
-import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.utils.ScriptUtils.executeBuildInPostProcessFunction;
-import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
-import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
 
 @Log4j2
 public class ConnectorUtils {
@@ -52,7 +54,12 @@ public class ConnectorUtils {
         signer = Aws4Signer.create();
     }
 
-    public static RemoteInferenceInputDataSet processInput(MLInput mlInput, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
+    public static RemoteInferenceInputDataSet processInput(
+        MLInput mlInput,
+        Connector connector,
+        Map<String, String> parameters,
+        ScriptService scriptService
+    ) {
         if (mlInput == null) {
             throw new IllegalArgumentException("Input is null");
         }
@@ -60,7 +67,7 @@ public class ConnectorUtils {
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             inputData = processTextDocsInput((TextDocsInputDataSet) mlInput.getInputDataset(), connector, parameters, scriptService);
         } else if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
-            inputData = (RemoteInferenceInputDataSet)mlInput.getInputDataset();
+            inputData = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
         } else {
             throw new IllegalArgumentException("Wrong input type");
         }
@@ -80,7 +87,13 @@ public class ConnectorUtils {
         }
         return inputData;
     }
-    private static RemoteInferenceInputDataSet processTextDocsInput(TextDocsInputDataSet inputDataSet, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
+
+    private static RemoteInferenceInputDataSet processTextDocsInput(
+        TextDocsInputDataSet inputDataSet,
+        Connector connector,
+        Map<String, String> parameters,
+        ScriptService scriptService
+    ) {
         Optional<ConnectorAction> predictAction = connector.findPredictAction();
         if (predictAction.isEmpty()) {
             throw new IllegalArgumentException("no predict action found");
@@ -95,7 +108,7 @@ public class ConnectorUtils {
             for (String doc : inputDataSet.getDocs()) {
                 if (doc != null) {
                     String gsonString = gson.toJson(doc);
-                    // in 2.9, user will add  " before and after string
+                    // in 2.9, user will add " before and after string
                     // gson.toString(string) will add extra " before after string, so need to remove
                     docs.add(gsonString.substring(1, gsonString.length() - 1));
                 } else {
@@ -136,7 +149,12 @@ public class ConnectorUtils {
         return parameterStringMap;
     }
 
-    public static ModelTensors processOutput(String modelResponse, Connector connector, ScriptService scriptService, Map<String, String> parameters) throws IOException {
+    public static ModelTensors processOutput(
+        String modelResponse,
+        Connector connector,
+        ScriptService scriptService,
+        Map<String, String> parameters
+    ) throws IOException {
         if (modelResponse == null) {
             throw new IllegalArgumentException("model response is null");
         }
@@ -155,16 +173,22 @@ public class ConnectorUtils {
         String responseFilter = parameters.get(RESPONSE_FILTER_FIELD);
         if (MLPostProcessFunction.contains(postProcessFunction)) {
             // in this case, we can use jsonpath to build a List<List<Float>> result from model response.
-            if (StringUtils.isBlank(responseFilter)) responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
+            if (StringUtils.isBlank(responseFilter))
+                responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
             List<List<Float>> vectors = JsonPath.read(modelResponse, responseFilter);
-            List<ModelTensor> processedResponse = executeBuildInPostProcessFunction(vectors, MLPostProcessFunction.get(postProcessFunction));
+            List<ModelTensor> processedResponse = executeBuildInPostProcessFunction(
+                vectors,
+                MLPostProcessFunction.get(postProcessFunction)
+            );
             return ModelTensors.builder().mlModelTensors(processedResponse).build();
         }
 
         // execute user defined painless script.
         Optional<String> processedResponse = executePostProcessFunction(scriptService, postProcessFunction, modelResponse);
         String response = processedResponse.orElse(modelResponse);
-        boolean scriptReturnModelTensor = postProcessFunction != null && processedResponse.isPresent() && org.opensearch.ml.common.utils.StringUtils.isJson(response);
+        boolean scriptReturnModelTensor = postProcessFunction != null
+            && processedResponse.isPresent()
+            && org.opensearch.ml.common.utils.StringUtils.isJson(response);
         if (responseFilter == null) {
             connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
         } else {
@@ -174,14 +198,24 @@ public class ConnectorUtils {
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
     }
 
-    public static SdkHttpFullRequest signRequest(SdkHttpFullRequest request, String accessKey, String secretKey, String sessionToken, String signingName, String region) {
-        AwsCredentials credentials = sessionToken == null ? AwsBasicCredentials.create(accessKey, secretKey) : AwsSessionCredentials.create(accessKey, secretKey, sessionToken);
+    public static SdkHttpFullRequest signRequest(
+        SdkHttpFullRequest request,
+        String accessKey,
+        String secretKey,
+        String sessionToken,
+        String signingName,
+        String region
+    ) {
+        AwsCredentials credentials = sessionToken == null
+            ? AwsBasicCredentials.create(accessKey, secretKey)
+            : AwsSessionCredentials.create(accessKey, secretKey, sessionToken);
 
-        Aws4SignerParams params = Aws4SignerParams.builder()
-                .awsCredentials(credentials)
-                .signingName(signingName)
-                .signingRegion(Region.of(region))
-                .build();
+        Aws4SignerParams params = Aws4SignerParams
+            .builder()
+            .awsCredentials(credentials)
+            .signingName(signingName)
+            .signingRegion(Region.of(region))
+            .build();
 
         return signer.sign(request, params);
     }

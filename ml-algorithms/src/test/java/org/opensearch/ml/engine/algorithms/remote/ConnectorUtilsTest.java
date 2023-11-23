@@ -5,7 +5,18 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -24,19 +35,8 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.ScriptService;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 public class ConnectorUtilsTest {
 
@@ -63,13 +63,20 @@ public class ConnectorUtilsTest {
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test1", "test2")).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
         ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
     }
 
@@ -110,13 +117,20 @@ public class ConnectorUtilsTest {
         RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(params).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
         ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
         Assert.assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
     }
@@ -126,7 +140,12 @@ public class ConnectorUtilsTest {
         List<String> input = Collections.singletonList("test_value");
         String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
-                "{\"input\": \"${parameters.input}\"}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, "texts");
+            "{\"input\": \"${parameters.input}\"}",
+            input,
+            inputJson,
+            MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+            "texts"
+        );
     }
 
     @Test
@@ -136,7 +155,12 @@ public class ConnectorUtilsTest {
         input.add("test_value2");
         String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
-                "{\"input\": ${parameters.input}}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT, "input");
+            "{\"input\": ${parameters.input}}",
+            input,
+            inputJson,
+            MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+            "input"
+        );
     }
 
     @Test
@@ -148,16 +172,25 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processOutput_NoPostprocessFunction_jsonResponse() throws IOException {
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        ModelTensors tensors = ConnectorUtils.processOutput("{\"response\": \"test response\"}", connector, scriptService, ImmutableMap.of());
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        ModelTensors tensors = ConnectorUtils
+            .processOutput("{\"response\": \"test response\"}", connector, scriptService, ImmutableMap.of());
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
@@ -166,20 +199,30 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processOutput_PostprocessFunction() throws IOException {
-        String postprocessResult = "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
+        String postprocessResult =
+            "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
         when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult));
 
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
-                .build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
+            .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        String modelResponse = "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        String modelResponse =
+            "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils.processOutput(modelResponse, connector, scriptService, ImmutableMap.of());
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
@@ -190,21 +233,36 @@ public class ConnectorUtilsTest {
         Assert.assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
     }
 
-    private void processInput_TextDocsInputDataSet_PreprocessFunction(String requestBody, List<String> inputs, String expectedProcessedInput, String preProcessName, String resultKey) {
+    private void processInput_TextDocsInputDataSet_PreprocessFunction(
+        String requestBody,
+        List<String> inputs,
+        String expectedProcessedInput,
+        String preProcessName,
+        String resultKey
+    ) {
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(inputs).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody(requestBody)
-                .preProcessFunction(preProcessName)
-                .build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody(requestBody)
+            .preProcessFunction(preProcessName)
+            .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils
+            .processInput(mlInput, connector, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
         Assert.assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
         Assert.assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));

@@ -5,10 +5,23 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.log4j.Log4j2;
-import org.apache.commons.lang3.BooleanUtils;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
@@ -39,23 +52,9 @@ import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchHit;
 
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Data
@@ -86,7 +85,14 @@ public class MLReActAgentRunner {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLReActAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLReActAgentRunner(
+        Client client,
+        Settings settings,
+        ClusterService clusterService,
+        NamedXContentRegistry xContentRegistry,
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, Memory.Factory> memoryFactoryMap
+    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -103,17 +109,27 @@ public class MLReActAgentRunner {
             if (!memoryType.startsWith("conversation") || !this.memoryFactoryMap.containsKey(memoryType)) {
                 throw new IllegalArgumentException("Invalid memory type");
             }
-            memoryFactoryMap.get(memoryType).create(params, ActionListener.<ConversationIndexMemory>wrap(memory->{
+            memoryFactoryMap.get(memoryType).create(params, ActionListener.<ConversationIndexMemory>wrap(memory -> {
                 if (clusterService.state().metadata().hasIndex(memory.getMemoryMessageIndexName())) {
-                    memory.getMessages(sessionId, ActionListener.<SearchResponse>wrap(r -> { //TODO: support onlyIncludeFinalAnswerInChatHistory parameters
+                    memory.getMessages(sessionId, ActionListener.<SearchResponse>wrap(r -> { // TODO: support
+                                                                                             // onlyIncludeFinalAnswerInChatHistory
+                                                                                             // parameters
                         List<Message> messageList = new ArrayList<>();
                         Iterator<SearchHit> iterator = r.getHits().iterator();
-                        while(iterator.hasNext()) {
+                        while (iterator.hasNext()) {
                             SearchHit next = iterator.next();
                             Map<String, Object> map = next.getSourceAsMap();
-                            String question = (String)map.get("question");
-                            String response = (String)map.get("response");
-                            messageList.add(ConversationIndexMessage.conversationIndexMessageBuilder().sessionId(sessionId).question(question).response(response).build());
+                            String question = (String) map.get("question");
+                            String response = (String) map.get("response");
+                            messageList
+                                .add(
+                                    ConversationIndexMessage
+                                        .conversationIndexMessageBuilder()
+                                        .sessionId(sessionId)
+                                        .question(question)
+                                        .response(response)
+                                        .build()
+                                );
                         }
 
                         StringBuilder chatHistoryBuilder = new StringBuilder();
@@ -126,23 +142,28 @@ public class MLReActAgentRunner {
                         }
 
                         runAgent(mlAgent, params, listener, toolSpecs, memory, sessionId);
-                    }, e-> {
+                    }, e -> {
                         log.error("Failed to get session history", e);
                         listener.onFailure(e);
                     }));
                 } else {
                     runAgent(mlAgent, params, listener, toolSpecs, memory, sessionId);
                 }
-            }, e->{
-                listener.onFailure(e);
-            }));
+            }, e -> { listener.onFailure(e); }));
 
         } else {
             runAgent(mlAgent, params, listener, toolSpecs, null, sessionId);
         }
     }
 
-    private void runAgent(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, List<MLToolSpec> toolSpecs, Memory memory, String sessionId) {
+    private void runAgent(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        List<MLToolSpec> toolSpecs,
+        Memory memory,
+        String sessionId
+    ) {
         LLMSpec llm = mlAgent.getLlm();
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
@@ -156,7 +177,7 @@ public class MLReActAgentRunner {
             }
             for (String key : params.keySet()) {
                 if (key.startsWith(toolSpec.getName() + ".")) {
-                    executeParams.put(key.replace(toolSpec.getName()+".", ""), params.get(key));
+                    executeParams.put(key.replace(toolSpec.getName() + ".", ""), params.get(key));
                 }
             }
             if (!toolFactories.containsKey(toolSpec.getType())) {
@@ -177,7 +198,15 @@ public class MLReActAgentRunner {
         runReAct(llm, tools, toolSpecMap, params, memory, sessionId, listener);
     }
 
-    private void runReAct(LLMSpec llm, Map<String, Tool> tools, Map<String, MLToolSpec> toolSpecMap, Map<String, String> parameters, Memory memory, String sessionId, ActionListener<Object> listener) {
+    private void runReAct(
+        LLMSpec llm,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        Map<String, String> parameters,
+        Memory memory,
+        String sessionId,
+        ActionListener<Object> listener
+    ) {
         String question = parameters.get(QUESTION);
         Map<String, String> tmpParameters = new HashMap<>();
         if (llm.getParameters() != null) {
@@ -185,13 +214,26 @@ public class MLReActAgentRunner {
         }
         tmpParameters.putAll(parameters);
         if (!tmpParameters.containsKey("stop")) {
-            tmpParameters.put("stop", gson.toJson(new String[]{"\nObservation:", "\n\tObservation:"}));
+            tmpParameters.put("stop", gson.toJson(new String[] { "\nObservation:", "\n\tObservation:" }));
         }
         if (!tmpParameters.containsKey("stop_sequences")) {
-            tmpParameters.put("stop_sequences", gson.toJson(new String[]{"\n\nHuman:", "\nObservation:", "\n\tObservation:","\nObservation", "\n\tObservation", "\n\nQuestion"}));
+            tmpParameters
+                .put(
+                    "stop_sequences",
+                    gson
+                        .toJson(
+                            new String[] {
+                                "\n\nHuman:",
+                                "\nObservation:",
+                                "\n\tObservation:",
+                                "\nObservation",
+                                "\n\tObservation",
+                                "\n\nQuestion" }
+                        )
+                );
         }
 
-        boolean verbose = parameters.containsKey("verbose")? Boolean.parseBoolean(parameters.get("verbose")):false;
+        boolean verbose = parameters.containsKey("verbose") ? Boolean.parseBoolean(parameters.get("verbose")) : false;
 
         String prompt = parameters.get(PROMPT);
         if (prompt == null) {
@@ -218,8 +260,8 @@ public class MLReActAgentRunner {
             inputTools.addAll(gson.fromJson(parameters.get(TOOLS), List.class));
         } else {
             for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-//                String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getType());
-//                String toolName = Optional.ofNullable(entry.getKey()).orElse(entry.getValue().getType());
+                // String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getType());
+                // String toolName = Optional.ofNullable(entry.getKey()).orElse(entry.getValue().getType());
                 inputTools.add(entry.getKey());
             }
         }
@@ -235,13 +277,21 @@ public class MLReActAgentRunner {
 
         List<ModelTensors> modelTensors = new ArrayList<>();
 
-
         List<ModelTensors> cotModelTensors = new ArrayList<>();
-        cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name(SESSION_ID)
-                .result(sessionId).build())).build());
+        cotModelTensors
+            .add(
+                ModelTensors
+                    .builder()
+                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name(SESSION_ID).result(sessionId).build()))
+                    .build()
+            );
 
         StringBuilder scratchpadBuilder = new StringBuilder();
-        StringSubstitutor tmpSubstitutor = new StringSubstitutor(ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
+        StringSubstitutor tmpSubstitutor = new StringSubstitutor(
+            ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
+            "${parameters.",
+            "}"
+        );
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
 
@@ -281,7 +331,7 @@ public class MLReActAgentRunner {
                     String thought = dataAsMap.get("thought") + "";
                     String action = dataAsMap.get("action") + "";
                     String actionInput = dataAsMap.get("action_input") + "";
-                    String finalAnswer = (String)dataAsMap.get("final_answer");
+                    String finalAnswer = (String) dataAsMap.get("final_answer");
                     if (!dataAsMap.containsKey("thought")) {
                         String response = (String) dataAsMap.get("response");
                         Pattern pattern = Pattern.compile("```json(.*?)```", Pattern.DOTALL);
@@ -303,19 +353,55 @@ public class MLReActAgentRunner {
                     }
                     sessionMsgAnswerBuilder.append(thought);
                     lastThought.set(thought);
-                    cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build())).build());
-                    //TODO: check if verbose
+                    cotModelTensors
+                        .add(
+                            ModelTensors
+                                .builder()
+                                .mlModelTensors(
+                                    Arrays.asList(ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build())
+                                )
+                                .build()
+                        );
+                    // TODO: check if verbose
                     modelTensors.addAll(tmpModelTensorOutput.getMlModelOutputs());
 
                     if (memory != null) {
-                        memory.save(sessionId, ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response(thought).finalAnswer(false).sessionId(sessionId).build());
+                        memory
+                            .save(
+                                sessionId,
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .type("ReAct")
+                                    .question(question)
+                                    .response(thought)
+                                    .finalAnswer(false)
+                                    .sessionId(sessionId)
+                                    .build()
+                            );
                     }
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
                         if (memory != null) {
-                            memory.save(sessionId, ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response(finalAnswer).finalAnswer(true).sessionId(sessionId).build());
+                            memory
+                                .save(
+                                    sessionId,
+                                    ConversationIndexMessage
+                                        .conversationIndexMessageBuilder()
+                                        .type("ReAct")
+                                        .question(question)
+                                        .response(finalAnswer)
+                                        .finalAnswer(true)
+                                        .sessionId(sessionId)
+                                        .build()
+                                );
                         }
-                        cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(finalAnswer).build())).build());
+                        cotModelTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(finalAnswer).build()))
+                                    .build()
+                            );
 
                         getFinalAnswer.set(true);
                         if (verbose) {
@@ -355,7 +441,7 @@ public class MLReActAgentRunner {
                                 Map<String, String> llmToolTmpParameters = new HashMap<>();
                                 llmToolTmpParameters.putAll(tmpParameters);
                                 llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
-                                //TODO: support tool parameter override : langauge_model_tool.prompt
+                                // TODO: support tool parameter override : langauge_model_tool.prompt
                                 llmToolTmpParameters.put(QUESTION, actionInput);
                                 tools.get(action).run(llmToolTmpParameters, nextStepListener); // run tool
                             } else {
@@ -385,9 +471,30 @@ public class MLReActAgentRunner {
                                 if (answer.contains("\nHuman:")) {
                                     answer = answer.substring(0, answer.indexOf("\nHuman:"));
                                 }
-                                cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(answer).build())).build());
+                                cotModelTensors
+                                    .add(
+                                        ModelTensors
+                                            .builder()
+                                            .mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(answer).build()))
+                                            .build()
+                                    );
                                 List<ModelTensors> finalModelTensors = new ArrayList<>();
-                                finalModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("response", answer)).build())).build());
+                                finalModelTensors
+                                    .add(
+                                        ModelTensors
+                                            .builder()
+                                            .mlModelTensors(
+                                                Arrays
+                                                    .asList(
+                                                        ModelTensor
+                                                            .builder()
+                                                            .name("response")
+                                                            .dataAsMap(ImmutableMap.of("response", answer))
+                                                            .build()
+                                                    )
+                                            )
+                                            .build()
+                                    );
                                 listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
                                 return;
                             }
@@ -395,39 +502,92 @@ public class MLReActAgentRunner {
                             lastActionResult.set("tool not found");
                         }
 
-                        StringSubstitutor substitutor = new StringSubstitutor(ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
+                        StringSubstitutor substitutor = new StringSubstitutor(
+                            ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                            "${parameters.",
+                            "}"
+                        );
                         newPrompt.set(substitutor.replace(finalPrompt));
                         tmpParameters.put(PROMPT, newPrompt.get());
                     }
                 } else { // Handle tool output
                     Object result = output;
-                    modelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + result)).build())).build());
+                    modelTensors
+                        .add(
+                            ModelTensors
+                                .builder()
+                                .mlModelTensors(
+                                    Arrays
+                                        .asList(
+                                            ModelTensor
+                                                .builder()
+                                                .dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + result))
+                                                .build()
+                                        )
+                                )
+                                .build()
+                        );
 
                     MLToolSpec toolSpec = toolSpecMap.get(currentAction.get());
                     if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
-                        String outputString = output instanceof String ? (String) output :
-                                AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                        String outputString = output instanceof String
+                            ? (String) output
+                            : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
                         ModelTensor modelTensor = ModelTensor.builder().name(toolSpec.getName()).result(outputString).build();
                         outputModelTensors.add(modelTensor);
                     }
 
                     String toolResponse = tmpParameters.get("prompt.tool_response");
-                    StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(ImmutableMap.of("observation", result), "${parameters.", "}");
+                    StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(
+                        ImmutableMap.of("observation", result),
+                        "${parameters.",
+                        "}"
+                    );
                     toolResponse = toolResponseSubstitutor.replace(toolResponse);
                     scratchpadBuilder.append(toolResponse).append("\n\n");
                     if (memory != null) {
-                        memory.save(sessionId, ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response("Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result).finalAnswer(false).sessionId(sessionId).build());
+                        memory
+                            .save(
+                                sessionId,
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .type("ReAct")
+                                    .question(question)
+                                    .response(
+                                        "Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result
+                                    )
+                                    .finalAnswer(false)
+                                    .sessionId(sessionId)
+                                    .build()
+                            );
                     }
-                    StringSubstitutor substitutor = new StringSubstitutor(ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
+                    StringSubstitutor substitutor = new StringSubstitutor(
+                        ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                        "${parameters.",
+                        "}"
+                    );
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
 
                     sessionMsgAnswerBuilder.append("\nObservation: ").append(result);
-                    cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build())).build());
+                    cotModelTensors
+                        .add(
+                            ModelTensors
+                                .builder()
+                                .mlModelTensors(
+                                    Arrays.asList(ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build())
+                                )
+                                .build()
+                        );
 
-                    ActionRequest request = new MLPredictionTaskRequest(llm.getModelId(), RemoteInferenceMLInput.builder()
+                    ActionRequest request = new MLPredictionTaskRequest(
+                        llm.getModelId(),
+                        RemoteInferenceMLInput
+                            .builder()
                             .algorithm(FunctionName.REMOTE)
-                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build()).build());
+                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                            .build()
+                    );
 
                     if (finalI == maxIterations - 1) {
                         if (verbose) {
@@ -448,9 +608,14 @@ public class MLReActAgentRunner {
             }
         }
 
-        ActionRequest request = new MLPredictionTaskRequest(llm.getModelId(), RemoteInferenceMLInput.builder()
+        ActionRequest request = new MLPredictionTaskRequest(
+            llm.getModelId(),
+            RemoteInferenceMLInput
+                .builder()
                 .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build()).build());
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                .build()
+        );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
     }
 
@@ -475,14 +640,16 @@ public class MLReActAgentRunner {
         StringBuilder toolsBuilder = new StringBuilder();
         StringBuilder toolNamesBuilder = new StringBuilder();
 
-        String toolsPrefix = Optional.ofNullable(parameters.get("agent.tools.prefix")).orElse("You have access to the following tools defined in <tools>: \n" + "<tools>\n");
+        String toolsPrefix = Optional
+            .ofNullable(parameters.get("agent.tools.prefix"))
+            .orElse("You have access to the following tools defined in <tools>: \n" + "<tools>\n");
         String toolsSuffix = Optional.ofNullable(parameters.get("agent.tools.suffix")).orElse("</tools>\n");
         String toolPrefix = Optional.ofNullable(parameters.get("agent.tools.tool.prefix")).orElse("<tool>\n");
         String toolSuffix = Optional.ofNullable(parameters.get("agent.tools.tool.suffix")).orElse("\n</tool>\n");
         toolsBuilder.append(toolsPrefix);
         for (String toolName : inputTools) {
             if (!tools.containsKey(toolName)) {
-                throw new IllegalArgumentException("Tool ["+toolName+"] not registered for model");
+                throw new IllegalArgumentException("Tool [" + toolName + "] not registered for model");
             }
             toolsBuilder.append(toolPrefix).append(toolName).append(": ").append(tools.get(toolName).getDescription()).append(toolSuffix);
             toolNamesBuilder.append(toolName).append(", ");
@@ -508,7 +675,9 @@ public class MLReActAgentRunner {
             String indices = parameters.get(OS_INDICES);
             List<String> indicesList = gson.fromJson(indices, List.class);
             StringBuilder indicesBuilder = new StringBuilder();
-            String indicesPrefix = Optional.ofNullable(parameters.get("opensearch_indices.prefix")).orElse("You have access to the following OpenSearch Index defined in <opensearch_indexes>: \n" + "<opensearch_indexes>\n");
+            String indicesPrefix = Optional
+                .ofNullable(parameters.get("opensearch_indices.prefix"))
+                .orElse("You have access to the following OpenSearch Index defined in <opensearch_indexes>: \n" + "<opensearch_indexes>\n");
             String indicesSuffix = Optional.ofNullable(parameters.get("opensearch_indices.suffix")).orElse("</opensearch_indexes>\n");
             String indexPrefix = Optional.ofNullable(parameters.get("opensearch_indices.index.prefix")).orElse("<index>\n");
             String indexSuffix = Optional.ofNullable(parameters.get("opensearch_indices.index.suffix")).orElse("\n</index>\n");
@@ -532,13 +701,15 @@ public class MLReActAgentRunner {
             List<String> exampleList = gson.fromJson(examples, List.class);
             StringBuilder exampleBuilder = new StringBuilder();
             exampleBuilder.append("EXAMPLES\n--------\n");
-            String examplesPrefix = Optional.ofNullable(parameters.get("examples.prefix")).orElse("You should follow and learn from examples defined in <examples>: \n" + "<examples>\n");
+            String examplesPrefix = Optional
+                .ofNullable(parameters.get("examples.prefix"))
+                .orElse("You should follow and learn from examples defined in <examples>: \n" + "<examples>\n");
             String examplesSuffix = Optional.ofNullable(parameters.get("examples.suffix")).orElse("</examples>\n");
             exampleBuilder.append(examplesPrefix);
 
             String examplePrefix = Optional.ofNullable(parameters.get("examples.example.prefix")).orElse("<example>\n");
             String exampleSuffix = Optional.ofNullable(parameters.get("examples.example.suffix")).orElse("\n</example>\n");
-            for (int i = 0; i< exampleList.size(); i++) {
+            for (int i = 0; i < exampleList.size(); i++) {
                 String example = exampleList.get(i);
                 exampleBuilder.append(examplePrefix).append(example).append(exampleSuffix);
             }
@@ -577,6 +748,5 @@ public class MLReActAgentRunner {
         }
         return prompt;
     }
-
 
 }

@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.engine.httpclient;
 
-import lombok.extern.log4j.Log4j2;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
@@ -19,16 +23,13 @@ import org.apache.http.protocol.HttpContext;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.Arrays;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLHttpClientFactory {
 
     public static CloseableHttpClient getCloseableHttpClient() {
-       return createHttpClient();
+        return createHttpClient();
     }
 
     private static CloseableHttpClient createHttpClient() {

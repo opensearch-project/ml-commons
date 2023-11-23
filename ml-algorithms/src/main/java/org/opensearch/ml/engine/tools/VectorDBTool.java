@@ -5,17 +5,18 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
-import java.util.Map;
-
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This tool supports neural search with embedding models and knn index.
@@ -24,7 +25,8 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 @ToolAnnotation(VectorDBTool.TYPE)
 public class VectorDBTool extends AbstractRetrieverTool {
     public static final String TYPE = "VectorDBTool";
-    @Setter @Getter
+    @Setter
+    @Getter
     private String name = TYPE;
     private Integer k;
 
@@ -57,6 +59,7 @@ public class VectorDBTool extends AbstractRetrieverTool {
 
     public static class Factory extends AbstractRetrieverTool.Factory<VectorDBTool> {
         private static Factory INSTANCE;
+
         public static Factory getInstance() {
             if (INSTANCE != null) {
                 return INSTANCE;
@@ -72,20 +75,21 @@ public class VectorDBTool extends AbstractRetrieverTool {
 
         @Override
         public VectorDBTool create(Map<String, Object> params) {
-            String index = (String)params.get("index");
-            String embeddingField = (String)params.get("embedding_field");
-            String[] sourceFields = gson.fromJson((String)params.get("source_field"), String[].class);
-            String modelId = (String)params.get("model_id");
-            Integer docSize = params.containsKey("doc_size")? Integer.parseInt((String)params.get("doc_size")) : 2;
-            return VectorDBTool.builder()
-                    .client(client)
-                    .xContentRegistry(xContentRegistry)
-                    .index(index)
-                    .embeddingField(embeddingField)
-                    .sourceFields(sourceFields)
-                    .modelId(modelId)
-                    .docSize(docSize)
-                    .build();
+            String index = (String) params.get("index");
+            String embeddingField = (String) params.get("embedding_field");
+            String[] sourceFields = gson.fromJson((String) params.get("source_field"), String[].class);
+            String modelId = (String) params.get("model_id");
+            Integer docSize = params.containsKey("doc_size") ? Integer.parseInt((String) params.get("doc_size")) : 2;
+            return VectorDBTool
+                .builder()
+                .client(client)
+                .xContentRegistry(xContentRegistry)
+                .index(index)
+                .embeddingField(embeddingField)
+                .sourceFields(sourceFields)
+                .modelId(modelId)
+                .docSize(docSize)
+                .build();
         }
 
         @Override

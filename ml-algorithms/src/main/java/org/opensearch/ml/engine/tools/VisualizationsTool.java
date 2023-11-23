@@ -5,9 +5,10 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
+
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -24,10 +25,9 @@ import org.opensearch.ml.repackage.com.google.common.base.Strings;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Optional;
-
+import lombok.Builder;
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ToolAnnotation(VisualizationsTool.TYPE)
@@ -37,7 +37,8 @@ public class VisualizationsTool implements Tool {
     public static final String VERSION = "v1.0";
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
-    private static final String DEFAULT_DESCRIPTION = "Use this tool to find user created visualizations. This tool takes the visualization name as input and returns the first 3 matching visualizations";
+    private static final String DEFAULT_DESCRIPTION =
+        "Use this tool to find user created visualizations. This tool takes the visualization name as input and returns the first 3 matching visualizations";
     private String description = DEFAULT_DESCRIPTION;
 
     private String name = NAME;
@@ -162,10 +163,7 @@ public class VisualizationsTool implements Tool {
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
             String index = params.get("index") == null ? ".kibana" : (String) params.get("index");
-            return VisualizationsTool.builder()
-                    .client(client)
-                    .index(index)
-                    .build();
+            return VisualizationsTool.builder().client(client).index(index).build();
         }
 
         @Override

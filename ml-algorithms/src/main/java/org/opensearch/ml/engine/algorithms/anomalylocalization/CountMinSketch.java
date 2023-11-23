@@ -9,8 +9,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.IntStream;
 
-import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * CountMin sketch implementation.

@@ -5,9 +5,11 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -17,21 +19,21 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.engine.utils.ScriptUtils;
 import org.opensearch.script.ScriptService;
 
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ToolAnnotation(PainlessScriptTool.TYPE)
 public class PainlessScriptTool implements Tool {
     public static final String TYPE = "PainlessScriptTool";
 
-    @Setter @Getter
+    @Setter
+    @Getter
     private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
-    @Getter @Setter
+    @Getter
+    @Setter
     private String description = DEFAULT_DESCRIPTION;
     private Client client;
     private String modelId;
@@ -54,14 +56,12 @@ public class PainlessScriptTool implements Tool {
         };
     }
 
-
-
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         String painlessScript = parameters.get("script");
         Map<String, Object> params = gson.fromJson(parameters.get("script_params"), Map.class);
         String s = ScriptUtils.executeScript(scriptService, painlessScript, params) + "";
-        listener.onResponse((T)s);
+        listener.onResponse((T) s);
     }
 
     @Override
@@ -97,6 +97,7 @@ public class PainlessScriptTool implements Tool {
         private ScriptService scriptService;
 
         private static Factory INSTANCE;
+
         public static Factory getInstance() {
             if (INSTANCE != null) {
                 return INSTANCE;

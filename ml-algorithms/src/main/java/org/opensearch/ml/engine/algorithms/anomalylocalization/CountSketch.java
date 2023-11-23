@@ -9,8 +9,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.IntStream;
 
-import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Count sketch implementation.
@@ -54,8 +55,11 @@ public class CountSketch implements Counter {
     @Override
     public double estimate(List<String> key) {
         int keyHash = key.hashCode();
-        double[] estimates =
-                IntStream.range(0, this.numHashes).mapToDouble(i -> counts[i][getBucketIndex(keyHash, i)] * getCountSign(keyHash, i)).sorted().toArray();
+        double[] estimates = IntStream
+            .range(0, this.numHashes)
+            .mapToDouble(i -> counts[i][getBucketIndex(keyHash, i)] * getCountSign(keyHash, i))
+            .sorted()
+            .toArray();
         int numEstimates = estimates.length;
         return (estimates[(numEstimates - 1) / 2] + estimates[numEstimates / 2]) / 2;
     }

@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+
+import java.util.Arrays;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -17,11 +22,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
-
-import java.util.Arrays;
-
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
 public class LocalSampleCalculatorTest {
     @Rule
@@ -44,26 +44,20 @@ public class LocalSampleCalculatorTest {
         ActionListener<Output> actionListener1 = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             Assert.assertEquals(6.0, output.getResult().doubleValue(), 1e-5);
-        }, e -> {
-            fail("Test failed: " + e.getMessage());
-        });
+        }, e -> { fail("Test failed: " + e.getMessage()); });
         calculator.execute(input, actionListener1);
 
         ActionListener<Output> actionListener2 = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             Assert.assertEquals(3.0, output.getResult().doubleValue(), 1e-5);
-        }, e -> {
-            fail("Test failed: " + e.getMessage());
-        });
+        }, e -> { fail("Test failed: " + e.getMessage()); });
         input = new LocalSampleCalculatorInput("max", Arrays.asList(1.0, 2.0, 3.0));
         calculator.execute(input, actionListener2);
 
         ActionListener<Output> actionListener3 = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             Assert.assertEquals(1.0, output.getResult().doubleValue(), 1e-5);
-        }, e -> {
-            fail("Test failed: " + e.getMessage());
-        });
+        }, e -> { fail("Test failed: " + e.getMessage()); });
         input = new LocalSampleCalculatorInput("min", Arrays.asList(1.0, 2.0, 3.0));
         calculator.execute(input, actionListener3);
     }
@@ -73,10 +67,7 @@ public class LocalSampleCalculatorTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("can't support this operation");
         input = new LocalSampleCalculatorInput("wrong_operation", Arrays.asList(1.0, 2.0, 3.0));
-        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
-        }, e -> {
-            fail("Test failed: " + e.getMessage());
-        });
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {}, e -> { fail("Test failed: " + e.getMessage()); });
         calculator.execute(input, actionListener);
     }
 
