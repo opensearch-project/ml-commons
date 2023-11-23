@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import static org.opensearch.ml.common.agent.MLToolSpec.INCLUDE_OUTPUT_IN_AGENT_RESPONSE;
-
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
@@ -47,13 +45,11 @@ public class VisualizationsTool implements Tool {
     private final Client client;
     @Getter
     private final String index;
-    private final boolean includeOutputInAgentResponse;
 
     @Builder
-    public VisualizationsTool(Client client, String index, boolean includeOutputInAgentResponse) {
+    public VisualizationsTool(Client client, String index) {
         this.client = client;
         this.index = index;
-        this.includeOutputInAgentResponse = includeOutputInAgentResponse;
     }
 
     @Override
@@ -142,11 +138,6 @@ public class VisualizationsTool implements Tool {
         return parameters.containsKey("input") && !Strings.isNullOrEmpty(parameters.get("input"));
     }
 
-    @Override
-    public boolean includeOutputInAgentResponse() {
-        return this.includeOutputInAgentResponse;
-    }
-
     public static class Factory implements Tool.Factory<VisualizationsTool> {
         private Client client;
 
@@ -172,14 +163,7 @@ public class VisualizationsTool implements Tool {
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
             String index = params.get("index") == null ? ".kibana" : (String) params.get("index");
-            boolean includeOutputInAgentResponse = params.get(INCLUDE_OUTPUT_IN_AGENT_RESPONSE) != null
-                && Boolean.parseBoolean((String) params.get(INCLUDE_OUTPUT_IN_AGENT_RESPONSE));
-            return VisualizationsTool
-                .builder()
-                .client(client)
-                .index(index)
-                .includeOutputInAgentResponse(includeOutputInAgentResponse)
-                .build();
+            return VisualizationsTool.builder().client(client).index(index).build();
         }
 
         @Override

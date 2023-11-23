@@ -568,13 +568,13 @@ public class MLChatAgentRunner {
                     }
                 } else {
                     Object result = output;
-                    Tool tool = tools.get(lastAction.get());
-                    if (tool != null && tool.includeOutputInAgentResponse()) {
+                    MLToolSpec toolSpec = toolSpecMap.get(lastAction.get());
+                    if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
                         String outputString = output instanceof String
                             ? (String) output
                             : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
 
-                        String toolOutputKey = String.format("%s.output", tool.getType());
+                        String toolOutputKey = String.format("%s.output", toolSpec.getType());
                         if (additionalInfo.get(toolOutputKey) != null) {
                             List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
                             list.add(outputString);
