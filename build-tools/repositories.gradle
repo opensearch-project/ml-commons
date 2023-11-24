@@ -10,3 +10,7 @@ repositories {
     maven {url 'https://oss.sonatype.org/content/repositories/snapshots/'}
     maven { url "https://d1nvenhzbhpy0q.cloudfront.net/snapshots/lucene/" }
 }
+
+plugins {
+    id 'org.openjdk.jmh' version '1.0.8'
+}
