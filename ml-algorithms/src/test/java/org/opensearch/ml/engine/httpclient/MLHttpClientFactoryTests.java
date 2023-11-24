@@ -80,11 +80,149 @@ public class MLHttpClientFactoryTests {
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
         }
+
+        try {
+            MLHttpClientFactory.validateIp("2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("177.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("12.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.0.0.2");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.0.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.1.0.0");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("127.255.255.254");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.0.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.0.2.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("10.255.255.254");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.16.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.17.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.16.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.16.2.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.31.255.255");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.1.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.2.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.100.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.168.200.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
     }
 
     @Test
-    public void test_validateSchemaAndPort_success() {
+    public void test_validateSchemaAndPort_https_success() {
         HttpHost httpHost = new HttpHost("api.openai.com", 8080, "https");
+        MLHttpClientFactory.validateSchemaAndPort(httpHost);
+    }
+
+    @Test
+    public void test_validateSchemaAndPort_http_success() {
+        HttpHost httpHost = new HttpHost("api.openai.com", 8080, "http");
         MLHttpClientFactory.validateSchemaAndPort(httpHost);
     }
 
@@ -96,9 +234,22 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_portNotInRange_throwException() {
+    public void test_validateSchemaAndPort_stringPortSplit_throwException() {
+        HttpHost httpHost = new HttpHost("api.openai.com:abc", 8080, "http");
+        MLHttpClientFactory.validateSchemaAndPort(httpHost);
+    }
+
+    @Test
+    public void test_validateSchemaAndPort_portNotInRangeLessThan_throwException() {
         expectedException.expect(IllegalArgumentException.class);
         HttpHost httpHost = new HttpHost("api.openai.com:65537", -1, "https");
+        MLHttpClientFactory.validateSchemaAndPort(httpHost);
+    }
+
+    @Test
+    public void test_validateSchemaAndPort_portNotInRangeGreaterThan_throwException() {
+        expectedException.expect(IllegalArgumentException.class);
+        HttpHost httpHost = new HttpHost("api.openai.com:65537", 65537, "https");
         MLHttpClientFactory.validateSchemaAndPort(httpHost);
     }
 }
