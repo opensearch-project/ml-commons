@@ -57,7 +57,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     compileOnly "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
-    testImplementation('com.google.guava:guava:32.1.2-jre')
+    testImplementation('com.google.guava:guava:32.0.1-jre')
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"

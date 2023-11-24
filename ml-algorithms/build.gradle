@@ -67,6 +67,34 @@ dependencies {
     }
     implementation group: 'org.json', name: 'json', version: '20230227'
     implementation group: 'org.jsoup', name: 'jsoup', version: '1.16.1'
+    implementation(group: 'opensearch-sql', name: 'opensearch-sql', version: "${common_utils_version}") {
+        exclude module: 'legacy'
+        exclude module: 'prometheus'
+        exclude module: 'datasources'
+        exclude module: 'spark'
+        exclude module: 'common'
+        exclude module: 'core'
+        exclude module: 'protocol'
+        exclude module: 'opensearch'
+    }
+    implementation(group: 'opensearch-sql', name: 'ppl', version: "${common_utils_version}") {
+        exclude module: 'common'
+        exclude module: 'core'
+        exclude module: 'protocol'
+        exclude module: 'opensearch'
+        exclude group: 'org.reflections', module: 'reflections'
+        exclude group: 'com.google.guava', module: 'guava'
+        exclude group: 'org.json', module: 'json'
+    }
+    implementation(group: 'opensearch-sql', name: 'protocol', version: "${common_utils_version}") {
+        exclude group: 'com.google.guava', module: 'guava'
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
+        exclude group: 'com.fasterxml.jackson.dataformat', module: 'jackson-dataformat-cbor'
+        exclude group: 'com.google.code.gson', module: 'gson'
+        exclude module: 'core'
+        exclude module: 'opensearch'
+    }
 }
 
 configurations.all {

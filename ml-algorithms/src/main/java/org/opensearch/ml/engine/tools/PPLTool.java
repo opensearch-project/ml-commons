@@ -3,6 +3,7 @@ package org.opensearch.ml.engine.tools;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import org.json.JSONObject;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.cluster.shards.ClusterSearchShardsRequest;
 import org.opensearch.action.admin.cluster.shards.ClusterSearchShardsResponse;
@@ -29,9 +30,17 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+
+import org.opensearch.sql.plugin.request.PPLQueryRequestFactory;
+import org.opensearch.sql.plugin.transport.PPLQueryAction;
+import org.opensearch.sql.plugin.transport.TransportPPLQueryAction;
+import org.opensearch.sql.plugin.transport.TransportPPLQueryRequest;
+import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
+import org.opensearch.sql.ppl.domain.PPLQueryRequest;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -86,9 +95,16 @@ public class PPLTool implements Tool {
                     ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
                     Map<String, String> dataAsMap = (Map<String, String>) modelTensor.getDataAsMap();
                     String ppl = dataAsMap.get("output");
-
+                    JSONObject jsonContent = new JSONObject(ImmutableMap.of("query", ppl));
+                    PPLQueryRequest pplQueryRequest = new PPLQueryRequest(ppl, jsonContent, null, "jdbc");
+                    TransportPPLQueryRequest transportPPLQueryRequest = new TransportPPLQueryRequest(pplQueryRequest);
+                    client.execute(PPLQueryAction.INSTANCE, transportPPLQueryRequest, ActionListener.<TransportPPLQueryResponse>wrap(transportPPLQueryResponse -> {
+                        String results = transportPPLQueryResponse.getResult();
+                        listener.onResponse((T) results);
+                    }, e -> {
+                        listener.onFailure(e);
+                    }));
                     //Execute output here
-                    listener.onResponse((T) ppl);
                         }, e -> {
                     log.info("fail to predict model: " + e);
                     listener.onFailure(e);

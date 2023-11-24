@@ -47,6 +47,7 @@ import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
 
+import lombok.Setter;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
