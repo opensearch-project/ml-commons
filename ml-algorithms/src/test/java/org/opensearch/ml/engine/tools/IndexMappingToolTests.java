@@ -5,14 +5,12 @@
 
 package org.opensearch.ml.engine.tools;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.Strings;
-import org.opensearch.ml.common.spi.tools.Tool;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -21,6 +19,11 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
@@ -29,13 +32,9 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.json.JsonXContent;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
+import org.opensearch.ml.common.spi.tools.Tool;
 
 public class IndexMappingToolTests {
 
@@ -68,7 +67,6 @@ public class IndexMappingToolTests {
         emptyParams = Collections.emptyMap();
     }
 
-
     @Test
     public void testRunAsyncNoIndexParams() throws Exception {
         Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
@@ -80,7 +78,7 @@ public class IndexMappingToolTests {
         future.join();
         assertEquals("There were no results searching the index parameter [null].", future.get());
     }
-    
+
     @Test
     public void testRunAsyncNoIndices() throws Exception {
         Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
@@ -92,7 +90,7 @@ public class IndexMappingToolTests {
         future.join();
         assertEquals("There were no results searching the index parameter [null].", future.get());
     }
-        
+
     @Test
     public void testRunAsyncNoResults() throws Exception {
         @SuppressWarnings("unchecked")
@@ -164,9 +162,8 @@ public class IndexMappingToolTests {
 
         assertTrue(responseList.contains("mappings:"));
         assertTrue(
-            responseList.contains(
-                "mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}"
-            )
+            responseList
+                .contains("mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}")
         );
 
         assertTrue(responseList.contains("settings:"));

@@ -13,6 +13,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
@@ -33,35 +34,33 @@ import lombok.extern.log4j.Log4j2;
  * Abstract tool supports search paradigms in neural-search plugin.
  */
 @Log4j2
+@Getter
+@Setter
 public abstract class AbstractRetrieverTool implements Tool {
-    protected static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
-    @Getter
-    @Setter
-    protected String description = DEFAULT_DESCRIPTION;
+    public static final String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
+    public static final String INPUT_FIELD = "input";
+    public static final String INDEX_FIELD = "index";
+    public static final String SOURCE_FIELD = "source_field";
+    public static final String DOC_SIZE_FIELD = "doc_size";
 
+    protected String description = DEFAULT_DESCRIPTION;
     protected Client client;
     protected NamedXContentRegistry xContentRegistry;
     protected String index;
-    protected String embeddingField;
     protected String[] sourceFields;
-    protected String modelId;
     protected Integer docSize;
 
     protected AbstractRetrieverTool(
         Client client,
         NamedXContentRegistry xContentRegistry,
         String index,
-        String embeddingField,
         String[] sourceFields,
-        Integer docSize,
-        String modelId
+        Integer docSize
     ) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.index = index;
-        this.embeddingField = embeddingField;
         this.sourceFields = sourceFields;
-        this.modelId = modelId;
         this.docSize = docSize == null ? 2 : docSize;
     }
 
@@ -70,13 +69,16 @@ public abstract class AbstractRetrieverTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
-            String question = parameters.get("input");
+            String question = parameters.get(INPUT_FIELD);
             try {
                 question = gson.fromJson(question, String.class);
             } catch (Exception e) {
                 // throw new IllegalArgumentException("wrong input");
             }
             String query = getQueryBody(question);
+            if (StringUtils.isBlank(query)) {
+                throw new IllegalArgumentException("[" + INPUT_FIELD + "] is null or empty, can not process it.");
+            }
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             XContentParser queryParser = XContentType.JSON

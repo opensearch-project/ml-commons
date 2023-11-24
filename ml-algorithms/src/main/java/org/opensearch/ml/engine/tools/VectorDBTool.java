@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.client.Client;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -22,13 +23,17 @@ import lombok.extern.log4j.Log4j2;
  * This tool supports neural search with embedding models and knn index.
  */
 @Log4j2
+@Getter
+@Setter
 @ToolAnnotation(VectorDBTool.TYPE)
 public class VectorDBTool extends AbstractRetrieverTool {
     public static final String TYPE = "VectorDBTool";
-    @Setter
-    @Getter
+    public static final String MODEL_ID_FIELD = "model_id";
+    public static final String EMBEDDING_FIELD = "embedding_field";
     private String name = TYPE;
     private Integer k;
+    private String modelId;
+    private String embeddingField;
 
     @Builder
     public VectorDBTool(
@@ -41,12 +46,19 @@ public class VectorDBTool extends AbstractRetrieverTool {
         Integer docSize,
         String modelId
     ) {
-        super(client, xContentRegistry, index, embeddingField, sourceFields, docSize, modelId);
+        super(client, xContentRegistry, index, sourceFields, docSize);
+        this.modelId = modelId;
+        this.embeddingField = embeddingField;
         this.k = k == null ? 10 : k;
     }
 
     @Override
     protected String getQueryBody(String queryText) {
+        if (StringUtils.isBlank(embeddingField) || StringUtils.isBlank(modelId)) {
+            throw new IllegalArgumentException(
+                "Parameter [" + EMBEDDING_FIELD + "] and [" + MODEL_ID_FIELD + "] can not be null or empty."
+            );
+        }
         return "{\"query\":{\"neural\":{\""
             + embeddingField
             + "\":{\"query_text\":\""
@@ -92,11 +104,11 @@ public class VectorDBTool extends AbstractRetrieverTool {
 
         @Override
         public VectorDBTool create(Map<String, Object> params) {
-            String index = (String) params.get("index");
-            String embeddingField = (String) params.get("embedding_field");
-            String[] sourceFields = gson.fromJson((String) params.get("source_field"), String[].class);
-            String modelId = (String) params.get("model_id");
-            Integer docSize = params.containsKey("doc_size") ? Integer.parseInt((String) params.get("doc_size")) : 2;
+            String index = (String) params.get(INDEX_FIELD);
+            String embeddingField = (String) params.get(EMBEDDING_FIELD);
+            String[] sourceFields = gson.fromJson((String) params.get(SOURCE_FIELD), String[].class);
+            String modelId = (String) params.get(MODEL_ID_FIELD);
+            Integer docSize = params.containsKey(DOC_SIZE_FIELD) ? Integer.parseInt((String) params.get(DOC_SIZE_FIELD)) : 2;
             return VectorDBTool
                 .builder()
                 .client(client)

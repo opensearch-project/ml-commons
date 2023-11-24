@@ -5,8 +5,14 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -20,13 +26,9 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
-import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.Getter;
+import lombok.Setter;
 
 @ToolAnnotation(IndexMappingTool.NAME)
 public class IndexMappingTool implements Tool {
@@ -74,7 +76,7 @@ public class IndexMappingTool implements Tool {
             listener.onResponse(empty);
             return;
         }
-        
+
         final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
         final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
@@ -96,16 +98,16 @@ public class IndexMappingTool implements Tool {
                     StringBuilder sb = new StringBuilder();
                     for (String index : getIndexResponse.indices()) {
                         sb.append("index: ").append(index).append("\n\n");
-                        
+
                         MappingMetadata mapping = getIndexResponse.mappings().get(index);
                         if (mapping != null) {
                             sb.append("mappings:\n");
-                            for (Entry<String, Object> entry: mapping.sourceAsMap().entrySet()) {
-                                sb.append(entry.getKey()).append("=").append(entry.getValue()).append('\n');                                
-                            }                            
+                            for (Entry<String, Object> entry : mapping.sourceAsMap().entrySet()) {
+                                sb.append(entry.getKey()).append("=").append(entry.getValue()).append('\n');
+                            }
                             sb.append("\n\n");
                         }
-                        
+
                         Settings settings = getIndexResponse.settings().get(index);
                         if (settings != null) {
                             sb.append("settings:\n").append(settings.toDelimitedString('\n')).append("\n\n");
@@ -126,7 +128,8 @@ public class IndexMappingTool implements Tool {
             }
 
         };
-        final GetIndexRequest getIndexRequest = new GetIndexRequest().indices(indices)
+        final GetIndexRequest getIndexRequest = new GetIndexRequest()
+            .indices(indices)
             .indicesOptions(indicesOptions)
             .local(local)
             .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
