@@ -8,7 +8,6 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
-import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -27,13 +26,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -71,8 +68,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLModelGroupGetResponse> actionListener) {
         MLModelGroupGetRequest mlModelGroupGetRequest = MLModelGroupGetRequest.fromActionRequest(request);
         String modelGroupId = mlModelGroupGetRequest.getModelGroupId();
-        FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGroupGetRequest.isReturnContent());
-        GetRequest getRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId).fetchSourceContext(fetchSourceContext);
+        GetRequest getRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
         User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -87,8 +83,9 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
                             if (!access) {
                                 wrappedListener
                                     .onFailure(
-                                        new MLValidationException(
-                                            "User doesn't have privilege to perform this operation on this model group"
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model group",
+                                            RestStatus.FORBIDDEN
                                         )
                                     );
                             } else {

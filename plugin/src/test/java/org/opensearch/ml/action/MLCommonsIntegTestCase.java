@@ -391,7 +391,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLModelGroup getModelGroup(String modelGroupId) {
-        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId, false);
+        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId);
         MLModelGroupGetResponse response = client().execute(MLModelGroupGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModelGroup();
     }

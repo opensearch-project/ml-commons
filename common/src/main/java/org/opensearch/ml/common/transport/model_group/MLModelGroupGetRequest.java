@@ -30,25 +30,21 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLModelGroupGetRequest extends ActionRequest {
 
     String modelGroupId;
-    boolean returnContent;
 
     @Builder
-    public MLModelGroupGetRequest(String modelGroupId, boolean returnContent) {
+    public MLModelGroupGetRequest(String modelGroupId) {
         this.modelGroupId = modelGroupId;
-        this.returnContent = returnContent;
     }
 
     public MLModelGroupGetRequest(StreamInput in) throws IOException {
         super(in);
         this.modelGroupId = in.readString();
-        this.returnContent = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.modelGroupId);
-        out.writeBoolean(returnContent);
     }
 
     @Override

@@ -8,7 +8,6 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
-import static org.opensearch.ml.utils.RestActionUtils.returnContent;
 
 import java.io.IOException;
 import java.util.List;
@@ -60,8 +59,7 @@ public class RestMLGetModelGroupAction extends BaseRestHandler {
     @VisibleForTesting
     MLModelGroupGetRequest getRequest(RestRequest request) throws IOException {
         String modelGroupId = getParameterId(request, PARAMETER_MODEL_GROUP_ID);
-        boolean returnContent = returnContent(request);
 
-        return new MLModelGroupGetRequest(modelGroupId, returnContent);
+        return new MLModelGroupGetRequest(modelGroupId);
     }
 }
