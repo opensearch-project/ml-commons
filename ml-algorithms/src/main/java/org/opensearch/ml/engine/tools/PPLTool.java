@@ -214,19 +214,29 @@ public class PPLTool implements Tool {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         Map<String, String> fieldsToType = new HashMap<>();
         extractNamesTypes(mappingSource, fieldsToType, "");
-
-        SearchHit hit = searchHits[0];
-        Map<String, Object> sampleSource = hit.getSourceAsMap();
-        Map<String, String> fieldsToSample = new HashMap<>();
-        for (String key : fieldsToType.keySet()) {
-            fieldsToSample.put(key, "");
-        }
-        extractSamples(sampleSource, fieldsToSample, "");
         StringJoiner tableInfoJoiner = new StringJoiner("\n");
 
-        for (String key : fieldsToType.keySet()) {
-            String line = "- " + key + ": " + fieldsToType.get(key) + " (" + fieldsToSample.get(key) + ")";
-            tableInfoJoiner.add(line);
+        if (searchHits.length > 0) {
+            SearchHit hit = searchHits[0];
+            Map<String, Object> sampleSource = hit.getSourceAsMap();
+            Map<String, String> fieldsToSample = new HashMap<>();
+            for (String key : fieldsToType.keySet()) {
+                fieldsToSample.put(key, "");
+            }
+            extractSamples(sampleSource, fieldsToSample, "");
+
+
+            for (String key : fieldsToType.keySet()) {
+                String line = "- " + key + ": " + fieldsToType.get(key) + " (" + fieldsToSample.get(key) + ")";
+                tableInfoJoiner.add(line);
+            }
+        }
+        else
+        {
+            for (String key : fieldsToType.keySet()) {
+                String line = "- " + key + ": " + fieldsToType.get(key);
+                tableInfoJoiner.add(line);
+            }
         }
 
         String tableInfo = tableInfoJoiner.toString();
