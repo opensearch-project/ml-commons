@@ -17,8 +17,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -337,4 +339,21 @@ public interface MachineLearningClient {
      * @param listener action listener
      */
     void getTool(String toolName, ActionListener<ToolMetadata> listener);
+
+    /**
+     * Registers new agent and returns ActionFuture.
+     * @param mlAgent Register agent input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#register-agent
+     * @return the result future
+     */
+    default ActionFuture<MLRegisterAgentResponse> registerAgent(MLAgent mlAgent) {
+        PlainActionFuture<MLRegisterAgentResponse> actionFuture = PlainActionFuture.newFuture();
+        registerAgent(mlAgent, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Registers new agent and returns agent ID in response
+     * @param mlAgent Register agent input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#register-agent
+     */
+    void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener);
 }

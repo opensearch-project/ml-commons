@@ -5,28 +5,29 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.util.Comparator;
+import java.util.List;
+
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
-import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 
-import java.util.Comparator;
-import java.util.List;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
 @Function(FunctionName.LOCAL_SAMPLE_CALCULATOR)
 public class LocalSampleCalculator implements Executable {
 
-    //TODO: support calculate sum/max/min value from index.
+    // TODO: support calculate sum/max/min value from index.
     private Client client;
     private Settings settings;
 
@@ -45,7 +46,7 @@ public class LocalSampleCalculator implements Executable {
         List<Double> inputData = sampleCalculatorInput.getInputData();
         switch (operation) {
             case "sum":
-                double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum() ;
+                double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum();
                 listener.onResponse(new LocalSampleCalculatorOutput(sum));
                 break;
             case "max":

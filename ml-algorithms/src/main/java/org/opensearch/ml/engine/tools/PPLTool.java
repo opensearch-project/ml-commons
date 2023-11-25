@@ -16,6 +16,10 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.compress.CompressedXContent;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.action.ActionResponse;
+import org.opensearch.core.common.io.stream.InputStreamStreamInput;
+import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
@@ -42,6 +46,10 @@ import org.opensearch.sql.plugin.transport.TransportPPLQueryRequest;
 import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
 import org.opensearch.sql.ppl.domain.PPLQueryRequest;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -98,12 +106,14 @@ public class PPLTool implements Tool {
                     JSONObject jsonContent = new JSONObject(ImmutableMap.of("query", ppl));
                     PPLQueryRequest pplQueryRequest = new PPLQueryRequest(ppl, jsonContent, null, "jdbc");
                     TransportPPLQueryRequest transportPPLQueryRequest = new TransportPPLQueryRequest(pplQueryRequest);
-                    client.execute(PPLQueryAction.INSTANCE, transportPPLQueryRequest, ActionListener.<TransportPPLQueryResponse>wrap(transportPPLQueryResponse -> {
+                    client.execute(PPLQueryAction.INSTANCE, transportPPLQueryRequest, getPPLTransportActionListener(ActionListener.<TransportPPLQueryResponse>wrap(transportPPLQueryResponse -> {
                         String results = transportPPLQueryResponse.getResult();
                         listener.onResponse((T) results);
                     }, e -> {
-                        listener.onFailure(e);
-                    }));
+                        String pplError = "execute ppl:" + ppl + ", get error: " + e.getMessage();
+                        Exception exception = new Exception(pplError);
+                        listener.onFailure(exception);
+                    })));
                     //Execute output here
                         }, e -> {
                     log.info("fail to predict model: " + e);
@@ -279,5 +289,25 @@ public class PPLTool implements Tool {
                 }
             }
         }
+    }
+
+    private <T extends ActionResponse> ActionListener<T> getPPLTransportActionListener(ActionListener<TransportPPLQueryResponse> listener) {
+        return ActionListener.wrap(r -> { listener.onResponse(fromActionResponse(r)); }, listener::onFailure);
+    }
+
+    private static TransportPPLQueryResponse fromActionResponse(ActionResponse actionResponse) {
+        if (actionResponse instanceof TransportPPLQueryResponse) {
+            return (TransportPPLQueryResponse) actionResponse;
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+            actionResponse.writeTo(osso);
+            try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
+                return new TransportPPLQueryResponse(input);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("failed to parse ActionResponse into TransportPPLQueryResponse", e);
+        }
+
     }
 }

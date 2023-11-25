@@ -38,7 +38,7 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
-    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 7;
+    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 8;
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
     public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 2;
@@ -194,6 +194,9 @@ public class CommonValue {
             + MLModel.DEPLOY_TO_ALL_NODES_FIELD
             + "\": {\"type\": \"boolean\"},\n"
             + "      \""
+            + MLModel.IS_HIDDEN_FIELD
+            + "\": {\"type\": \"boolean\"},\n"
+            + "      \""
             + MLModel.MODEL_CONFIG_FIELD
             + "\" : {\"properties\":{\""
             + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
@@ -203,6 +206,15 @@ public class CommonValue {
             + NORMALIZE_RESULT_FIELD + "\":{\"type\":\"boolean\"},\""
             + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
             + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
+            + "      \""
+            + MLModel.QUOTA_FLAG_FIELD
+            + "\" : {\"type\": \"boolean\"},\n"
+            + "      \""
+            + MLModel.RATE_LIMIT_NUMBER_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.RATE_LIMIT_UNIT_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
             + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
@@ -359,6 +371,7 @@ public class CommonValue {
             + MLAgent.MEMORY_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
             + "      \""
+            + MLAgent.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
             + MLAgent.LAST_UPDATED_TIME_FIELD

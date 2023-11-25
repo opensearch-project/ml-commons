@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
@@ -23,8 +23,9 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 
-import java.util.List;
-import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This tool supports running any ml-commons model.
@@ -34,10 +35,12 @@ import java.util.Map;
 public class MLModelTool implements Tool {
     public static final String TYPE = "MLModelTool";
 
-    @Setter @Getter
+    @Setter
+    @Getter
     private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
-    @Getter @Setter
+    @Getter
+    @Setter
     private String description = DEFAULT_DESCRIPTION;
     private Client client;
     private String modelId;
@@ -59,11 +62,13 @@ public class MLModelTool implements Tool {
         };
     }
 
-
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        ActionRequest request = new MLPredictionTaskRequest(modelId, MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+        ActionRequest request = new MLPredictionTaskRequest(
+            modelId,
+            MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build()
+        );
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.<MLTaskResponse>wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
@@ -89,6 +94,16 @@ public class MLModelTool implements Tool {
     }
 
     @Override
+    public String getName() {
+        return this.name;
+    }
+
+    @Override
+    public void setName(String s) {
+        this.name = s;
+    }
+
+    @Override
     public boolean validate(Map<String, String> parameters) {
         if (parameters == null || parameters.size() == 0) {
             return false;
@@ -100,6 +115,7 @@ public class MLModelTool implements Tool {
         private Client client;
 
         private static Factory INSTANCE;
+
         public static Factory getInstance() {
             if (INSTANCE != null) {
                 return INSTANCE;
@@ -119,7 +135,7 @@ public class MLModelTool implements Tool {
 
         @Override
         public MLModelTool create(Map<String, Object> map) {
-            return new MLModelTool(client, (String)map.get("model_id"));
+            return new MLModelTool(client, (String) map.get("model_id"));
         }
 
         @Override

@@ -53,7 +53,9 @@ import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
 import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
+import org.opensearch.ml.action.models.InPlaceUpdateModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
+import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
@@ -105,9 +107,11 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
@@ -138,6 +142,7 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
@@ -145,6 +150,7 @@ import org.opensearch.ml.engine.tools.MathTool;
 import org.opensearch.ml.engine.tools.PPLTool;
 import org.opensearch.ml.engine.tools.PainlessScriptTool;
 import org.opensearch.ml.engine.tools.VectorDBTool;
+import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -158,6 +164,17 @@ import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationsTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetTracesAction;
+import org.opensearch.ml.memory.action.conversation.GetTracesTransportAction;
+import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
+import org.opensearch.ml.memory.action.conversation.SearchConversationsTransportAction;
+import org.opensearch.ml.memory.action.conversation.SearchInteractionsAction;
+import org.opensearch.ml.memory.action.conversation.SearchInteractionsTransportAction;
+import org.opensearch.ml.memory.action.conversation.UpdateConversationAction;
+import org.opensearch.ml.memory.action.conversation.UpdateConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;
+import org.opensearch.ml.memory.action.conversation.UpdateInteractionTransportAction;
+import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -189,6 +206,7 @@ import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
+import org.opensearch.ml.rest.RestMLUpdateModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
@@ -196,6 +214,11 @@ import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
 import org.opensearch.ml.rest.RestMemoryDeleteConversationAction;
 import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
 import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
+import org.opensearch.ml.rest.RestMemoryGetTracesAction;
+import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
+import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
+import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
+import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -309,6 +332,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLUndeployModelsAction.INSTANCE, TransportUndeployModelsAction.class),
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
+                new ActionHandler<>(MLUpdateModelAction.INSTANCE, UpdateModelTransportAction.class),
+                new ActionHandler<>(MLInPlaceUpdateModelAction.INSTANCE, InPlaceUpdateModelTransportAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
                 new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),
@@ -327,7 +352,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
                 new ActionHandler<>(MLRegisterAgentAction.INSTANCE, TransportRegisterAgentAction.class),
                 new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
-                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class)
+                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class),
+                new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
+                new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
+                new ActionHandler<>(UpdateConversationAction.INSTANCE, UpdateConversationTransportAction.class),
+                new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
+                new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class)
             );
     }
 
@@ -476,6 +506,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         CatIndexTool.Factory.getInstance().init(client, clusterService);
         PainlessScriptTool.Factory.getInstance().init(client, scriptService);
         PPLTool.Factory.getInstance().init(client);
+        VisualizationsTool.Factory.getInstance().init(client);
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
         toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
@@ -483,14 +514,16 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
         toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
         toolFactories.put(PPLTool.TYPE, PPLTool.Factory.getInstance());
+        toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
 
+        MLMemoryManager memoryManager = new MLMemoryManager(client, clusterService, new ConversationMetaIndex(client, clusterService));
         Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
-        conversationIndexMemoryFactory.init(client, mlIndicesHandler);
+        conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
@@ -605,6 +638,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
         RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
         RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
@@ -618,6 +652,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
+        RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction();
+        RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
+        RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
+        RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
+        RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -628,6 +667,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLGetModelAction,
                 restMLDeleteModelAction,
                 restMLSearchModelAction,
+                restMLUpdateModelAction,
                 restMLGetTaskAction,
                 restMLDeleteTaskAction,
                 restMLSearchTaskAction,
@@ -653,7 +693,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restDeleteConversationAction,
                 restMLUpdateConnectorAction,
                 restMLListToolsAction,
-                restMLGetToolAction
+                restMLGetToolAction,
+                restSearchConversationsAction,
+                restSearchInteractionsAction,
+                restMemoryUpdateConversationAction,
+                restMemoryUpdateInteractionAction,
+                restMemoryGetTracesAction
             );
     }
 
@@ -760,7 +805,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_UPDATE_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
             );

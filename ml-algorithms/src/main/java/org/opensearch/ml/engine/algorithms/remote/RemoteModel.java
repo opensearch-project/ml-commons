@@ -5,7 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import lombok.extern.log4j.Log4j2;
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -22,7 +23,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.script.ScriptService;
 
-import java.util.Map;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Function(FunctionName.REMOTE)
@@ -43,7 +44,7 @@ public class RemoteModel implements Predictable {
     @Override
     public MLOutput predict(MLInput mlInput, MLModel model) {
         throw new IllegalArgumentException(
-                "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + model.getModelId() + "/_deploy"
+            "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + model.getModelId() + "/_deploy"
         );
     }
 

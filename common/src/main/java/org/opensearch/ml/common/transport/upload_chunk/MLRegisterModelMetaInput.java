@@ -16,6 +16,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -34,7 +36,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String MODEL_NAME_FIELD = "name"; //mandatory
     public static final String DESCRIPTION_FIELD = "description"; //optional
-
+    public static final String QUOTA_FLAG_FIELD = "quota_flag";
+    public static final String RATE_LIMIT_NUMBER_FIELD = "rate_limit_number";
+    public static final String RATE_LIMIT_UNIT_FIELD = "rate_limit_unit";
     public static final String VERSION_FIELD = "version";
     public static final String MODEL_FORMAT_FIELD = "model_format"; //mandatory
     public static final String MODEL_STATE_FIELD = "model_state";
@@ -55,7 +59,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private String modelGroupId;
     private String description;
     private String version;
-
+    private Boolean quotaFlag;
+    private String rateLimitNumber;
+    private TimeUnit rateLimitUnit;
     private MLModelFormat modelFormat;
 
     private MLModelState modelState;
@@ -68,12 +74,13 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private AccessMode accessMode;
     private Boolean isAddAllBackendRoles;
     private Boolean doesVersionCreateModelGroup;
+    private Boolean isHidden;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
+    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, Boolean quotaFlag, String rateLimitNumber, TimeUnit rateLimitUnit, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
                                     AccessMode accessMode,
                                     Boolean isAddAllBackendRoles,
-                                    Boolean doesVersionCreateModelGroup) {
+                                    Boolean doesVersionCreateModelGroup, Boolean isHidden) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -98,6 +105,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.modelGroupId = modelGroupId;
         this.version = version;
         this.description = description;
+        this.quotaFlag = quotaFlag;
+        this.rateLimitNumber = rateLimitNumber;
+        this.rateLimitUnit = rateLimitUnit;
         this.modelFormat = modelFormat;
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
@@ -108,6 +118,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.accessMode = accessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
         this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
+        this.isHidden = isHidden;
     }
 
     public MLRegisterModelMetaInput(StreamInput in) throws IOException{
@@ -116,6 +127,11 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.modelGroupId = in.readOptionalString();
         this.version = in.readOptionalString();
         this.description = in.readOptionalString();
+        this.quotaFlag = in.readOptionalBoolean();
+        this.rateLimitNumber = in.readOptionalString();
+        if (in.readBoolean()) {
+            rateLimitUnit = in.readEnum(TimeUnit.class);
+        }
         if (in.readBoolean()) {
             modelFormat = in.readEnum(MLModelFormat.class);
         }
@@ -134,6 +150,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
         this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        this.isHidden = in.readOptionalBoolean();
     }
 
     @Override
@@ -143,6 +160,14 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         out.writeOptionalString(modelGroupId);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
+        out.writeOptionalBoolean(quotaFlag);
+        out.writeOptionalString(rateLimitNumber);
+        if (rateLimitUnit != null) {
+            out.writeBoolean(true);
+            out.writeEnum(rateLimitUnit);
+        } else {
+            out.writeBoolean(false);
+        }
         if (modelFormat != null) {
             out.writeBoolean(true);
             out.writeEnum(modelFormat);
@@ -178,21 +203,31 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         }
         out.writeOptionalBoolean(isAddAllBackendRoles);
         out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        out.writeOptionalBoolean(isHidden);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
-        builder.field(MODEL_NAME_FIELD, name);
-        builder.field(FUNCTION_NAME_FIELD, functionName);
+        builder.field(MLModel.MODEL_NAME_FIELD, name);
+        builder.field(MLModel.FUNCTION_NAME_FIELD, functionName);
         if (modelGroupId != null) {
-            builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
+            builder.field(MLModel.MODEL_GROUP_ID_FIELD, modelGroupId);
         }
         if (version != null) {
             builder.field(VERSION_FIELD, version);
         }
         if (description != null) {
-            builder.field(DESCRIPTION_FIELD, description);
+            builder.field(MLModel.DESCRIPTION_FIELD, description);
+        }
+        if (quotaFlag != null) {
+            builder.field(QUOTA_FLAG_FIELD, quotaFlag);
+        }
+        if (rateLimitNumber != null) {
+            builder.field(RATE_LIMIT_NUMBER_FIELD, rateLimitNumber);
+        }
+        if (rateLimitUnit != null) {
+            builder.field(RATE_LIMIT_UNIT_FIELD, rateLimitUnit);
         }
         builder.field(MODEL_FORMAT_FIELD, modelFormat);
         if (modelState != null) {
@@ -216,6 +251,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (doesVersionCreateModelGroup != null) {
             builder.field(DOES_VERSION_CREATE_MODEL_GROUP, doesVersionCreateModelGroup);
         }
+        if (isHidden != null) {
+            builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
+        }
         builder.endObject();
         return builder;
     }
@@ -226,6 +264,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         String modelGroupId = null;
         String version = null;
         String description = null;
+        Boolean quotaFlag = null;
+        String rateLimitNumber = null;
+        TimeUnit rateLimitUnit = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
@@ -236,6 +277,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         AccessMode accessMode = null;
         Boolean isAddAllBackendRoles = null;
         Boolean doesVersionCreateModelGroup = null;
+        Boolean isHidden = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -256,6 +298,15 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
+                    break;
+                case QUOTA_FLAG_FIELD:
+                    quotaFlag = parser.booleanValue();
+                    break;
+                case RATE_LIMIT_NUMBER_FIELD:
+                    rateLimitNumber = parser.text();
+                    break;
+                case RATE_LIMIT_UNIT_FIELD:
+                    rateLimitUnit = TimeUnit.valueOf(parser.text());
                     break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text());
@@ -291,12 +342,15 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                 case DOES_VERSION_CREATE_MODEL_GROUP:
                     doesVersionCreateModelGroup = parser.booleanValue();
                     break;
+                case MLModel.IS_HIDDEN_FIELD:
+                    isHidden = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup);
+        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, quotaFlag, rateLimitNumber, rateLimitUnit, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup, isHidden);
     }
 
 }

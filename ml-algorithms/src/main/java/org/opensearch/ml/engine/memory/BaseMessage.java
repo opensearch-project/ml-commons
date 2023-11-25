@@ -5,14 +5,15 @@
 
 package org.opensearch.ml.engine.memory;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import java.io.IOException;
+
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.spi.memory.Message;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 public class BaseMessage implements Message, ToXContentObject {
 

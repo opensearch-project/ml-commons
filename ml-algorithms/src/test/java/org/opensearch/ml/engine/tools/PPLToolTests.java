@@ -28,6 +28,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.sql.plugin.transport.PPLQueryAction;
+import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
 import software.amazon.awssdk.utils.ImmutableMap;
 
 import java.util.ArrayList;
@@ -78,7 +80,12 @@ public class PPLToolTests {
 
     private Map<String, ?> pplReturns;
 
+    @Mock
+    private TransportPPLQueryResponse transportPPLQueryResponse;
+
     private String mockedIndexName = "demo";
+
+    private String pplResult = "ppl result";
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -106,7 +113,6 @@ public class PPLToolTests {
         }).when(client).search(any(), any());
 
         when(modelTensors.getMlModelTensors()).thenReturn(Collections.singletonList(modelTensor));
-        //when(modelTensors.getMlModelTensors()).thenReturn(Collections.singletonList(modelTensor));
         when(modelTensorOutput.getMlModelOutputs()).thenReturn(Collections.singletonList(modelTensors));
         when(mlTaskResponse.getOutput()).thenReturn(modelTensorOutput);
 
@@ -117,6 +123,14 @@ public class PPLToolTests {
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
+        when(transportPPLQueryResponse.getResult()).thenReturn(pplResult);
+
+        doAnswer(invocation -> {
+            ActionListener<TransportPPLQueryResponse> listener = (ActionListener<TransportPPLQueryResponse>) invocation.getArguments()[2];
+            listener.onResponse(transportPPLQueryResponse);
+            return null;
+        }).when(client).execute(eq(PPLQueryAction.INSTANCE), any(), any());
+
         PPLTool.Factory.getInstance().init(client);
     }
 
@@ -125,8 +139,8 @@ public class PPLToolTests {
         Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(PPLTool.TYPE, tool.getName());
 
-        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
-            assertEquals(ppl, "source=demo | head 1");
+        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(pplResult ->{
+            assertEquals(pplResult, "ppl result");
         }, e -> {
             log.info(e);
         }));
@@ -145,14 +159,14 @@ public class PPLToolTests {
         }).when(indicesAdminClient).getMappings(any(), any());
 
         tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
-            assertEquals(ppl, "source=demo | head 1");
+            assertEquals(pplResult, "ppl result");
         }, e -> {
-            log.info(e);
+            assertEquals("get mapping error", e.getMessage());
         }));
     }
 
     @Test
-    public void testTool_searchFailure(){
+    public void testTool_predictModelFailure(){
         Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(PPLTool.TYPE, tool.getName());
         Exception exception = new Exception("predict model error");
@@ -163,14 +177,14 @@ public class PPLToolTests {
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
         tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
-            assertEquals(ppl, "source=demo | head 1");
+            assertEquals(pplResult, "ppl result");
         }, e -> {
-            log.info(e);
+            assertEquals("predict model error", e.getMessage());
         }));
     }
 
     @Test
-    public void testTool_predictModelFailure(){
+    public void testTool_searchFailure(){
         Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(PPLTool.TYPE, tool.getName());
         Exception exception = new Exception("search error");
@@ -181,9 +195,27 @@ public class PPLToolTests {
         }).when(client).search(any(), any());
 
         tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
-            assertEquals(ppl, "source=demo | head 1");
+            assertEquals(pplResult, "ppl result");
         }, e -> {
-            log.info(e);
+            assertEquals("search error", e.getMessage());
+        }));
+    }
+
+    @Test
+    public void testTool_executePPLFailure(){
+        Tool tool = PPLTool.Factory.getInstance().create(Collections.emptyMap());
+        assertEquals(PPLTool.TYPE, tool.getName());
+        Exception exception = new Exception("execute ppl error");
+        doAnswer(invocation -> {
+            ActionListener<TransportPPLQueryResponse> listener = (ActionListener<TransportPPLQueryResponse>) invocation.getArguments()[2];
+            listener.onFailure(exception);
+            return null;
+        }).when(client).execute(eq(PPLQueryAction.INSTANCE), any(), any());
+
+        tool.run(ImmutableMap.of("index", "demo", "question", "demo"), ActionListener.<String>wrap(ppl ->{
+            assertEquals(pplResult, "ppl result");
+        }, e -> {
+            assertEquals("execute ppl:source=demo | head 1, get error: execute ppl error", e.getMessage());
         }));
     }
 

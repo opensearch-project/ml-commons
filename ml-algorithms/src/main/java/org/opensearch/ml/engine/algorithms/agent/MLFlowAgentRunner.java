@@ -5,9 +5,17 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.client.Client;
@@ -18,19 +26,14 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Data
@@ -44,7 +47,14 @@ public class MLFlowAgentRunner {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLFlowAgentRunner(
+        Client client,
+        Settings settings,
+        ClusterService clusterService,
+        NamedXContentRegistry xContentRegistry,
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, Memory.Factory> memoryFactoryMap
+    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -57,55 +67,75 @@ public class MLFlowAgentRunner {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
+        List<ModelTensor> flowAgentOutput = new ArrayList<>();
         Map<String, String> firstToolExecuteParams = null;
-        StepListener<Object> lastStepListener = null;
+        StepListener<Object> previousStepListener = null;
         if (toolSpecs.size() == 0) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
-        for (int i = 0 ;i<toolSpecs.size(); i++) {
-            MLToolSpec toolSpec = toolSpecs.get(i);
-            Tool tool = createTool(toolSpec);
 
+        for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
+                MLToolSpec toolSpec = toolSpecs.get(i);
+                Tool tool = createTool(toolSpec);
                 firstStepListener = new StepListener();
-                lastStepListener = firstStepListener;
+                previousStepListener = firstStepListener;
                 firstTool = tool;
                 firstToolExecuteParams = getToolExecuteParams(toolSpec, params);
             } else {
-                MLToolSpec lastToolSpec = toolSpecs.get(i - 1);
+                MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
                 int finalI = i;
-                lastStepListener.whenComplete(output -> {
-                    String outputKey = lastToolSpec.getName() + ".output";
-                    if (lastToolSpec.getName() !=  null) {
-                        outputKey = lastToolSpec.getName() + ".output";
+                previousStepListener.whenComplete(output -> {
+                    String key = previousToolSpec.getName();
+                    String outputKey = previousToolSpec.getName() != null
+                        ? previousToolSpec.getName() + ".output"
+                        : previousToolSpec.getType() + ".output";
+
+                    if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
+                        if (output instanceof ModelTensorOutput) {
+                            flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+                        } else {
+                            String result = output instanceof String
+                                ? (String) output
+                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+
+                            ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
+                            flowAgentOutput.add(stepOutput);
+                        }
                     }
+
                     if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
                         ModelTensors tensors = (ModelTensors) ((List) output).get(0);
                         Object response = tensors.getMlModelTensors().get(0).getDataAsMap().get("response");
                         params.put(outputKey, response + "");
                     } else if (output instanceof ModelTensor) {
-                        params.put(outputKey, escapeJson(toJson(((ModelTensor)output).getDataAsMap())));
+                        params.put(outputKey, escapeJson(toJson(((ModelTensor) output).getDataAsMap())));
                     } else {
                         if (output instanceof String) {
-                            params.put(outputKey, (String)output);
+                            params.put(outputKey, (String) output);
                         } else {
                             params.put(outputKey, escapeJson(toJson(output.toString())));
                         }
                     }
-                    if (finalI < toolSpecs.size() - 1) {
-                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
-                    } else {
-                        tool.run(getToolExecuteParams(toolSpec, params), listener);
+
+                    if (finalI == toolSpecs.size()) {
+                        listener.onResponse(flowAgentOutput);
+                        return;
                     }
+
+                    MLToolSpec toolSpec = toolSpecs.get(finalI);
+                    Tool tool = createTool(toolSpec);
+                    if (finalI < toolSpecs.size()) {
+                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
+                    }
+
                 }, e -> {
                     log.error("Failed to run flow agent", e);
                     listener.onFailure(e);
                 });
-                if (i < toolSpecs.size() - 1) {
-                    lastStepListener  = nextStepListener;
-                }
+                previousStepListener = nextStepListener;
             }
         }
         if (toolSpecs.size() == 1) {
@@ -119,7 +149,7 @@ public class MLFlowAgentRunner {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
                 if (value instanceof String) {
-                    return (String)value;
+                    return (String) value;
                 } else {
                     return gson.toJson(value);
                 }
@@ -134,11 +164,13 @@ public class MLFlowAgentRunner {
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
         }
-        if (!toolFactories.containsKey(toolSpec.getName())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getName());
+        if (!toolFactories.containsKey(toolSpec.getType())) {
+            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
-        Tool tool = toolFactories.get(toolSpec.getName()).create(toolParams);
-        tool.setName(toolSpec.getName());
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+        if (toolSpec.getName() != null) {
+            tool.setName(toolSpec.getName());
+        }
 
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());
@@ -153,11 +185,11 @@ public class MLFlowAgentRunner {
         }
         for (String key : params.keySet()) {
             String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName()+".";
+            if (key.startsWith(toolSpec.getType() + ".")) {
+                toBeReplaced = toolSpec.getType() + ".";
             }
             if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName()+".";
+                toBeReplaced = toolSpec.getName() + ".";
             }
             if (toBeReplaced != null) {
                 executeParams.put(key.replace(toBeReplaced, ""), params.get(key));

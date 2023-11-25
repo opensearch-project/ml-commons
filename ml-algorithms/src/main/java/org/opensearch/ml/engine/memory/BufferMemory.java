@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.engine.memory;
 
-import org.opensearch.ml.common.spi.memory.Memory;
-import org.opensearch.ml.common.spi.memory.Message;
-
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+
+import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.spi.memory.Message;
 
 public class BufferMemory implements Memory {
     public static final String TYPE = "buffer";

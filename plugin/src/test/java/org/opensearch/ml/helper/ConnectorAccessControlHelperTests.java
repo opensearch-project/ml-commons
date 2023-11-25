@@ -22,6 +22,7 @@ import java.util.Optional;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -42,7 +43,6 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
@@ -206,7 +206,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
         connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
-        verify(actionListener, times(1)).onFailure(any(MLResourceNotFoundException.class));
+        verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
     }
 
     public void test_validateConnectorAccess_searchConnectorException_return_false() {
@@ -221,7 +221,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
         connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
-        verify(actionListener).onFailure(any(IllegalStateException.class));
+        verify(actionListener).onFailure(any(OpenSearchStatusException.class));
     }
 
     public void test_skipConnectorAccessControl_userIsNull_return_true() {

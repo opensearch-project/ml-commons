@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.OpenSearchWrapperException;
@@ -41,12 +42,17 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
 import lombok.AllArgsConstructor;
@@ -116,6 +122,8 @@ public class InteractionsIndex {
      * @param origin the origin of the response for this interaction
      * @param additionalInfo additional information used for constructing the LLM prompt
      * @param timestamp when this interaction happened
+     * @param parintid the parent interactionId of this interaction
+     * @param traceNumber the trace number for a parent interaction
      * @param listener gets the id of the newly created interaction record
      */
     public void createInteraction(
@@ -124,9 +132,11 @@ public class InteractionsIndex {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo,
+        Map<String, String> additionalInfo,
         Instant timestamp,
-        ActionListener<String> listener
+        ActionListener<String> listener,
+        String parintid,
+        Integer traceNumber
     ) {
         initInteractionsIndexIfAbsent(ActionListener.wrap(indexExists -> {
             String userstr = client
@@ -153,7 +163,11 @@ public class InteractionsIndex {
                                 ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD,
                                 additionalInfo,
                                 ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
-                                timestamp
+                                timestamp,
+                                ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD,
+                                parintid,
+                                ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD,
+                                traceNumber
                             );
                         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                             ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -179,6 +193,30 @@ public class InteractionsIndex {
     }
 
     /**
+     * Add an interaction to this index. Return the ID of the newly created interaction
+     * @param conversationId The id of the conversation this interaction belongs to
+     * @param input the user (human) input into this interaction
+     * @param promptTemplate the prompt template used for this interaction
+     * @param response the GenAI response for this interaction
+     * @param origin the origin of the response for this interaction
+     * @param additionalInfo additional information used for constructing the LLM prompt
+     * @param timestamp when this interaction happened
+     * @param listener gets the id of the newly created interaction record
+     */
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        Instant timestamp,
+        ActionListener<String> listener
+    ) {
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, timestamp, listener, "", null);
+    }
+
+    /**
      * Add an interaction to this index, timestamped now. Return the id of the newly created interaction
      * @param conversationId The id of the converation this interaction belongs to
      * @param input the user (human) input into this interaction
@@ -194,10 +232,10 @@ public class InteractionsIndex {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo,
+        Map<String, String> additionalInfo,
         ActionListener<String> listener
     ) {
-        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener);
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener, "", null);
     }
 
     /**
@@ -230,8 +268,70 @@ public class InteractionsIndex {
     @VisibleForTesting
     void innerGetInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
         SearchRequest request = Requests.searchRequest(indexName);
-        TermQueryBuilder builder = new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
-        request.source().query(builder);
+
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+        // Add the ExistsQueryBuilder for checking null values
+        ExistsQueryBuilder existsQueryBuilder = QueryBuilders.existsQuery(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD);
+        boolQueryBuilder.mustNot(existsQueryBuilder);
+
+        // Add the TermQueryBuilder for another field
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+        boolQueryBuilder.must(termQueryBuilder);
+
+        // Set the query to the search source
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQueryBuilder);
+
+        request.source(searchSourceBuilder);
+        request.source().from(from).size(maxResults);
+        request.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
+                List<Interaction> result = new LinkedList<Interaction>();
+                for (SearchHit hit : response.getHits()) {
+                    result.add(Interaction.fromSearchHit(hit));
+                }
+                internalListener.onResponse(result);
+            }, e -> { internalListener.onFailure(e); });
+            client
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
+                    internalListener.onFailure(e);
+                }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Gets a list of interactions belonging to a conversation
+     * @param interactionId the interaction to read from
+     * @param from where to start in the reading
+     * @param maxResults how many interactions to return
+     * @param listener gets the list, sorted by recency, of interactions
+     */
+    public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
+        SearchRequest request = Requests.searchRequest(indexName);
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+        // Add the ExistsQueryBuilder for checking null values
+        ExistsQueryBuilder existsQueryBuilder = QueryBuilders.existsQuery(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD);
+        boolQueryBuilder.must(existsQueryBuilder);
+
+        // Add the TermQueryBuilder for another field
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, interactionId);
+        boolQueryBuilder.must(termQueryBuilder);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQueryBuilder);
+
+        request.source(searchSourceBuilder);
         request.source().from(from).size(maxResults);
         request.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
@@ -339,4 +439,41 @@ public class InteractionsIndex {
         }
     }
 
+    /**
+     * Execute a search query over the interactions of a conversation by constructing a wrapper
+     * boolean query around the original query, AND a term query over conversation id
+     * @param conversationId the id of the conversation to query over
+     * @param request the original search request
+     * @param listener receives the search response from this query
+     */
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
+            if (access) {
+                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<SearchResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+                    request.indices(indexName);
+                    QueryBuilder originalQuery = request.source().query();
+                    BoolQueryBuilder newQuery = new BoolQueryBuilder();
+                    newQuery.must(originalQuery);
+                    newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId));
+                    request.source().query(newQuery);
+                    client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> {
+                        client.search(request, internalListener);
+                    }, e -> {
+                        log.error("Failed to refresh interactions index during search interactions ", e);
+                        internalListener.onFailure(e);
+                    }));
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
+            } else {
+                String userstr = client
+                    .threadPool()
+                    .getThreadContext()
+                    .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+            }
+        }, e -> { listener.onFailure(e); }));
+    }
 }

@@ -19,6 +19,7 @@ package org.opensearch.searchpipelines.questionanswering.generative.client;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -66,7 +67,7 @@ public class ConversationalMemoryClient {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo
+        Map<String, String> additionalInfo
     ) {
         Preconditions.checkNotNull(conversationId);
         Preconditions.checkNotNull(input);

@@ -28,10 +28,14 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -199,9 +203,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void getTask(String taskId, ActionListener<MLTask> listener) {
         MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
 
-        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, ActionListener.wrap(response -> {
-            listener.onResponse(MLTaskGetResponse.fromActionResponse(response).getMlTask());
-        }, listener::onFailure));
+        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, getMLTaskResponseActionListener(listener));
     }
 
     @Override
@@ -255,6 +257,22 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLGetToolAction.INSTANCE, mlToolGetRequest, getMlGetToolResponseActionListener(listener));
     }
 
+    @Override
+    public void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
+        MLRegisterAgentRequest mlRegisterAgentRequest = MLRegisterAgentRequest.builder().mlAgent(mlAgent).build();
+        client.execute(MLRegisterAgentAction.INSTANCE, mlRegisterAgentRequest, getMLRegisterAgentResponseActionListener(listener));
+    }
+
+    private ActionListener<MLRegisterAgentResponse> getMLRegisterAgentResponseActionListener(
+        ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        ActionListener<MLRegisterAgentResponse> actionListener = wrapActionListener(listener, res -> {
+            MLRegisterAgentResponse mlRegisterAgentResponse = MLRegisterAgentResponse.fromActionResponse(res);
+            return mlRegisterAgentResponse;
+        });
+        return actionListener;
+    }
+
     private ActionListener<MLToolsListResponse> getMlListToolsResponseActionListener(ActionListener<List<ToolMetadata>> listener) {
         ActionListener<MLToolsListResponse> internalListener = ActionListener.wrap(mlModelListResponse -> {
             listener.onResponse(mlModelListResponse.getToolMetadataList());
@@ -272,6 +290,16 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         }, listener::onFailure);
         ActionListener<MLToolGetResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLToolGetResponse getResponse = MLToolGetResponse.fromActionResponse(res);
+            return getResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {
+        ActionListener<MLTaskGetResponse> internalListener = ActionListener
+            .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
+        ActionListener<MLTaskGetResponse> actionListener = wrapActionListener(internalListener, response -> {
+            MLTaskGetResponse getResponse = MLTaskGetResponse.fromActionResponse(response);
             return getResponse;
         });
         return actionListener;

@@ -93,6 +93,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
@@ -113,7 +114,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetModel_ValidateAccessFailed() throws IOException {
@@ -178,6 +179,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             .modelId("test_id")
             .modelState(MLModelState.REGISTERED)
             .algorithm(FunctionName.TEXT_EMBEDDING)
+            .isHidden(false)
             .build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);

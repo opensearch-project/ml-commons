@@ -5,10 +5,16 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import com.google.gson.Gson;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -37,15 +43,11 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import com.google.gson.Gson;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Data
@@ -60,7 +62,14 @@ public class MLAgentExecutor implements Executable {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLAgentExecutor(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLAgentExecutor(
+        Client client,
+        Settings settings,
+        ClusterService clusterService,
+        NamedXContentRegistry xContentRegistry,
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, Memory.Factory> memoryFactoryMap
+    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -76,16 +85,15 @@ public class MLAgentExecutor implements Executable {
         }
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet)agentMLInput.getInputDataset();
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         List<ModelTensors> outputs = new ArrayList<>();
         List<ModelTensor> modelTensors = new ArrayList<>();
         outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
 
-
         if (clusterService.state().metadata().hasIndex(ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 GetRequest getRequest = new GetRequest(ML_AGENT_INDEX).id(agentId);
-                client.get(getRequest, ActionListener.<GetResponse>wrap(r -> {
+                client.get(getRequest, ActionListener.runBefore(ActionListener.<GetResponse>wrap(r -> {
                     if (r.isExists()) {
                         try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -113,12 +121,18 @@ public class MLAgentExecutor implements Executable {
                                             });
                                         } else {
                                             Object finalOutput = output;
-                                            String result = output instanceof String ? (String) output : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
+                                            String result = output instanceof String
+                                                ? (String) output
+                                                : AccessController
+                                                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
                                             modelTensors.add(ModelTensor.builder().name("response").result(result).build());
                                         }
                                     } else {
                                         Object finalOutput = output;
-                                        String result = output instanceof String ? (String) output : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
+                                        String result = output instanceof String
+                                            ? (String) output
+                                            : AccessController
+                                                .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
                                         modelTensors.add(ModelTensor.builder().name("response").result(result).build());
                                     }
                                     listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
@@ -130,11 +144,35 @@ public class MLAgentExecutor implements Executable {
                                 listener.onFailure(ex);
                             });
                             if ("flow".equals(mlAgent.getType())) {
-                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(
+                                    client,
+                                    settings,
+                                    clusterService,
+                                    xContentRegistry,
+                                    toolFactories,
+                                    memoryFactoryMap
+                                );
                                 flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             } else if ("cot".equals(mlAgent.getType())) {
-                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(
+                                    client,
+                                    settings,
+                                    clusterService,
+                                    xContentRegistry,
+                                    toolFactories,
+                                    memoryFactoryMap
+                                );
                                 reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+                            } else if ("conversational".equals(mlAgent.getType())) {
+                                MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(
+                                    client,
+                                    settings,
+                                    clusterService,
+                                    xContentRegistry,
+                                    toolFactories,
+                                    memoryFactoryMap
+                                );
+                                chatAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             }
                         }
                     } else {
@@ -143,14 +181,14 @@ public class MLAgentExecutor implements Executable {
                 }, e -> {
                     log.error("Failed to get agent", e);
                     listener.onFailure(e);
-                }));
+                }), () -> context.restore()));
             }
         }
 
     }
 
     public XContentParser createXContentParserFromRegistry(NamedXContentRegistry xContentRegistry, BytesReference bytesReference)
-            throws IOException {
+        throws IOException {
         return XContentHelper.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, bytesReference, XContentType.JSON);
     }
 }

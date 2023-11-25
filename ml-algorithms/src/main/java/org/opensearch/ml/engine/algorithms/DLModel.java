@@ -5,20 +5,23 @@
 
 package org.opensearch.ml.engine.algorithms;
 
-import ai.djl.Application;
-import ai.djl.Device;
-import ai.djl.MalformedModelException;
-import ai.djl.engine.Engine;
-import ai.djl.inference.Predictor;
-import ai.djl.modality.Input;
-import ai.djl.modality.Output;
-import ai.djl.repository.zoo.Criteria;
-import ai.djl.repository.zoo.ModelNotFoundException;
-import ai.djl.repository.zoo.ZooModel;
-import ai.djl.translate.TranslateException;
-import ai.djl.translate.Translator;
-import ai.djl.translate.TranslatorFactory;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.engine.ModelHelper.ONNX_ENGINE;
+import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
+import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -35,22 +38,20 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.opensearch.ml.engine.ModelHelper.ONNX_ENGINE;
-import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
-import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+import ai.djl.Application;
+import ai.djl.Device;
+import ai.djl.MalformedModelException;
+import ai.djl.engine.Engine;
+import ai.djl.inference.Predictor;
+import ai.djl.modality.Input;
+import ai.djl.modality.Output;
+import ai.djl.repository.zoo.Criteria;
+import ai.djl.repository.zoo.ModelNotFoundException;
+import ai.djl.repository.zoo.ZooModel;
+import ai.djl.translate.TranslateException;
+import ai.djl.translate.Translator;
+import ai.djl.translate.TranslatorFactory;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public abstract class DLModel implements Predictable {
@@ -116,9 +117,9 @@ public abstract class DLModel implements Predictable {
                 throw new IllegalArgumentException("unsupported engine");
         }
 
-        File modelZipFile = (File)params.get(MODEL_ZIP_FILE);
-        modelHelper = (ModelHelper)params.get(MODEL_HELPER);
-        mlEngine = (MLEngine)params.get(ML_ENGINE);
+        File modelZipFile = (File) params.get(MODEL_ZIP_FILE);
+        modelHelper = (ModelHelper) params.get(MODEL_HELPER);
+        mlEngine = (MLEngine) params.get(ML_ENGINE);
         if (modelZipFile == null) {
             throw new IllegalArgumentException("model file is null");
         }
@@ -135,14 +136,7 @@ public abstract class DLModel implements Predictable {
         if (!FunctionName.isDLModel(model.getAlgorithm())) {
             throw new IllegalArgumentException("wrong function name");
         }
-        loadModel(
-                modelZipFile,
-                modelId,
-                model.getName(),
-                model.getVersion(),
-                model.getModelConfig(),
-                engine
-        );
+        loadModel(modelZipFile, modelId, model.getName(), model.getVersion(), model.getModelConfig(), engine);
     }
 
     @Override
@@ -178,21 +172,28 @@ public abstract class DLModel implements Predictable {
 
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
 
-    protected void doLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
-                               String engine,
-                               Path modelPath,
-                               MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
+    protected void doLoadModel(
+        List<Predictor<Input, Output>> predictorList,
+        List<ZooModel<Input, Output>> modelList,
+        String engine,
+        Path modelPath,
+        MLModelConfig modelConfig
+    ) throws ModelNotFoundException,
+        MalformedModelException,
+        IOException,
+        TranslateException {
         devices = Engine.getEngine(engine).getDevices();
         for (int i = 0; i < devices.length; i++) {
             log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
             ZooModel<Input, Output> model;
             Predictor<Input, Output> predictor;
-            Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
-                    .setTypes(Input.class, Output.class)
-                    .optApplication(Application.UNDEFINED)
-                    .optEngine(engine)
-                    .optDevice(devices[i])
-                    .optModelPath(modelPath);
+            Criteria.Builder<Input, Output> criteriaBuilder = Criteria
+                .builder()
+                .setTypes(Input.class, Output.class)
+                .optApplication(Application.UNDEFINED)
+                .optEngine(engine)
+                .optDevice(devices[i])
+                .optModelPath(modelPath);
             Translator translator = getTranslator(engine, modelConfig);
             TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
             if (translatorFactory != null) {
@@ -218,7 +219,6 @@ public abstract class DLModel implements Predictable {
             warmUp(predictor, modelId, modelConfig);
         }
 
-
         if (predictorList.size() > 0) {
             this.predictors = predictorList.toArray(new Predictor[0]);
             predictorList.clear();
@@ -230,9 +230,14 @@ public abstract class DLModel implements Predictable {
         log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
     }
 
-    protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
-                             MLModelConfig modelConfig,
-                             String engine) {
+    protected void loadModel(
+        File modelZipFile,
+        String modelId,
+        String modelName,
+        String version,
+        MLModelConfig modelConfig,
+        String engine
+    ) {
         try {
             if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
                 throw new IllegalArgumentException("unsupported engine");

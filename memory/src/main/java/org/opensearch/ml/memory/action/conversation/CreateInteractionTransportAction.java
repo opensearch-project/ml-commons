@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import java.util.Map;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -86,14 +88,20 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String rsp = request.getResponse();
         String ogn = request.getOrigin();
         String prompt = request.getPromptTemplate();
-        String additionalInfo = request.getAdditionalInfo();
+        Map<String, String> additionalInfo = request.getAdditionalInfo();
+        String parentId = request.getParentInteractionId();
+        Integer traceNumber = request.getTraceNum();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener
                 .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
                     internalListener.onFailure(e);
                 });
-            cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
+            if (parentId == null || traceNumber == null) {
+                cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
+            } else {
+                cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al, parentId, traceNumber);
+            }
         } catch (Exception e) {
             log.error("Failed to create interaction for conversation " + cid, e);
             actionListener.onFailure(e);

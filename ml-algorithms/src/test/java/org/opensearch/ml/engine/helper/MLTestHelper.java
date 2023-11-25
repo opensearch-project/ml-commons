@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.engine.helper;
 
-import lombok.experimental.UtilityClass;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
 import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
@@ -14,10 +18,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import lombok.experimental.UtilityClass;
 
 @UtilityClass
 public class MLTestHelper {
@@ -33,7 +34,7 @@ public class MLTestHelper {
     }
 
     public static DataFrame constructTestDataFrame(int size, boolean addTimeFiled) {
-        List<ColumnMeta> columnMetaList =  new ArrayList<>();
+        List<ColumnMeta> columnMetaList = new ArrayList<>();
         columnMetaList.add(new ColumnMeta("f1", ColumnType.DOUBLE));
         columnMetaList.add(new ColumnMeta("f2", ColumnType.DOUBLE));
         if (addTimeFiled) {
@@ -43,11 +44,17 @@ public class MLTestHelper {
         DataFrame dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
 
         Random random = new Random(1);
-        MultivariateNormalDistribution g1 = new MultivariateNormalDistribution(new JDKRandomGenerator(random.nextInt()),
-                new double[]{0.0, 0.0}, new double[][]{{2.0, 1.0}, {1.0, 2.0}});
-        MultivariateNormalDistribution g2 = new MultivariateNormalDistribution(new JDKRandomGenerator(random.nextInt()),
-                new double[]{10.0, 10.0}, new double[][]{{2.0, 1.0}, {1.0, 2.0}});
-        MultivariateNormalDistribution[] normalDistributions = new MultivariateNormalDistribution[]{g1, g2};
+        MultivariateNormalDistribution g1 = new MultivariateNormalDistribution(
+            new JDKRandomGenerator(random.nextInt()),
+            new double[] { 0.0, 0.0 },
+            new double[][] { { 2.0, 1.0 }, { 1.0, 2.0 } }
+        );
+        MultivariateNormalDistribution g2 = new MultivariateNormalDistribution(
+            new JDKRandomGenerator(random.nextInt()),
+            new double[] { 10.0, 10.0 },
+            new double[][] { { 2.0, 1.0 }, { 1.0, 2.0 } }
+        );
+        MultivariateNormalDistribution[] normalDistributions = new MultivariateNormalDistribution[] { g1, g2 };
         long startTime = 1648154137000l;
         for (int i = 0; i < size; ++i) {
             int id = 0;
@@ -58,7 +65,7 @@ public class MLTestHelper {
             Object[] row = Arrays.stream(sample).boxed().toArray(Double[]::new);
             if (addTimeFiled) {
                 long timestamp = startTime + 60_000 * i;
-                row = new Object[] {row[0], row[1], timestamp};
+                row = new Object[] { row[0], row[1], timestamp };
             }
             dataFrame.appendRow(row);
         }
