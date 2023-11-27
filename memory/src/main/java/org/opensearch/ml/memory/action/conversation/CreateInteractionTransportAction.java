@@ -17,11 +17,14 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -93,10 +96,10 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         Integer traceNumber = request.getTraceNum();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            ActionListener<String> al = ActionListener
-                .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
-                    internalListener.onFailure(e);
-                });
+            ActionListener<String> al = ActionListener.wrap(iid -> {
+                cmHandler.updateConversation(cid, new HashMap<>(), getUpdateResponseListener(cid, iid, internalListener));
+                // internalListener.onResponse(new CreateInteractionResponse(iid));
+            }, e -> { internalListener.onFailure(e); });
             if (parentId == null || traceNumber == null) {
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
             } else {
@@ -108,4 +111,29 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         }
     }
 
+    private ActionListener<UpdateResponse> getUpdateResponseListener(
+        String conversationId,
+        String interactionId,
+        ActionListener<CreateInteractionResponse> actionListener
+    ) {
+        return ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                log.info("Failed to update the Conversation with ID: {} after interaction {} is created", conversationId, interactionId);
+                actionListener.onResponse(new CreateInteractionResponse(interactionId));
+                return;
+            }
+            log.info("Successfully updated the Conversation with ID: {} after interaction {} is created", conversationId);
+            actionListener.onResponse(new CreateInteractionResponse(interactionId));
+        }, exception -> {
+            log
+                .error(
+                    "Failed to update Conversation with ID {} after interaction {} is created. Details: {}",
+                    conversationId,
+                    interactionId,
+                    exception
+                );
+            actionListener.onResponse(new CreateInteractionResponse(interactionId));
+        });
+
+    }
 }
