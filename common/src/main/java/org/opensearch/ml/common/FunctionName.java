@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.common;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public enum FunctionName {
     LINEAR_REGRESSION,
     KMEANS,
@@ -36,9 +39,12 @@ public enum FunctionName {
      * @return true for deep learning model.
      */
     public static boolean isDLModel(FunctionName functionName) {
-        if (functionName == TEXT_EMBEDDING || functionName == SPARSE_ENCODING || functionName == SPARSE_TOKENIZE || functionName == TEXT_SIMILARITY) {
-            return true;
-        }
-        return false;
+        Set<FunctionName> dlmodels = new HashSet<>(Set.of(
+            TEXT_EMBEDDING,
+            TEXT_SIMILARITY,
+            SPARSE_ENCODING,
+            SPARSE_TOKENIZE
+        ));
+        return dlmodels.contains(functionName);
     }
 }

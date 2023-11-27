@@ -169,7 +169,7 @@ public class TextSimilarityCrossEncoderModelTest {
         List<ModelTensor> modelTensorsList = tensorOutput.getMlModelTensors();
         assertEquals(1, modelTensorsList.size());
         ModelTensor modelTensor = modelTensorsList.get(0);
-        assertEquals("output", modelTensor.getName());
+        assertEquals("similarity", modelTensor.getName());
         Number[] data = modelTensor.getData();
         assertEquals(1, data.length);
     }
