@@ -707,6 +707,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         verifyResponse(function, response);
     }
 
+    public void getModelGroup(RestClient client, String modelIGroupd, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/model_groups/" + modelIGroupd, null, "", null);
+        verifyResponse(function, response);
+    }
+
     public void searchModelGroups(RestClient client, String query, Consumer<Map<String, Object>> function) throws IOException {
         Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/model_groups/_search", null, query, null);
         verifyResponse(function, response);
