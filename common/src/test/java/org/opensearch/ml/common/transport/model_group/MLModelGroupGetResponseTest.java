@@ -66,7 +66,7 @@ public class MLModelGroupGetResponseTest {
     }
 
     @Test
-    public void fromActionResponseWithMLModelGetResponse_Success() {
+    public void fromActionResponseWithMLModelGroupGetResponse_Success() {
         MLModelGroupGetResponse mlModelGroupGetResponse = MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build();
         MLModelGroupGetResponse mlModelGroupGetResponseFromActionResponse = MLModelGroupGetResponse.fromActionResponse(mlModelGroupGetResponse);
         assertSame(mlModelGroupGetResponse, mlModelGroupGetResponseFromActionResponse);

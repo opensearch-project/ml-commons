@@ -7,8 +7,11 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
+
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.message.BasicHeader;
@@ -25,10 +28,8 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.utils.TestHelper;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Map;
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 
 public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 
