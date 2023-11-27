@@ -2,9 +2,14 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MEMORY_ID;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.REGENERATE_INTERACTION_ID;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -35,6 +40,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -119,6 +125,11 @@ public class MLChatAgentRunnerTest {
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
         ArgumentCaptor<ActionListener<Boolean>> argumentCaptor = ArgumentCaptor.forClass(ActionListener.class);
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(Boolean.TRUE);
+            return null;
+        }).when(mlMemoryManager).deleteInteraction(anyString(), argumentCaptor.capture());
+        doAnswer(invocation -> {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
             listener.onResponse(conversationIndexMemory);
             return null;
@@ -170,7 +181,7 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
-    public void testRunWithIncludeOutputSet() {
+    public void testRegenerateWithInvalidInput() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
@@ -182,15 +193,36 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
         HashMap<String, String> params = new HashMap<>();
+        params.put(REGENERATE_INTERACTION_ID, "123");
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+        ArgumentCaptor<MLValidationException> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
+        Mockito.verify(agentActionListener).onFailure(argumentCaptor.capture());
+        MLValidationException ex = argumentCaptor.getValue();
+        Assert.assertEquals(ex.getMessage(), "memory Id must provide for regenerate");
+    }
+
+    @Test
+    public void testRegenerate() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+        HashMap<String, String> params = new HashMap<>();
+        params.put(REGENERATE_INTERACTION_ID, "interaction-1");
+        params.put(MEMORY_ID, "memory-id");
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
-        List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors();
-        Assert.assertEquals(1, agentOutput.size());
-        // Respond with last tool output
-        Assert.assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
-        Map<String, List<String>> additionalInfos = (Map<String, List<String>>) agentOutput.get(0).getDataAsMap().get("additional_info");
-        Assert.assertEquals("Second tool response", additionalInfos.get(String.format("%s.output", SECOND_TOOL)).get(0));
+        String chatHistory = params.get(CHAT_HISTORY);
+        Assert.assertFalse(chatHistory.contains("input-1"));
+
+        Mockito.verify(mlMemoryManager, times(1)).deleteInteraction(eq("interaction-1"), any());
+
     }
 
     @Test

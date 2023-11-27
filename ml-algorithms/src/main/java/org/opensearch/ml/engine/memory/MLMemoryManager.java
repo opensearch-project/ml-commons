@@ -12,6 +12,8 @@ import java.util.Map;
 
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -286,4 +288,28 @@ public class MLMemoryManager {
             actionListener.onFailure(e);
         }
     }
+
+    public void deleteInteraction(String interactionId, ActionListener<Boolean> actionListener) {
+        DeleteRequest deleteRequest = new DeleteRequest(indexName, interactionId);
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<DeleteResponse> al = ActionListener.runBefore(ActionListener.wrap(deleteResponse -> {
+                if (deleteResponse != null && deleteResponse.getResult() != DocWriteResponse.Result.DELETED) {
+                    log.info("Failed to delete the interaction with ID: {}", interactionId);
+                    actionListener.onResponse(true);
+                    return;
+                }
+                log.info("Successfully delete the interaction with ID: {}", interactionId);
+                actionListener.onResponse(true);
+            }, exception -> {
+                log.error("Failed to delete interaction with ID {}. Details: {}", interactionId, exception);
+                actionListener.onFailure(exception);
+            }), context::restore);
+            client.delete(deleteRequest, al);
+        } catch (Exception e) {
+            log.error("Failed to delete interaction for interaction id {}. Details {}:", interactionId, e);
+            actionListener.onFailure(e);
+        }
+    }
+
 }
