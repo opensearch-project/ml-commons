@@ -432,14 +432,21 @@ public class MLChatAgentRunner {
                             );
 
                         List<ModelTensors> finalModelTensors = new ArrayList<>();
-                        Map<String, Object> additionalInfoMap = new HashMap<>(additionalInfo);
-                        additionalInfoMap.put("response", finalAnswer);
                         finalModelTensors
                             .add(
                                 ModelTensors
                                     .builder()
                                     .mlModelTensors(
-                                        Arrays.asList(ModelTensor.builder().name("response").dataAsMap(additionalInfoMap).build())
+                                        Arrays
+                                            .asList(
+                                                ModelTensor
+                                                    .builder()
+                                                    .name("response")
+                                                    .dataAsMap(
+                                                        ImmutableMap.of("response", finalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo)
+                                                    )
+                                                    .build()
+                                            )
                                     )
                                     .build()
                             );
