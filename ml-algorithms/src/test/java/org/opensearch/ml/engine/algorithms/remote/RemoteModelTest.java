@@ -5,7 +5,14 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
+
+import java.util.Arrays;
+import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -22,13 +29,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
-import java.util.Arrays;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
+import com.google.common.collect.ImmutableMap;
 
 public class RemoteModelTest {
 
@@ -112,20 +113,22 @@ public class RemoteModelTest {
     }
 
     private Connector createConnector(Map<String, String> headers) {
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("wrong_method")
-                .url("http://test.com/mock")
-                .headers(headers)
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .build();
-        Connector connector = HttpConnector.builder()
-                .name("test connector")
-                .protocol(ConnectorProtocols.HTTP)
-                .version("1")
-                .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key")))
-                .actions(Arrays.asList(predictAction))
-                .build();
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("wrong_method")
+            .url("http://test.com/mock")
+            .headers(headers)
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .protocol(ConnectorProtocols.HTTP)
+            .version("1")
+            .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key")))
+            .actions(Arrays.asList(predictAction))
+            .build();
         return connector;
     }
 

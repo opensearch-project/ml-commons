@@ -1,12 +1,20 @@
 package org.opensearch.ml.engine.algorithms.tokenize;
 
-import ai.djl.MalformedModelException;
-import ai.djl.inference.Predictor;
-import ai.djl.modality.Input;
-import ai.djl.modality.Output;
-import ai.djl.repository.zoo.ModelNotFoundException;
-import ai.djl.repository.zoo.ZooModel;
-import ai.djl.translate.TranslateException;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.DLModel.*;
+import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -30,20 +38,13 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.*;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.algorithms.DLModel.*;
-import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
+import ai.djl.MalformedModelException;
+import ai.djl.inference.Predictor;
+import ai.djl.modality.Input;
+import ai.djl.modality.Output;
+import ai.djl.repository.zoo.ModelNotFoundException;
+import ai.djl.repository.zoo.ZooModel;
+import ai.djl.translate.TranslateException;
 
 public class SparseTokenizerModelTest {
     @Rule
@@ -73,14 +74,15 @@ public class SparseTokenizerModelTest {
         modelName = "test_model_name";
         functionName = FunctionName.SPARSE_TOKENIZE;
         version = "1";
-        model = MLModel.builder()
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .name("test_model_name")
-                .modelId("test_model_id")
-                .algorithm(FunctionName.SPARSE_TOKENIZE)
-                .version("1.0.0")
-                .modelState(MLModelState.TRAINED)
-                .build();
+        model = MLModel
+            .builder()
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .name("test_model_name")
+            .modelId("test_model_id")
+            .algorithm(FunctionName.SPARSE_TOKENIZE)
+            .version("1.0.0")
+            .modelState(MLModelState.TRAINED)
+            .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("tokenize-demo.zip").toURI());
@@ -93,12 +95,16 @@ public class SparseTokenizerModelTest {
     }
 
     @Test
-    public void test_doLoadModel() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
+    public void test_doLoadModel() throws URISyntaxException,
+        TranslateException,
+        ModelNotFoundException,
+        MalformedModelException,
+        IOException {
         SparseTokenizerModel sparseTokenizerModel = mock(SparseTokenizerModel.class);
         Predictor<Input, Output> predictor = mock(Predictor.class);
         List<Predictor<Input, Output>> predictorList = Collections.singletonList(predictor);
         ZooModel<Input, Output> model = mock(ZooModel.class);
-        List<ZooModel<Input, Output> > modelList = Collections.singletonList(model);
+        List<ZooModel<Input, Output>> modelList = Collections.singletonList(model);
         String engine = "engine";
         Path modelPath = mock(Path.class);
         when(modelPath.resolve((String) any())).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()));
@@ -112,7 +118,7 @@ public class SparseTokenizerModelTest {
         Predictor<Input, Output> predictor = mock(Predictor.class);
         List<Predictor<Input, Output>> predictorList = Collections.singletonList(predictor);
         ZooModel<Input, Output> model = mock(ZooModel.class);
-        List<ZooModel<Input, Output> > modelList = Collections.singletonList(model);
+        List<ZooModel<Input, Output>> modelList = Collections.singletonList(model);
         String engine = "engine";
         Path modelPath = Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent();
         MLModelConfig modelConfig = mock(MLModelConfig.class);
@@ -143,20 +149,19 @@ public class SparseTokenizerModelTest {
         ModelTensorOutput output = (ModelTensorOutput) sparseTokenizerModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            List<Map<String, Float>>  resultList = (List< Map<String, Float>>) resultMap.get("response");
+            List<Map<String, Float>> resultList = (List<Map<String, Float>>) resultMap.get("response");
             assertEquals(resultList.size(), 1);
             Map<String, Float> result = resultList.get(0);
             assertEquals(result.size(), 3);
         }
     }
-
 
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {

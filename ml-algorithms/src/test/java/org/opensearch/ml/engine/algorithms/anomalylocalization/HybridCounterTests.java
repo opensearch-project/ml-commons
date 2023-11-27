@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.anomalylocalization;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 public class HybridCounterTests {
 
@@ -21,7 +21,7 @@ public class HybridCounterTests {
         HashMapCounter hash = new HashMapCounter();
 
         double sum = 0.;
-        String[] keys = new String[]{"a", "b", "c"};
+        String[] keys = new String[] { "a", "b", "c" };
         for (int i = 0; i < 1_000_000; i++) {
             List<String> key = Arrays.asList(keys[(int) (keys.length * Math.random())]);
             double value = Math.random();
@@ -48,7 +48,7 @@ public class HybridCounterTests {
         HashMapCounter hash = new HashMapCounter();
 
         double sum = 0.;
-        String[] keys = new String[]{"a", "b", "c"};
+        String[] keys = new String[] { "a", "b", "c" };
         for (int i = 0; i < 1_000_000; i++) {
             List<String> key = Arrays.asList(keys[(int) (keys.length * Math.random())]);
             double value = Math.random() * -1;

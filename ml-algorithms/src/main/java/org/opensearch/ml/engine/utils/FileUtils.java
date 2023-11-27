@@ -5,12 +5,6 @@
 
 package org.opensearch.ml.engine.utils;
 
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
-import com.google.common.io.ByteSource;
-import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.exception.MLException;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -25,6 +19,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+
+import org.opensearch.ml.common.exception.MLException;
+
+import com.google.common.hash.HashCode;
+import com.google.common.hash.Hashing;
+import com.google.common.io.ByteSource;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * A util class contains file related operations.
@@ -43,7 +45,7 @@ public class FileUtils {
     public static List<String> splitFileIntoChunks(File file, Path outputPath, int chunkSize) throws IOException {
         int fileSize = (int) file.length();
         ArrayList<String> nameList = new ArrayList<>();
-        try (InputStream inStream = new BufferedInputStream(new FileInputStream(file))){
+        try (InputStream inStream = new BufferedInputStream(new FileInputStream(file))) {
             int numberOfChunk = 0;
             int totalBytesRead = 0;
             while (totalBytesRead < fileSize) {
@@ -86,8 +88,10 @@ public class FileUtils {
      */
     public static void write(byte[] data, File destinationFile, boolean append) throws IOException {
         org.apache.commons.io.FileUtils.forceMkdir(destinationFile.getParentFile());
-        try (FileOutputStream fileOutputStream = new FileOutputStream(destinationFile, append);
-             OutputStream output = new BufferedOutputStream(fileOutputStream)){
+        try (
+            FileOutputStream fileOutputStream = new FileOutputStream(destinationFile, append);
+            OutputStream output = new BufferedOutputStream(fileOutputStream)
+        ) {
             output.write(data);
             output.flush();
         }

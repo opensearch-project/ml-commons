@@ -5,6 +5,19 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensors;
+
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.modality.Input;
@@ -15,27 +28,19 @@ import ai.djl.ndarray.NDManager;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.ServingTranslator;
 import ai.djl.translate.TranslatorContext;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensors;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
 
 public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTranslator {
-    private static final int[] AXIS = {0};
+    private static final int[] AXIS = { 0 };
     private HuggingFaceTokenizer tokenizer;
     private TextEmbeddingModelConfig.PoolingMode poolingMode;
     private boolean normalizeResult;
     private String modelType;
 
-    public ONNXSentenceTransformerTextEmbeddingTranslator(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType) {
+    public ONNXSentenceTransformerTextEmbeddingTranslator(
+        TextEmbeddingModelConfig.PoolingMode poolingMode,
+        boolean normalizeResult,
+        String modelType
+    ) {
         this.poolingMode = poolingMode == null ? TextEmbeddingModelConfig.PoolingMode.MEAN : poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;
@@ -46,6 +51,7 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         return null;
 
     }
+
     @Override
     public void prepare(TranslatorContext ctx) throws IOException {
         Path path = ctx.getModel().getModelPath();
@@ -117,12 +123,13 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         Number[] data = embeddings.toArray();
         List<ModelTensor> outputs = new ArrayList<>();
         long[] shape = embeddings.getShape().getShape();
-        ModelTensor modelTensor = ModelTensor.builder()
-                .name(SENTENCE_EMBEDDING)
-                .data(data)
-                .shape(shape)
-                .dataType(MLResultDataType.FLOAT32)
-                .build();
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name(SENTENCE_EMBEDDING)
+            .data(data)
+            .shape(shape)
+            .dataType(MLResultDataType.FLOAT32)
+            .build();
         outputs.add(modelTensor);
 
         Output output = new Output();
@@ -166,6 +173,5 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
     }
 
     @Override
-    public void setArguments(Map<String, ?> arguments) {
-    }
+    public void setArguments(Map<String, ?> arguments) {}
 }
