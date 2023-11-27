@@ -99,7 +99,7 @@ public class AbstractRetrieverToolTests {
 
     @Test
     @SneakyThrows
-    public void testRunAsyncWithEmptyInputQuestionThenThrowException() {
+    public void testRunAsyncWithEmptySearchResponse() {
         Client client = mock(Client.class);
         SearchResponse mockedEmptySearchResponse = SearchResponse
             .fromXContent(
