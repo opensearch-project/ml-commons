@@ -98,7 +98,7 @@ public class CatIndexTool implements Tool {
         final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
         final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
-        final boolean local = parameters.containsKey("local") ? Boolean.parseBoolean("local") : false;
+        final boolean local = parameters.containsKey("local") ? Boolean.parseBoolean(parameters.get("local")) : false;
         final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
         final boolean includeUnloadedSegments = parameters.containsKey("include_unloaded_segments")
             ? Boolean.parseBoolean(parameters.get("include_unloaded_segments"))

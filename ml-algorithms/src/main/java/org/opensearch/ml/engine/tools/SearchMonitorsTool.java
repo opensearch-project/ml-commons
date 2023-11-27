@@ -12,7 +12,9 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.MatchQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -60,10 +62,26 @@ public class SearchMonitorsTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+        final String monitorId = parameters.getOrDefault("monitorId", null);
         final String monitorName = parameters.getOrDefault("monitorName", null);
+        final String monitorNamePattern = parameters.getOrDefault("monitorNamePattern", null);
+        final boolean enabled = parameters.containsKey("enabled") ? Boolean.parseBoolean(parameters.get("enabled")) : null;
+        final boolean hasTriggers = parameters.containsKey("hasTriggers") ? Boolean.parseBoolean(parameters.get("hasTriggers")) : null;
+        final String index = parameters.getOrDefault("index", null);
+        final String sortOrder = parameters.getOrDefault("sortOrder", "asc");
+        final String sortString = parameters.getOrDefault("sortString", "monitor.name.keyword");
+        final int size = parameters.containsKey("size") ? Integer.parseInt(parameters.get("size")) : 20;
+        final int startIndex = parameters.containsKey("startIndex") ? Integer.parseInt(parameters.get("startIndex")) : 0;
+
+        QueryBuilder queryBuilder;
+        if (monitorName == null) {
+            queryBuilder = new MatchAllQueryBuilder();
+        } else {
+            queryBuilder = new MatchQueryBuilder("monitor.name", monitorName);
+        }
 
         // generate the search request based on parameters
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(new MatchQueryBuilder("monitor.name", monitorName));
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(queryBuilder);
 
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder);
 
