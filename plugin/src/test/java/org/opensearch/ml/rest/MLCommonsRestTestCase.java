@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+<<<<<<< HEAD
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
@@ -47,6 +48,25 @@ import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
+=======
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
+import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpHeaders;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.message.BasicHeader;
+import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
+import org.apache.hc.core5.ssl.SSLContextBuilder;
+import org.apache.hc.core5.util.Timeout;
+>>>>>>> 500fff9e (Get model group API (#1670))
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Request;
@@ -704,6 +724,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public void deleteModelGroup(RestClient client, String modelGroupId, Consumer<Map<String, Object>> function) throws IOException {
         Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/model_groups/" + modelGroupId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void getModelGroup(RestClient client, String modelIGroupd, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/model_groups/" + modelIGroupd, null, "", null);
         verifyResponse(function, response);
     }
 
