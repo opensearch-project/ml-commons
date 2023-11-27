@@ -1212,4 +1212,144 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         }
     }
 
+    public void test_get_modelGroup() throws IOException {
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("testModelGroup1", Arrays.asList("IT"), AccessMode.RESTRICTED, null);
+        registerModelGroup(user1Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId1 = (String) registerModelGroupResult.get("model_group_id");
+            assertTrue(registerModelGroupResult.containsKey("model_group_id"));
+            try {
+                // User2 successfully gets model group since user2 has IT backend role
+                getModelGroup(
+                    user2Client,
+                    modelGroupId1,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+
+                // Admin successfully gets model group
+                getModelGroup(
+                    client(),
+                    modelGroupId1,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+            } catch (IOException e) {
+                assertNull(e);
+            }
+            // User2 fails to get model group
+            try {
+                getModelGroup(user3Client, modelGroupId, null);
+            } catch (Exception e) {
+                assertEquals(ResponseException.class, e.getClass());
+                assertTrue(
+                    Throwables
+                        .getStackTraceAsString(e)
+                        .contains("User doesn't have privilege to perform this operation on this model group")
+                );
+            }
+        });
+
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("testModelGroup2", null, AccessMode.PUBLIC, null);
+        registerModelGroup(user2Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId2 = (String) registerModelGroupResult.get("model_group_id");
+            assertTrue(registerModelGroupResult.containsKey("model_group_id"));
+            try {
+                // User1 successfully gets model group since user2 has IT backend role
+                getModelGroup(
+                    user1Client,
+                    modelGroupId2,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+
+                // User3 successfully gets model group
+                getModelGroup(
+                    user3Client,
+                    modelGroupId2,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+
+                // User4 successfully gets model group
+                getModelGroup(
+                    user4Client,
+                    modelGroupId2,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        });
+
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("testModelGroup3", null, AccessMode.PRIVATE, null);
+        registerModelGroup(user3Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId3 = (String) registerModelGroupResult.get("model_group_id");
+            assertTrue(registerModelGroupResult.containsKey("model_group_id"));
+            try {
+                // User3 successfully gets model group since user2 has IT backend role
+                getModelGroup(
+                    user3Client,
+                    modelGroupId3,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+
+                // Admin successfully gets model group
+                getModelGroup(
+                    client(),
+                    modelGroupId3,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+            } catch (IOException e) {
+                assertNull(e);
+            }
+            // User2 fails to get model group
+            try {
+                getModelGroup(user2Client, modelGroupId3, null);
+            } catch (Exception e) {
+                assertEquals(ResponseException.class, e.getClass());
+                assertTrue(
+                    Throwables
+                        .getStackTraceAsString(e)
+                        .contains("User doesn't have privilege to perform this operation on this model group")
+                );
+            }
+        });
+
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("testModelGroup4", null, null, null);
+        registerModelGroup(client(), TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId4 = (String) registerModelGroupResult.get("model_group_id");
+            assertTrue(registerModelGroupResult.containsKey("model_group_id"));
+            try {
+                // Admin successfully gets model group
+                getModelGroup(
+                    client(),
+                    modelGroupId4,
+                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                );
+            } catch (IOException e) {
+                assertNull(e);
+            }
+
+            // User1 fails to get model group
+            try {
+                getModelGroup(user1Client, modelGroupId4, null);
+            } catch (Exception e) {
+                assertEquals(ResponseException.class, e.getClass());
+                assertTrue(
+                    Throwables
+                        .getStackTraceAsString(e)
+                        .contains("User doesn't have privilege to perform this operation on this model group")
+                );
+            }
+
+            // User2 fails to get model group
+            try {
+                getModelGroup(user2Client, modelGroupId4, null);
+            } catch (Exception e) {
+                assertEquals(ResponseException.class, e.getClass());
+                assertTrue(
+                    Throwables
+                        .getStackTraceAsString(e)
+                        .contains("User doesn't have privilege to perform this operation on this model group")
+                );
+            }
+        });
+    }
+
 }

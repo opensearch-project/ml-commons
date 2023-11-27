@@ -44,7 +44,11 @@ import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.core5.http.*;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.HttpHeaders;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
@@ -715,6 +719,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public void deleteModelGroup(RestClient client, String modelGroupId, Consumer<Map<String, Object>> function) throws IOException {
         Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/model_groups/" + modelGroupId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void getModelGroup(RestClient client, String modelIGroupd, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/model_groups/" + modelIGroupd, null, "", null);
         verifyResponse(function, response);
     }
 
