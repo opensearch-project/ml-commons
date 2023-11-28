@@ -68,7 +68,6 @@ import lombok.extern.log4j.Log4j2;
 public class MLChatAgentRunner {
 
     public static final String SESSION_ID = "session_id";
-    public static final String MEMORY_ID = "memory_id";
     public static final String PROMPT_PREFIX = "prompt_prefix";
     public static final String LLM_TOOL_PROMPT_PREFIX = "LanguageModelTool.prompt_prefix";
     public static final String LLM_TOOL_PROMPT_SUFFIX = "LanguageModelTool.prompt_suffix";
@@ -111,12 +110,11 @@ public class MLChatAgentRunner {
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params.get(MEMORY_ID);
-        String appType = mlAgent.getAppType();
-        String title = params.get(QUESTION);
+        String memoryId = params
+            .computeIfAbsent(MLAgentExecutor.MEMORY_ID, k -> { throw new IllegalStateException("Memory ID not provided"); });
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+        conversationIndexMemoryFactory.create(memoryId, ActionListener.<ConversationIndexMemory>wrap(memory -> {
             memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 Iterator<Interaction> iterator = r.iterator();
@@ -283,7 +281,7 @@ public class MLChatAgentRunner {
             .add(
                 ModelTensors
                     .builder()
-                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name(MEMORY_ID).result(sessionId).build()))
+                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build()))
                     .build()
             );
 

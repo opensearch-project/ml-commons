@@ -15,9 +15,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -25,21 +27,26 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.utils.ImmutableMap;
 
 @Log4j2
 @Data
 @NoArgsConstructor
 public class MLFlowAgentRunner {
 
+    public static final int PREVIOUS_INTERACTION = 1;
     private Client client;
     private Settings settings;
     private ClusterService clusterService;
@@ -70,10 +77,15 @@ public class MLFlowAgentRunner {
         List<ModelTensor> flowAgentOutput = new ArrayList<>();
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
+        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
         if (toolSpecs.size() == 0) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
+
+        String memoryType = mlAgent.getMemory().getType();
+        String memoryId = params
+            .computeIfAbsent(MLAgentExecutor.MEMORY_ID, k -> { throw new IllegalStateException("Memory ID not provided"); });
 
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
@@ -106,21 +118,12 @@ public class MLFlowAgentRunner {
                         }
                     }
 
-                    if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
-                        ModelTensors tensors = (ModelTensors) ((List) output).get(0);
-                        Object response = tensors.getMlModelTensors().get(0).getDataAsMap().get("response");
-                        params.put(outputKey, response + "");
-                    } else if (output instanceof ModelTensor) {
-                        params.put(outputKey, escapeJson(toJson(((ModelTensor) output).getDataAsMap())));
-                    } else {
-                        if (output instanceof String) {
-                            params.put(outputKey, (String) output);
-                        } else {
-                            params.put(outputKey, escapeJson(toJson(output.toString())));
-                        }
-                    }
+                    String outputResponse = parseResponse(output);
+                    params.put(outputKey, outputResponse);
+                    additionalInfo.put(outputKey, outputResponse);
 
                     if (finalI == toolSpecs.size()) {
+                        updateMemory(additionalInfo, memoryType, memoryId);
                         listener.onResponse(flowAgentOutput);
                         return;
                     }
@@ -142,6 +145,51 @@ public class MLFlowAgentRunner {
             firstTool.run(firstToolExecuteParams, listener);
         } else {
             firstTool.run(firstToolExecuteParams, firstStepListener);
+        }
+    }
+
+    private void updateMemory(Map<String, Object> additionalInfo, String memoryType, String memoryId) {
+        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
+        conversationIndexMemoryFactory.create(memoryId, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+            updateInteraction(additionalInfo, memoryId, memory);
+        }, e -> { log.error("Failed create memory from id: " + memoryId, e); }));
+    }
+
+    private void updateInteraction(Map<String, Object> additionalInfo, String memoryId, ConversationIndexMemory memory) {
+        memory
+            .getMemoryManager()
+            .getFinalInteractions(memoryId, PREVIOUS_INTERACTION, ActionListener.<List<Interaction>>wrap(interactions -> {
+                if (interactions.size() == 0) {
+                    throw new IllegalStateException("No existing interactions to update");
+                }
+
+                String interactionId = interactions.get(0).getId();
+                memory
+                    .getMemoryManager()
+                    .updateInteraction(
+                        interactionId,
+                        ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
+                        ActionListener.<UpdateResponse>wrap(updateResponse -> {
+                            log.info("Updated additional info", interactionId);
+                        }, e -> { log.error("Failed to update root interaction", e); })
+                    );
+            }, e -> { log.error("Failed update interaction with additional info", e); }));
+    }
+
+    private String parseResponse(Object output) {
+        if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
+            ModelTensors tensors = (ModelTensors) ((List) output).get(0);
+            Object response = tensors.getMlModelTensors().get(0).getDataAsMap().get("response");
+            return response + "";
+
+        } else if (output instanceof ModelTensor) {
+            return escapeJson(toJson(((ModelTensor) output).getDataAsMap()));
+        } else {
+            if (output instanceof String) {
+                return (String) output;
+            } else {
+                return escapeJson(toJson(output.toString()));
+            }
         }
     }
 
