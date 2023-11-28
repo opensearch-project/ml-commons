@@ -36,6 +36,8 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
+import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
@@ -97,6 +99,8 @@ import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
+import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
@@ -179,12 +183,14 @@ import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
+import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
+import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
@@ -356,7 +362,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
                 new ActionHandler<>(UpdateConversationAction.INSTANCE, UpdateConversationTransportAction.class),
                 new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
-                new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class)
+                new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class),
+                new ActionHandler<>(MLAgentGetAction.INSTANCE, GetAgentTransportAction.class),
+                new ActionHandler<>(MLAgentDeleteAction.INSTANCE, DeleteAgentTransportAction.class)
             );
     }
 
@@ -654,6 +662,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
+        RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction();
+        RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -695,7 +705,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restSearchInteractionsAction,
                 restMemoryUpdateConversationAction,
                 restMemoryUpdateInteractionAction,
-                restMemoryGetTracesAction
+                restMemoryGetTracesAction,
+                restMLGetAgentAction,
+                restMLDeleteAgentAction
             );
     }
 
