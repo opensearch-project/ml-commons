@@ -213,7 +213,7 @@ public class InteractionsIndex {
         Instant timestamp,
         ActionListener<String> listener
     ) {
-        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, timestamp, listener, "", null);
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, timestamp, listener, null, null);
     }
 
     /**
@@ -235,7 +235,7 @@ public class InteractionsIndex {
         Map<String, String> additionalInfo,
         ActionListener<String> listener
     ) {
-        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener, "", null);
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener, null, null);
     }
 
     /**

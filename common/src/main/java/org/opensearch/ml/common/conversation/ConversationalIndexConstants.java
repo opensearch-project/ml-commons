@@ -29,6 +29,8 @@ public class ConversationalIndexConstants {
     public final static String META_INDEX_NAME = ".plugins-ml-memory-meta";
     /** Name of the metadata field for initial timestamp */
     public final static String META_CREATED_FIELD = "create_time";
+    /** Name of the metadata field for updated timestamp */
+    public final static String META_UPDATED_FIELD = "updated_time";
     /** Name of the metadata field for name of the conversation */
     public final static String META_NAME_FIELD = "name";
     /** Name of the owning user field in all indices */
@@ -46,6 +48,9 @@ public class ConversationalIndexConstants {
         + "\": {\"type\": \"keyword\"},\n"
         + "        \""
         + META_CREATED_FIELD
+        + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+        + "        \""
+        + META_UPDATED_FIELD
         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
         + "        \""
         + USER_FIELD

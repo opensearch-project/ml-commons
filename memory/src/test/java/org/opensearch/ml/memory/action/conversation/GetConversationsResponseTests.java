@@ -46,9 +46,9 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
     public void setup() {
         conversations = List
             .of(
-                new ConversationMeta("0", Instant.now(), "name0", "user0"),
-                new ConversationMeta("1", Instant.now(), "name1", "user0"),
-                new ConversationMeta("2", Instant.now(), "name2", "user2")
+                new ConversationMeta("0", Instant.now(), Instant.now(), "name0", "user0"),
+                new ConversationMeta("1", Instant.now(), Instant.now(), "name1", "user0"),
+                new ConversationMeta("2", Instant.now(), Instant.now(), "name2", "user2")
             );
     }
 
@@ -75,6 +75,8 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
             + conversation.getCreatedTime()
+            + "\",\"updated_time\":\""
+            + conversation.getCreatedTime()
             + "\",\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
         log.info("FINDME");
         log.info(result);
@@ -92,6 +94,8 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
+            + conversation.getCreatedTime()
+            + "\",\"updated_time\":\""
             + conversation.getCreatedTime()
             + "\",\"name\":\"name0\",\"user\":\"user0\"}]}";
         log.info("FINDME");

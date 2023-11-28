@@ -25,11 +25,14 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.conversation.Interaction.InteractionBuilder;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -383,4 +386,13 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         interactionsIndex.getTraces(interactionId, from, maxResults, listener);
     }
 
+    public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener) {
+        UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.META_INDEX_NAME, conversationId);
+        updateContent.putIfAbsent(ConversationalIndexConstants.META_UPDATED_FIELD, Instant.now());
+
+        updateRequest.doc(updateContent);
+        updateRequest.docAsUpsert(true);
+
+        conversationMetaIndex.updateConversation(updateRequest, listener);
+    }
 }

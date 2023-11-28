@@ -37,6 +37,8 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
@@ -127,6 +129,8 @@ public class ConversationMetaIndex {
                     .indexRequest(indexName)
                     .source(
                         ConversationalIndexConstants.META_CREATED_FIELD,
+                        Instant.now(),
+                        ConversationalIndexConstants.META_UPDATED_FIELD,
                         Instant.now(),
                         ConversationalIndexConstants.META_NAME_FIELD,
                         name,
@@ -343,6 +347,20 @@ public class ConversationMetaIndex {
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Update conversations in the index
+     * @param updateRequest original update request
+     * @param listener receives the update response for the wrapped query
+     */
+    public void updateConversation(UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.update(updateRequest, listener);
+        } catch (Exception e) {
+            log.error("Failed to update Conversation. Details {}:", e);
             listener.onFailure(e);
         }
     }

@@ -22,6 +22,7 @@ import java.util.Map;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
@@ -238,4 +239,10 @@ public interface ConversationalMemoryHandler {
      */
     public ActionFuture<SearchResponse> searchInteractions(String conversationId, SearchRequest request);
 
+    /**
+     * Update a conversation
+     * @param updateContent update content for the conversations index
+     * @param listener receives the update response
+     */
+    public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener);
 }
