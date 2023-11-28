@@ -190,21 +190,6 @@ public class TextSimilarityCrossEncoderModelTest {
         textSimilarityCrossEncoderModel.close();
     }
 
-    @Test
-    public void initModel_predict_ONNX_CrossEncoder_ThenFail() throws URISyntaxException {
-        model = MLModel.builder()
-                .modelFormat(MLModelFormat.ONNX)
-                .name("test_model_name")
-                .modelId("test_model_id")
-                .algorithm(FunctionName.TEXT_SIMILARITY)
-                .version("1.0.0")
-                .modelState(MLModelState.TRAINED)
-                .build();
-        assertThrows("Wrong deep learning engine [OnnxRuntime]. Only TORCH_SCRIPT is supported for function name TEXT_SIMILARITY",
-            MLException.class,
-            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor)
-        );
-    }
 
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {

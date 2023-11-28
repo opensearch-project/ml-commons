@@ -61,14 +61,7 @@ public class TextSimilarityCrossEncoderModel extends DLModel {
 
     @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) throws IllegalArgumentException {
-        if(PYTORCH_ENGINE.equals(engine)) {
-            return new TextSimilarityTranslator();
-        } else {
-            throw new IllegalArgumentException("Wrong deep learning engine [" 
-                + engine 
-                + "]. Only TORCH_SCRIPT is supported for function name " 
-                + FunctionName.TEXT_SIMILARITY.name());
-        }
+        return new TextSimilarityTranslator();
     }
 
     @Override
