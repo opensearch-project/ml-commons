@@ -167,6 +167,11 @@ public class MachineLearningClientTest {
                 listener.onResponse(createConnectorResponse);
             }
 
+            @Override
+            public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
             public void registerModelGroup(
                 MLRegisterModelGroupInput mlRegisterModelGroupInput,
                 ActionListener<MLRegisterModelGroupResponse> listener
@@ -374,6 +379,11 @@ public class MachineLearningClientTest {
             .build();
 
         assertEquals(createConnectorResponse, machineLearningClient.createConnector(mlCreateConnectorInput).actionGet());
+    }
+
+    @Test
+    public void deleteConnector() {
+        assertEquals(deleteResponse, machineLearningClient.deleteConnector("connectorId").actionGet());
     }
 
     @Test
