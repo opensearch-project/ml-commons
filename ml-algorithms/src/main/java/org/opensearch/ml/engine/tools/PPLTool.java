@@ -39,9 +39,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import org.opensearch.sql.plugin.request.PPLQueryRequestFactory;
 import org.opensearch.sql.plugin.transport.PPLQueryAction;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryAction;
 import org.opensearch.sql.plugin.transport.TransportPPLQueryRequest;
 import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
 import org.opensearch.sql.ppl.domain.PPLQueryRequest;
@@ -50,6 +48,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -78,9 +78,12 @@ public class PPLTool implements Tool {
 
     private String modelId;
 
-    public PPLTool(Client client, String modelId) {
+    private String contextPrompt;
+
+    public PPLTool(Client client, String modelId, String contextPrompt) {
         this.client = client;
         this.modelId = modelId;
+        this.contextPrompt = contextPrompt;
     }
 
     @Override
@@ -108,7 +111,8 @@ public class PPLTool implements Tool {
                     TransportPPLQueryRequest transportPPLQueryRequest = new TransportPPLQueryRequest(pplQueryRequest);
                     client.execute(PPLQueryAction.INSTANCE, transportPPLQueryRequest, getPPLTransportActionListener(ActionListener.<TransportPPLQueryResponse>wrap(transportPPLQueryResponse -> {
                         String results = transportPPLQueryResponse.getResult();
-                        listener.onResponse((T) results);
+                        Map<String, String> returnResults = ImmutableMap.of("ppl", ppl, "executionResult", results);
+                        listener.onResponse((T) AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(returnResults)));
                     }, e -> {
                         String pplError = "execute ppl:" + ppl + ", get error: " + e.getMessage();
                         Exception exception = new Exception(pplError);
@@ -131,9 +135,6 @@ public class PPLTool implements Tool {
             listener.onFailure(e);
                 })
         );
-
-        //client.search(request);
-        //client.admin().indices().getMappings(ActionListener< GetMappingsResponse >);
     }
 
 
@@ -180,7 +181,7 @@ public class PPLTool implements Tool {
 
         @Override
         public PPLTool create(Map<String, Object> map) {
-            return new PPLTool(client, (String)map.get("model_id"));
+            return new PPLTool(client, (String)map.get("model_id"), (String)map.get("prompt"));
         }
 
         @Override
@@ -245,19 +246,7 @@ public class PPLTool implements Tool {
 
     private String constructPrompt(String tableInfo, String question, String indexName)
     {
-        String template = "Below is an instruction that describes a task, paired with the index and "
-                + "corresponding fields that provides further context. Write a response that appropriately "
-                + "completes the request.\n\n"
-                + "### Instruction:\n"
-                + "I have an opensearch index with fields in the following. Now I have a question: %s "
-                + "Can you help me generate a PPL for that?\n\n"
-                + "### Index:\n"
-                + "%s\n\n"
-                + "### Fields:\n"
-                + "%s\n\n"
-                + "### Response:\n";
-
-        return String.format(template, question.strip(), indexName, tableInfo.strip());
+        return String.format(contextPrompt, question.strip(), indexName, tableInfo.strip());
     }
 
     private void extractNamesTypes(Map<String, Object> mappingSource, Map<String, String> fieldsToType, String prefix) {
@@ -294,7 +283,6 @@ public class PPLTool implements Tool {
                 fieldsToSample.put(fullKey, gson.toJson(v));
             } else {
                 if (v instanceof Map) {
-                    // Assuming that `v` is a Map, as in the Python version
                     extractSamples((Map<String, Object>) v, fieldsToSample, fullKey);
                 }
             }
