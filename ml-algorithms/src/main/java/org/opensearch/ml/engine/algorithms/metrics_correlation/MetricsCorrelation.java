@@ -175,9 +175,7 @@ public class MetricsCorrelation extends DLModelExecute {
                                     )
                             );
                         }
-                    }, e-> {
-                        log.error("Failed to get model", e);
-                    });
+                    }, e -> { log.error("Failed to get model", e); });
                     client.get(getModelRequest, ActionListener.runBefore(listener, context::restore));
                 }
             }
@@ -199,12 +197,19 @@ public class MetricsCorrelation extends DLModelExecute {
         waitUntil(() -> {
             if (modelId != null) {
                 MLModelState modelState = getModel(modelId).getModelState();
-                if (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED){
+                if (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED) {
                     log.info("Model deployed: " + modelState);
                     return true;
                 } else if (modelState == MLModelState.UNDEPLOYED || modelState == MLModelState.DEPLOY_FAILED) {
                     log.info("Model not deployed: " + modelState);
-                    deployModel(modelId, ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
+                    deployModel(
+                        modelId,
+                        ActionListener
+                            .wrap(
+                                deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(),
+                                e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)
+                            )
+                    );
                     return false;
                 }
             }
