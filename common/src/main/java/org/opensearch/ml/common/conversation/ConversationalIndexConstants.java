@@ -45,7 +45,7 @@ public class ConversationalIndexConstants {
         + "    \"properties\": {\n"
         + "        \""
         + META_NAME_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
+        + "\": {\"type\": \"text\"},\n"
         + "        \""
         + META_CREATED_FIELD
         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
