@@ -49,6 +49,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.security.AccessController;
+import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Collections;
 import java.util.HashMap;
@@ -209,8 +210,7 @@ public class PPLTool implements Tool {
         return getMappingsRequest;
     }
 
-    private String constructTableInfo(SearchHit [] searchHits, Map<String, MappingMetadata> mappings, String indexName)
-    {
+    private String constructTableInfo(SearchHit [] searchHits, Map<String, MappingMetadata> mappings, String indexName) throws PrivilegedActionException {
         MappingMetadata mappingMetadata = mappings.get(indexName);
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         Map<String, String> fieldsToType = new HashMap<>();
@@ -269,7 +269,7 @@ public class PPLTool implements Tool {
         }
     }
 
-    private static void extractSamples(Map<String, Object> sampleSource, Map<String, String> fieldsToSample, String prefix) {
+    private static void extractSamples(Map<String, Object> sampleSource, Map<String, String> fieldsToSample, String prefix) throws PrivilegedActionException {
         if (prefix.length() > 0) {
             prefix += ".";
         }
@@ -280,7 +280,7 @@ public class PPLTool implements Tool {
 
             String fullKey = prefix + p;
             if (fieldsToSample.containsKey(fullKey)) {
-                fieldsToSample.put(fullKey, gson.toJson(v));
+                fieldsToSample.put(fullKey, AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(v)));
             } else {
                 if (v instanceof Map) {
                     extractSamples((Map<String, Object>) v, fieldsToSample, fullKey);
