@@ -297,12 +297,16 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
         'org.opensearch.ml.action.tools.ListToolsTransportAction',
         'org.opensearch.ml.action.tools.GetToolTransportAction',
+        'org.opensearch.ml.action.agents.DeleteAgentTransportAction',
+        'org.opensearch.ml.action.agents.GetAgentTransportAction',
         'org.opensearch.ml.action.agents.TransportRegisterAgentAction',
         'org.opensearch.ml.rest.RestMLGetMemoryAction',
         'org.opensearch.ml.rest.RestMLRegisterAgentAction',
         'org.opensearch.ml.rest.RestMLExecuteAction',
         'org.opensearch.ml.rest.RestMLGetToolAction',
-        'org.opensearch.ml.rest.RestMLListToolsAction'
+        'org.opensearch.ml.rest.RestMLListToolsAction',
+        'org.opensearch.ml.rest.RestMLGetAgentAction',
+        'org.opensearch.ml.rest.RestMLDeleteAgentAction'
 ]
 
 jacocoTestCoverageVerification {
