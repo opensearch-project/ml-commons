@@ -247,7 +247,6 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         Map map = gson.fromJson(entityString, Map.class);
         assert (map.containsKey("interaction_id"));
         String iid = (String) map.get("interaction_id");
-        System.out.println("iid is " + iid);
 
         Response response2 = TestHelper
             .makeRequest(
@@ -265,7 +264,6 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         Map map2 = gson.fromJson(entityString2, Map.class);
         assert (map2.containsKey("interaction_id"));
         String iid2 = (String) map2.get("interaction_id");
-        System.out.println("iid2 is " + iid2);
 
         Response response1 = TestHelper
             .makeRequest(
@@ -286,10 +284,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (((ArrayList) map1.get("interactions")).size() == 1);
         @SuppressWarnings("unchecked")
         ArrayList<Map> interactions = (ArrayList<Map>) map1.get("interactions");
-        System.out.println("interaction_id is " + ((String) interactions.get(0).get("interaction_id")));
-        System.out.println("iid2 is " + iid2);
-        System.out.println("iid is " + iid);
-        assert (((String) interactions.get(0).get("interaction_id")).equals(iid2));
+        assert (((String) interactions.get(0).get("interaction_id")).equals(iid));
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response3 = TestHelper
@@ -311,7 +306,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (((ArrayList) map3.get("interactions")).size() == 1);
         @SuppressWarnings("unchecked")
         ArrayList<Map> interactions3 = (ArrayList<Map>) map3.get("interactions");
-        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid));
+        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid2));
         assert (((Double) map3.get("next_token")).intValue() == 2);
     }
 }
