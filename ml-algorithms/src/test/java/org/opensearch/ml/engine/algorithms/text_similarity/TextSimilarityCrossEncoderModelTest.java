@@ -17,6 +17,15 @@
  */
 package org.opensearch.ml.engine.algorithms.text_similarity;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.DLModel.*;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -30,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -61,15 +69,6 @@ import ai.djl.ndarray.types.Shape;
 import ai.djl.translate.TranslatorContext;
 import lombok.extern.log4j.Log4j2;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.algorithms.DLModel.*;
-
 @Log4j2
 public class TextSimilarityCrossEncoderModelTest {
 
@@ -88,14 +87,15 @@ public class TextSimilarityCrossEncoderModelTest {
         mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
         encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(mlCachePath, encryptor);
-        model = MLModel.builder()
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .name("test_model_name")
-                .modelId("test_model_id")
-                .algorithm(FunctionName.TEXT_SIMILARITY)
-                .version("1.0.0")
-                .modelState(MLModelState.TRAINED)
-                .build();
+        model = MLModel
+            .builder()
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .name("test_model_name")
+            .modelId("test_model_id")
+            .algorithm(FunctionName.TEXT_SIMILARITY)
+            .version("1.0.0")
+            .modelState(MLModelState.TRAINED)
+            .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("TinyBERT-CE.zip").toURI());
@@ -104,10 +104,9 @@ public class TextSimilarityCrossEncoderModelTest {
         params.put(ML_ENGINE, mlEngine);
         textSimilarityCrossEncoderModel = new TextSimilarityCrossEncoderModel();
 
-        inputDataSet = TextSimilarityInputDataSet.builder()
-            .textDocs(Arrays.asList(
-                "That is a happy dog", 
-                "it's summer"))
+        inputDataSet = TextSimilarityInputDataSet
+            .builder()
+            .textDocs(Arrays.asList("That is a happy dog", "it's summer"))
             .queryText("it's summer")
             .build();
     }
@@ -128,7 +127,7 @@ public class TextSimilarityCrossEncoderModelTest {
         when(input.getAsString(0)).thenReturn(testSentence);
         when(input.getAsString(1)).thenReturn(testSentence);
         NDArray indiceNdArray = mock(NDArray.class);
-        when(indiceNdArray.toLongArray()).thenReturn(new long[]{102l, 101l});
+        when(indiceNdArray.toLongArray()).thenReturn(new long[] { 102l, 101l });
         when(manager.create((long[]) any())).thenReturn(indiceNdArray);
         doNothing().when(indiceNdArray).setName(any());
         NDList outputList = textSimilarityTranslator.processInput(translatorContext, input);
@@ -136,7 +135,7 @@ public class TextSimilarityCrossEncoderModelTest {
         Iterator<NDArray> iterator = outputList.iterator();
         while (iterator.hasNext()) {
             NDArray ndArray = iterator.next();
-            long [] output = ndArray.toLongArray();
+            long[] output = ndArray.toLongArray();
             assertEquals(2, output.length);
         }
     }
@@ -155,10 +154,10 @@ public class TextSimilarityCrossEncoderModelTest {
         when(ndArray.nonzero()).thenReturn(ndArray);
         when(ndArray.squeeze()).thenReturn(ndArray);
         when(ndArray.getFloat(any())).thenReturn(1.0f);
-        when(ndArray.toArray()).thenReturn(new Number[]{1.245f});
+        when(ndArray.toArray()).thenReturn(new Number[] { 1.245f });
         when(ndArray.getName()).thenReturn("output");
         when(ndArray.getShape()).thenReturn(shape);
-        when(shape.getShape()).thenReturn(new long[]{1});
+        when(shape.getShape()).thenReturn(new long[] { 1 });
         when(ndArray.getDataType()).thenReturn(DataType.FLOAT32);
         List<NDArray> ndArrayList = Collections.singletonList(ndArray);
         NDList ndList = new NDList(ndArrayList);
@@ -181,7 +180,7 @@ public class TextSimilarityCrossEncoderModelTest {
         ModelTensorOutput output = (ModelTensorOutput) textSimilarityCrossEncoderModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
@@ -190,13 +189,14 @@ public class TextSimilarityCrossEncoderModelTest {
         textSimilarityCrossEncoderModel.close();
     }
 
-
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyBERT-CE.zip").toURI()));
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor)
+        );
         assert (e.getMessage().equals("model helper is null"));
     }
 
@@ -205,16 +205,20 @@ public class TextSimilarityCrossEncoderModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyBERT-CE.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor)
+        );
         assert (e.getMessage().equals("ML engine is null"));
     }
 
     @Test
     public void initModel_NullModelId() {
         model.setModelId(null);
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor)
+        );
         assert (e.getMessage().equals("model id is null"));
     }
 
@@ -224,8 +228,7 @@ public class TextSimilarityCrossEncoderModelTest {
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("../text_embedding/wrong_zip_with_2_pt_file.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
-        MLException e = assertThrows(MLException.class, 
-            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor));
+        MLException e = assertThrows(MLException.class, () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor));
         Throwable rootCause = e.getCause();
         assert (rootCause instanceof IllegalArgumentException);
         assert (rootCause.getMessage().equals("found multiple models"));
@@ -234,26 +237,36 @@ public class TextSimilarityCrossEncoderModelTest {
     @Test
     public void initModel_WrongFunctionName() {
         MLModel mlModel = model.toBuilder().algorithm(FunctionName.KMEANS).build();
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.initModel(mlModel, params, encryptor));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel.initModel(mlModel, params, encryptor)
+        );
         assert (e.getMessage().equals("wrong function name"));
     }
 
     @Test
     public void predict_NullModelHelper() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build()));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel
+                .predict(MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build())
+        );
         assert (e.getMessage().equals("model not deployed"));
     }
 
     @Test
     public void predict_NullModelId() {
         model.setModelId(null);
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor)
+        );
         assert (e.getMessage().equals("model id is null"));
-        IllegalArgumentException e2 = assertThrows(IllegalArgumentException.class, 
-            () -> textSimilarityCrossEncoderModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build()));
+        IllegalArgumentException e2 = assertThrows(
+            IllegalArgumentException.class,
+            () -> textSimilarityCrossEncoderModel
+                .predict(MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build())
+        );
         assert (e2.getMessage().equals("model not deployed"));
     }
 
@@ -261,12 +274,15 @@ public class TextSimilarityCrossEncoderModelTest {
     public void predict_AfterModelClosed() {
         textSimilarityCrossEncoderModel.initModel(model, params, encryptor);
         textSimilarityCrossEncoderModel.close();
-        MLException e = assertThrows(MLException.class, 
-            () -> textSimilarityCrossEncoderModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build()));
+        MLException e = assertThrows(
+            MLException.class,
+            () -> textSimilarityCrossEncoderModel
+                .predict(MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build())
+        );
         log.info(e.getMessage());
         assert (e.getMessage().startsWith("Failed to inference TEXT_SIMILARITY"));
     }
-    
+
     @After
     public void tearDown() {
         FileUtils.deleteFileQuietly(mlCachePath);

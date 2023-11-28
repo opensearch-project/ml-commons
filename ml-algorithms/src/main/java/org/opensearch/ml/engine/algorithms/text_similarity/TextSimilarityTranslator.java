@@ -38,6 +38,7 @@ import ai.djl.translate.TranslatorContext;
 
 public class TextSimilarityTranslator extends SentenceTransformerTranslator {
     public final String SIMILARITY_NAME = "similarity";
+
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
         String sentence = input.getAsString(0);
@@ -78,13 +79,14 @@ public class TextSimilarityTranslator extends SentenceTransformerTranslator {
             DataType dataType = ndArray.getDataType();
             MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
             ByteBuffer buffer = ndArray.toByteBuffer();
-            ModelTensor tensor = ModelTensor.builder()
-                    .name(name)
-                    .data(data)
-                    .shape(shape)
-                    .dataType(mlResultDataType)
-                    .byteBuffer(buffer)
-                    .build();
+            ModelTensor tensor = ModelTensor
+                .builder()
+                .name(name)
+                .data(data)
+                .shape(shape)
+                .dataType(mlResultDataType)
+                .byteBuffer(buffer)
+                .build();
             outputs.add(tensor);
         }
 

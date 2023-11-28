@@ -17,8 +17,6 @@
  */
 package org.opensearch.ml.engine.algorithms.text_similarity;
 
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,7 +38,7 @@ import ai.djl.translate.TranslatorFactory;
 
 @Function(FunctionName.TEXT_SIMILARITY)
 public class TextSimilarityCrossEncoderModel extends DLModel {
-    
+
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
