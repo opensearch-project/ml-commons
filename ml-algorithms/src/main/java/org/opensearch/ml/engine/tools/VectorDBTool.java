@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Map;
-import java.util.Vector;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.client.Client;
@@ -121,7 +120,7 @@ public class VectorDBTool extends AbstractRetrieverTool {
                 .modelId(modelId)
                 .docSize(docSize)
                 .build();
-            if(params.containsKey(DESCRIPTION_FIELD)){
+            if (params.containsKey(DESCRIPTION_FIELD)) {
                 vectorDBTool.setDescription((String) params.get(DESCRIPTION_FIELD));
             }
             return vectorDBTool;

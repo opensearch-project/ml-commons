@@ -116,7 +116,7 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
                 .modelId(modelId)
                 .docSize(docSize)
                 .build();
-            if(params.containsKey(DESCRIPTION_FIELD)){
+            if (params.containsKey(DESCRIPTION_FIELD)) {
                 neuralSparseTool.setDescription((String) params.get(DESCRIPTION_FIELD));
             }
             return neuralSparseTool;
