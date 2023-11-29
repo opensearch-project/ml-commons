@@ -67,6 +67,8 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
+        System.out.println("THIS SHOULD BE WELL FORMED!");
+        System.out.println(entityString);
         Map map = gson.fromJson(entityString, Map.class);
         assert (map.containsKey("conversations"));
         assert (!map.containsKey("next_token"));
