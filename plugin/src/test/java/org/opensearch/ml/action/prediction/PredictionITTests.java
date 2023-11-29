@@ -14,6 +14,7 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.junit.runners.model.MultipleFailureException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
@@ -89,14 +90,27 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictionFuture.actionGet();
     }
 
-    public void testPredictionWithEmptyDataset_KMeans() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("No document found");
+    public void testPredictionWithEmptyDataset_KMeans() throws Exception {
         MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(emptySearchInputDataset).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
-        predictionFuture.actionGet();
+        Exception e = assertThrows(Exception.class, () -> predictionFuture.actionGet());
+        boolean foundIllegalArgument = false;
+        if (e instanceof MultipleFailureException) {
+            for (Throwable t : ((MultipleFailureException) e).getFailures()) {
+                if (t instanceof IllegalArgumentException) {
+                    e = (Exception) t;
+                    foundIllegalArgument = true;
+                    break;
+                }
+            }
+            if (!foundIllegalArgument) {
+                throw e;
+            }
+        }
+        assert (e instanceof IllegalArgumentException);
+        assert (e.getMessage().equals("No document found"));
     }
 
     public void testPredictionWithSearchInput_LogisticRegression() {
