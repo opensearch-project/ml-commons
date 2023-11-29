@@ -119,7 +119,7 @@ public class MLChatAgentRunner {
         String appType = mlAgent.getAppType();
         String title = params.get(QUESTION);
         if (null != regenerateInteractionId && memoryId == null) {
-            listener.onFailure(new MLValidationException("memory Id must provide for regenerate"));
+            listener.onFailure(new MLValidationException("memory id must provide for regenerate"));
             return;
         }
 
@@ -136,7 +136,7 @@ public class MLChatAgentRunner {
                         interactionIdFound = true;
                         // if no new question provided, use original question
                         params.computeIfAbsent(QUESTION, key -> next.getInput());
-                        // there may have other new interactions happened
+                        // there may have other new interactions happened after this interaction
                         continue;
                     }
                     String question = next.getInput();
@@ -174,17 +174,14 @@ public class MLChatAgentRunner {
                     return;
                 }
 
-                if (interactionIdFound) {
-                    memory.getMemoryManager().deleteInteraction(regenerateInteractionId, ActionListener.wrap(deleteResult -> {
-                        runAgent(mlAgent, params, listener, toolSpecs, memory, memory.getConversationId());
-                    }, e -> {
+                ActionListener<Object> finalListener = interactionIdFound ? ActionListener.runBefore(listener, () -> {
+                    memory.getMemoryManager().deleteInteraction(regenerateInteractionId, ActionListener.wrap(deleted -> {}, e -> {
                         log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
                         listener.onFailure(e);
                     }));
+                }) : listener;
 
-                } else {
-                    runAgent(mlAgent, params, listener, toolSpecs, memory, memory.getConversationId());
-                }
+                runAgent(mlAgent, params, finalListener, toolSpecs, memory, memory.getConversationId());
             }, e -> {
                 log.error("Failed to get chat history", e);
                 listener.onFailure(e);

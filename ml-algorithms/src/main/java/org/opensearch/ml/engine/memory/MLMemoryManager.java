@@ -12,8 +12,9 @@ import java.util.Map;
 
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteRequest;
-import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -289,26 +290,45 @@ public class MLMemoryManager {
         }
     }
 
-    public void deleteInteraction(String interactionId, ActionListener<Boolean> actionListener) {
-        DeleteRequest deleteRequest = new DeleteRequest(indexName, interactionId);
+    /**
+     * Delete interaction with its trace data
+     * @param interactionId interaction id
+     * @param listener callback for delete result
+     */
+    public void deleteInteraction(String interactionId, ActionListener<Boolean> listener) {
+        BulkRequest bulkRequest = new BulkRequest(indexName);
+        bulkRequest.add(new DeleteRequest(indexName, interactionId));
 
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<DeleteResponse> al = ActionListener.runBefore(ActionListener.wrap(deleteResponse -> {
-                if (deleteResponse != null && deleteResponse.getResult() != DocWriteResponse.Result.DELETED) {
+        innerGetTraces(interactionId, ActionListener.wrap(traces -> {
+            traces.forEach(trace-> bulkRequest.add(new DeleteRequest(indexName, trace.getId())));
+
+            innerDeleteInteraction(bulkRequest, interactionId, listener);
+        }, e -> {
+            // delete interaction only if we can't get trace
+            innerDeleteInteraction(bulkRequest, interactionId, listener);
+        }));
+    }
+
+    @VisibleForTesting
+     void innerDeleteInteraction(BulkRequest bulkRequest, String interactionId, ActionListener<Boolean> listener) {
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<BulkResponse> al = ActionListener.wrap(bulkResponse -> {
+                if (bulkResponse != null && bulkResponse.hasFailures()) {
                     log.info("Failed to delete the interaction with ID: {}", interactionId);
-                    actionListener.onResponse(true);
+                    listener.onResponse(false);
                     return;
                 }
                 log.info("Successfully delete the interaction with ID: {}", interactionId);
-                actionListener.onResponse(true);
+                listener.onResponse(true);
             }, exception -> {
                 log.error("Failed to delete interaction with ID {}. Details: {}", interactionId, exception);
-                actionListener.onFailure(exception);
-            }), context::restore);
-            client.delete(deleteRequest, al);
+                listener.onFailure(exception);
+            });
+            // bulk delete interaction and its trace
+            client.bulk(bulkRequest, al);
         } catch (Exception e) {
-            log.error("Failed to delete interaction for interaction id {}. Details {}:", interactionId, e);
-            actionListener.onFailure(e);
+            log.error("Failed to delete interaction with ID {}. Details {}:", interactionId, e);
+            listener.onFailure(e);
         }
     }
 

@@ -198,7 +198,7 @@ public class MLChatAgentRunnerTest {
         ArgumentCaptor<MLValidationException> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
         Mockito.verify(agentActionListener).onFailure(argumentCaptor.capture());
         MLValidationException ex = argumentCaptor.getValue();
-        Assert.assertEquals(ex.getMessage(), "memory Id must provide for regenerate");
+        Assert.assertEquals(ex.getMessage(), "memory id must provide for regenerate");
     }
 
     @Test
