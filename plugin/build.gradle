@@ -13,7 +13,7 @@ plugins {
     id "io.freefair.lombok"
     id 'jacoco'
     id 'java-library'
-    id 'com.diffplug.spotless' version '6.18.0'
+    id 'com.diffplug.spotless' version '6.23.0'
     id 'checkstyle'
 }
 
@@ -36,7 +36,7 @@ checkstyle {
 }
 
 lombok {
-    version = "1.18.28"
+    version = "1.18.30"
 }
 
 opensearchplugin {
