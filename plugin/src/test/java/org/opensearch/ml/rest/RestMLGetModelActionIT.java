@@ -22,9 +22,12 @@ public class RestMLGetModelActionIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     public void testGetModelAPI_EmptyResources() throws IOException {
-        exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("Fail to find model");
-        TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/111222333", null, "", null);
+        ResponseException e = assertThrows(
+            ResponseException.class,
+            () -> TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/111222333", null, "", null)
+        );
+        String msg = e.getMessage();
+        assert (msg.contains("Fail to find model") || msg.contains("Failed to find model"));
     }
 
     @Ignore
