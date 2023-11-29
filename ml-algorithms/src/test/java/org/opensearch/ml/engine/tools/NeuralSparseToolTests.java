@@ -15,6 +15,7 @@ import lombok.SneakyThrows;
 public class NeuralSparseToolTests {
     public static final String TEST_EMBEDDING_FIELD = "test embedding";
     public static final String TEST_MODEL_ID = "123fsd23134";
+    public static final String TEST_DESCRIPTION = "test";
     private Map<String, Object> params = new HashMap<>();
 
     @Before
@@ -24,6 +25,7 @@ public class NeuralSparseToolTests {
         params.put(NeuralSparseTool.SOURCE_FIELD, gson.toJson(AbstractRetrieverToolTests.TEST_SOURCE_FIELDS));
         params.put(NeuralSparseTool.MODEL_ID_FIELD, TEST_MODEL_ID);
         params.put(NeuralSparseTool.DOC_SIZE_FIELD, AbstractRetrieverToolTests.TEST_DOC_SIZE.toString());
+        params.put(NeuralSparseTool.DESCRIPTION_FIELD, TEST_DESCRIPTION);
     }
 
     @Test
@@ -35,6 +37,7 @@ public class NeuralSparseToolTests {
         assertEquals(AbstractRetrieverToolTests.TEST_SOURCE_FIELDS, tool.getSourceFields());
         assertEquals(TEST_MODEL_ID, tool.getModelId());
         assertEquals(AbstractRetrieverToolTests.TEST_DOC_SIZE, tool.getDocSize());
+        assertEquals(TEST_DESCRIPTION, tool.getDescription());
         assertEquals("NeuralSparseTool", tool.getType());
         assertEquals("NeuralSparseTool", tool.getName());
         assertEquals("Use this tool to search data in OpenSearch index.", NeuralSparseTool.Factory.getInstance().getDefaultDescription());

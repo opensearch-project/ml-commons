@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Map;
+import java.util.Vector;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.client.Client;
@@ -30,6 +31,7 @@ public class VectorDBTool extends AbstractRetrieverTool {
     public static final String TYPE = "VectorDBTool";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String EMBEDDING_FIELD = "embedding_field";
+    public static final String DESCRIPTION_FIELD = "description";
     private String name = TYPE;
     private Integer k;
     private String modelId;
@@ -109,7 +111,7 @@ public class VectorDBTool extends AbstractRetrieverTool {
             String[] sourceFields = gson.fromJson((String) params.get(SOURCE_FIELD), String[].class);
             String modelId = (String) params.get(MODEL_ID_FIELD);
             Integer docSize = params.containsKey(DOC_SIZE_FIELD) ? Integer.parseInt((String) params.get(DOC_SIZE_FIELD)) : 2;
-            return VectorDBTool
+            VectorDBTool vectorDBTool = VectorDBTool
                 .builder()
                 .client(client)
                 .xContentRegistry(xContentRegistry)
@@ -119,6 +121,10 @@ public class VectorDBTool extends AbstractRetrieverTool {
                 .modelId(modelId)
                 .docSize(docSize)
                 .build();
+            if(params.containsKey(DESCRIPTION_FIELD)){
+                vectorDBTool.setDescription((String) params.get(DESCRIPTION_FIELD));
+            }
+            return vectorDBTool;
         }
 
         @Override
