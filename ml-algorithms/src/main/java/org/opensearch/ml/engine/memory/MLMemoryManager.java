@@ -300,7 +300,7 @@ public class MLMemoryManager {
         bulkRequest.add(new DeleteRequest(indexName, interactionId));
 
         innerGetTraces(interactionId, ActionListener.wrap(traces -> {
-            traces.forEach(trace-> bulkRequest.add(new DeleteRequest(indexName, trace.getId())));
+            traces.forEach(trace -> bulkRequest.add(new DeleteRequest(indexName, trace.getId())));
 
             innerDeleteInteraction(bulkRequest, interactionId, listener);
         }, e -> {
@@ -310,7 +310,7 @@ public class MLMemoryManager {
     }
 
     @VisibleForTesting
-     void innerDeleteInteraction(BulkRequest bulkRequest, String interactionId, ActionListener<Boolean> listener) {
+    void innerDeleteInteraction(BulkRequest bulkRequest, String interactionId, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<BulkResponse> al = ActionListener.wrap(bulkResponse -> {
                 if (bulkResponse != null && bulkResponse.hasFailures()) {
