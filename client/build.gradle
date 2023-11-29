@@ -9,7 +9,7 @@ plugins {
     id 'jacoco'
     id 'com.github.johnrengelman.shadow'
     id 'maven-publish'
-    id 'com.diffplug.spotless' version '6.18.0'
+    id 'com.diffplug.spotless' version '6.23.0'
     id 'signing'
 }
 
