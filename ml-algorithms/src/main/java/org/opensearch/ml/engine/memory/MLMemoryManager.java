@@ -176,14 +176,14 @@ public class MLMemoryManager {
         searchRequest.source(searchSourceBuilder);
 
         searchRequest.source().size(lastNInteraction);
-        searchRequest.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.ASC);
+        searchRequest.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
 
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
                 List<Interaction> result = new LinkedList<Interaction>();
                 for (SearchHit hit : response.getHits()) {
-                    result.add(Interaction.fromSearchHit(hit));
+                    result.add(0, Interaction.fromSearchHit(hit));
                 }
                 internalListener.onResponse(result);
             }, e -> { internalListener.onFailure(e); });
