@@ -142,6 +142,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (ccmap1.containsKey("conversation_id"));
         String id1 = (String) ccmap1.get("conversation_id");
 
+        refreshAllIndices();
         Response ccresponse2 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse2 != null);
         assert (TestHelper.restStatus(ccresponse2) == RestStatus.OK);
@@ -151,6 +152,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (ccmap2.containsKey("conversation_id"));
         String id2 = (String) ccmap2.get("conversation_id");
 
+        refreshAllIndices();
         Response response1 = TestHelper
             .makeRequest(
                 client(),
