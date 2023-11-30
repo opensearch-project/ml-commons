@@ -198,7 +198,7 @@ public class ConversationMetaIndex {
             queryBuilder = new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
         request.source().query(queryBuilder);
         request.source().from(from).size(maxResults);
-        request.source().sort(ConversationalIndexConstants.META_CREATED_FIELD, SortOrder.DESC);
+        request.source().sort(ConversationalIndexConstants.META_UPDATED_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<ConversationMeta>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(searchResponse -> {
