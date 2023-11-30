@@ -284,7 +284,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (((ArrayList) map1.get("interactions")).size() == 1);
         @SuppressWarnings("unchecked")
         ArrayList<Map> interactions = (ArrayList<Map>) map1.get("interactions");
-        assert (((String) interactions.get(0).get("interaction_id")).equals(iid2));
+        assert (((String) interactions.get(0).get("interaction_id")).equals(iid));
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response3 = TestHelper
@@ -306,7 +306,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (((ArrayList) map3.get("interactions")).size() == 1);
         @SuppressWarnings("unchecked")
         ArrayList<Map> interactions3 = (ArrayList<Map>) map3.get("interactions");
-        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid));
+        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid2));
         assert (((Double) map3.get("next_token")).intValue() == 2);
     }
 }

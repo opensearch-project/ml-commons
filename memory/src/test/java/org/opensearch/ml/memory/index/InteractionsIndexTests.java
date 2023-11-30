@@ -41,6 +41,7 @@ import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.refresh.RefreshResponse;
 import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -642,5 +643,96 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(searchInteractionsListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to conversation test_cid"));
+    }
+
+    public void testGetSg_NoIndex_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("cid", "iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor
+            .getValue()
+            .getMessage()
+            .equals("no such index [.plugins-ml-memory-message] and cannot get interaction since the interactions index does not exist"));
+    }
+
+    public void testGetSg_InteractionNotExist_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        setupRefreshSuccess();
+        GetResponse response = mock(GetResponse.class);
+        doReturn(false).when(response).isExists();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("cid", "iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Interaction [iid] not found"));
+    }
+
+    public void testGetSg_WrongId_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        setupRefreshSuccess();
+        GetResponse response = mock(GetResponse.class);
+        doReturn(true).when(response).isExists();
+        doReturn("wrong id").when(response).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("cid", "iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Interaction [iid] not found"));
+    }
+
+    public void testGetSg_RefreshFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Failed during Sg Get Refresh"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("cid", "iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Failed during Sg Get Refresh"));
+    }
+
+    public void testGetSg_ClientFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        doThrow(new RuntimeException("Client Failure in Sg Get")).when(client).admin();
+        @SuppressWarnings("unchecked")
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("cid", "iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Client Failure in Sg Get"));
+    }
+
+    public void testGetSg_NoAccess_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupDenyAccess("Henry");
+        @SuppressWarnings("unchecked")
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("cid", "iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("User [Henry] does not have access to conversation cid"));
     }
 }

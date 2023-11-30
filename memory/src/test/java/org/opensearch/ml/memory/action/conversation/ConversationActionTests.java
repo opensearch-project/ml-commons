@@ -25,5 +25,6 @@ public class ConversationActionTests extends OpenSearchTestCase {
         assert (DeleteConversationAction.INSTANCE instanceof DeleteConversationAction);
         assert (GetConversationsAction.INSTANCE instanceof GetConversationsAction);
         assert (SearchConversationsAction.INSTANCE instanceof SearchConversationsAction);
+        assert (GetConversationAction.INSTANCE instanceof GetConversationAction);
     }
 }

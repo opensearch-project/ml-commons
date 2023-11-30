@@ -70,6 +70,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
+import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -152,6 +154,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLCreateConnectorResponse> createConnectorActionListener;
+
+    @Mock
+    ActionListener<DeleteResponse> deleteConnectorActionListener;
 
     @Mock
     ActionListener<MLRegisterModelGroupResponse> registerModelGroupResponseActionListener;
@@ -681,6 +686,28 @@ public class MachineLearningNodeClientTest {
         verify(createConnectorActionListener).onResponse(argumentCaptor.capture());
         assertEquals(connectorId, (argumentCaptor.getValue()).getConnectorId());
 
+    }
+
+    @Test
+    public void deleteConnector() {
+
+        String connectorId = "connectorId";
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            DeleteResponse output = new DeleteResponse(shardId, connectorId, 1, 1, 1, true);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLConnectorDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+
+        machineLearningNodeClient.deleteConnector(connectorId, deleteConnectorActionListener);
+
+        verify(client).execute(eq(MLConnectorDeleteAction.INSTANCE), isA(MLConnectorDeleteRequest.class), any());
+        verify(deleteConnectorActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(connectorId, (argumentCaptor.getValue()).getId());
     }
 
     @Test

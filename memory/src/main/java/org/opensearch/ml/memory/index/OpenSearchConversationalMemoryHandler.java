@@ -25,11 +25,14 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.conversation.Interaction.InteractionBuilder;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -381,6 +384,58 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
 
     public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
         interactionsIndex.getTraces(interactionId, from, maxResults, listener);
+    }
+
+    public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener) {
+        UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.META_INDEX_NAME, conversationId);
+        updateContent.putIfAbsent(ConversationalIndexConstants.META_UPDATED_FIELD, Instant.now());
+
+        updateRequest.doc(updateContent);
+        updateRequest.docAsUpsert(true);
+
+        conversationMetaIndex.updateConversation(updateRequest, listener);
+    }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @param listener receives the conversationMeta object
+     */
+    public void getConversation(String conversationId, ActionListener<ConversationMeta> listener) {
+        conversationMetaIndex.getConversation(conversationId, listener);
+    }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @return ActionFuture for the conversationMeta object
+     */
+    public ActionFuture<ConversationMeta> getConversation(String conversationId) {
+        PlainActionFuture<ConversationMeta> fut = PlainActionFuture.newFuture();
+        getConversation(conversationId, fut);
+        return fut;
+    }
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @param listener receives the interaction
+     */
+    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
+        interactionsIndex.getInteraction(conversationId, interactionId, listener);
+    }
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @return ActionFuture for the interaction
+     */
+    public ActionFuture<Interaction> getInteraction(String conversationId, String interactionId) {
+        PlainActionFuture<Interaction> fut = PlainActionFuture.newFuture();
+        getInteraction(conversationId, interactionId, fut);
+        return fut;
     }
 
 }

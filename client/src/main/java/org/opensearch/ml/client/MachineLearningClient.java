@@ -286,6 +286,19 @@ public interface MachineLearningClient {
     void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener);
 
     /**
+     * Delete connector for remote model
+     * @param connectorId The id of the connector to delete
+     * @return the result future
+     */
+    default ActionFuture<DeleteResponse> deleteConnector(String connectorId) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteConnector(connectorId, actionFuture);
+        return actionFuture;
+    }
+
+    void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener);
+
+    /**
      * Register model group
      * For additional info on model group, refer: https://opensearch.org/docs/latest/ml-commons-plugin/model-access-control#registering-a-model-group
      * @param mlRegisterModelGroupInput model group input

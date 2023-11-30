@@ -386,6 +386,17 @@ public class MLChatAgentRunner {
                         if (conversationIndexMemory != null) {
                             String finalAnswer1 = finalAnswer;
                             createRootItListener.whenComplete(r -> {
+                                // Create final trace message.
+                                ConversationIndexMessage msgTemp = ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .type("ReAct")
+                                    .question(question)
+                                    .response(finalAnswer1)
+                                    .finalAnswer(true)
+                                    .sessionId(sessionId)
+                                    .build();
+                                conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), null);
+                                // Update root interaction.
                                 conversationIndexMemory
                                     .getMemoryManager()
                                     .updateInteraction(

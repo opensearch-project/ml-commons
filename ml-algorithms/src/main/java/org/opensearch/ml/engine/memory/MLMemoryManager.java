@@ -183,7 +183,7 @@ public class MLMemoryManager {
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
                 List<Interaction> result = new LinkedList<Interaction>();
                 for (SearchHit hit : response.getHits()) {
-                    result.add(Interaction.fromSearchHit(hit));
+                    result.add(0, Interaction.fromSearchHit(hit));
                 }
                 internalListener.onResponse(result);
             }, e -> { internalListener.onFailure(e); });
