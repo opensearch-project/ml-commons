@@ -118,7 +118,7 @@ Sample response:
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
 {
-  "name": "Bedrock embedding model",
+  "name": "Bedrock multi-modal embedding model",
   "function_name": "remote",
   "model_group_id": "rqR9PIsBQRofe4CScErR",
   "description": "test model",
