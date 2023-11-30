@@ -28,7 +28,8 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "aws_sigv4",
   "parameters": {
     "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-    "service_name": "bedrock"
+    "service_name": "bedrock",
+    "input_docs_processed_step_size": 2
   },
   "credential": {
     "access_key": "<PLEASE ADD YOUR AWS ACCESS KEY HERE>",
@@ -64,7 +65,8 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "aws_sigv4",
   "parameters": {
     "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-    "service_name": "bedrock"
+    "service_name": "bedrock",
+    "input_docs_processed_step_size": 2
   },
   "credential": {
     "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
