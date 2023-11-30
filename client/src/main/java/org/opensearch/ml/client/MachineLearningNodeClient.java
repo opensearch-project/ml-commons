@@ -76,6 +76,9 @@ import org.opensearch.ml.common.transport.tools.MLToolsListResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -240,6 +243,12 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+        MLUndeployModelsRequest undeployModelRequest = new MLUndeployModelsRequest(modelIds, nodeIds);
+        client.execute(MLUndeployModelsAction.INSTANCE, undeployModelRequest, getMlUndeployModelsResponseActionListener(listener));
+    }
+
+    @Override
     public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
         client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, getMlCreateConnectorResponseActionListener(listener));
@@ -318,6 +327,16 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     private ActionListener<MLDeployModelResponse> getMlDeployModelResponseActionListener(ActionListener<MLDeployModelResponse> listener) {
         ActionListener<MLDeployModelResponse> actionListener = wrapActionListener(listener, response -> {
             MLDeployModelResponse deployModelResponse = MLDeployModelResponse.fromActionResponse(response);
+            return deployModelResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLUndeployModelsResponse> getMlUndeployModelsResponseActionListener(
+        ActionListener<MLUndeployModelsResponse> listener
+    ) {
+        ActionListener<MLUndeployModelsResponse> actionListener = wrapActionListener(listener, response -> {
+            MLUndeployModelsResponse deployModelResponse = MLUndeployModelsResponse.fromActionResponse(response);
             return deployModelResponse;
         });
         return actionListener;
