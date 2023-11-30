@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
@@ -263,5 +264,36 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         }).when(interactionsIndex).searchInteractions(any(), any(), any());
         ActionFuture<SearchResponse> result = cmHandler.searchInteractions(cid, request);
         assert (result.actionGet().equals(response));
+    }
+
+    public void testGetAConversation_Future() {
+        ConversationMeta response = new ConversationMeta("cid", Instant.now(), Instant.now(), "boring name", null);
+        doAnswer(invocation -> {
+            ActionListener<ConversationMeta> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(conversationMetaIndex).getConversation(any(), any());
+        ActionFuture<ConversationMeta> result = cmHandler.getConversation("cid");
+        assert (result.actionGet().equals(response));
+    }
+
+    public void testGetAnInteraction_Future() {
+        Interaction interaction = new Interaction(
+            "iid",
+            Instant.now(),
+            "cid",
+            "inp",
+            "pt",
+            "rsp",
+            "ogn",
+            Collections.singletonMap("metadata", "some meta")
+        );
+        doAnswer(invocation -> {
+            ActionListener<Interaction> listener = invocation.getArgument(2);
+            listener.onResponse(interaction);
+            return null;
+        }).when(interactionsIndex).getInteraction(any(), any(), any());
+        ActionFuture<Interaction> result = cmHandler.getInteraction("cid", "iid");
+        assert (result.actionGet().equals(interaction));
     }
 }

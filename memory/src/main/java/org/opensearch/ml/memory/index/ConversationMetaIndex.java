@@ -47,6 +47,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
@@ -198,7 +199,7 @@ public class ConversationMetaIndex {
             queryBuilder = new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
         request.source().query(queryBuilder);
         request.source().from(from).size(maxResults);
-        request.source().sort(ConversationalIndexConstants.META_CREATED_FIELD, SortOrder.DESC);
+        request.source().sort(ConversationalIndexConstants.META_UPDATED_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<ConversationMeta>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(searchResponse -> {
@@ -293,8 +294,6 @@ public class ConversationMetaIndex {
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
                     throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
                 }
-                log.info(userstr);
-                log.info(User.parse(userstr));
                 // If security is off - User doesn't exist - you have permission
                 if (userstr == null || User.parse(userstr) == null) {
                     internalListener.onResponse(true);
@@ -361,6 +360,56 @@ public class ConversationMetaIndex {
             client.update(updateRequest, listener);
         } catch (Exception e) {
             log.error("Failed to update Conversation. Details {}:", e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @param listener receives the conversationMeta object
+     */
+    public void getConversation(String conversationId, ActionListener<ConversationMeta> listener) {
+        if (!clusterService.state().metadata().hasIndex(indexName)) {
+            listener
+                .onFailure(new IndexNotFoundException("cannot get conversation since the conversation index does not exist", indexName));
+            return;
+        }
+        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<ConversationMeta> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            GetRequest request = Requests.getRequest(indexName).id(conversationId);
+            ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
+                // If the conversation doesn't exist, fail
+                if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
+                    throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
+                }
+                ConversationMeta conversation = ConversationMeta.fromMap(conversationId, getResponse.getSourceAsMap());
+                // If no security, return conversation
+                if (userstr == null || User.parse(userstr) == null) {
+                    internalListener.onResponse(conversation);
+                    return;
+                }
+                // If security and correct user, return conversation
+                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+                if (user.equals(conversation.getUser())) {
+                    internalListener.onResponse(conversation);
+                    return;
+                }
+                // Otherwise you don't have permission
+                internalListener
+                    .onFailure(
+                        new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId)
+                    );
+            }, e -> { internalListener.onFailure(e); });
+            client
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> { client.get(request, al); }, e -> {
+                    log.error("Failed to refresh conversations index during get conversation ", e);
+                    internalListener.onFailure(e);
+                }));
+        } catch (Exception e) {
             listener.onFailure(e);
         }
     }
