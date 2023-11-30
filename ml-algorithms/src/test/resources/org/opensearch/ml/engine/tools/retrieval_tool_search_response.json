@@ -19,7 +19,7 @@
         "_id": "1",
         "_score": 89.2917,
         "_source": {
-          "passage_text": "Company xyz have a history of 100 years."
+          "passage_text": "Company test_mock have a history of 100 years."
         }
       },
       {

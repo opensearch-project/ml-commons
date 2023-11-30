@@ -91,8 +91,8 @@ public class AbstractRetrieverToolTests {
 
         future.join();
         assertEquals(
-            "{\"_source\":{\"passage_text\":\"Company xyz have a history of 100 years.\"},\"_id\":\"1\"}\n"
-                + "{\"_source\":{\"passage_text\":\"the price of the api is 2$ per invokation\"},\"_id\":\"2\"}\n",
+            "{\"_index\":\"hybrid-index\",\"_source\":{\"passage_text\":\"Company test_mock have a history of 100 years.\"},\"_id\":\"1\",\"_score\":89.2917}\n" +
+                    "{\"_index\":\"hybrid-index\",\"_source\":{\"passage_text\":\"the price of the api is 2$ per invokation\"},\"_id\":\"2\",\"_score\":0.10702579}\n",
             gson.fromJson(future.get(), String.class)
         );
     }

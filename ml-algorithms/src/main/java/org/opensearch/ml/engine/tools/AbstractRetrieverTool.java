@@ -97,7 +97,9 @@ public abstract class AbstractRetrieverTool implements Tool {
                         SearchHit hit = hits[i];
                         String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
                             Map<String, Object> docContent = new HashMap<>();
+                            docContent.put("_index", hit.getIndex());
                             docContent.put("_id", hit.getId());
+                            docContent.put("_score", hit.getScore());
                             docContent.put("_source", hit.getSourceAsMap());
                             return gson.toJson(docContent);
                         });
