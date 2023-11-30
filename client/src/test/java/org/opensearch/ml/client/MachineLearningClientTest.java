@@ -49,6 +49,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 
 public class MachineLearningClientTest {
 
@@ -77,6 +78,9 @@ public class MachineLearningClientTest {
 
     @Mock
     MLDeployModelResponse deployModelResponse;
+
+    @Mock
+    MLUndeployModelsResponse undeployModelsResponse;
 
     @Mock
     MLCreateConnectorResponse createConnectorResponse;
@@ -160,6 +164,11 @@ public class MachineLearningClientTest {
             @Override
             public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
                 listener.onResponse(deployModelResponse);
+            }
+
+            @Override
+            public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+                listener.onResponse(undeployModelsResponse);
             }
 
             @Override
@@ -356,6 +365,11 @@ public class MachineLearningClientTest {
     @Test
     public void deploy() {
         assertEquals(deployModelResponse, machineLearningClient.deploy("modelId").actionGet());
+    }
+
+    @Test
+    public void undeploy() {
+        assertEquals(undeployModelsResponse, machineLearningClient.undeploy(new String[] { "modelId" }, null).actionGet());
     }
 
     @Test

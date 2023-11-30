@@ -6,6 +6,8 @@
 package org.opensearch.ml.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,6 +44,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.ClusterName;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -104,6 +107,10 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -151,6 +158,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLDeployModelResponse> deployModelActionListener;
+
+    @Mock
+    ActionListener<MLUndeployModelsResponse> undeployModelsActionListener;
 
     @Mock
     ActionListener<MLCreateConnectorResponse> createConnectorActionListener;
@@ -645,6 +655,33 @@ public class MachineLearningNodeClientTest {
         verify(deployModelActionListener).onResponse(argumentCaptor.capture());
         assertEquals(taskId, (argumentCaptor.getValue()).getTaskId());
         assertEquals(status, (argumentCaptor.getValue()).getStatus());
+    }
+
+    @Test
+    public void undeploy() {
+        ClusterName clusterName = new ClusterName("clusterName");
+        String[] modelIds = new String[] { "modelId" };
+        String[] nodeIds = new String[] { "nodeId" };
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelsResponse> actionListener = invocation.getArgument(2);
+            MLUndeployModelNodesResponse mlUndeployModelNodesResponse = new MLUndeployModelNodesResponse(
+                clusterName,
+                Collections.emptyList(),
+                Collections.emptyList()
+            );
+            MLUndeployModelsResponse output = new MLUndeployModelsResponse(mlUndeployModelNodesResponse);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLUndeployModelsAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLUndeployModelsResponse> argumentCaptor = ArgumentCaptor.forClass(MLUndeployModelsResponse.class);
+        machineLearningNodeClient.undeploy(modelIds, nodeIds, undeployModelsActionListener);
+
+        verify(client).execute(eq(MLUndeployModelsAction.INSTANCE), isA(MLUndeployModelsRequest.class), any());
+        verify(undeployModelsActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(clusterName, (argumentCaptor.getValue()).getResponse().getClusterName());
+        assertTrue((argumentCaptor.getValue()).getResponse().getNodes().isEmpty());
+        assertFalse((argumentCaptor.getValue()).getResponse().hasFailures());
     }
 
     @Test
