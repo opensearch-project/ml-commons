@@ -19,16 +19,23 @@ package org.opensearch.ml.memory.index;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.query.MatchQueryBuilder;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -341,6 +348,159 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
             assert (false);
         }), cdl);
         interactions2.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
+
+    public void testSearchInteractions() {
+        final String conversation1 = "conversation1";
+        final String conversation2 = "conversation2";
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> iid1 = new StepListener<>();
+        index
+            .createInteraction(
+                conversation1,
+                "input about fish",
+                "pt",
+                "response about fish",
+                "origin1",
+                "lots of information about fish",
+                iid1
+            );
+
+        StepListener<String> iid2 = new StepListener<>();
+        iid1.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation1,
+                    "input about squash",
+                    "pt",
+                    "response about squash",
+                    "origin1",
+                    "lots of information about squash",
+                    iid2
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<String> iid3 = new StepListener<>();
+        iid2.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation2,
+                    "input about fish",
+                    "pt2",
+                    "response about fish",
+                    "origin1",
+                    "lots of information about fish",
+                    iid3
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<String> iid4 = new StepListener<>();
+        iid3.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation1,
+                    "input about france",
+                    "pt",
+                    "response about france",
+                    "origin1",
+                    "lots of information about france",
+                    iid4
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<SearchResponse> searchListener = new StepListener<>();
+        iid4.whenComplete(r -> {
+            SearchRequest request = new SearchRequest();
+            request.source(new SearchSourceBuilder());
+            request.source().query(new MatchQueryBuilder(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "fish input"));
+            index.searchInteractions(conversation1, request, searchListener);
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        searchListener.whenComplete(response -> {
+            cdl.countDown();
+            assert (response.getHits().getHits().length == 3);
+            // BM25 was being a little unpredictable here so I don't assert ordering
+            List<String> ids = new ArrayList<>(3);
+            for (SearchHit hit : response.getHits()) {
+                ids.add(hit.getId());
+            }
+            assert (ids.contains(iid1.result()));
+            assert (ids.contains(iid2.result()));
+            assert (ids.contains(iid4.result()));
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
+
+    public void testGetInteractionById() {
+        final String conversation = "test-conversation";
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> iid1 = new StepListener<>();
+        index.createInteraction(conversation, "test input", "pt", "test response", "test origin", "metadata", iid1);
+
+        StepListener<String> iid2 = new StepListener<>();
+        iid1
+            .whenComplete(
+                iid -> { index.createInteraction(conversation, "test input2", "pt", "test response", "test origin", "metadata", iid2); },
+                e -> {
+                    cdl.countDown();
+                    log.error(e);
+                    assert false;
+                }
+            );
+
+        StepListener<Interaction> get1 = new StepListener<>();
+        iid2.whenComplete(iid -> { index.getInteraction(conversation, iid1.result(), get1); }, e -> {
+            cdl.countDown();
+            log.error(e);
+        });
+
+        StepListener<Interaction> get2 = new StepListener<>();
+        get1.whenComplete(interaction1 -> { index.getInteraction(conversation, iid2.result(), get2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+        });
+
+        get2.whenComplete(interaction2 -> {
+            assert (get1.result().getId().equals(iid1.result()));
+            assert (get1.result().getInput().equals("test input"));
+            assert (get2.result().getId().equals(iid2.result()));
+            assert (get2.result().getInput().equals("test input2"));
+            cdl.countDown();
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+        });
 
         try {
             cdl.await();

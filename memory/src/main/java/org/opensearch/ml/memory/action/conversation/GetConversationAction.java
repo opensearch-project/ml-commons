@@ -17,13 +17,18 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
-import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.action.ActionType;
 
-public class InteractionActionTests extends OpenSearchTestCase {
-    public void testActions() {
-        assert (CreateInteractionAction.INSTANCE instanceof CreateInteractionAction);
-        assert (GetInteractionsAction.INSTANCE instanceof GetInteractionsAction);
-        assert (SearchInteractionsAction.INSTANCE instanceof SearchInteractionsAction);
-        assert (GetInteractionAction.INSTANCE instanceof GetInteractionAction);
+/**
+ * Action for retrieving a top-level conversation object by id
+ */
+public class GetConversationAction extends ActionType<GetConversationResponse> {
+    /** Instance of this */
+    public static final GetConversationAction INSTANCE = new GetConversationAction();
+    /** Name of this action */
+    public static final String NAME = "cluster:admin/opensearch/ml/memory/conversation/get";
+
+    private GetConversationAction() {
+        super(NAME, GetConversationResponse::new);
     }
 }
