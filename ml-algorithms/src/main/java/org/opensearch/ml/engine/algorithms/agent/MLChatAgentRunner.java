@@ -396,12 +396,28 @@ public class MLChatAgentRunner {
                                 .sessionId(sessionId)
                                 .build();
                             conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
+                        }
+                    }
+                    if (finalAnswer != null) {
+                        finalAnswer = finalAnswer.trim();
+                        if (conversationIndexMemory != null) {
+                            String finalAnswer1 = finalAnswer;
+                            // Create final trace message.
+                            ConversationIndexMessage msgTemp = ConversationIndexMessage
+                                .conversationIndexMessageBuilder()
+                                .type("ReAct")
+                                .question(question)
+                                .response(finalAnswer1)
+                                .finalAnswer(true)
+                                .sessionId(sessionId)
+                                .build();
+                            conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
                             // Update root interaction.
                             conversationIndexMemory
                                 .getMemoryManager()
                                 .updateInteraction(
                                     parentInteractionId,
-                                    ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1),
+                                    ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
                                     ActionListener.<UpdateResponse>wrap(updateResponse -> {
                                         log.info("Updated final answer into interaction id: {}", parentInteractionId);
                                         log.info("Final answer: {}", finalAnswer1);
