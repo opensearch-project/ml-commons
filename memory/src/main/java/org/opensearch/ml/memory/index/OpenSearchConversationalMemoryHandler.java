@@ -21,6 +21,8 @@ import java.time.Instant;
 import java.util.List;
 
 import org.opensearch.action.StepListener;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -283,6 +285,90 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     public ActionFuture<Boolean> deleteConversation(String conversationId) {
         PlainActionFuture<Boolean> fut = PlainActionFuture.newFuture();
         deleteConversation(conversationId, fut);
+        return fut;
+    }
+
+    /**
+     * Search over conversations index
+     * @param request search request over the conversations index
+     * @param listener receives the search response
+     */
+    public void searchConversations(SearchRequest request, ActionListener<SearchResponse> listener) {
+        conversationMetaIndex.searchConversations(request, listener);
+    }
+
+    /**
+     * Search over conversations index
+     * @param request search request over the conversations index
+     * @return ActionFuture for the search response
+     */
+    public ActionFuture<SearchResponse> searchConversations(SearchRequest request) {
+        PlainActionFuture<SearchResponse> fut = PlainActionFuture.newFuture();
+        searchConversations(request, fut);
+        return fut;
+    }
+
+    /**
+     * Search over interactions of a conversation
+     * @param conversationId id of the conversation to search through
+     * @param request search request over the interactions
+     * @param listener receives the search response
+     */
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        interactionsIndex.searchInteractions(conversationId, request, listener);
+    }
+
+    /**
+     * Search over interactions of a conversation
+     * @param conversationId id of the conversation to search through
+     * @param request search request over the interactions
+     * @return ActionFuture for the search response
+     */
+    public ActionFuture<SearchResponse> searchInteractions(String conversationId, SearchRequest request) {
+        PlainActionFuture<SearchResponse> fut = PlainActionFuture.newFuture();
+        searchInteractions(conversationId, request, fut);
+        return fut;
+    }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @param listener receives the conversationMeta object
+     */
+    public void getConversation(String conversationId, ActionListener<ConversationMeta> listener) {
+        conversationMetaIndex.getConversation(conversationId, listener);
+    }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @return ActionFuture for the conversationMeta object
+     */
+    public ActionFuture<ConversationMeta> getConversation(String conversationId) {
+        PlainActionFuture<ConversationMeta> fut = PlainActionFuture.newFuture();
+        getConversation(conversationId, fut);
+        return fut;
+    }
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @param listener receives the interaction
+     */
+    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
+        interactionsIndex.getInteraction(conversationId, interactionId, listener);
+    }
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @return ActionFuture for the interaction
+     */
+    public ActionFuture<Interaction> getInteraction(String conversationId, String interactionId) {
+        PlainActionFuture<Interaction> fut = PlainActionFuture.newFuture();
+        getInteraction(conversationId, interactionId, fut);
         return fut;
     }
 

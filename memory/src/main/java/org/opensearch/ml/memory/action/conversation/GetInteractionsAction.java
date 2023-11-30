@@ -26,7 +26,7 @@ public class GetInteractionsAction extends ActionType<GetInteractionsResponse> {
     /** Instance of this */
     public static final GetInteractionsAction INSTANCE = new GetInteractionsAction();
     /** Name of this action */
-    public static final String NAME = "cluster:admin/opensearch/ml/memory/interaction/get";
+    public static final String NAME = "cluster:admin/opensearch/ml/memory/interaction/list";
 
     private GetInteractionsAction() {
         super(NAME, GetInteractionsResponse::new);
