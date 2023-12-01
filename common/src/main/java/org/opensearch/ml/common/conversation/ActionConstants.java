@@ -48,6 +48,10 @@ public class ActionConstants {
     public final static String PROMPT_TEMPLATE_FIELD = "prompt_template";
     /** name of metadata field in all requests */
     public final static String ADDITIONAL_INFO_FIELD = "additional_info";
+    /** name of metadata field in all requests */
+    public final static String PARENT_INTERACTION_ID_FIELD = "parent_interaction_id";
+    /** name of metadata field in all requests */
+    public final static String TRACE_NUMBER_FIELD = "trace_number";
     /** name of success field in all requests */
     public final static String SUCCESS_FIELD = "success";
 

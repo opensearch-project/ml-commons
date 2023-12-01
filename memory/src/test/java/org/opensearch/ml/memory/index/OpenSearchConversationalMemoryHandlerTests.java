@@ -26,6 +26,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.Before;
@@ -82,10 +83,9 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
-        ActionFuture<String> result = cmHandler.createInteraction("cid", "inp", "pt", "rsp", "ogn", "meta");
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), any(), any(), any());
+        ActionFuture<String> result = cmHandler
+            .createInteraction("cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta"));
         assert (result.actionGet(200).equals("iid"));
     }
 
@@ -94,9 +94,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), any(), any(), any());
         InteractionBuilder builder = Interaction
             .builder()
             .conversationId("cid")
@@ -104,7 +102,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .origin("origin")
             .response("rsp")
             .promptTemplate("pt")
-            .additionalInfo("meta");
+            .additionalInfo(Collections.singletonMap("meta", "some meta"));
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
         cmHandler.createInteraction(builder, createInteractionListener);
@@ -118,9 +116,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), any(), any(), any());
         InteractionBuilder builder = Interaction
             .builder()
             .origin("ogn")
@@ -128,7 +124,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .input("inp")
             .response("rsp")
             .promptTemplate("pt")
-            .additionalInfo("meta");
+            .additionalInfo(Collections.singletonMap("meta", "some meta"));
         ActionFuture<String> result = cmHandler.createInteraction(builder);
         assert (result.actionGet(200).equals("iid"));
     }
@@ -271,7 +267,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
     }
 
     public void testGetAConversation_Future() {
-        ConversationMeta response = new ConversationMeta("cid", Instant.now(), "boring name", null);
+        ConversationMeta response = new ConversationMeta("cid", Instant.now(), Instant.now(), "boring name", null);
         doAnswer(invocation -> {
             ActionListener<ConversationMeta> listener = invocation.getArgument(1);
             listener.onResponse(response);
@@ -282,7 +278,16 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
     }
 
     public void testGetAnInteraction_Future() {
-        Interaction interaction = new Interaction("iid", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", "extra");
+        Interaction interaction = new Interaction(
+            "iid",
+            Instant.now(),
+            "cid",
+            "inp",
+            "pt",
+            "rsp",
+            "ogn",
+            Collections.singletonMap("meta", "some meta")
+        );
         doAnswer(invocation -> {
             ActionListener<Interaction> listener = invocation.getArgument(2);
             listener.onResponse(interaction);

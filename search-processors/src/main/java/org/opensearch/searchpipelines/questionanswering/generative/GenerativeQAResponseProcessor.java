@@ -171,7 +171,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                         PromptUtil.getPromptTemplate(systemPrompt, userInstructions),
                         answer,
                         GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
-                        jsonArrayToString(searchResults)
+                        Collections.singletonMap("metadata", jsonArrayToString(searchResults))
                     );
                 log.info("Created a new interaction: {} ({})", interactionId, getDuration(start));
             }

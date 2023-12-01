@@ -20,6 +20,7 @@ package org.opensearch.ml.memory.index;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -104,7 +105,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 "pt",
                 "test response",
                 "test origin",
-                "metadata",
+                Collections.singletonMap("metadata", "some meta"),
                 new LatchedActionListener<>(ActionListener.wrap(id -> {
                     ids[0] = id;
                 }, e -> {
@@ -121,7 +122,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 "pt",
                 "test response",
                 "test origin",
-                "metadata",
+                Collections.singletonMap("metadata", "some meta"),
                 new LatchedActionListener<>(ActionListener.wrap(id -> {
                     ids[1] = id;
                 }, e -> {
@@ -145,7 +146,16 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> id1Listener = new StepListener<>();
-        index.createInteraction(conversation, "test input", "pt", "test response", "test origin", "metadata", id1Listener);
+        index
+            .createInteraction(
+                conversation,
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                Collections.singletonMap("metadata", "some meta"),
+                id1Listener
+            );
 
         StepListener<String> id2Listener = new StepListener<>();
         id1Listener.whenComplete(id -> {
@@ -156,7 +166,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     "pt",
                     "test response",
                     "test origin",
-                    "metadata",
+                    Collections.singletonMap("metadata", "some meta"),
                     Instant.now().plus(3, ChronoUnit.MINUTES),
                     id2Listener
                 );
@@ -175,8 +185,8 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
 
         LatchedActionListener<List<Interaction>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(interactions -> {
             assert (interactions.size() == 2);
-            assert (interactions.get(0).getId().equals(id2Listener.result()));
-            assert (interactions.get(1).getId().equals(id1Listener.result()));
+            assert (interactions.get(0).getId().equals(id1Listener.result()));
+            assert (interactions.get(1).getId().equals(id2Listener.result()));
         }, e -> {
             log.error(e);
             assert (false);
@@ -194,7 +204,16 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> id1Listener = new StepListener<>();
-        index.createInteraction(conversation, "test input", "pt", "test response", "test origin", "metadata", id1Listener);
+        index
+            .createInteraction(
+                conversation,
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                Collections.singletonMap("metadata", "some meta"),
+                id1Listener
+            );
 
         StepListener<String> id2Listener = new StepListener<>();
         id1Listener.whenComplete(id -> {
@@ -205,7 +224,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     "pt",
                     "test response",
                     "test origin",
-                    "metadata",
+                    Collections.singletonMap("metadata", "some meta"),
                     Instant.now().plus(3, ChronoUnit.MINUTES),
                     id2Listener
                 );
@@ -224,7 +243,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     "pt",
                     "test response",
                     "test origin",
-                    "metadata",
+                    Collections.singletonMap("metadata", "some meta"),
                     Instant.now().plus(4, ChronoUnit.MINUTES),
                     id3Listener
                 );
@@ -255,9 +274,9 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
             String id3 = id3Listener.result();
             assert (interactions2.size() == 1);
             assert (interactions1.size() == 2);
-            assert (interactions1.get(0).getId().equals(id3));
+            assert (interactions1.get(0).getId().equals(id1));
             assert (interactions1.get(1).getId().equals(id2));
-            assert (interactions2.get(0).getId().equals(id1));
+            assert (interactions2.get(0).getId().equals(id3));
         }, e -> {
             log.error(e);
             assert (false);
@@ -276,40 +295,70 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation2 = "conversation2";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> iid1 = new StepListener<>();
-        index.createInteraction(conversation1, "test input", "pt", "test response", "test origin", "metadata", iid1);
+        index
+            .createInteraction(
+                conversation1,
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                Collections.singletonMap("metadata", "some meta"),
+                iid1
+            );
 
         StepListener<String> iid2 = new StepListener<>();
-        iid1
-            .whenComplete(
-                r -> { index.createInteraction(conversation1, "test input", "pt", "test response", "test origin", "metadata", iid2); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }
-            );
+        iid1.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation1,
+                    "test input",
+                    "pt",
+                    "test response",
+                    "test origin",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid2
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         StepListener<String> iid3 = new StepListener<>();
-        iid2
-            .whenComplete(
-                r -> { index.createInteraction(conversation2, "test input", "pt", "test response", "test origin", "metadata", iid3); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }
-            );
+        iid2.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation2,
+                    "test input",
+                    "pt",
+                    "test response",
+                    "test origin",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid3
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         StepListener<String> iid4 = new StepListener<>();
-        iid3
-            .whenComplete(
-                r -> { index.createInteraction(conversation1, "test input", "pt", "test response", "test origin", "metadata", iid4); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }
-            );
+        iid3.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation1,
+                    "test input",
+                    "pt",
+                    "test response",
+                    "test origin",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid4
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         StepListener<Boolean> deleteListener = new StepListener<>();
         iid4.whenComplete(r -> { index.deleteConversation(conversation1, deleteListener); }, e -> {
@@ -368,7 +417,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 "pt",
                 "response about fish",
                 "origin1",
-                "lots of information about fish",
+                Collections.singletonMap("metadata", "lots of information about fish"),
                 iid1
             );
 
@@ -381,7 +430,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     "pt",
                     "response about squash",
                     "origin1",
-                    "lots of information about squash",
+                    Collections.singletonMap("metadata", "lots of information about fish"),
                     iid2
                 );
         }, e -> {
@@ -399,7 +448,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     "pt2",
                     "response about fish",
                     "origin1",
-                    "lots of information about fish",
+                    Collections.singletonMap("metadata", "lots of information about fish"),
                     iid3
                 );
         }, e -> {
@@ -417,7 +466,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     "pt",
                     "response about france",
                     "origin1",
-                    "lots of information about france",
+                    Collections.singletonMap("metadata", "lots of information about france"),
                     iid4
                 );
         }, e -> {
@@ -466,18 +515,34 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> iid1 = new StepListener<>();
-        index.createInteraction(conversation, "test input", "pt", "test response", "test origin", "metadata", iid1);
+        index
+            .createInteraction(
+                conversation,
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                Collections.singletonMap("metadata", "some meta"),
+                iid1
+            );
 
         StepListener<String> iid2 = new StepListener<>();
-        iid1
-            .whenComplete(
-                iid -> { index.createInteraction(conversation, "test input2", "pt", "test response", "test origin", "metadata", iid2); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert false;
-                }
-            );
+        iid1.whenComplete(iid -> {
+            index
+                .createInteraction(
+                    conversation,
+                    "test input2",
+                    "pt",
+                    "test response",
+                    "test origin",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid2
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert false;
+        });
 
         StepListener<Interaction> get1 = new StepListener<>();
         iid2.whenComplete(iid -> { index.getInteraction(conversation, iid1.result(), get1); }, e -> {

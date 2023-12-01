@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Set;
 
 import org.junit.Before;
@@ -91,7 +92,14 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
-        this.request = new CreateInteractionRequest("test-cid", "input", "pt", "response", "origin", "metadata");
+        this.request = new CreateInteractionRequest(
+            "test-cid",
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta")
+        );
 
         Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);

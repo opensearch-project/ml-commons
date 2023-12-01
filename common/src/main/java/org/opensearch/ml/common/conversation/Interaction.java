@@ -19,6 +19,7 @@ package org.opensearch.ml.common.conversation;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -54,7 +55,24 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private String origin;
     @Getter
-    private String additionalInfo;
+    private Map<String, String> additionalInfo;
+    @Getter
+    private String parentInteractionId;
+    @Getter
+    private Integer traceNum;
+
+    public Interaction(String id, Instant createTime, String conversationId, String input, String promptTemplate, String response, String origin, Map<String, String> additionalInfo) {
+        this.id = id;
+        this.createTime = createTime;
+        this.conversationId = conversationId;
+        this.input = input;
+        this.promptTemplate = promptTemplate;
+        this.response = response;
+        this.origin = origin;
+        this.additionalInfo = additionalInfo;
+        this.parentInteractionId = null;
+        this.traceNum = null;
+    }
 
     /**
      * Creates an Interaction object from a map of fields in the OS index
@@ -69,7 +87,9 @@ public class Interaction implements Writeable, ToXContentObject {
         String promptTemplate = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD);
         String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
         String origin     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
-        String additionalInfo  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
+        Map<String,String> additionalInfo  = (Map<String,String>) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
+        String parentInteractionId = (String) fields.getOrDefault(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, null);
+        Integer traceNum = (Integer) fields.getOrDefault(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, null);
         return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
@@ -97,7 +117,12 @@ public class Interaction implements Writeable, ToXContentObject {
         String promptTemplate = in.readString();
         String response = in.readString();
         String origin = in.readString();
-        String additionalInfo = in.readOptionalString();
+        Map<String, String> additionalInfo = new HashMap<>();
+        if (in.readBoolean()) {
+            additionalInfo = in.readMap(s -> s.readString(), s -> s.readString());
+        }
+        String parentInteractionId = in.readOptionalString();
+        Integer traceNum = in.readOptionalInt();
         return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
@@ -111,7 +136,14 @@ public class Interaction implements Writeable, ToXContentObject {
         out.writeString(promptTemplate);
         out.writeString(response);
         out.writeString(origin);
-        out.writeOptionalString(additionalInfo);
+        if (additionalInfo != null) {
+            out.writeBoolean(true);
+            out.writeMap(additionalInfo, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalString(parentInteractionId);
+        out.writeOptionalInt(traceNum);
     }
 
     @Override
@@ -126,6 +158,12 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
         if(additionalInfo != null) {
             builder.field(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
+        }
+        if (parentInteractionId != null) {
+            builder.field(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parentInteractionId);
+        }
+        if (traceNum != null) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, traceNum);
         }
         builder.endObject();
         return builder;
@@ -143,7 +181,12 @@ public class Interaction implements Writeable, ToXContentObject {
             ((Interaction) other).response.equals(this.response) &&
             ((Interaction) other).origin.equals(this.origin) && 
             ( (((Interaction) other).additionalInfo == null && this.additionalInfo == null) ||
-              ((Interaction) other).additionalInfo.equals(this.additionalInfo))
+              ((Interaction) other).additionalInfo.equals(this.additionalInfo)) &&
+            ( (((Interaction) other).parentInteractionId == null && this.parentInteractionId == null) ||
+              ((Interaction) other).parentInteractionId.equals(this.parentInteractionId)) &&
+            ( (((Interaction) other).traceNum == null && this.traceNum == null) ||
+              ((Interaction) other).traceNum.equals(this.traceNum))
+
         );
     }
 
@@ -158,8 +201,9 @@ public class Interaction implements Writeable, ToXContentObject {
             + ",promt_template=" + promptTemplate
             + ",response=" + response
             + ",additional_info=" + additionalInfo
+            + ",parentInteractionId=" + parentInteractionId
+            + ",traceNum=" + traceNum
             + "}";
     }
-    
 
 }

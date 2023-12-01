@@ -19,6 +19,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 
 import org.apache.lucene.search.spell.LevenshteinDistance;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -36,7 +37,16 @@ import org.opensearch.test.OpenSearchTestCase;
 public class GetInteractionResponseTests extends OpenSearchTestCase {
 
     public void testConstructorAndStreaming() throws IOException {
-        Interaction interaction = new Interaction("iid", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", "extra");
+        Interaction interaction = new Interaction(
+            "iid",
+            Instant.now(),
+            "cid",
+            "inp",
+            "pt",
+            "rsp",
+            "ogn",
+            Collections.singletonMap("metadata", "some meta")
+        );
         GetInteractionResponse response = new GetInteractionResponse(interaction);
         assert (response.getInteraction().equals(interaction));
 
@@ -49,14 +59,24 @@ public class GetInteractionResponseTests extends OpenSearchTestCase {
     }
 
     public void testToXContent() throws IOException {
-        Interaction interaction = new Interaction("iid", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", "extra");
+        Interaction interaction = new Interaction(
+            "iid",
+            Instant.now(),
+            "cid",
+            "inp",
+            "pt",
+            "rsp",
+            "ogn",
+            Collections.singletonMap("metadata", "some meta")
+        );
         GetInteractionResponse response = new GetInteractionResponse(interaction);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
+        System.out.println(result);
         String expected = "{\"conversation_id\":\"cid\",\"interaction_id\":\"iid\",\"create_time\":\""
             + interaction.getCreateTime()
-            + "\",\"input\":\"inp\",\"prompt_template\":\"pt\",\"response\":\"rsp\",\"origin\":\"ogn\",\"additional_info\":\"extra\"}";
+            + "\",\"input\":\"inp\",\"prompt_template\":\"pt\",\"response\":\"rsp\",\"origin\":\"ogn\",\"additional_info\":{\"metadata\":\"some meta\"}}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         assert (ld.getDistance(result, expected) > 0.95);
