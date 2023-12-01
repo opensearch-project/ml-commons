@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,7 +30,10 @@ import org.opensearch.client.AdminClient;
 import org.opensearch.client.ClusterAdminClient;
 import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -61,17 +65,16 @@ public class SearchMonitorsToolTests {
 
     @Test
     public void testRunWithNoMonitors() throws Exception {
+        final String monitorName = "monitor-1";
+        final String monitorId = "monitor-1-id";
         Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
+
+        SearchHit[] hits = new SearchHit[0];
+
+        TotalHits totalHits = new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO);
+
         SearchResponse getMonitorsResponse = new SearchResponse(
-            new SearchResponseSections(
-                new SearchHits(new SearchHit[] {}, null, 0),
-                new Aggregations(new ArrayList<>()),
-                null,
-                false,
-                null,
-                null,
-                0
-            ),
+            new SearchResponseSections(new SearchHits(hits, totalHits, 0), new Aggregations(new ArrayList<>()), null, false, null, null, 0),
             null,
             0,
             0,
@@ -80,7 +83,50 @@ public class SearchMonitorsToolTests {
             null,
             null
         );
-        String expectedResponseStr = "Response placeholder";
+        String expectedResponseStr = String.format("Monitors=[]TotalMonitors=%d", hits.length);
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
+
+        doAnswer((invocation) -> {
+            ActionListener<SearchResponse> responseListener = invocation.getArgument(2);
+            responseListener.onResponse(getMonitorsResponse);
+            return null;
+        }).when(nodeClient).execute(any(ActionType.class), any(), any());
+
+        tool.run(emptyParams, listener);
+        ArgumentCaptor<String> responseCaptor = ArgumentCaptor.forClass(String.class);
+        verify(listener, times(1)).onResponse(responseCaptor.capture());
+        assertEquals(expectedResponseStr, responseCaptor.getValue());
+    }
+
+    @Test
+    public void testRunWitSingleMonitor() throws Exception {
+        final String monitorName = "monitor-1";
+        final String monitorId = "monitor-1-id";
+        Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
+
+        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+        content.startObject();
+        content.field("type", "monitor");
+        content.field("name", monitorName);
+        content.endObject();
+        SearchHit[] hits = new SearchHit[1];
+        hits[0] = new SearchHit(0, monitorId, null, null).sourceRef(BytesReference.bytes(content));
+
+        TotalHits totalHits = new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO);
+
+        SearchResponse getMonitorsResponse = new SearchResponse(
+            new SearchResponseSections(new SearchHits(hits, totalHits, 0), new Aggregations(new ArrayList<>()), null, false, null, null, 0),
+            null,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null
+        );
+        String expectedResponseStr = String.format("Monitors=[{id=%s,name=%s}]TotalMonitors=%d", monitorId, monitorName, hits.length);
 
         @SuppressWarnings("unchecked")
         ActionListener<String> listener = Mockito.mock(ActionListener.class);

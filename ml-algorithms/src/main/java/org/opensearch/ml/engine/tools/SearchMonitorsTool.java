@@ -26,6 +26,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
@@ -132,7 +133,16 @@ public class SearchMonitorsTool implements Tool {
             // stringify the response, may change to a standard format in the future
             ActionListener<SearchResponse> searchMonitorListener = ActionListener.<SearchResponse>wrap(response -> {
                 StringBuilder sb = new StringBuilder();
-                sb.append("Response placeholder");
+                SearchHit[] hits = response.getHits().getHits();
+                sb.append("Monitors=[");
+                for (SearchHit hit : hits) {
+                    sb.append("{");
+                    sb.append("id=").append(hit.getId()).append(",");
+                    sb.append("name=").append(hit.getSourceAsMap().get("name"));
+                    sb.append("}");
+                }
+                sb.append("]");
+                sb.append("TotalMonitors=").append(response.getHits().getTotalHits().value);
                 listener.onResponse((T) sb.toString());
             }, e -> { listener.onFailure(e); });
 
