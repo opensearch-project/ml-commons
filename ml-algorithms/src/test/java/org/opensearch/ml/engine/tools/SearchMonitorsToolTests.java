@@ -12,9 +12,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -24,14 +23,17 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionType;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.ClusterAdminClient;
 import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.commons.alerting.action.GetAlertsResponse;
-import org.opensearch.commons.alerting.model.Alert;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.Aggregations;
 
 public class SearchMonitorsToolTests {
     @Mock
@@ -57,7 +59,43 @@ public class SearchMonitorsToolTests {
         nonEmptyParams = Map.of("monitorName", "foo");
     }
 
-    // TODO: add tests to trigger run() with different param values
+    @Test
+    public void testRunWithNoMonitors() throws Exception {
+        Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
+        SearchResponse getMonitorsResponse = new SearchResponse(
+            new SearchResponseSections(
+                new SearchHits(new SearchHit[] {}, null, 0),
+                new Aggregations(new ArrayList<>()),
+                null,
+                false,
+                null,
+                null,
+                0
+            ),
+            null,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null
+        );
+        String expectedResponseStr = "Response placeholder";
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
+
+        doAnswer((invocation) -> {
+            ActionListener<SearchResponse> responseListener = invocation.getArgument(2);
+            responseListener.onResponse(getMonitorsResponse);
+            return null;
+        }).when(nodeClient).execute(any(ActionType.class), any(), any());
+
+        tool.run(emptyParams, listener);
+        ArgumentCaptor<String> responseCaptor = ArgumentCaptor.forClass(String.class);
+        verify(listener, times(1)).onResponse(responseCaptor.capture());
+        assertEquals(expectedResponseStr, responseCaptor.getValue());
+    }
 
     @Test
     public void testValidate() {

@@ -5,12 +5,15 @@
 
 package org.opensearch.ml.engine.tools;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.client.node.NodeClient;
+import org.opensearch.commons.alerting.AlertingPluginInterface;
 import org.opensearch.commons.alerting.action.SearchMonitorRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
@@ -70,8 +73,8 @@ public class SearchMonitorsTool implements Tool {
         final String monitorId = parameters.getOrDefault("monitorId", null);
         final String monitorName = parameters.getOrDefault("monitorName", null);
         final String monitorNamePattern = parameters.getOrDefault("monitorNamePattern", null);
-        final boolean enabled = parameters.containsKey("enabled") ? Boolean.parseBoolean(parameters.get("enabled")) : null;
-        final boolean hasTriggers = parameters.containsKey("hasTriggers") ? Boolean.parseBoolean(parameters.get("hasTriggers")) : null;
+        final Boolean enabled = parameters.containsKey("enabled") ? Boolean.parseBoolean(parameters.get("enabled")) : null;
+        final Boolean hasTriggers = parameters.containsKey("hasTriggers") ? Boolean.parseBoolean(parameters.get("hasTriggers")) : null;
         final String indices = parameters.getOrDefault("indices", null);
         final String sortOrderStr = parameters.getOrDefault("sortOrder", "asc");
         final SortOrder sortOrder = sortOrderStr == "asc" ? SortOrder.ASC : SortOrder.DESC;
@@ -111,11 +114,14 @@ public class SearchMonitorsTool implements Tool {
             if (indices != null) {
                 mustList
                     .add(
-                        new NestedQueryBuilder("monitor.inputs", new WildcardQueryBuilder("monitor.inputs.search.indices", indices, null))
+                        new NestedQueryBuilder("monitor.inputs", new WildcardQueryBuilder("monitor.inputs.search.indices", indices), null)
                     );
             }
+
+            BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+            boolQueryBuilder.must().addAll(mustList);
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-                .query(new BoolQueryBuilder().must(mustList))
+                .query(boolQueryBuilder)
                 .size(size)
                 .from(startIndex)
                 .sort(sortString, sortOrder);
@@ -123,7 +129,7 @@ public class SearchMonitorsTool implements Tool {
             SearchMonitorRequest searchMonitorRequest = new SearchMonitorRequest(new SearchRequest().source(searchSourceBuilder));
 
             // create response listener
-            // stringify the aresponse, may change to a standard format in the future
+            // stringify the response, may change to a standard format in the future
             ActionListener<SearchResponse> searchMonitorListener = ActionListener.<SearchResponse>wrap(response -> {
                 StringBuilder sb = new StringBuilder();
                 sb.append("Response placeholder");
