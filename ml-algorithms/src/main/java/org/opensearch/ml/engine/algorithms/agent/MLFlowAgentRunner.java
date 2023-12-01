@@ -28,7 +28,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.ActionConstants;
-import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -46,7 +45,6 @@ import software.amazon.awssdk.utils.ImmutableMap;
 @NoArgsConstructor
 public class MLFlowAgentRunner {
 
-    public static final int PREVIOUS_INTERACTION = 1;
     private Client client;
     private Settings settings;
     private ClusterService clusterService;
@@ -84,8 +82,8 @@ public class MLFlowAgentRunner {
         }
 
         String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params
-            .computeIfAbsent(MLAgentExecutor.MEMORY_ID, k -> { throw new IllegalStateException("Memory ID not provided"); });
+        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+        String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
 
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
@@ -123,7 +121,7 @@ public class MLFlowAgentRunner {
                     additionalInfo.put(outputKey, outputResponse);
 
                     if (finalI == toolSpecs.size()) {
-                        updateMemory(additionalInfo, memoryType, memoryId);
+                        updateMemory(additionalInfo, memoryType, memoryId, parentInteractionId);
                         listener.onResponse(flowAgentOutput);
                         return;
                     }
@@ -148,32 +146,26 @@ public class MLFlowAgentRunner {
         }
     }
 
-    private void updateMemory(Map<String, Object> additionalInfo, String memoryType, String memoryId) {
+    private void updateMemory(Map<String, Object> additionalInfo, String memoryType, String memoryId, String interactionId) {
+        if (memoryId == null || interactionId == null) {
+            return;
+        }
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(memoryId, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            updateInteraction(additionalInfo, memoryId, memory);
+            updateInteraction(additionalInfo, interactionId, memory);
         }, e -> { log.error("Failed create memory from id: " + memoryId, e); }));
     }
 
-    private void updateInteraction(Map<String, Object> additionalInfo, String memoryId, ConversationIndexMemory memory) {
+    private void updateInteraction(Map<String, Object> additionalInfo, String interactionId, ConversationIndexMemory memory) {
         memory
             .getMemoryManager()
-            .getFinalInteractions(memoryId, PREVIOUS_INTERACTION, ActionListener.<List<Interaction>>wrap(interactions -> {
-                if (interactions.size() == 0) {
-                    throw new IllegalStateException("No existing interactions to update");
-                }
-
-                String interactionId = interactions.get(0).getId();
-                memory
-                    .getMemoryManager()
-                    .updateInteraction(
-                        interactionId,
-                        ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
-                        ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                            log.info("Updated additional info", interactionId);
-                        }, e -> { log.error("Failed to update root interaction", e); })
-                    );
-            }, e -> { log.error("Failed update interaction with additional info", e); }));
+            .updateInteraction(
+                interactionId,
+                ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
+                ActionListener.<UpdateResponse>wrap(updateResponse -> {
+                    log.info("Updated additional info for interaction ID: " + interactionId);
+                }, e -> { log.error("Failed to update root interaction", e); })
+            );
     }
 
     private String parseResponse(Object output) {
