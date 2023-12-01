@@ -29,6 +29,8 @@ import org.junit.Before;
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
@@ -36,8 +38,10 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -412,6 +416,217 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         } catch (Exception e) {
             log.error(e);
             throw e;
+        }
+    }
+
+    public void testCanQueryOverConversations() {
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> convo1 = new StepListener<>();
+        index.createConversation("Henry Conversation", convo1);
+
+        StepListener<String> convo2 = new StepListener<>();
+        convo1.whenComplete(cid -> { index.createConversation("Mehul Conversation", convo2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<SearchResponse> search = new StepListener<>();
+        convo2.whenComplete(cid -> {
+            SearchRequest request = new SearchRequest();
+            request.source(new SearchSourceBuilder());
+            request.source().query(new TermQueryBuilder(ConversationalIndexConstants.META_NAME_FIELD, "Henry Conversation"));
+            index.searchConversations(request, search);
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        search.whenComplete(response -> {
+            log.info("SEARCH RESPONSE");
+            log.info(response.toString());
+            cdl.countDown();
+            assert (response.getHits().getAt(0).getId().equals(convo1.result()));
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
+
+    public void testCanQueryOverConversationsSecurely() {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            CountDownLatch cdl = new CountDownLatch(1);
+            Stack<StoredContext> contextStack = new Stack<>();
+            Consumer<Exception> onFail = e -> {
+                while (!contextStack.empty()) {
+                    contextStack.pop().close();
+                }
+                cdl.countDown();
+                log.error(e);
+                threadContext.restore();
+                assert (false);
+            };
+
+            final String user1 = "Dhrubo";
+            final String user2 = "Jing";
+            contextStack.push(setUser(user1));
+
+            StepListener<String> convo1 = new StepListener<>();
+            index.createConversation("Dhrubo Conversation", convo1);
+
+            StepListener<String> convo2 = new StepListener<>();
+            convo1.whenComplete(cid -> {
+                contextStack.push(setUser(user2));
+                index.createConversation("Jing Conversation", convo2);
+            }, onFail);
+
+            StepListener<SearchResponse> search1 = new StepListener<>();
+            convo2.whenComplete(cid -> {
+                SearchRequest request = new SearchRequest();
+                request.source(new SearchSourceBuilder());
+                request.source().query(new TermQueryBuilder(ConversationalIndexConstants.META_NAME_FIELD, "Dhrubo Conversation"));
+                index.searchConversations(request, search1);
+            }, onFail);
+
+            StepListener<SearchResponse> search2 = new StepListener<>();
+            search1.whenComplete(response -> {
+                SearchRequest request = new SearchRequest();
+                request.source(new SearchSourceBuilder());
+                request.source().query(new TermQueryBuilder(ConversationalIndexConstants.META_NAME_FIELD, "Jing Conversation"));
+                index.searchConversations(request, search2);
+            }, onFail);
+
+            search2.whenComplete(response -> {
+                cdl.countDown();
+                assert (response.getHits().getAt(0).getId().equals(convo2.result()));
+                assert (search1.result().getHits().getHits().length == 0);
+                while (!contextStack.isEmpty()) {
+                    contextStack.pop().close();
+                }
+            }, onFail);
+
+            try {
+                cdl.await();
+                threadContext.restore();
+            } catch (InterruptedException e) {
+                log.error(e);
+                threadContext.restore();
+            }
+
+        } catch (Exception e) {
+            log.error(e);
+        }
+    }
+
+    public void testCanGetAConversationById() {
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> cid1 = new StepListener<>();
+        index.createConversation("convo1", cid1);
+
+        StepListener<String> cid2 = new StepListener<>();
+        cid1.whenComplete(cid -> { index.createConversation("convo2", cid2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<ConversationMeta> get1 = new StepListener<>();
+        cid2.whenComplete(cid -> { index.getConversation(cid1.result(), get1); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<ConversationMeta> get2 = new StepListener<>();
+        get1.whenComplete(convo1 -> { index.getConversation(cid2.result(), get2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        get2.whenComplete(convo2 -> {
+            assert (cid1.result().equals(get1.result().getId()));
+            assert (cid2.result().equals(get2.result().getId()));
+            assert (get1.result().getName().equals("convo1"));
+            assert (get2.result().getName().equals("convo2"));
+            cdl.countDown();
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
+
+    public void testCanGetAConversationByIdSecurely() {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            CountDownLatch cdl = new CountDownLatch(1);
+            Stack<StoredContext> contextStack = new Stack<>();
+            Consumer<Exception> onFail = e -> {
+                while (!contextStack.empty()) {
+                    contextStack.pop().close();
+                }
+                cdl.countDown();
+                log.error(e);
+                threadContext.restore();
+                assert (false);
+            };
+
+            final String user1 = "Austin";
+            final String user2 = "Yaliang";
+            contextStack.push(setUser(user1));
+
+            StepListener<String> cid1 = new StepListener<>();
+            index.createConversation("Austin Convo", cid1);
+
+            StepListener<String> cid2 = new StepListener<>();
+            cid1.whenComplete(cid -> {
+                contextStack.push(setUser(user2));
+                index.createConversation("Yaliang Convo", cid2);
+            }, onFail);
+
+            StepListener<ConversationMeta> get2 = new StepListener<>();
+            cid2.whenComplete(cid -> { index.getConversation(cid2.result(), get2); }, onFail);
+
+            StepListener<ConversationMeta> get1 = new StepListener<>();
+            get2.whenComplete(convo -> { index.getConversation(cid1.result(), get1); }, onFail);
+
+            get1.whenComplete(convo -> {
+                while (!contextStack.isEmpty()) {
+                    contextStack.pop().close();
+                }
+                cdl.countDown();
+                assert (false);
+            }, e -> {
+                cdl.countDown();
+                assert (e.getMessage().startsWith("User [Yaliang] does not have access to conversation"));
+                assert (get2.result().getName().equals("Yaliang Convo"));
+                assert (get2.result().getId().equals(cid2.result()));
+            });
+
+            try {
+                cdl.await();
+                threadContext.restore();
+            } catch (InterruptedException e) {
+                log.error(e);
+                threadContext.restore();
+            }
+
+        } catch (Exception e) {
+            log.error(e);
         }
     }
 
