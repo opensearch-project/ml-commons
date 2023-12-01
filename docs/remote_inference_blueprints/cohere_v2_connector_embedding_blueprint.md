@@ -1,4 +1,4 @@
-### Cohere connector blueprint example for embedding:
+### Cohere connector blueprint version 2.0 example for embedding:
 
 #### this blueprint is created from Cohere doc: https://docs.cohere.com/reference/embed
 
