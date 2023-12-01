@@ -65,8 +65,6 @@ public class SearchMonitorsToolTests {
 
     @Test
     public void testRunWithNoMonitors() throws Exception {
-        final String monitorName = "monitor-1";
-        final String monitorId = "monitor-1-id";
         Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
 
         SearchHit[] hits = new SearchHit[0];
@@ -100,11 +98,27 @@ public class SearchMonitorsToolTests {
         assertEquals(expectedResponseStr, responseCaptor.getValue());
     }
 
+    // TODO: add tests to exercise get monitor action vs. search monitor action
+
     @Test
-    public void testRunWitSingleMonitor() throws Exception {
+    public void testRunWithSingleMonitor() throws Exception {
         final String monitorName = "monitor-1";
         final String monitorId = "monitor-1-id";
         Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
+
+        // TODO: explore more detailed monitor response. IndexMonitorRequest translates to a PUT request
+        // to the system index, and is the same result as what's returned by the search response in search monitors API.
+        // explore converting the response to this to test it
+
+        // IndexMonitorRequest indexedMonitor = new IndexMonitorRequest(
+        // "1234",
+        // 1L,
+        // 2L,
+        // WriteRequest.RefreshPolicy.IMMEDIATE,
+        // RestRequest.Method.POST,
+        // // randomQueryLevelMonitor().copy(inputs = listOf(SearchInput(emptyList(), SearchSourceBuilder())));
+        // randomQueryLevelMonitor()
+        // );
 
         XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
         content.startObject();
