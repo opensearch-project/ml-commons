@@ -33,6 +33,8 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
@@ -280,6 +282,14 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
         MLRegisterAgentRequest mlRegisterAgentRequest = MLRegisterAgentRequest.builder().mlAgent(mlAgent).build();
         client.execute(MLRegisterAgentAction.INSTANCE, mlRegisterAgentRequest, getMLRegisterAgentResponseActionListener(listener));
+    }
+
+    @Override
+    public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+        MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
     }
 
     private ActionListener<MLRegisterAgentResponse> getMLRegisterAgentResponseActionListener(

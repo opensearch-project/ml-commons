@@ -70,6 +70,8 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
@@ -173,6 +175,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLRegisterAgentResponse> registerAgentResponseActionListener;
+
+    @Mock
+    ActionListener<DeleteResponse> deleteAgentActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -766,6 +771,28 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLRegisterAgentAction.INSTANCE), isA(MLRegisterAgentRequest.class), any());
         verify(registerAgentResponseActionListener).onResponse(argumentCaptor.capture());
         assertEquals(agentId, (argumentCaptor.getValue()).getAgentId());
+    }
+
+    @Test
+    public void deleteAgent() {
+
+        String agentId = "agentId";
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            DeleteResponse output = new DeleteResponse(shardId, agentId, 1, 1, 1, true);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLAgentDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+
+        machineLearningNodeClient.deleteAgent(agentId, deleteAgentActionListener);
+
+        verify(client).execute(eq(MLAgentDeleteAction.INSTANCE), isA(MLAgentDeleteRequest.class), any());
+        verify(deleteAgentActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(agentId, (argumentCaptor.getValue()).getId());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
