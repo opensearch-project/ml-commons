@@ -34,11 +34,11 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import software.amazon.awssdk.utils.ImmutableMap;
 
 @Log4j2
 @Data
@@ -180,7 +180,7 @@ public class MLFlowAgentRunner {
             if (output instanceof String) {
                 return (String) output;
             } else {
-                return escapeJson(toJson(output.toString()));
+                return escapeJson(toJson(output));
             }
         }
     }
