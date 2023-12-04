@@ -202,6 +202,11 @@ public class MachineLearningClientTest {
             public void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
                 listener.onResponse(registerAgentResponse);
             }
+
+            @Override
+            public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
         };
     }
 
@@ -404,5 +409,10 @@ public class MachineLearningClientTest {
     public void testRegisterAgent() {
         MLAgent mlAgent = MLAgent.builder().name("Agent name").build();
         assertEquals(registerAgentResponse, machineLearningClient.registerAgent(mlAgent).actionGet());
+    }
+
+    @Test
+    public void deleteAgent() {
+        assertEquals(deleteResponse, machineLearningClient.deleteAgent("agentId").actionGet());
     }
 }
