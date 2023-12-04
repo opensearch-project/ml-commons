@@ -77,7 +77,8 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     try {
                         String predictEndpoint = connector.getPredictEndpoint(parameters);
                         request = new HttpPost(predictEndpoint);
-                        HttpEntity entity = new StringEntity(payload);
+                        String charset = parameters.containsKey("charset") ? parameters.get("charset") : "UTF-8";
+                        HttpEntity entity = new StringEntity(payload, charset);
                         ((HttpPost) request).setEntity(entity);
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
