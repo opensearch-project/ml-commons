@@ -8,7 +8,9 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
@@ -384,7 +386,28 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertTrue((Boolean) responseMap.get("violence"));
     }
 
-    public void testOpenAITextEmbeddingModel() throws IOException, InterruptedException {
+    public void testOpenAITextEmbeddingModel_UTF8() throws IOException, InterruptedException {
+        testOpenAITextEmbeddingModel("UTF-8", (responseMap) -> {
+            List responseList = (List) responseMap.get("inference_results");
+            responseMap = (Map) responseList.get(0);
+            responseList = (List) responseMap.get("output");
+            responseMap = (Map) responseList.get(0);
+            responseList = (List) responseMap.get("data");
+            assertFalse(responseList.isEmpty());
+        }, null);
+    }
+
+    public void testOpenAITextEmbeddingModel_ISO8859_1() throws IOException, InterruptedException {
+        testOpenAITextEmbeddingModel("ISO-8859-1", null, (exception) -> {
+            assertTrue(exception instanceof org.opensearch.client.ResponseException);
+            String stackTrace = ExceptionUtils.getStackTrace(exception);
+            assertTrue(stackTrace.contains("'utf-8' codec can't decode byte 0xeb"));
+        });
+    }
+
+    private void testOpenAITextEmbeddingModel(String charset, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
+        throws IOException,
+        InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
             return;
@@ -432,17 +455,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n"
             + "  \"parameters\": {\n"
-            + "      \"input\": [\"This is a string containing Moët Hennessy\"]\n"
+            + "      \"input\": [\"This is a string containing Moët Hennessy\"],\n"
+            + "      \"charset\": \""
+            + charset
+            + "\"\n"
             + "  }\n"
             + "}";
-        response = predictRemoteModel(modelId, predictInput);
-        responseMap = parseResponseToMap(response);
-        List responseList = (List) responseMap.get("inference_results");
-        responseMap = (Map) responseList.get(0);
-        responseList = (List) responseMap.get("output");
-        responseMap = (Map) responseList.get(0);
-        responseList = (List) responseMap.get("data");
-        assertFalse(responseList.isEmpty());
+        try {
+            response = predictRemoteModel(modelId, predictInput);
+            responseMap = parseResponseToMap(response);
+            verifyResponse.accept(responseMap);
+        } catch (Exception e) {
+            verifyException.accept(e);
+        }
     }
 
     public void testCohereGenerateTextModel() throws IOException, InterruptedException {
