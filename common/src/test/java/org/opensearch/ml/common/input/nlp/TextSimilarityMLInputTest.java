@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -64,7 +63,6 @@ public class TextSimilarityMLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        System.out.println(jsonStr);
         XContentParser parser = XContentType.JSON.xContent()
                 .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                         Collections.emptyList()).getNamedXContents()), null, jsonStr);
