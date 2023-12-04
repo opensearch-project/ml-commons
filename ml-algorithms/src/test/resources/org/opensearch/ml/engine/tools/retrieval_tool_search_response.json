@@ -1,0 +1,35 @@
+{
+  "took": 201,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 2,
+      "relation": "eq"
+    },
+    "max_score": 89.2917,
+    "hits": [
+      {
+        "_index": "hybrid-index",
+        "_id": "1",
+        "_score": 89.2917,
+        "_source": {
+          "passage_text": "Company test_mock have a history of 100 years."
+        }
+      },
+      {
+        "_index": "hybrid-index",
+        "_id": "2",
+        "_score": 0.10702579,
+        "_source": {
+          "passage_text": "the price of the api is 2$ per invokation"
+        }
+      }
+    ]
+  }
+}
