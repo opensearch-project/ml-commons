@@ -12,6 +12,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
@@ -31,6 +33,11 @@ import org.opensearch.client.ClusterAdminClient;
 import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.commons.alerting.action.GetMonitorResponse;
+import org.opensearch.commons.alerting.model.CronSchedule;
+import org.opensearch.commons.alerting.model.DataSources;
+import org.opensearch.commons.alerting.model.Monitor;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -98,27 +105,53 @@ public class SearchMonitorsToolTests {
         assertEquals(expectedResponseStr, responseCaptor.getValue());
     }
 
-    // TODO: add tests to exercise get monitor action vs. search monitor action
+    @Test
+    public void testRunWithMonitorId() throws Exception {
+        final String monitorId = "monitor-1-id";
+        final String monitorName = "monitor-1";
+        Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
+
+        Monitor monitor = new Monitor(
+            monitorId,
+            0L,
+            monitorName,
+            true,
+            new CronSchedule("31 * * * *", ZoneId.of("Asia/Kolkata"), null),
+            Instant.now(),
+            Instant.now(),
+            Monitor.MonitorType.QUERY_LEVEL_MONITOR,
+            new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList()),
+            0,
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            new DataSources(),
+            ""
+        );
+
+        GetMonitorResponse getMonitorResponse = new GetMonitorResponse(monitorId, 1L, 2L, 0L, monitor, Collections.emptyList());
+        String expectedResponseStr = String.format("Monitors=[{id=%s,name=%s}]TotalMonitors=%d", monitorId, monitorName, 1);
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
+
+        doAnswer((invocation) -> {
+            ActionListener<GetMonitorResponse> responseListener = invocation.getArgument(2);
+            responseListener.onResponse(getMonitorResponse);
+            return null;
+        }).when(nodeClient).execute(any(ActionType.class), any(), any());
+
+        tool.run(emptyParams, listener);
+        ArgumentCaptor<String> responseCaptor = ArgumentCaptor.forClass(String.class);
+        verify(listener, times(1)).onResponse(responseCaptor.capture());
+        assertEquals(expectedResponseStr, responseCaptor.getValue());
+    }
 
     @Test
     public void testRunWithSingleMonitor() throws Exception {
         final String monitorName = "monitor-1";
         final String monitorId = "monitor-1-id";
         Tool tool = SearchMonitorsTool.Factory.getInstance().create(Collections.emptyMap());
-
-        // TODO: explore more detailed monitor response. IndexMonitorRequest translates to a PUT request
-        // to the system index, and is the same result as what's returned by the search response in search monitors API.
-        // explore converting the response to this to test it
-
-        // IndexMonitorRequest indexedMonitor = new IndexMonitorRequest(
-        // "1234",
-        // 1L,
-        // 2L,
-        // WriteRequest.RefreshPolicy.IMMEDIATE,
-        // RestRequest.Method.POST,
-        // // randomQueryLevelMonitor().copy(inputs = listOf(SearchInput(emptyList(), SearchSourceBuilder())));
-        // randomQueryLevelMonitor()
-        // );
 
         XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
         content.startObject();

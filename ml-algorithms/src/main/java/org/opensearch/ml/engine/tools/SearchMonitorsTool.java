@@ -14,7 +14,10 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.commons.alerting.AlertingPluginInterface;
+import org.opensearch.commons.alerting.action.GetMonitorRequest;
+import org.opensearch.commons.alerting.action.GetMonitorResponse;
 import org.opensearch.commons.alerting.action.SearchMonitorRequest;
+import org.opensearch.commons.alerting.model.Monitor;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
@@ -26,6 +29,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.rest.RestRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
@@ -69,6 +73,9 @@ public class SearchMonitorsTool implements Tool {
         };
     }
 
+    // Response is currently in a simple string format including the list of monitors (only name and ID attached), and
+    // number of total monitors. The output will likely need to be updated, standardized, and include more fields in the
+    // future to cover a sufficient amount of potential questions the agent will need to handle.
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         final String monitorId = parameters.getOrDefault("monitorId", null);
@@ -86,7 +93,23 @@ public class SearchMonitorsTool implements Tool {
         // If a monitor ID is specified, all other params will be ignored. Simply return the monitor details based on that ID
         // via the get monitor transport action
         if (monitorId != null) {
-            // TODO
+            GetMonitorRequest getMonitorRequest = new GetMonitorRequest(monitorId, 1L, RestRequest.Method.GET, null);
+            ActionListener<GetMonitorResponse> getMonitorListener = ActionListener.<GetMonitorResponse>wrap(response -> {
+                StringBuilder sb = new StringBuilder();
+                Monitor monitor = response.getMonitor();
+                if (monitor != null) {
+                    sb.append("Monitors=[");
+                    sb.append("{");
+                    sb.append("id=").append(monitor.getId()).append(",");
+                    sb.append("name=").append(monitor.getName());
+                    sb.append("}]");
+                    sb.append("TotalMonitors=1");
+                } else {
+                    sb.append("Monitors=[]TotalMonitors=0");
+                }
+                listener.onResponse((T) sb.toString());
+            }, e -> { listener.onFailure(e); });
+            AlertingPluginInterface.INSTANCE.getMonitor((NodeClient) client, getMonitorRequest, getMonitorListener);
         } else {
             List<QueryBuilder> mustList = new ArrayList<QueryBuilder>();
             if (monitorName != null) {
@@ -129,8 +152,6 @@ public class SearchMonitorsTool implements Tool {
 
             SearchMonitorRequest searchMonitorRequest = new SearchMonitorRequest(new SearchRequest().source(searchSourceBuilder));
 
-            // create response listener
-            // stringify the response, may change to a standard format in the future
             ActionListener<SearchResponse> searchMonitorListener = ActionListener.<SearchResponse>wrap(response -> {
                 StringBuilder sb = new StringBuilder();
                 SearchHit[] hits = response.getHits().getHits();
@@ -145,8 +166,6 @@ public class SearchMonitorsTool implements Tool {
                 sb.append("TotalMonitors=").append(response.getHits().getTotalHits().value);
                 listener.onResponse((T) sb.toString());
             }, e -> { listener.onFailure(e); });
-
-            // execute the search
             AlertingPluginInterface.INSTANCE.searchMonitors((NodeClient) client, searchMonitorRequest, searchMonitorListener);
         }
     }
