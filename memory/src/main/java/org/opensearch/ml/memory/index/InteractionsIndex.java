@@ -337,7 +337,10 @@ public class InteractionsIndex {
 
         request.source(searchSourceBuilder);
         request.source().from(from).size(maxResults);
-        request.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.ASC);
+        request
+            .source()
+            .sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.ASC)
+            .sort(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, SortOrder.ASC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
