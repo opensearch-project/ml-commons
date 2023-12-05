@@ -117,7 +117,7 @@ public class MLFlowAgentRunner {
                     }
 
                     String outputResponse = parseResponse(output);
-                    params.put(outputKey, outputResponse);
+                    params.put(outputKey, escapeJson(outputResponse));
                     additionalInfo.put(outputKey, outputResponse);
 
                     if (finalI == toolSpecs.size()) {
@@ -175,12 +175,12 @@ public class MLFlowAgentRunner {
             return response + "";
 
         } else if (output instanceof ModelTensor) {
-            return escapeJson(toJson(((ModelTensor) output).getDataAsMap()));
+            return toJson(((ModelTensor) output).getDataAsMap());
         } else {
             if (output instanceof String) {
                 return (String) output;
             } else {
-                return escapeJson(toJson(output));
+                return toJson(output);
             }
         }
     }
