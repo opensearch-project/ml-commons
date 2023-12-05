@@ -29,6 +29,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
@@ -97,6 +98,17 @@ public class MLSearchHandler {
                 Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::includes).orElse(null),
                 excludes.toArray(new String[0])
             );
+
+            // Check if the original query is not null before adding it to the must clause
+            BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
+            if (request.source().query() != null) {
+                queryBuilder.must(request.source().query());
+            }
+
+            // Add a filter to the query to include only documents where IS_HIDDEN_FIELD is false
+            queryBuilder.filter(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, false));
+
+            request.source().query(queryBuilder);
             request.source().fetchSource(rebuiltFetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, wrappedListener);

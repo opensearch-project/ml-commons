@@ -25,7 +25,9 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -49,6 +51,8 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -57,6 +61,9 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
+
+    Settings settings;
+    ClusterService clusterService;
     ModelAccessControlHelper modelAccessControlHelper;
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelManager mlModelManager;
@@ -70,7 +77,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         ConnectorAccessControlHelper connectorAccessControlHelper,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelManager mlModelManager,
-        MLModelGroupManager mlModelGroupManager
+        MLModelGroupManager mlModelGroupManager,
+        Settings settings,
+        ClusterService clusterService
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
@@ -78,6 +87,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.clusterService = clusterService;
+        this.settings = settings;
     }
 
     @Override
@@ -86,6 +97,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
         User user = RestActionUtils.getUserContext(client);
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
@@ -93,36 +105,52 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
                 MLModelState mlModelState = mlModel.getModelState();
+
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
-                    modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                if (isModelDeployed(mlModelState)) {
-                                    updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener, context);
+                    if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
+                        if (isSuperAdmin) {
+                            updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener, context);
+                        } else {
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
+                                        RestStatus.FORBIDDEN
+                                    )
+                                );
+                        }
+                    } else {
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    if (isModelDeployed(mlModelState)) {
+                                        updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener, context);
+                                    } else {
+                                        actionListener
+                                            .onFailure(
+                                                new OpenSearchStatusException(
+                                                    "ML Model "
+                                                        + modelId
+                                                        + " is in deploying or deployed state, please undeploy the models first!",
+                                                    RestStatus.FORBIDDEN
+                                                )
+                                            );
+                                    }
                                 } else {
                                     actionListener
                                         .onFailure(
                                             new OpenSearchStatusException(
-                                                "ML Model "
-                                                    + modelId
-                                                    + " is in deploying or deployed state, please undeploy the models first!",
+                                                "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
                                                 RestStatus.FORBIDDEN
                                             )
                                         );
                                 }
-                            } else {
-                                actionListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            }
-                        }, exception -> {
-                            log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                            actionListener.onFailure(exception);
-                        }));
+                            }, exception -> {
+                                log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                                actionListener.onFailure(exception);
+                            }));
+                    }
+
                 } else {
                     actionListener
                         .onFailure(
@@ -395,5 +423,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             && !mlModelState.equals(MLModelState.DEPLOYED)
             && !mlModelState.equals(MLModelState.DEPLOYING)
             && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
+    }
+
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }

@@ -31,17 +31,23 @@ public class MLModelGetRequest extends ActionRequest {
 
     String modelId;
     boolean returnContent;
+    // This is to identify if the get request is initiated by user or not. Sometimes during
+    // delete/update options, we also perform get operation. This field is to distinguish between
+    // these two situations.
+    boolean isUserInitiatedGetRequest;
 
     @Builder
-    public MLModelGetRequest(String modelId, boolean returnContent) {
+    public MLModelGetRequest(String modelId, boolean returnContent, boolean isUserInitiatedGetRequest) {
         this.modelId = modelId;
         this.returnContent = returnContent;
+        this.isUserInitiatedGetRequest = isUserInitiatedGetRequest;
     }
 
     public MLModelGetRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
         this.returnContent = in.readBoolean();
+        this.isUserInitiatedGetRequest = in.readBoolean();
     }
 
     @Override
@@ -49,6 +55,7 @@ public class MLModelGetRequest extends ActionRequest {
         super.writeTo(out);
         out.writeString(this.modelId);
         out.writeBoolean(returnContent);
+        out.writeBoolean(isUserInitiatedGetRequest);
     }
 
     @Override
