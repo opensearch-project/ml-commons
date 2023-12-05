@@ -34,17 +34,18 @@ public enum FunctionName {
         }
     }
 
+    private static final HashSet<FunctionName> DL_MODELS = new HashSet<>(Set.of(
+        TEXT_EMBEDDING,
+        TEXT_SIMILARITY,
+        SPARSE_ENCODING,
+        SPARSE_TOKENIZE
+    ));
+
     /**
      * Check if model is deep learning model.
      * @return true for deep learning model.
      */
     public static boolean isDLModel(FunctionName functionName) {
-        Set<FunctionName> dlmodels = new HashSet<>(Set.of(
-            TEXT_EMBEDDING,
-            TEXT_SIMILARITY,
-            SPARSE_ENCODING,
-            SPARSE_TOKENIZE
-        ));
-        return dlmodels.contains(functionName);
+        return DL_MODELS.contains(functionName);
     }
 }
