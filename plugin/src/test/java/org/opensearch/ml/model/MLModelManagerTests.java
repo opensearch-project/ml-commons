@@ -971,7 +971,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 )
             )
             .totalChunks(2)
-            .isHidden(false)
+            .isHidden(true)
             .build();
         return input;
     }
