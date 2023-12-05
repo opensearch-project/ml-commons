@@ -14,6 +14,7 @@ import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -266,6 +267,7 @@ public class MLMemoryManager {
         UpdateRequest updateRequest = new UpdateRequest(indexName, interactionId);
         updateRequest.doc(updateContent);
         updateRequest.docAsUpsert(true);
+        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> al = ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
