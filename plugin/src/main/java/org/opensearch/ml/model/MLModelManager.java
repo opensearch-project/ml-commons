@@ -62,6 +62,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
@@ -552,7 +553,8 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
+    @VisibleForTesting
+     void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -844,7 +846,8 @@ public class MLModelManager {
         }));
     }
 
-    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+    @VisibleForTesting
+    void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);

@@ -426,9 +426,33 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             indexResponseActionListener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    public void testIndexRemoteModel() throws PrivilegedActionException {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+        modelManager.indexRemoteModel(pretrainedInput, pretrainedTask, "1.0.0");
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(modelManager).deployModelAfterRegistering(any(), anyString());
+
     }
 
     @Ignore
@@ -884,6 +908,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     @Mock
     private IndexResponse indexResponse;
 
+    @Mock
+    private UpdateResponse updateResponse;
+
     private String[] createTempChunkFiles() throws IOException {
         String tmpFolder = randomAlphaOfLength(10);
         String newChunk0 = chunk0.substring(0, chunk0.length() - 2) + "/" + tmpFolder + "/0";
@@ -996,6 +1023,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .modelFormat(modelFormat)
             .functionName(FunctionName.REMOTE)
             .isHidden(isHidden)
+            .deployModel(true)
             .build();
     }
 }
