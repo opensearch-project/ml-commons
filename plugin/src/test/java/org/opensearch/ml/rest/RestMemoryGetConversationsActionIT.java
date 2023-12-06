@@ -126,6 +126,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (TestHelper.restStatus(ccresponse1) == RestStatus.OK);
         HttpEntity cchttpEntity1 = ccresponse1.getEntity();
         String ccentityString1 = TestHelper.httpEntityToString(cchttpEntity1);
+        logger.info("ccentityString1={}", ccentityString1);
         Map ccmap1 = gson.fromJson(ccentityString1, Map.class);
         assert (ccmap1.containsKey("conversation_id"));
         String id1 = (String) ccmap1.get("conversation_id");
@@ -140,6 +141,20 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (ccmap2.containsKey("conversation_id"));
         String id2 = (String) ccmap2.get("conversation_id");
         logger.info("id2={}", id2);
+
+        // for debug
+        Response _response = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                ActionConstants.GET_CONVERSATIONS_REST_PATH,
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "10"),
+                "",
+                null
+            );
+        HttpEntity _httpEntity = _response.getEntity();
+        String entityStringAll = TestHelper.httpEntityToString(_httpEntity);
+        logger.info("entityString={}", entityStringAll);
 
         Response response1 = TestHelper
             .makeRequest(
