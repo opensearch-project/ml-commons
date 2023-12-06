@@ -24,6 +24,7 @@ import java.util.Map;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
+import org.junit.Assert;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
@@ -158,7 +159,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         ArrayList<Map> conversations1 = (ArrayList<Map>) map1.get("conversations");
         assert (conversations1.size() == 1);
         assert (conversations1.get(0).containsKey("conversation_id"));
-        assert (((String) conversations1.get(0).get("conversation_id")).equals(id2));
+        Assert.assertEquals(conversations1.get(0).get("conversation_id"), id2);
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response = TestHelper
