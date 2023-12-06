@@ -382,7 +382,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any(), any());
     }
 
-    public void testRegisterMLModel_RegisterPreBuildModel() throws PrivilegedActionException {
+    public void testRegisterMLModel_RegisterPreBuildModel() throws PrivilegedActionException, IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
@@ -394,6 +394,23 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             listener.onResponse(pretrainedInput);
             return null;
         }).when(modelHelper).downloadPrebuiltModelConfig(any(), any(), any());
+
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        String[] newChunks = createTempChunkFiles();
+        doAnswer(invocation -> {
+            ActionListener<Map<String, Object>> listener = invocation.getArgument(7);
+            Map<String, Object> result = new HashMap<>();
+            result.put(MODEL_SIZE_IN_BYTES, modelContentSize);
+            result.put(CHUNK_FILES, Arrays.asList(newChunks[0], newChunks[1]));
+            result.put(MODEL_FILE_HASH, randomAlphaOfLength(10));
+            listener.onResponse(result);
+            return null;
+        }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any(), any(), any());
         MLTask pretrainedTask = MLTask
             .builder()
             .taskId("pretrained")
@@ -1011,6 +1028,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .modelGroupId("modelGroupId")
             .modelFormat(modelFormat)
             .functionName(FunctionName.SPARSE_ENCODING)
+            .isHidden(true)
             .build();
     }
 
