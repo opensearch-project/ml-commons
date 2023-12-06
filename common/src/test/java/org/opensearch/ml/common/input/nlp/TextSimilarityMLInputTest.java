@@ -116,7 +116,7 @@ public class TextSimilarityMLInputTest {
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
             () -> MLInput.parse(parser, input.getFunctionName().name()));
-        assert (e.getMessage().equals("no text docs"));
+        assert (e.getMessage().equals("No text documents were provided"));
     }
 
     @Test

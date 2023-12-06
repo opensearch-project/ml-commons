@@ -46,7 +46,7 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
         Objects.requireNonNull(textDocs);
         Objects.requireNonNull(queryText);
         if(textDocs.isEmpty()) {
-            throw new IllegalArgumentException("pairs must be nonempty");
+            throw new IllegalArgumentException("No text documents provided");
         }
         this.textDocs = textDocs;
         this.queryText = queryText;

@@ -52,6 +52,14 @@ public class TextSimilarityInputDatasetTest {
         String queryText = "today is sunny";
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
             () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
-        assert (e.getMessage().equals("pairs must be nonempty"));
+        assert (e.getMessage().equals("No text documents provided"));
+    }
+
+    @Test
+    public void noQuery_ThenFail() {
+        List<String> docs = List.of("That is a happy dog", "it's summer");
+        String queryText = null;
+        assertThrows(NullPointerException.class,
+            () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
     }
 }

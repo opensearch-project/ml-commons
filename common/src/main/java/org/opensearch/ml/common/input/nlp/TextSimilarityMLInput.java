@@ -105,10 +105,10 @@ public class TextSimilarityMLInput extends MLInput {
             }
         }        
         if(docs.isEmpty()) {
-            throw new IllegalArgumentException("no text docs");
+            throw new IllegalArgumentException("No text documents were provided");
         }
         if(queryText == null) {
-            throw new IllegalArgumentException("no query text");
+            throw new IllegalArgumentException("No query text was provided");
         }
         inputDataset = new TextSimilarityInputDataSet(queryText, docs);
     }
