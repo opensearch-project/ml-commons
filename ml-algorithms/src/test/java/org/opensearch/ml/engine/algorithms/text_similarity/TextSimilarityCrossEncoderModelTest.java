@@ -98,7 +98,7 @@ public class TextSimilarityCrossEncoderModelTest {
             .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        modelZipFile = new File(getClass().getResource("TinyBERT-CE-pt.zip").toURI());
+        modelZipFile = new File(getClass().getResource("TinyBERT-CE-torch_script.zip").toURI());
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -220,7 +220,7 @@ public class TextSimilarityCrossEncoderModelTest {
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyBERT-CE-pt.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyBERT-CE-torch_script.zip").toURI()));
         IllegalArgumentException e = assertThrows(
             IllegalArgumentException.class,
             () -> textSimilarityCrossEncoderModel.initModel(model, params, encryptor)
@@ -231,7 +231,7 @@ public class TextSimilarityCrossEncoderModelTest {
     @Test
     public void initModel_NullMLEngine() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyBERT-CE-pt.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("TinyBERT-CE-torch_script.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
         IllegalArgumentException e = assertThrows(
             IllegalArgumentException.class,
