@@ -42,6 +42,9 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 
 import com.google.gson.Gson;
 
@@ -54,6 +57,10 @@ import lombok.extern.log4j.Log4j2;
 @NoArgsConstructor
 @Function(FunctionName.AGENT)
 public class MLAgentExecutor implements Executable {
+
+    public static final String MEMORY_ID = "memory_id";
+    public static final String QUESTION = "question";
+    public static final String PARENT_INTERACTION_ID = "parent_interaction_id";
 
     private Client client;
     private Settings settings;
@@ -86,6 +93,10 @@ public class MLAgentExecutor implements Executable {
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        if (inputDataSet.getParameters() == null) {
+            throw new IllegalArgumentException("wrong input");
+        }
+
         List<ModelTensors> outputs = new ArrayList<>();
         List<ModelTensor> modelTensors = new ArrayList<>();
         outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
@@ -98,81 +109,50 @@ public class MLAgentExecutor implements Executable {
                         try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             MLAgent mlAgent = MLAgent.parse(parser);
-                            ActionListener<Object> agentActionListener = ActionListener.wrap(output -> {
-                                if (output != null) {
-                                    Gson gson = new Gson();
-                                    if (output instanceof ModelTensorOutput) {
-                                        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) output;
-                                        modelTensorOutput.getMlModelOutputs().forEach(outs -> {
-                                            for (ModelTensor mlModelTensor : outs.getMlModelTensors()) {
-                                                modelTensors.add(mlModelTensor);
-                                            }
-                                        });
-                                    } else if (output instanceof ModelTensor) {
-                                        modelTensors.add((ModelTensor) output);
-                                    } else if (output instanceof List) {
-                                        if (((List) output).get(0) instanceof ModelTensor) {
-                                            ((List<ModelTensor>) output).forEach(mlModelTensor -> modelTensors.add(mlModelTensor));
-                                        } else if (((List) output).get(0) instanceof ModelTensors) {
-                                            ((List<ModelTensors>) output).forEach(outs -> {
-                                                for (ModelTensor mlModelTensor : outs.getMlModelTensors()) {
-                                                    modelTensors.add(mlModelTensor);
-                                                }
-                                            });
-                                        } else {
-                                            Object finalOutput = output;
-                                            String result = output instanceof String
-                                                ? (String) output
-                                                : AccessController
-                                                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
-                                            modelTensors.add(ModelTensor.builder().name("response").result(result).build());
-                                        }
-                                    } else {
-                                        Object finalOutput = output;
-                                        String result = output instanceof String
-                                            ? (String) output
-                                            : AccessController
-                                                .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
-                                        modelTensors.add(ModelTensor.builder().name("response").result(result).build());
-                                    }
-                                    listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
-                                } else {
-                                    listener.onResponse(null);
-                                }
-                            }, ex -> {
-                                log.error("Failed to run flow agent", ex);
-                                listener.onFailure(ex);
-                            });
-                            if ("flow".equals(mlAgent.getType())) {
-                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(
-                                    client,
-                                    settings,
-                                    clusterService,
-                                    xContentRegistry,
-                                    toolFactories,
-                                    memoryFactoryMap
-                                );
-                                flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
-                            } else if ("cot".equals(mlAgent.getType())) {
-                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(
-                                    client,
-                                    settings,
-                                    clusterService,
-                                    xContentRegistry,
-                                    toolFactories,
-                                    memoryFactoryMap
-                                );
-                                reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
-                            } else if ("conversational".equals(mlAgent.getType())) {
-                                MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(
-                                    client,
-                                    settings,
-                                    clusterService,
-                                    xContentRegistry,
-                                    toolFactories,
-                                    memoryFactoryMap
-                                );
-                                chatAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+                            String memoryType = mlAgent.getMemory().getType();
+                            String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
+                            String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
+                            String appType = mlAgent.getAppType();
+                            String question = inputDataSet.getParameters().get(QUESTION);
+
+                            if (memoryType != null
+                                && memoryFactoryMap.containsKey(memoryType)
+                                && (memoryId == null || parentInteractionId == null)) {
+                                ConversationIndexMemory.Factory conversationIndexMemoryFactory =
+                                    (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
+                                conversationIndexMemoryFactory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
+                                    inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
+                                    ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
+                                    // Create root interaction ID
+                                    ConversationIndexMessage msg = ConversationIndexMessage
+                                        .conversationIndexMessageBuilder()
+                                        .type(appType)
+                                        .question(question)
+                                        .response("")
+                                        .finalAnswer(true)
+                                        .sessionId(memory.getConversationId())
+                                        .build();
+                                    conversationIndexMemory
+                                        .save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
+                                            log.info("Created parent interaction ID: " + interaction.getId());
+                                            inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
+                                            ActionListener<Object> agentActionListener = createAgentActionListener(
+                                                listener,
+                                                outputs,
+                                                modelTensors
+                                            );
+                                            executeAgent(inputDataSet, mlAgent, agentActionListener);
+                                        }, ex -> {
+                                            log.error("Failed to create parent interaction", ex);
+                                            listener.onFailure(ex);
+                                        }));
+                                }, ex -> {
+                                    log.error("Failed to read conversation memory", ex);
+                                    listener.onFailure(ex);
+                                }));
+                            } else {
+                                ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
+                                executeAgent(inputDataSet, mlAgent, agentActionListener);
                             }
                         }
                     } else {
@@ -185,6 +165,90 @@ public class MLAgentExecutor implements Executable {
             }
         }
 
+    }
+
+    private void executeAgent(RemoteInferenceInputDataSet inputDataSet, MLAgent mlAgent, ActionListener<Object> agentActionListener) {
+        if ("flow".equals(mlAgent.getType())) {
+            MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(
+                client,
+                settings,
+                clusterService,
+                xContentRegistry,
+                toolFactories,
+                memoryFactoryMap
+            );
+            flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+        } else if ("cot".equals(mlAgent.getType())) {
+            MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(
+                client,
+                settings,
+                clusterService,
+                xContentRegistry,
+                toolFactories,
+                memoryFactoryMap
+            );
+            reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+        } else if ("conversational".equals(mlAgent.getType())) {
+            MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(
+                client,
+                settings,
+                clusterService,
+                xContentRegistry,
+                toolFactories,
+                memoryFactoryMap
+            );
+            chatAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+        }
+    }
+
+    private ActionListener<Object> createAgentActionListener(
+        ActionListener<Output> listener,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors
+    ) {
+        return ActionListener.wrap(output -> {
+            if (output != null) {
+                Gson gson = new Gson();
+                if (output instanceof ModelTensorOutput) {
+                    ModelTensorOutput modelTensorOutput = (ModelTensorOutput) output;
+                    modelTensorOutput.getMlModelOutputs().forEach(outs -> {
+                        for (ModelTensor mlModelTensor : outs.getMlModelTensors()) {
+                            modelTensors.add(mlModelTensor);
+                        }
+                    });
+                } else if (output instanceof ModelTensor) {
+                    modelTensors.add((ModelTensor) output);
+                } else if (output instanceof List) {
+                    if (((List) output).get(0) instanceof ModelTensor) {
+                        ((List<ModelTensor>) output).forEach(mlModelTensor -> modelTensors.add(mlModelTensor));
+                    } else if (((List) output).get(0) instanceof ModelTensors) {
+                        ((List<ModelTensors>) output).forEach(outs -> {
+                            for (ModelTensor mlModelTensor : outs.getMlModelTensors()) {
+                                modelTensors.add(mlModelTensor);
+                            }
+                        });
+                    } else {
+                        Object finalOutput = output;
+                        String result = output instanceof String
+                            ? (String) output
+                            : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
+                        modelTensors.add(ModelTensor.builder().name("response").result(result).build());
+                    }
+                } else {
+                    Object finalOutput = output;
+                    String result = output instanceof String
+                        ? (String) output
+                        : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(finalOutput));
+                    modelTensors.add(ModelTensor.builder().name("response").result(result).build());
+                }
+                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+            } else {
+                listener.onResponse(null);
+            }
+        }, ex -> {
+            log.error("Failed to run flow agent", ex);
+            listener.onFailure(ex);
+        });
     }
 
     public XContentParser createXContentParserFromRegistry(NamedXContentRegistry xContentRegistry, BytesReference bytesReference)

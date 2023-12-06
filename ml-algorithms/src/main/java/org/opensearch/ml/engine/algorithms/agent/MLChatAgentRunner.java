@@ -54,7 +54,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
-import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 
@@ -68,7 +67,6 @@ import lombok.extern.log4j.Log4j2;
 public class MLChatAgentRunner {
 
     public static final String SESSION_ID = "session_id";
-    public static final String MEMORY_ID = "memory_id";
     public static final String PROMPT_PREFIX = "prompt_prefix";
     public static final String LLM_TOOL_PROMPT_PREFIX = "LanguageModelTool.prompt_prefix";
     public static final String LLM_TOOL_PROMPT_SUFFIX = "LanguageModelTool.prompt_suffix";
@@ -78,7 +76,6 @@ public class MLChatAgentRunner {
     public static final String TOOL_NAMES = "tool_names";
     public static final String OS_INDICES = "opensearch_indices";
     public static final String EXAMPLES = "examples";
-    public static final String QUESTION = "question";
     public static final String SCRATCHPAD = "scratchpad";
     public static final String CHAT_HISTORY = "chat_history";
     public static final String CONTEXT = "context";
@@ -111,9 +108,9 @@ public class MLChatAgentRunner {
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params.get(MEMORY_ID);
+        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
-        String title = params.get(QUESTION);
+        String title = params.get(MLAgentExecutor.QUESTION);
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
@@ -180,6 +177,7 @@ public class MLChatAgentRunner {
                     executeParams.put(key.replace(toolSpec.getType() + ".", ""), params.get(key));
                 }
             }
+            log.info("Fetching tool for type: " + toolSpec.getType());
             Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
             if (toolSpec.getName() != null) {
                 tool.setName(toolSpec.getName());
@@ -205,7 +203,8 @@ public class MLChatAgentRunner {
         String sessionId,
         ActionListener<Object> listener
     ) {
-        String question = parameters.get(QUESTION);
+        String question = parameters.get(MLAgentExecutor.QUESTION);
+        String parentInteractionId = parameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
         boolean verbose = parameters.containsKey("verbose") ? Boolean.parseBoolean(parameters.get("verbose")) : false;
         Map<String, String> tmpParameters = new HashMap<>();
         if (llm.getParameters() != null) {
@@ -283,7 +282,7 @@ public class MLChatAgentRunner {
             .add(
                 ModelTensors
                     .builder()
-                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name(MEMORY_ID).result(sessionId).build()))
+                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build()))
                     .build()
             );
 
@@ -299,17 +298,7 @@ public class MLChatAgentRunner {
         String maxIteration = Optional.ofNullable(tmpParameters.get("max_iteration")).orElse("3");
 
         // Create root interaction.
-        StepListener<CreateInteractionResponse> createRootItListener = new StepListener<>();
         ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
-        ConversationIndexMessage msg = ConversationIndexMessage
-            .conversationIndexMessageBuilder()
-            .type("ReAct")
-            .question(question)
-            .response("")
-            .finalAnswer(true)
-            .sessionId(sessionId)
-            .build();
-        conversationIndexMemory.save(msg, null, null, null, createRootItListener);
 
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
@@ -383,45 +372,57 @@ public class MLChatAgentRunner {
 
                     if (conversationIndexMemory != null) {
                         String finalThought = thought;
-                        createRootItListener.whenComplete(r -> {
-                            ConversationIndexMessage msgTemp = ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .type("ReAct")
-                                .question(question)
-                                .response(finalThought)
-                                .finalAnswer(false)
-                                .sessionId(sessionId)
-                                .build();
-                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), null);
-                        }, e -> { log.error("Failed to save intermediate step interaction", e); });
+                        ConversationIndexMessage msgTemp = ConversationIndexMessage
+                            .conversationIndexMessageBuilder()
+                            .type("ReAct")
+                            .question(question)
+                            .response(finalThought)
+                            .finalAnswer(false)
+                            .sessionId(sessionId)
+                            .build();
+                        conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
                     }
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
                         if (conversationIndexMemory != null) {
                             String finalAnswer1 = finalAnswer;
-                            createRootItListener.whenComplete(r -> {
-                                // Create final trace message.
-                                ConversationIndexMessage msgTemp = ConversationIndexMessage
-                                    .conversationIndexMessageBuilder()
-                                    .type("ReAct")
-                                    .question(question)
-                                    .response(finalAnswer1)
-                                    .finalAnswer(true)
-                                    .sessionId(sessionId)
-                                    .build();
-                                conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), null);
-                                // Update root interaction.
-                                conversationIndexMemory
-                                    .getMemoryManager()
-                                    .updateInteraction(
-                                        r.getId(),
-                                        ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
-                                        ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                                            log.info("Updated final answer into interaction id: {}", r.getId());
-                                            log.info("Final answer: {}", finalAnswer1);
-                                        }, e -> { log.error("Failed to update root interaction", e); })
-                                    );
-                            }, e -> { log.error("Failed to save final answer interaction", e); });
+                            // Create final trace message.
+                            ConversationIndexMessage msgTemp = ConversationIndexMessage
+                                .conversationIndexMessageBuilder()
+                                .type("ReAct")
+                                .question(question)
+                                .response(finalAnswer1)
+                                .finalAnswer(true)
+                                .sessionId(sessionId)
+                                .build();
+                            conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
+                        }
+                    }
+                    if (finalAnswer != null) {
+                        finalAnswer = finalAnswer.trim();
+                        if (conversationIndexMemory != null) {
+                            String finalAnswer1 = finalAnswer;
+                            // Create final trace message.
+                            ConversationIndexMessage msgTemp = ConversationIndexMessage
+                                .conversationIndexMessageBuilder()
+                                .type("ReAct")
+                                .question(question)
+                                .response(finalAnswer1)
+                                .finalAnswer(true)
+                                .sessionId(sessionId)
+                                .build();
+                            conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
+                            // Update root interaction.
+                            conversationIndexMemory
+                                .getMemoryManager()
+                                .updateInteraction(
+                                    parentInteractionId,
+                                    ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
+                                    ActionListener.<UpdateResponse>wrap(updateResponse -> {
+                                        log.info("Updated final answer into interaction id: {}", parentInteractionId);
+                                        log.info("Final answer: {}", finalAnswer1);
+                                    }, e -> { log.error("Failed to update root interaction", e); })
+                                );
                         }
                         cotModelTensors
                             .add(
@@ -505,7 +506,7 @@ public class MLChatAgentRunner {
                                 llmToolTmpParameters.putAll(tmpParameters);
                                 llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
                                 // TODO: support tool parameter override : langauge_model_tool.prompt
-                                llmToolTmpParameters.put(QUESTION, actionInput);
+                                llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
                                 tools.get(action).run(llmToolTmpParameters, nextStepListener); // run tool
                             } else {
                                 tools.get(action).run(toolParams, nextStepListener); // run tool
@@ -616,17 +617,16 @@ public class MLChatAgentRunner {
                     scratchpadBuilder.append(toolResponse).append("\n\n");
                     if (conversationIndexMemory != null) {
                         // String res = "Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result;
-                        createRootItListener.whenComplete(r -> {
-                            ConversationIndexMessage msgTemp = ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .type("ReAct")
-                                .question(lastActionInput.get())
-                                .response((String) result)
-                                .finalAnswer(false)
-                                .sessionId(sessionId)
-                                .build();
-                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), lastAction.get());
-                        }, e -> { log.error("Failed to save final answer interaction", e); });
+                        ConversationIndexMessage msgTemp = ConversationIndexMessage
+                            .conversationIndexMessageBuilder()
+                            .type("ReAct")
+                            .question(lastActionInput.get())
+                            .response((String) result)
+                            .finalAnswer(false)
+                            .sessionId(sessionId)
+                            .build();
+                        conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), lastAction.get());
+
                     }
                     StringSubstitutor substitutor = new StringSubstitutor(
                         ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
