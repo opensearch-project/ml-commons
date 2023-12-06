@@ -20,6 +20,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
@@ -120,7 +121,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (((Double) map.get("next_token")).intValue() == 1);
     }
 
-    public void testGetConversations_nextPage() throws IOException {
+    public void testGetConversations_nextPage() throws IOException, InterruptedException {
         Response ccresponse1 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse1 != null);
         assert (TestHelper.restStatus(ccresponse1) == RestStatus.OK);
@@ -131,6 +132,9 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (ccmap1.containsKey("conversation_id"));
         String id1 = (String) ccmap1.get("conversation_id");
 
+        // wait for 0.1s to make sure update time is different between conversation 1 and 2
+        TimeUnit.MICROSECONDS.sleep(100);
+
         Response ccresponse2 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse2 != null);
         assert (TestHelper.restStatus(ccresponse2) == RestStatus.OK);
@@ -140,21 +144,6 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         Map ccmap2 = gson.fromJson(ccentityString2, Map.class);
         assert (ccmap2.containsKey("conversation_id"));
         String id2 = (String) ccmap2.get("conversation_id");
-        logger.info("id2={}", id2);
-
-        // for debug
-        Response _response = TestHelper
-            .makeRequest(
-                client(),
-                "GET",
-                ActionConstants.GET_CONVERSATIONS_REST_PATH,
-                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "10"),
-                "",
-                null
-            );
-        HttpEntity _httpEntity = _response.getEntity();
-        String entityStringAll = TestHelper.httpEntityToString(_httpEntity);
-        logger.info("entityString={}", entityStringAll);
 
         Response response1 = TestHelper
             .makeRequest(
