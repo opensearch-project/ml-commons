@@ -105,8 +105,20 @@ public class MLSearchHandler {
                 queryBuilder.must(request.source().query());
             }
 
-            // Add a filter to the query to include only documents where IS_HIDDEN_FIELD is false
-            queryBuilder.filter(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, false));
+            // Create a BoolQueryBuilder for the should clauses
+            BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
+
+            // Add a should clause to include documents where IS_HIDDEN_FIELD is false
+            shouldQuery.should(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, false));
+
+            // Add a should clause to include documents where IS_HIDDEN_FIELD does not exist or is null
+            shouldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.IS_HIDDEN_FIELD)));
+
+            // Set minimum should match to 1 to ensure at least one of the should conditions is met
+            shouldQuery.minimumShouldMatch(1);
+
+            // Add the shouldQuery to the main queryBuilder
+            queryBuilder.filter(shouldQuery);
 
             request.source().query(queryBuilder);
             request.source().fetchSource(rebuiltFetchSourceContext);
