@@ -52,7 +52,7 @@ public class TextSimilarityInputDatasetTest {
         String queryText = "today is sunny";
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
             () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
-        assert (e.getMessage().equals("No text documents provided"));
+        assert (e.getMessage().equals("No text documents were provided"));
     }
 
     @Test
