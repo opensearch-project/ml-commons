@@ -32,6 +32,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
+import org.opensearch.ml.common.input.nlp.TextSimilarityMLInput;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.search.SearchModule;
@@ -208,6 +210,22 @@ public class MLInputTest {
         MLInput parsedInput = new MLInput(streamInput);
         assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
         verify.accept(parsedInput);
+    }
+
+    @Test
+    public void testParse_TextSimilarity() throws IOException {
+        List<String> docs = List.of("That is a happy dog", "it's summer");
+        String queryText = "today is sunny";
+        MLInputDataset dataset = TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build();
+        input = new TextSimilarityMLInput(FunctionName.TEXT_SIMILARITY, dataset);
+        MLInput inp = new MLInput(FunctionName.TEXT_SIMILARITY, null, dataset);
+        String expected = "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}";
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        inp.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = builder.toString();
+        assertEquals(expected, jsonStr);
     }
 
 }
