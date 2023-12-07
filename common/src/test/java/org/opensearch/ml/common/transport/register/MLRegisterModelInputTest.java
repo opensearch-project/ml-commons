@@ -44,10 +44,21 @@ public class MLRegisterModelInputTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
-            "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"," +
-            "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"" +
-            "},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
+            "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\"," +
+            "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\"," +
+            "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100," +
+            "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\"," +
+            "\\\"field2\\\":\\\"value2\\\"}\"},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]," +
+            "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\"," +
+            "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
+            "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +
+            "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
+            "\"headers\":{\"api_key\":\"${credential.key}\"}," +
+            "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
+            "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
+            "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
+            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
     private final String modelName = "modelName";
     private final String version = "version";
@@ -63,6 +74,7 @@ public class MLRegisterModelInputTest {
                 .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
                 .embeddingDimension(100)
                 .build();
+        HttpConnector connector = HttpConnectorTest.createHttpConnector();
 
         input = MLRegisterModelInput.builder()
                 .functionName(functionName)
@@ -74,6 +86,10 @@ public class MLRegisterModelInputTest {
                 .modelConfig(config)
                 .deployModel(true)
                 .modelNodeIds(new String[]{"modelNodeIds" })
+                .isHidden(false)
+                .description("test description")
+                .hashValue("hash_value_test")
+                .connector(connector)
                 .build();
     }
 
@@ -155,7 +171,16 @@ public class MLRegisterModelInputTest {
     public void testToXContent_Incomplete() throws Exception {
         String expectedIncompleteInputStr =
                 "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
-                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"deploy_model\":true}";
+                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\"," +
+                "\"model_content_hash_value\":\"hash_value_test\",\"deploy_model\":true,\"connector\":" +
+                "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
+                "\"protocol\":\"http\",\"parameters\":{\"input\":\"test input value\"}," +
+                "\"credential\":{\"key\":\"test_key_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":" +
+                "\"POST\",\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}," +
+                "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\",\"pre_process_function\":" +
+                "\"connector.pre_process.openai.embedding\",\"post_process_function\":" +
+                "\"connector.post_process.openai.embedding\"}],\"backend_roles\":[\"role1\",\"role2\"]," +
+                "\"access\":\"public\"},\"is_hidden\":false}";
         input.setUrl(null);
         input.setModelConfig(null);
         input.setModelFormat(null);

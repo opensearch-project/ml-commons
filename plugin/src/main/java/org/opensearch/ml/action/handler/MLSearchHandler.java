@@ -30,6 +30,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
@@ -96,6 +97,29 @@ public class MLSearchHandler {
                 Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::includes).orElse(null),
                 excludes.toArray(new String[0])
             );
+
+            // Check if the original query is not null before adding it to the must clause
+            BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
+            if (request.source().query() != null) {
+                queryBuilder.must(request.source().query());
+            }
+
+            // Create a BoolQueryBuilder for the should clauses
+            BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
+
+            // Add a should clause to include documents where IS_HIDDEN_FIELD is false
+            shouldQuery.should(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, false));
+
+            // Add a should clause to include documents where IS_HIDDEN_FIELD does not exist or is null
+            shouldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.IS_HIDDEN_FIELD)));
+
+            // Set minimum should match to 1 to ensure at least one of the should conditions is met
+            shouldQuery.minimumShouldMatch(1);
+
+            // Add the shouldQuery to the main queryBuilder
+            queryBuilder.filter(shouldQuery);
+
+            request.source().query(queryBuilder);
             request.source().fetchSource(rebuiltFetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, wrappedListener);
