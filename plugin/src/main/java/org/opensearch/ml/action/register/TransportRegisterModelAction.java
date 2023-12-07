@@ -79,6 +79,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+
+    Settings settings;
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
     MLStats mlStats;
@@ -125,6 +127,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.settings = settings;
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
@@ -139,6 +142,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null

@@ -124,6 +124,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
@@ -285,11 +286,17 @@ public class MLModelManager {
                     .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
                     .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
                     .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                    .isHidden(mlRegisterModelMetaInput.getIsHidden())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                 indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
+
+                if (mlRegisterModelMetaInput.getIsHidden()) {
+                    indexRequest.id(modelName);
+                }
+                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
@@ -510,9 +517,13 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -542,7 +553,8 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
+    @VisibleForTesting
+    void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -568,8 +580,12 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 // create model meta doc
@@ -627,10 +643,14 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
                     indexModelMetaRequest.id(functionName.name());
+                }
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
                 }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
@@ -706,8 +726,12 @@ public class MLModelManager {
                             .content(Base64.getEncoder().encodeToString(bytes))
                             .createdTime(now)
                             .lastUpdateTime(now)
+                            .isHidden(registerModelInput.getIsHidden())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                        if (registerModelInput.getIsHidden()) {
+                            indexRequest.id(modelName);
+                        }
                         String chunkId = getModelChunkId(modelId, chunkNum);
                         indexRequest.id(chunkId);
                         indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -822,7 +846,8 @@ public class MLModelManager {
         }));
     }
 
-    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+    @VisibleForTesting
+    void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);

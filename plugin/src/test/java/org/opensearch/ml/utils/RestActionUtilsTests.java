@@ -7,6 +7,7 @@ package org.opensearch.ml.utils;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.OPENSEARCH_DASHBOARDS_USER_AGENT;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -14,15 +15,20 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ASYNC;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.UI_METADATA_EXCLUDE;
 
+import java.net.InetAddress;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.Version;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -32,6 +38,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
@@ -59,6 +66,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     public void setup() {
         param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, algoName).build();
         fakeRestRequest = createRestRequest(param);
+
     }
 
     private FakeRestRequest createRestRequest(Map<String, String> param) {
@@ -79,6 +87,52 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         exceptionRule.expectMessage("Request should contain algorithm!");
         fakeRestRequest = createRestRequest(ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, "").build());
         RestActionUtils.getAlgorithm(fakeRestRequest);
+    }
+
+    @Test
+    public void testReturnContent() {
+        RestRequest request = mock(RestRequest.class);
+        when(request.paramAsBoolean("return_content", false)).thenReturn(true);
+        Assert.assertTrue(RestActionUtils.returnContent(request));
+
+        when(request.paramAsBoolean("return_content", false)).thenReturn(false);
+        Assert.assertFalse(RestActionUtils.returnContent(request));
+    }
+
+    @Test
+    public void testGetAllNodes() {
+
+        DiscoveryNode localNode = new DiscoveryNode(
+            "mockClusterManagerNodeId",
+            "mockClusterManagerNodeId",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+
+        ClusterState clusterState = mock(ClusterState.class);
+        DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
+        DiscoveryNode dataNode = mock(DiscoveryNode.class);
+        ClusterService clusterService = mock(ClusterService.class);
+
+        when(dataNode.getId()).thenReturn("mockDataNodeId");
+        final Map<String, DiscoveryNode> dataNodes = Map.of("0", dataNode);
+        when(discoveryNodes.getDataNodes()).thenReturn(dataNodes);
+        when(clusterState.nodes()).thenReturn(discoveryNodes);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.state()).thenReturn(clusterState);
+        when(clusterState.nodes()).thenReturn(discoveryNodes);
+        when(discoveryNodes.getSize()).thenReturn(2); // Assuming 2 nodes in the cluster
+        // Mock two discovery nodes
+        DiscoveryNode node1 = mock(DiscoveryNode.class);
+        DiscoveryNode node2 = mock(DiscoveryNode.class);
+        when(node1.getId()).thenReturn("node1");
+        when(node2.getId()).thenReturn("node2");
+        when(discoveryNodes.iterator()).thenReturn(Arrays.asList(node1, node2).iterator());
+
+        String[] nodeIds = RestActionUtils.getAllNodes(clusterService);
+        Assert.assertArrayEquals(new String[] { "node1", "node2" }, nodeIds);
     }
 
     public void testIsAsync() {
@@ -229,5 +283,38 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         User user = RestActionUtils.getUserContext(client);
         assertNotNull(user);
+    }
+
+    @Test
+    public void testIsSuperAdminUser() {
+        ClusterService clusterService = mock(ClusterService.class);
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+
+        when(clusterService.getSettings())
+            .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_SSL_PRINCIPAL, "cn=admin");
+
+        boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
+        Assert.assertTrue(isAdmin);
+    }
+
+    @Test
+    public void testIsSuperAdminUser_NotAdmin() {
+        ClusterService clusterService = mock(ClusterService.class);
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+
+        when(clusterService.getSettings())
+            .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_SSL_PRINCIPAL, "cn=notadmin");
+
+        boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
+        Assert.assertFalse(isAdmin);
     }
 }
