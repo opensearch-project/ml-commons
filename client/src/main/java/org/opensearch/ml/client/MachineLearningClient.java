@@ -392,4 +392,17 @@ public interface MachineLearningClient {
      * @param mlAgent Register agent input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#register-agent
      */
     void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener);
+
+    /**
+     * Delete agent
+     * @param agentId The id of the agent to delete
+     * @return the result future
+     */
+    default ActionFuture<DeleteResponse> deleteAgent(String agentId) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteAgent(agentId, actionFuture);
+        return actionFuture;
+    }
+
+    void deleteAgent(String agentId, ActionListener<DeleteResponse> listener);
 }

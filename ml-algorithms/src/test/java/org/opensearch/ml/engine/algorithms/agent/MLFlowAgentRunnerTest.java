@@ -23,10 +23,12 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 
 import software.amazon.awssdk.utils.ImmutableMap;
 
@@ -48,7 +50,6 @@ public class MLFlowAgentRunnerTest {
 
     private Map<String, Tool.Factory> toolFactories;
 
-    @Mock
     private Map<String, Memory.Factory> memoryMap;
 
     private MLFlowAgentRunner mlFlowAgentRunner;
@@ -65,6 +66,9 @@ public class MLFlowAgentRunnerTest {
     private Tool secondTool;
 
     @Mock
+    private ConversationIndexMemory.Factory mockMemoryFactory;
+
+    @Mock
     private ActionListener<Object> agentActionListener;
 
     @Captor
@@ -79,6 +83,7 @@ public class MLFlowAgentRunnerTest {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
+        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
         mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
@@ -102,10 +107,18 @@ public class MLFlowAgentRunnerTest {
 
     @Test
     public void testRunWithIncludeOutputNotSet() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
-        final MLAgent mlAgent = MLAgent.builder().name("TestAgent").tools(Arrays.asList(firstToolSpec, secondToolSpec)).build();
-        mlFlowAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         Assert.assertEquals(1, agentOutput.size());
@@ -116,10 +129,18 @@ public class MLFlowAgentRunnerTest {
 
     @Test
     public void testRunWithIncludeOutputSet() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(true).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        final MLAgent mlAgent = MLAgent.builder().name("TestAgent").tools(Arrays.asList(firstToolSpec, secondToolSpec)).build();
-        mlFlowAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         // Respond with all tool output

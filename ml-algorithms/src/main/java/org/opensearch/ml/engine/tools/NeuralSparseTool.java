@@ -20,23 +20,22 @@ import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * This tool supports neural search with embedding models and knn index.
+ * This tool supports neural_sparse search with sparse encoding models and rank_features field.
  */
 @Log4j2
 @Getter
 @Setter
-@ToolAnnotation(VectorDBTool.TYPE)
-public class VectorDBTool extends AbstractRetrieverTool {
-    public static final String TYPE = "VectorDBTool";
+@ToolAnnotation(NeuralSparseTool.TYPE)
+public class NeuralSparseTool extends AbstractRetrieverTool {
+    public static final String TYPE = "NeuralSparseTool";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String EMBEDDING_FIELD = "embedding_field";
     private String name = TYPE;
-    private Integer k;
     private String modelId;
     private String embeddingField;
 
     @Builder
-    public VectorDBTool(
+    public NeuralSparseTool(
         Client client,
         NamedXContentRegistry xContentRegistry,
         String index,
@@ -49,7 +48,6 @@ public class VectorDBTool extends AbstractRetrieverTool {
         super(client, xContentRegistry, index, sourceFields, docSize);
         this.modelId = modelId;
         this.embeddingField = embeddingField;
-        this.k = k == null ? 10 : k;
     }
 
     @Override
@@ -59,15 +57,13 @@ public class VectorDBTool extends AbstractRetrieverTool {
                 "Parameter [" + EMBEDDING_FIELD + "] and [" + MODEL_ID_FIELD + "] can not be null or empty."
             );
         }
-        return "{\"query\":{\"neural\":{\""
+        return "{\"query\":{\"neural_sparse\":{\""
             + embeddingField
             + "\":{\"query_text\":\""
             + queryText
             + "\",\"model_id\":\""
             + modelId
-            + "\",\"k\":"
-            + k
-            + "}}}"
+            + "\"}}}"
             + " }";
     }
 
@@ -86,14 +82,14 @@ public class VectorDBTool extends AbstractRetrieverTool {
         this.name = s;
     }
 
-    public static class Factory extends AbstractRetrieverTool.Factory<VectorDBTool> {
+    public static class Factory extends AbstractRetrieverTool.Factory<NeuralSparseTool> {
         private static Factory INSTANCE;
 
         public static Factory getInstance() {
             if (INSTANCE != null) {
                 return INSTANCE;
             }
-            synchronized (VectorDBTool.class) {
+            synchronized (NeuralSparseTool.class) {
                 if (INSTANCE != null) {
                     return INSTANCE;
                 }
@@ -103,13 +99,13 @@ public class VectorDBTool extends AbstractRetrieverTool {
         }
 
         @Override
-        public VectorDBTool create(Map<String, Object> params) {
+        public NeuralSparseTool create(Map<String, Object> params) {
             String index = (String) params.get(INDEX_FIELD);
             String embeddingField = (String) params.get(EMBEDDING_FIELD);
             String[] sourceFields = gson.fromJson((String) params.get(SOURCE_FIELD), String[].class);
             String modelId = (String) params.get(MODEL_ID_FIELD);
             Integer docSize = params.containsKey(DOC_SIZE_FIELD) ? Integer.parseInt((String) params.get(DOC_SIZE_FIELD)) : 2;
-            return VectorDBTool
+            return NeuralSparseTool
                 .builder()
                 .client(client)
                 .xContentRegistry(xContentRegistry)
