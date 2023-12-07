@@ -16,31 +16,25 @@ public class MLUpdateModelCacheNodesRequest extends BaseNodesRequest<MLUpdateMod
 
     @Getter
     private String modelId;
-    @Getter
-    private boolean predictorUpdate;
 
     public MLUpdateModelCacheNodesRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
-        this.predictorUpdate = in.readBoolean();
     }
 
-    public MLUpdateModelCacheNodesRequest(String[] nodeIds, String modelId, boolean predictorUpdate) {
+    public MLUpdateModelCacheNodesRequest(String[] nodeIds, String modelId) {
         super(nodeIds);
         this.modelId = modelId;
-        this.predictorUpdate = predictorUpdate;
     }
 
-    public MLUpdateModelCacheNodesRequest(DiscoveryNode[] nodeIds, String modelId, boolean predictorUpdate) {
+    public MLInPlaceUpdateModelNodesRequest(DiscoveryNode[] nodeIds, String modelId) {
         super(nodeIds);
         this.modelId = modelId;
-        this.predictorUpdate = predictorUpdate;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(modelId);
-        out.writeBoolean(predictorUpdate);
     }
 }

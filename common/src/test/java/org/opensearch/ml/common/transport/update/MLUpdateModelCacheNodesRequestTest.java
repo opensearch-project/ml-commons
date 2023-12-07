@@ -30,7 +30,7 @@ public class MLUpdateModelCacheNodesRequestTest {
         String[] nodeIds = {"nodeId1", "nodeId2", "nodeId3"};
 
         MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = new MLUpdateModelCacheNodeRequest(
-                new MLUpdateModelCacheNodesRequest(nodeIds, modelId, true)
+                new MLUpdateModelCacheNodesRequest(nodeIds, modelId)
         );
         BytesStreamOutput output = new BytesStreamOutput();
 
@@ -59,7 +59,7 @@ public class MLUpdateModelCacheNodesRequestTest {
         );
         DiscoveryNode[] nodes = {localNode1, localNode2};
         MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = new MLUpdateModelCacheNodeRequest(
-                new MLUpdateModelCacheNodesRequest(nodes, modelId, true)
+                new MLUpdateModelCacheNodesRequest(nodes, modelId)
         );
         assertEquals(2, updateModelCacheNodeRequest.getUpdateModelCacheNodesRequest().concreteNodes().length);
     }
@@ -70,7 +70,7 @@ public class MLUpdateModelCacheNodesRequestTest {
         String[] nodeIds = {"nodeId1", "nodeId2", "nodeId3"};
 
         MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = new MLUpdateModelCacheNodeRequest(
-                new MLUpdateModelCacheNodesRequest(nodeIds, modelId, true)
+                new MLUpdateModelCacheNodesRequest(nodeIds, modelId)
         );
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         updateModelCacheNodeRequest.writeTo(bytesStreamOutput);

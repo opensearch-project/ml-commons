@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -34,6 +35,7 @@ public class RemoteModel implements Predictable {
     public static final String SCRIPT_SERVICE = "script_service";
     public static final String CLIENT = "client";
     public static final String XCONTENT_REGISTRY = "xcontent_registry";
+    public static final String MODEL_RATE_LIMITER = "model_rate_limiter";
 
     private RemoteConnectorExecutor connectorExecutor;
 
@@ -57,10 +59,10 @@ public class RemoteModel implements Predictable {
         try {
             return connectorExecutor.executePredict(mlInput);
         } catch (RuntimeException e) {
-            log.error("Failed to call remote model", e);
+            log.error("Failed to call remote model.", e);
             throw e;
         } catch (Throwable e) {
-            log.error("Failed to call remote model", e);
+            log.error("Failed to call remote model.", e);
             throw new MLException(e);
         }
     }
@@ -85,11 +87,12 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
             this.connectorExecutor.setClient((Client) params.get(CLIENT));
             this.connectorExecutor.setXContentRegistry((NamedXContentRegistry) params.get(XCONTENT_REGISTRY));
+            this.connectorExecutor.setModelRateLimiter((TokenBucket) params.get(MODEL_RATE_LIMITER));
         } catch (RuntimeException e) {
-            log.error("Failed to init remote model", e);
+            log.error("Failed to init remote model.", e);
             throw e;
         } catch (Throwable e) {
-            log.error("Failed to init remote model", e);
+            log.error("Failed to init remote model.", e);
             throw new MLException(e);
         }
     }

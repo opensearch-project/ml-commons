@@ -45,6 +45,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.model.MLModelController;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
@@ -124,7 +126,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 if (!isModelDeploying(mlModel.getModelState())) {
-                    boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
                     FunctionName functionName = mlModel.getAlgorithm();
                     // TODO: Support update as well as model/user level throttling in all other DLModel categories
                     if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
@@ -135,8 +136,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                     updateModelInput,
                                     mlModel,
                                     user,
-                                    wrappedListener,
-                                    isModelDeployed
+                                    wrappedListener
                                 );
                             } else {
                                 wrappedListener
@@ -156,8 +156,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                             updateModelInput,
                                             mlModel,
                                             user,
-                                            wrappedListener,
-                                            isModelDeployed
+                                            wrappedListener
                                         );
                                     } else {
                                         wrappedListener
@@ -213,13 +212,26 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput,
         MLModel mlModel,
         User user,
-        ActionListener<UpdateResponse> wrappedListener,
-        boolean isModelDeployed
+        ActionListener<UpdateResponse> wrappedListener
     ) {
         String newModelGroupId = (Strings.hasLength(updateModelInput.getModelGroupId())
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
 
+        String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
+        boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
+        // This flag is used to decide if we need to re-deploy the predictor(model) when performing the in-place update
+        boolean isPredictorUpdate = updateModelInput.getConnectorUpdateContent() != null || relinkConnectorId != null;
+        if (updateModelInput.getModelController() != null) {
+            MLModelController modelController = mlModel.getModelController();
+            if (modelController != null) {
+                modelController.update(updateModelInput.getModelController());
+                updateModelInput.setModelController(modelController);
+            }
+            isPredictorUpdate = true;
+        }
+        // This flag is used to decide if we need to perform an in-place update
+        boolean isUpdateModelCache = isPredictorUpdate && isModelDeployed;
         if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
             if (newConnectorId == null && updateModelInput.getConnectorUpdateContent() == null) {
                 updateModelWithRegisteringToAnotherModelGroup(
@@ -228,7 +240,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     user,
                     updateModelInput,
                     wrappedListener,
-                    isModelDeployed
+                    isUpdateModelCache
                 );
             } else {
                 wrappedListener
@@ -255,7 +267,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     user,
                     updateModelInput,
                     wrappedListener,
-                    isModelDeployed
+                    isUpdateModelCache
                 );
             } else {
                 updateModelWithNewStandAloneConnector(
@@ -266,7 +278,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     user,
                     updateModelInput,
                     wrappedListener,
-                    isModelDeployed
+                    isUpdateModelCache
                 );
             }
         }
@@ -280,7 +292,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> wrappedListener,
-        boolean isModelDeployed
+        boolean isUpdateModelCache
     ) {
         if (Strings.hasLength(mlModel.getConnectorId())) {
             connectorAccessControlHelper.validateConnectorAccess(client, newConnectorId, ActionListener.wrap(hasNewConnectorPermission -> {
@@ -291,7 +303,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         user,
                         updateModelInput,
                         wrappedListener,
-                        isModelDeployed
+                        isUpdateModelCache
                     );
                 } else {
                     wrappedListener
@@ -323,13 +335,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> wrappedListener,
-        boolean isModelDeployed
+        boolean isUpdateModelCache
     ) {
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
-        // This flag is used to decide if we need to re-deploy the predictor(model) when performing the in-place update
-        boolean isPredictorUpdate = (updateModelInput.getConnector() != null || updateModelInput.getConnectorId() != null);
-        // This flag is used to decide if we need to perform an in-place update
-        boolean isUpdateModelCache = isModelDeployed && isPredictorUpdate;
         if (newModelGroupId != null) {
             modelAccessControlHelper
                 .validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasNewModelGroupPermission -> {
@@ -342,8 +350,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 updateModelInput,
                                 newModelGroupResponse,
                                 wrappedListener,
-                                isUpdateModelCache,
-                                isPredictorUpdate
+                                isUpdateModelCache
                             );
                         },
                             exception -> wrappedListener
@@ -370,7 +377,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     wrappedListener.onFailure(exception);
                 }));
         } else {
-            updateRequestConstructor(modelId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache, isPredictorUpdate);
+            updateRequestConstructor(modelId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
         }
     }
 
@@ -379,8 +386,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         UpdateRequest updateRequest,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> wrappedListener,
-        boolean isUpdateModelCache,
-        boolean isPredictorUpdate
+        boolean isUpdateModelCache
     ) {
         try {
             updateModelInput.setLastUpdateTime(Instant.now());
@@ -391,8 +397,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 String[] targetNodeIds = getAllNodes();
                 MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(
                     targetNodeIds,
-                    modelId,
-                    isPredictorUpdate
+                    modelId
                 );
                 client
                     .update(
@@ -415,8 +420,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput,
         GetResponse newModelGroupResponse,
         ActionListener<UpdateResponse> wrappedListener,
-        boolean isUpdateModelCache,
-        boolean isPredictorUpdate
+        boolean isUpdateModelCache
     ) {
         Map<String, Object> newModelGroupSourceMap = newModelGroupResponse.getSourceAsMap();
         String updatedVersion = incrementLatestVersion(newModelGroupSourceMap);
@@ -438,8 +442,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 String[] targetNodeIds = getAllNodes();
                 MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(
                     targetNodeIds,
-                    modelId,
-                    isPredictorUpdate
+                    modelId
                 );
                 client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
                     client

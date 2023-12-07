@@ -25,6 +25,7 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.MODEL_RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -65,6 +66,7 @@ import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -75,6 +77,7 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -98,6 +101,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.model.MLModelController;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -124,7 +128,6 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 
@@ -279,6 +282,7 @@ public class MLModelManager {
                     .version(version)
                     .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
                     .description(mlRegisterModelMetaInput.getDescription())
+                    .modelController(mlRegisterModelMetaInput.getModelController())
                     .modelFormat(mlRegisterModelMetaInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(mlRegisterModelMetaInput.getModelConfig())
@@ -508,6 +512,7 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .modelController(registerModelInput.getModelController())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -530,7 +535,7 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    mlTaskManager.updateMLTask(taskId, Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
                     }
@@ -571,6 +576,7 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .modelController(registerModelInput.getModelController())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -591,7 +597,7 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    mlTaskManager.updateMLTask(taskId, Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
                     }
@@ -636,6 +642,7 @@ public class MLModelManager {
                     .algorithm(functionName)
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .modelController(registerModelInput.getModelController())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(registerModelInput.getModelConfig())
@@ -718,6 +725,7 @@ public class MLModelManager {
                             .algorithm(functionName)
                             .version(version)
                             .modelFormat(registerModelInput.getModelFormat())
+                            .modelController(registerModelInput.getModelController())
                             .chunkNumber(chunkNum)
                             .totalChunks(chunkFiles.size())
                             .content(Base64.getEncoder().encodeToString(bytes))
@@ -779,12 +787,7 @@ public class MLModelManager {
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
             mlTask.setFunctionName(mlRegisterModelInput.getFunctionName());
             mlTaskManager
-                .updateMLTask(
-                    taskId,
-                    ImmutableMap.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()),
-                    TIMEOUT_IN_MILLIS,
-                    false
-                );
+                .updateMLTask(taskId, Map.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()), TIMEOUT_IN_MILLIS, false);
             registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
@@ -817,7 +820,7 @@ public class MLModelManager {
     ) {
         FunctionName functionName = registerModelInput.getFunctionName();
         deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-        Map<String, Object> updatedFields = ImmutableMap
+        Map<String, Object> updatedFields = Map
             .of(
                 MLModel.MODEL_STATE_FIELD,
                 MLModelState.REGISTERED,
@@ -832,7 +835,7 @@ public class MLModelManager {
             );
         log.info("Model registered successfully, model id: {}, task id: {}", modelId, taskId);
         updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
-            mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
+            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
             if (registerModelInput.isDeployModel()) {
                 deployModelAfterRegistering(registerModelInput, modelId);
             }
@@ -844,7 +847,7 @@ public class MLModelManager {
     }
 
     @VisibleForTesting
-    void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);
@@ -903,48 +906,36 @@ public class MLModelManager {
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
-        Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
+        Map<String, Object> updated = Map.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
-    public synchronized void updateModelCache(String modelId, boolean isPredictorUpdate, ActionListener<String> listener) {
+    public synchronized void updateModelCache(String modelId, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
             getModel(modelId, ActionListener.wrap(mlModel -> {
-                if (isPredictorUpdate) {
-                    assert FunctionName.REMOTE == mlModel.getAlgorithm()
-                        : "In-place update is only supported on REMOTE models at this time.";
-                    Map<String, Object> params = ImmutableMap
-                        .of(
-                            ML_ENGINE,
-                            mlEngine,
-                            SCRIPT_SERVICE,
-                            scriptService,
-                            CLIENT,
-                            client,
-                            XCONTENT_REGISTRY,
-                            xContentRegistry,
-                            CLUSTER_SERVICE,
-                            clusterService
-                        );
+                int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
+                setupModelController(modelId, eligibleNodeCount, mlModel.getModelController());
+                if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
                     if (mlModel.getConnector() != null) {
-                        Predictable predictable = mlEngine.deploy(mlModel, params);
-                        modelCacheHelper.setPredictor(modelId, predictable);
+                        setupParamsAndPredictable(modelId, mlModel);
                         wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
                         log.info("Completed in-place update internal connector for the model {}", modelId);
                     } else {
                         getConnector(client, mlModel.getConnectorId(), ActionListener.wrap(connector -> {
                             mlModel.setConnector(connector);
-                            Predictable predictable = mlEngine.deploy(mlModel, params);
-                            modelCacheHelper.setPredictor(modelId, predictable);
+                            setupParamsAndPredictable(modelId, mlModel);
                             wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
                             log.info("Completed in-place update stand-alone connector for the model {}", modelId);
                         }, wrappedListener::onFailure));
                     }
-                    wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
-                    log.info("Completed in-place update for the model {}", modelId);
                 }
+                wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                log.info("Completed in-place update for the model {}", modelId);
             }, wrappedListener::onFailure));
+        } catch (Exception e) {
+            log.error("Failed to perform in-place update for the model " + modelId, e);
+            listener.onFailure(e);
         }
     }
 
@@ -984,6 +975,7 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Exceed max local model per node limit"));
             return;
         }
+        int eligibleNodeCount = workerNodes.size();
         modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
@@ -992,29 +984,21 @@ public class MLModelManager {
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
-                    Map<String, Object> params = ImmutableMap
-                        .of(
-                            ML_ENGINE,
-                            mlEngine,
-                            SCRIPT_SERVICE,
-                            scriptService,
-                            CLIENT,
-                            client,
-                            XCONTENT_REGISTRY,
-                            xContentRegistry,
-                            CLUSTER_SERVICE,
-                            clusterService
-                        );
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
+                    setupModelController(modelId, eligibleNodeCount, mlModel.getModelController());
                     if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-                        setupPredictable(modelId, mlModel, params);
+                        setupParamsAndPredictable(modelId, mlModel);
+                        mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                         wrappedListener.onResponse("successful");
                         return;
                     }
                     log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
                     getConnector(client, mlModel.getConnectorId(), ActionListener.wrap(connector -> {
                         mlModel.setConnector(connector);
-                        setupPredictable(modelId, mlModel, params);
+                        setupParamsAndPredictable(modelId, mlModel);
+                        mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                         wrappedListener.onResponse("successful");
                         log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
                     }, wrappedListener::onFailure));
@@ -1031,8 +1015,8 @@ public class MLModelManager {
                         return;
                     }
                     log.debug("Model content matches original hash value, continue deploying");
-                    Map<String, Object> params = ImmutableMap
-                        .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
+                    setupModelController(modelId, eligibleNodeCount, mlModel.getModelController());
+                    Map<String, Object> params = Map.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
                     if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {
@@ -1045,7 +1029,6 @@ public class MLModelManager {
                             mlExecutable.close();
                             wrappedListener.onFailure(e);
                         }
-
                     } else {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
                         try {
@@ -1091,11 +1074,75 @@ public class MLModelManager {
         listener.onFailure(e);
     }
 
-    private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
-        Predictable predictable = mlEngine.deploy(mlModel, params);
-        modelCacheHelper.setPredictor(modelId, predictable);
-        mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+    private void setupParamsAndPredictable(String modelId, MLModel mlModel) {
+        TokenBucket modelRateLimiter = getModelRateLimiter(modelId);
+        if (modelRateLimiter != null) {
+            Map<String, Object> params = Map
+                .of(
+                    ML_ENGINE,
+                    mlEngine,
+                    SCRIPT_SERVICE,
+                    scriptService,
+                    CLIENT,
+                    client,
+                    XCONTENT_REGISTRY,
+                    xContentRegistry,
+                    CLUSTER_SERVICE,
+                    clusterService,
+                    MODEL_RATE_LIMITER,
+                    modelRateLimiter
+                );
+            Predictable predictable = mlEngine.deploy(mlModel, params);
+            modelCacheHelper.setPredictor(modelId, predictable);
+        } else {
+            Map<String, Object> params = Map
+                .of(
+                    ML_ENGINE,
+                    mlEngine,
+                    SCRIPT_SERVICE,
+                    scriptService,
+                    CLIENT,
+                    client,
+                    XCONTENT_REGISTRY,
+                    xContentRegistry,
+                    CLUSTER_SERVICE,
+                    clusterService
+                );
+            Predictable predictable = mlEngine.deploy(mlModel, params);
+            modelCacheHelper.setPredictor(modelId, predictable);
+        }
+    }
+
+    private void setupModelController(String modelId, Integer eligibleNodeCount, MLModelController modelController) {
+        if (modelController != null) {
+            modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, modelController));
+            modelCacheHelper.setIsRequestAccepted(modelId, modelController.getIsRequestAccepted());
+        }
+    }
+
+    private TokenBucket rateLimiterConstructor(Integer eligibleNodeCount, MLModelController modelController) {
+        if (modelController.getRateLimitNumber() != null && modelController.getRateLimitUnit() != null) {
+            double rateLimitNumber = modelController.getRateLimitNumber().doubleValue();
+            TimeUnit rateLimitUnit = modelController.getRateLimitUnit();
+            log
+                .debug(
+                    "Initializing the rate limiter with TPS limit {}, evenly distributed on {} nodes",
+                    rateLimitNumber / rateLimitUnit.toSeconds(1),
+                    eligibleNodeCount
+                );
+            return new TokenBucket(System::nanoTime, rateLimitNumber / rateLimitUnit.toNanos(1) / eligibleNodeCount, rateLimitNumber);
+        }
+        return null;
+    }
+
+    /**
+     * Get model-level rate limiter with model id.
+     *
+     * @param modelId model id
+     * @return a TokenBucket object to enable model-level throttling
+     */
+    public TokenBucket getModelRateLimiter(String modelId) {
+        return modelCacheHelper.getRateLimiter(modelId);
     }
 
     /**

@@ -18,6 +18,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelController;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -29,7 +30,6 @@ import java.util.Locale;
 import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 
 /**
@@ -43,6 +43,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String VERSION_FIELD = "version";
+    public static final String MODEL_CONTROLLER_FIELD = "model_controller";
     public static final String URL_FIELD = "url";
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_CONFIG_FIELD = "model_config";
@@ -60,6 +61,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private String modelGroupId;
     private String version;
     private String description;
+    private MLModelController modelController;
     private String url;
     private String hashValue;
     private MLModelFormat modelFormat;
@@ -84,6 +86,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 String modelGroupId,
                                 String version,
                                 String description,
+                                MLModelController modelController,
                                 String url,
                                 String hashValue,
                                 MLModelFormat modelFormat,
@@ -114,6 +117,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.modelGroupId = modelGroupId;
         this.version = version;
         this.description = description;
+        this.modelController = modelController;
         this.url = url;
         this.hashValue = hashValue;
         this.modelFormat = modelFormat;
@@ -136,6 +140,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.modelGroupId = in.readOptionalString();
         this.version = in.readOptionalString();
         this.description = in.readOptionalString();
+        if (in.readBoolean()) {
+            this.modelController = new MLModelController(in);
+        }
         this.url = in.readOptionalString();
         this.hashValue = in.readOptionalString();
         if (in.readBoolean()) {
@@ -172,6 +179,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(modelGroupId);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
+        if (modelController != null) {
+            out.writeBoolean(true);
+            modelController.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalString(url);
         out.writeOptionalString(hashValue);
         if (modelFormat != null) {
@@ -226,6 +239,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
+        if (modelController != null) {
+            builder.field(MODEL_CONTROLLER_FIELD, modelController);
+        }
         if (url != null) {
             builder.field(URL_FIELD, url);
         }
@@ -270,6 +286,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel) throws IOException {
         FunctionName functionName = null;
         String modelGroupId = null;
+        MLModelController modelController = null;
         String url = null;
         String hashValue = null;
         String description = null;
@@ -294,6 +311,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
+                    break;
+                case MODEL_CONTROLLER_FIELD:
+                    modelController = MLModelController.parse(parser);
                     break;
                 case URL_FIELD:
                     url = parser.text();
@@ -345,8 +365,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
-
+        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, modelController, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -354,6 +373,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String name = null;
         String modelGroupId = null;
         String version = null;
+        MLModelController modelController = null;
         String url = null;
         String hashValue = null;
         String description = null;
@@ -389,6 +409,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
+                case MODEL_CONTROLLER_FIELD:
+                    modelController = MLModelController.parse(parser);
+                    break;
                 case URL_FIELD:
                     url = parser.text();
                     break;
@@ -436,6 +459,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
+        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, modelController, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
     }
 }

@@ -35,7 +35,7 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLExecutable executor;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) TokenBucket rateLimiter;
-    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean quotaFlag;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isRequestAccepted;
     private final Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
     private MLModel modelInfo;
@@ -160,6 +160,8 @@ public class MLModelCache {
         if (executor != null) {
             executor.close();
         }
+        rateLimiter = null;
+        isRequestAccepted = null;
     }
 
     public void addModelInferenceDuration(double duration, long maxRequestCount) {

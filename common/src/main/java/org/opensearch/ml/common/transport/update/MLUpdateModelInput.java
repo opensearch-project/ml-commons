@@ -16,6 +16,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelController;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
@@ -32,6 +33,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String MODEL_VERSION_FIELD = "model_version"; // passively set when register model to a new model group
     public static final String MODEL_NAME_FIELD = "name"; // optional
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
+    public static final String MODEL_CONTROLLER_FIELD = "model_controller"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
     public static final String CONNECTOR_FIELD = "connector"; // optional
     public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
@@ -45,6 +47,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String version;
     private String name;
     private String modelGroupId;
+    private MLModelController modelController;
     private MLModelConfig modelConfig;
     private Connector connector;
     private String connectorId;
@@ -53,13 +56,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
-                              MLModelConfig modelConfig, Connector connector, String connectorId,
-                              MLCreateConnectorInput connectorUpdateContent, Instant lastUpdateTime) {
+                              MLModelController modelController, MLModelConfig modelConfig,
+                              Connector connector, String connectorId, MLCreateConnectorInput connectorUpdateContent, Instant lastUpdateTime) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
         this.name = name;
         this.modelGroupId = modelGroupId;
+        this.modelController = modelController;
         this.modelConfig = modelConfig;
         this.connector = connector;
         this.connectorId = connectorId;
@@ -73,6 +77,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         version = in.readOptionalString();
         name = in.readOptionalString();
         modelGroupId = in.readOptionalString();
+        if (in.readBoolean()) {
+            modelController = new MLModelController(in);
+        }
         if (in.readBoolean()) {
             modelConfig = new TextEmbeddingModelConfig(in);
         }
@@ -102,6 +109,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelGroupId != null) {
             builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
         }
+        if (modelController != null) {
+            builder.field(MODEL_CONTROLLER_FIELD, modelController);
+        }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
@@ -128,6 +138,12 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(version);
         out.writeOptionalString(name);
         out.writeOptionalString(modelGroupId);
+        if (modelController != null) {
+            out.writeBoolean(true);
+            modelController.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
         if (modelConfig != null) {
             out.writeBoolean(true);
             modelConfig.writeTo(out);
@@ -156,6 +172,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         String version = null;
         String name = null;
         String modelGroupId = null;
+        MLModelController modelController = null;
         MLModelConfig modelConfig = null;
         Connector connector = null;
         String connectorId = null;
@@ -182,6 +199,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
                     break;
+                case MODEL_CONTROLLER_FIELD:
+                    modelController = MLModelController.parse(parser);
+                    break;
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
@@ -203,6 +223,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             }
         }
         // Model ID can only be set through RestRequest. Model version can only be set automatically.
-        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, modelConfig, connector, connectorId, connectorUpdateContent, lastUpdateTime);
+        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, modelController, modelConfig, connector, connectorId, connectorUpdateContent, lastUpdateTime);
     }
 }

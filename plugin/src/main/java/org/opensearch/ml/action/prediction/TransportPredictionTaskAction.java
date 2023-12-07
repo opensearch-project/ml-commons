@@ -57,8 +57,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     public TransportPredictionTaskAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLPredictTaskRunner mlPredictTaskRunner,
         MLModelCacheHelper modelCacheHelper,
+        MLPredictTaskRunner mlPredictTaskRunner,
         ClusterService clusterService,
         Client client,
         NamedXContentRegistry xContentRegistry,
@@ -106,16 +106,21 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         new MLValidationException("User Doesn't have privilege to perform this operation on this model")
                                     );
                             } else {
-                                if (modelCacheHelper.getQuotaFlag(modelId) != null && !modelCacheHelper.getQuotaFlag(modelId)) {
+                                if (modelCacheHelper.getIsRequestAccepted(modelId) != null
+                                    && !modelCacheHelper.getIsRequestAccepted(modelId)) {
                                     wrappedListener
                                         .onFailure(new OpenSearchStatusException("Quota is depleted.", RestStatus.TOO_MANY_REQUESTS));
                                 } else {
-                                    if (modelCacheHelper.getRateLimiter(modelId) != null
-                                        && !modelCacheHelper.getRateLimiter(modelId).request()) {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)
-                                            );
+                                    if (FunctionName.isDLModel(functionName)) {
+                                        if (modelCacheHelper.getRateLimiter(modelId) != null
+                                            && !modelCacheHelper.getRateLimiter(modelId).request()) {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)
+                                                );
+                                        } else {
+                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                        }
                                     } else {
                                         executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                     }

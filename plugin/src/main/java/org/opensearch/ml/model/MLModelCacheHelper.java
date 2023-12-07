@@ -101,23 +101,23 @@ public class MLModelCacheHelper {
     /**
      * Set a quota flag to control if the model can still receive request
      * @param modelId model id
-     * @param quotaFlag rate limiter
+     * @param isRequestAccepted quota flag
      */
-    public synchronized void setQuotaFlag(String modelId, Boolean quotaFlag) {
+    public synchronized void setIsRequestAccepted(String modelId, Boolean isRequestAccepted) {
         log.debug("Setting the quota flag for Model {}", modelId);
-        getExistingModelCache(modelId).setQuotaFlag(quotaFlag);
+        getExistingModelCache(modelId).setIsRequestAccepted(isRequestAccepted);
     }
 
     /**
      * Get the current quota flag condition for the model
      * @param modelId model id
      */
-    public Boolean getQuotaFlag(String modelId) {
+    public Boolean getIsRequestAccepted(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache == null) {
             return null;
         }
-        return modelCache.getQuotaFlag();
+        return modelCache.getIsRequestAccepted();
     }
 
     /**

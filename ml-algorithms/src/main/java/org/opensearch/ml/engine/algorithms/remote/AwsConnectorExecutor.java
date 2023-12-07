@@ -26,6 +26,7 @@ import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -62,6 +63,9 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
     @Setter
     @Getter
     private ClusterService clusterService;
+    @Setter
+    @Getter
+    private TokenBucket modelRateLimiter;
 
     public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
         this.connector = (AwsConnector) connector;
