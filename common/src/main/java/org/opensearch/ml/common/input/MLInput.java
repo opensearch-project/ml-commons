@@ -8,6 +8,7 @@ package org.opensearch.ml.common.input;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -21,6 +22,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -55,6 +57,8 @@ public class MLInput implements Input {
     public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
     // Input text sentences for text embedding model
     public static final String TEXT_DOCS_FIELD = "text_docs";
+    // Input query text to compare against for text similarity model
+    public static final String QUERY_TEXT_FIELD = "query_text";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -157,6 +161,20 @@ public class MLInput implements Input {
                             builder.field(TARGET_RESPONSE_POSITIONS_FIELD, targetPositions.toArray(new Integer[0]));
                         }
                     }
+                    break;
+                case TEXT_SIMILARITY:
+                    TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
+                    List<String> tdocs = ds.getTextDocs();
+                    String queryText = ds.getQueryText();
+                    builder.field(QUERY_TEXT_FIELD, queryText);
+                    if (tdocs != null && !tdocs.isEmpty()) {
+                        builder.startArray(TEXT_DOCS_FIELD);
+                        for(String d : tdocs) {
+                            builder.value(d);
+                        }
+                        builder.endArray();
+                    }
+                    break;
                 default:
                     break;
             }
@@ -186,6 +204,7 @@ public class MLInput implements Input {
         List<String> targetResponse = new ArrayList<>();
         List<Integer> targetResponsePositions = new ArrayList<>();
         List<String> textDocs = new ArrayList<>();
+        String queryText = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -233,6 +252,9 @@ public class MLInput implements Input {
                         textDocs.add(parser.text());
                     }
                     break;
+                case QUERY_TEXT_FIELD:
+                    queryText = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -242,6 +264,9 @@ public class MLInput implements Input {
         if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.SPARSE_TOKENIZE) {
             ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
+        }
+        if (algorithm == FunctionName.TEXT_SIMILARITY) {
+            inputDataSet = new TextSimilarityInputDataSet(queryText, textDocs);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }
