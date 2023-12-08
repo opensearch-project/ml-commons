@@ -20,10 +20,12 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
+import org.junit.Assert;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
@@ -119,21 +121,26 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (((Double) map.get("next_token")).intValue() == 1);
     }
 
-    public void testGetConversations_nextPage() throws IOException {
+    public void testGetConversations_nextPage() throws IOException, InterruptedException {
         Response ccresponse1 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse1 != null);
         assert (TestHelper.restStatus(ccresponse1) == RestStatus.OK);
         HttpEntity cchttpEntity1 = ccresponse1.getEntity();
         String ccentityString1 = TestHelper.httpEntityToString(cchttpEntity1);
+        logger.info("ccentityString1={}", ccentityString1);
         Map ccmap1 = gson.fromJson(ccentityString1, Map.class);
         assert (ccmap1.containsKey("conversation_id"));
         String id1 = (String) ccmap1.get("conversation_id");
+
+        // wait for 0.1s to make sure update time is different between conversation 1 and 2
+        TimeUnit.MICROSECONDS.sleep(100);
 
         Response ccresponse2 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse2 != null);
         assert (TestHelper.restStatus(ccresponse2) == RestStatus.OK);
         HttpEntity cchttpEntity2 = ccresponse2.getEntity();
         String ccentityString2 = TestHelper.httpEntityToString(cchttpEntity2);
+        logger.info("ccentityString2={}", ccentityString2);
         Map ccmap2 = gson.fromJson(ccentityString2, Map.class);
         assert (ccmap2.containsKey("conversation_id"));
         String id2 = (String) ccmap2.get("conversation_id");
@@ -151,6 +158,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (TestHelper.restStatus(response1) == RestStatus.OK);
         HttpEntity httpEntity1 = response1.getEntity();
         String entityString1 = TestHelper.httpEntityToString(httpEntity1);
+        logger.info("entityString1={}", entityString1);
         Map map1 = gson.fromJson(entityString1, Map.class);
         assert (map1.containsKey("conversations"));
         assert (map1.containsKey("next_token"));
@@ -158,7 +166,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         ArrayList<Map> conversations1 = (ArrayList<Map>) map1.get("conversations");
         assert (conversations1.size() == 1);
         assert (conversations1.get(0).containsKey("conversation_id"));
-        assert (((String) conversations1.get(0).get("conversation_id")).equals(id2));
+        Assert.assertEquals(conversations1.get(0).get("conversation_id"), id2);
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response = TestHelper
