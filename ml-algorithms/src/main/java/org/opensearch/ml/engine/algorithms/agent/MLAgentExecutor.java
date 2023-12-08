@@ -35,6 +35,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -139,7 +140,7 @@ public class MLAgentExecutor implements Executable {
                                     // get regenerate interaction question
                                     Optional.ofNullable(regenerateInteractionId).ifPresent(interactionId -> {
                                         log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                                        getQuestionFromInteraction(listener, memoryId, interactionId, inputDataSet);
+                                        getQuestionFromInteraction(memoryId, interactionId, inputDataSet);
                                     });
 
                                     // Create root interaction ID
@@ -189,17 +190,11 @@ public class MLAgentExecutor implements Executable {
 
     /**
      * Get question from existing interaction
-     * @param listener listener
      * @param memoryId conversation id
      * @param interactionId interaction id
      * @param inputDataSet input parameters
      */
-    private void getQuestionFromInteraction(
-        ActionListener<Output> listener,
-        String memoryId,
-        String interactionId,
-        RemoteInferenceInputDataSet inputDataSet
-    ) {
+    private void getQuestionFromInteraction(String memoryId, String interactionId, RemoteInferenceInputDataSet inputDataSet) {
         PlainActionFuture<GetInteractionResponse> future = PlainActionFuture.newFuture();
         client.execute(GetInteractionAction.INSTANCE, new GetInteractionRequest(memoryId, interactionId), future);
         try {
@@ -207,7 +202,7 @@ public class MLAgentExecutor implements Executable {
             inputDataSet.getParameters().computeIfAbsent(QUESTION, key -> interactionResponse.getInteraction().getInput());
         } catch (Exception ex) {
             log.error("Can't get regenerate interaction {}", interactionId, ex);
-            throw new RuntimeException(ex);
+            throw new MLException(ex);
         }
     }
 
