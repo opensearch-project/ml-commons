@@ -92,7 +92,7 @@ public class AbstractRetrieverToolTests {
         future.join();
         assertEquals(
             "{\"_index\":\"hybrid-index\",\"_source\":{\"passage_text\":\"Company test_mock have a history of 100 years.\"},\"_id\":\"1\",\"_score\":89.2917}\n"
-                + "{\"_index\":\"hybrid-index\",\"_source\":{\"passage_text\":\"the price of the api is 2$ per invokation\"},\"_id\":\"2\",\"_score\":0.10702579}\n",
+                + "{\"_index\":\"hybrid-index\",\"_source\":{\"passage_text\":\"the price of the api is 2$ per invocation\"},\"_id\":\"2\",\"_score\":0.10702579}\n",
             gson.fromJson(future.get(), String.class)
         );
     }
@@ -125,27 +125,23 @@ public class AbstractRetrieverToolTests {
     }
 
     @Test
-    @SneakyThrows
     public void testRunAsyncWithIllegalQueryThenThrowException() {
         Client client = mock(Client.class);
         mockedImpl.setClient(client);
 
-        assertThrows(
-            "[input] is null or empty, can not process it.",
+        Exception exception = assertThrows(
             IllegalArgumentException.class,
             () -> mockedImpl.run(Map.of(AbstractRetrieverTool.INPUT_FIELD, ""), null)
         );
+        assertEquals("[input] is null or empty, can not process it.", exception.getMessage());
 
-        assertThrows(
-            "[input] is null or empty, can not process it.",
+        exception = assertThrows(
             IllegalArgumentException.class,
             () -> mockedImpl.run(Map.of(AbstractRetrieverTool.INPUT_FIELD, "  "), null)
         );
+        assertEquals("[input] is null or empty, can not process it.", exception.getMessage());
 
-        assertThrows(
-            "[input] is null or empty, can not process it.",
-            IllegalArgumentException.class,
-            () -> mockedImpl.run(Map.of("test", "hello world"), null)
-        );
+        exception = assertThrows(IllegalArgumentException.class, () -> mockedImpl.run(Map.of("test", "hello world"), null));
+        assertEquals("[input] is null or empty, can not process it.", exception.getMessage());
     }
 }

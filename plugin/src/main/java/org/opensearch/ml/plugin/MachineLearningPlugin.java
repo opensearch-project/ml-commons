@@ -519,6 +519,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         SearchAlertsTool.Factory.getInstance().init(client);
         IndexMappingTool.Factory.getInstance().init(client);
 
+        SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
         toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
@@ -529,6 +530,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
+        toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);

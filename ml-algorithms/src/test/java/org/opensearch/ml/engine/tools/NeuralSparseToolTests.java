@@ -64,8 +64,8 @@ public class NeuralSparseToolTests {
         );
 
         Map<String, Object> illegalParams2 = new HashMap<>(params);
-        illegalParams1.remove(NeuralSparseTool.EMBEDDING_FIELD);
-        NeuralSparseTool tool2 = NeuralSparseTool.Factory.getInstance().create(illegalParams1);
+        illegalParams2.remove(NeuralSparseTool.EMBEDDING_FIELD);
+        NeuralSparseTool tool2 = NeuralSparseTool.Factory.getInstance().create(illegalParams2);
         assertThrows(
             "Parameter [embedding_field] and [model_id] can not be null or empty.",
             IllegalArgumentException.class,

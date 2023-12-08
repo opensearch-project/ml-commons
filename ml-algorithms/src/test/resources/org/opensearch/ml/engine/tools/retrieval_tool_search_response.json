@@ -27,7 +27,7 @@
         "_id": "2",
         "_score": 0.10702579,
         "_source": {
-          "passage_text": "the price of the api is 2$ per invokation"
+          "passage_text": "the price of the api is 2$ per invocation"
         }
       }
     ]
