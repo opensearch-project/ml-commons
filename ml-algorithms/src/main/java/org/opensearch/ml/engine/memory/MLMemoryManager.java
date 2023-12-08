@@ -308,6 +308,7 @@ public class MLMemoryManager {
 
         DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(indexName);
         deleteByQueryRequest.setQuery(boolQueryBuilder);
+        deleteByQueryRequest.setRefresh(true);
 
         innerDeleteInteraction(deleteByQueryRequest, interactionId, listener);
     }

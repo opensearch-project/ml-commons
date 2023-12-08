@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
@@ -42,7 +43,6 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -70,7 +70,6 @@ public class MLChatAgentRunner {
 
     public static final String SESSION_ID = "session_id";
     public static final String MEMORY_ID = "memory_id";
-    public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String PROMPT_PREFIX = "prompt_prefix";
     public static final String LLM_TOOL_PROMPT_PREFIX = "LanguageModelTool.prompt_prefix";
     public static final String LLM_TOOL_PROMPT_SUFFIX = "LanguageModelTool.prompt_suffix";
@@ -113,28 +112,18 @@ public class MLChatAgentRunner {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
-        // for regenerate, original interaction id must provide
         String regenerateInteractionId = params.get(REGENERATE_INTERACTION_ID);
         String appType = mlAgent.getAppType();
         String title = params.get(QUESTION);
-        if (null != regenerateInteractionId && memoryId == null) {
-            listener.onFailure(new MLValidationException("memory id must provide for regenerate"));
-            return;
-        }
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
             memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 Iterator<Interaction> iterator = r.iterator();
-                boolean interactionIdFound = false;
                 while (iterator.hasNext()) {
                     Interaction next = iterator.next();
                     if (next.getId().equals(regenerateInteractionId)) {
-                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                        interactionIdFound = true;
-                        // if no new question provided, use original question
-                        params.computeIfAbsent(QUESTION, key -> next.getInput());
                         // there may have other new interactions happened after this interaction
                         continue;
                     }
@@ -165,15 +154,7 @@ public class MLChatAgentRunner {
                     params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                 }
 
-                if (null != regenerateInteractionId && interactionIdFound == false) {
-                    listener
-                        .onFailure(
-                            new MLValidationException(String.format("Invalid interaction Id %s for regenerate", regenerateInteractionId))
-                        );
-                    return;
-                }
-
-                ActionListener<Object> finalListener = interactionIdFound ? ActionListener.runBefore(listener, () -> {
+                ActionListener<Object> finalListener = regenerateInteractionId != null ? ActionListener.runBefore(listener, () -> {
                     memory.getMemoryManager().deleteInteraction(regenerateInteractionId, ActionListener.wrap(deleted -> {}, e -> {
                         log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
                         listener.onFailure(e);

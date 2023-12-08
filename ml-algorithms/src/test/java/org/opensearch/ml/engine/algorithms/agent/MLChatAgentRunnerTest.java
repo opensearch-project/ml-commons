@@ -5,11 +5,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MEMORY_ID;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.REGENERATE_INTERACTION_ID;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -40,7 +41,6 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -178,27 +178,7 @@ public class MLChatAgentRunnerTest {
         Assert.assertEquals(1, agentOutput.size());
         // Respond with last tool output
         Assert.assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
-    }
-
-    @Test
-    public void testRegenerateWithInvalidInput() {
-        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        final MLAgent mlAgent = MLAgent
-            .builder()
-            .name("TestAgent")
-            .memory(mlMemorySpec)
-            .llm(llmSpec)
-            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
-            .build();
-        HashMap<String, String> params = new HashMap<>();
-        params.put(REGENERATE_INTERACTION_ID, "123");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
-        ArgumentCaptor<MLValidationException> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
-        Mockito.verify(agentActionListener).onFailure(argumentCaptor.capture());
-        MLValidationException ex = argumentCaptor.getValue();
-        Assert.assertEquals(ex.getMessage(), "memory id must provide for regenerate");
+        Mockito.verify(mlMemoryManager, never()).deleteInteraction(eq("interaction-1"), any());
     }
 
     @Test
