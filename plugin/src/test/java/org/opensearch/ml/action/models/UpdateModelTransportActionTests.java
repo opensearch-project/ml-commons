@@ -14,11 +14,17 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -32,7 +38,9 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -48,9 +56,13 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelNodesResponse;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -62,6 +74,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.collect.ImmutableList;
 
 public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -103,10 +117,17 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    @Mock
+    MLInPlaceUpdateModelNodesResponse inPlaceUpdateModelNodesResponse;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private ShardId shardId;
+
+    private Settings settings;
+
+    Connector testConnector;
 
     UpdateResponse updateResponse;
 
@@ -116,25 +137,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     MLUpdateModelInput updateLocalModelInput;
 
-    MLUpdateModelRequest updateRemoteModelRequest;
-
-    MLUpdateModelInput updateRemoteModelInput;
-
     MLModel mlModelWithNullFunctionName;
 
     MLModel localModel;
 
     ThreadContext threadContext;
+
+    ClusterState testState;
+
     @Mock
     ClusterService clusterService;
 
     @Mock
     MLEngine mlEngine;
 
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-
+        testState = setupTestClusterState();
         updateLocalModelInput = MLUpdateModelInput
             .builder()
             .modelId("test_model_id")
@@ -143,15 +165,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .modelGroupId("updated_test_model_group_id")
             .build();
         updateLocalModelRequest = MLUpdateModelRequest.builder().updateModelInput(updateLocalModelInput).build();
-        updateRemoteModelInput = MLUpdateModelInput
-            .builder()
-            .modelId("test_model_id")
-            .name("updated_test_name")
-            .description("updated_test_description")
-            .modelGroupId("updated_test_model_group_id")
-            .connectorId("updated_test_connector_id")
-            .build();
-        updateRemoteModelRequest = MLUpdateModelRequest.builder().updateModelInput(updateRemoteModelInput).build();
 
         mlModelWithNullFunctionName = MLModel
             .builder()
@@ -162,7 +175,22 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .modelState(MLModelState.REGISTERED)
             .build();
 
-        Settings settings = Settings.builder().build();
+        settings = Settings
+            .builder()
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
+
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX);
+
+        localModel = prepareMLModel("TEXT_EMBEDDING");
+        threadContext = new ThreadContext(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.state()).thenReturn(testState);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        shardId = new ShardId(new Index("indexName", "uuid"), 1);
+        updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
         transportUpdateModelAction = spy(
             new UpdateModelTransportAction(
@@ -174,17 +202,32 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 mlModelGroupManager,
                 settings,
-                clusterService
+                clusterService,
+                mlEngine
             )
         );
 
-        localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING, false);
-        threadContext = new ThreadContext(settings);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(clusterService.getSettings()).thenReturn(settings);
-        shardId = new ShardId(new Index("indexName", "uuid"), 1);
-        updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+        testConnector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.test.com/v1/test")
+                            .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                            .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
+                            .build()
+                    )
+            )
+            .build();
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -247,150 +290,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelStateLoadedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.LOADED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStateLoadingException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.LOADING).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStatePartiallyLoadedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.PARTIALLY_LOADED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStateDeployedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.DEPLOYED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStateDeployingException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.DEPLOYING).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
-    public void testUpdateModelStatePartiallyDeployedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.PARTIALLY_DEPLOYED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
     public void testUpdateModelWithoutRegisterToNewModelGroupSuccess() {
         updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
@@ -398,8 +297,15 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateModelWithRegisterToSameModelGroupSuccess() {
+        updateLocalModelRequest.getUpdateModelInput().setModelGroupId("test_model_group_id");
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
     public void testUpdateRemoteModelWithLocalInformationSuccess() {
-        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE, false);
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(remoteModel);
@@ -411,41 +317,54 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateRemoteModelWithRemoteInformationSuccess() {
-        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE, false);
+    public void testUpdateExternalRemoteModelWithExternalRemoteInformationSuccess() {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(remoteModel);
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateInternalRemoteModelWithInternalRemoteInformationSuccess() {
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
     public void testUpdateHiddenRemoteModelWithRemoteInformationSuccess() {
-        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE, true);
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(remoteModel);
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
         doReturn(true).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
     public void testUpdateHiddenRemoteModelPermissionError() {
-        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE, true);
+        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(remoteModel);
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
         doReturn(false).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -455,7 +374,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateRemoteModelWithNoStandAloneConnectorFound() {
+    public void testUpdateRemoteModelWithNoExternalConnectorFound() {
         MLModel remoteModelWithInternalConnector = prepareUnsupportedMLModel(FunctionName.REMOTE);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -463,7 +382,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -474,7 +393,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlNoPermission() {
-        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE, false);
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(remoteModel);
@@ -487,7 +406,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -498,7 +417,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlOtherException() {
-        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE, false);
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(remoteModel);
@@ -514,7 +433,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -650,11 +569,19 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateLocalModelWithRemoteInformation() {
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+    public void testUpdateLocalModelWithExternalRemoteInformation() {
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Trying to update the connector or connector_id field on a local model", argumentCaptor.getValue().getMessage());
+        assertEquals("Trying to update the connector or connector_id field on a local model.", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateLocalModelWithInternalRemoteInformation() {
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Trying to update the connector or connector_id field on a local model.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -666,7 +593,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -816,39 +743,371 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         );
     }
 
-    // TODO: Add UT to make sure that version incremented successfully.
+    @Test
+    public void testUpdateModelStateDeployingException() {
+        MLModel testDeployingModel = prepareMLModel("TEXT_EMBEDDING", MLModelState.DEPLOYING);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testDeployingModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-    private MLModel prepareMLModel(FunctionName functionName, boolean isHidden) throws IllegalArgumentException {
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Model is deploying, please wait for it complete. model ID test_model_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStateDeployedSuccess() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStateDeployedWrongStatus() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateWrongResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateWrongResponse);
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStateDeployedInPlaceUpdateException() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStateDeployedUpdateException() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testInPlaceUpdateModelRegisterToNewModelGroupSuccess() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testInPlaceUpdateModelRegisterToNewModelGroupWrongStatus() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateWrongResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateWrongResponse);
+    }
+
+    @Test
+    public void testInPlaceUpdateModelRegisterToNewModelGroupInPlaceUpdateException() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testInPlaceUpdateModelRegisterToNewModelGroupUpdateException() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStateLoadedSuccess() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.LOADED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStatePartiallyDeployedSuccess() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.PARTIALLY_DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testInPlaceUpdateModelStatePartiallyLoadedSuccess() {
+        MLModel testInplaceUpdateModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.PARTIALLY_LOADED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testInplaceUpdateModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLInPlaceUpdateModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(inPlaceUpdateModelNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testInplaceUpdateModelRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testInplaceUpdateModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testInplaceUpdateModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    // TODO: Add UT to make sure that version incremented successfully.
+    private MLModel prepareMLModel(String functionName, MLModelState modelState, boolean isHidden) throws IllegalArgumentException {
         MLModel mlModel;
         switch (functionName) {
-            case TEXT_EMBEDDING:
+            case "TEXT_EMBEDDING":
                 mlModel = MLModel
                     .builder()
                     .name("test_name")
                     .modelId("test_model_id")
                     .modelGroupId("test_model_group_id")
                     .description("test_description")
-                    .modelState(MLModelState.REGISTERED)
+                    .modelState(modelState)
                     .algorithm(FunctionName.TEXT_EMBEDDING)
                     .isHidden(isHidden)
                     .build();
                 return mlModel;
-            case REMOTE:
+            case "REMOTE_EXTERNAL":
                 mlModel = MLModel
                     .builder()
                     .name("test_name")
                     .modelId("test_model_id")
                     .modelGroupId("test_model_group_id")
                     .description("test_description")
-                    .modelState(MLModelState.REGISTERED)
+                    .modelState(modelState)
                     .algorithm(FunctionName.REMOTE)
                     .connectorId("test_connector_id")
                     .isHidden(isHidden)
                     .build();
                 return mlModel;
+            case "REMOTE_INTERNAL":
+                mlModel = MLModel
+                    .builder()
+                    .name("test_name")
+                    .modelId("test_model_id")
+                    .modelGroupId("test_model_group_id")
+                    .description("test_description")
+                    .modelState(modelState)
+                    .algorithm(FunctionName.REMOTE)
+                    .connector(testConnector)
+                    .isHidden(isHidden)
+                    .build();
+                return mlModel;
             default:
-                throw new IllegalArgumentException("Please choose from FunctionName.TEXT_EMBEDDING and FunctionName.REMOTE");
+                throw new IllegalArgumentException("Please choose from TEXT_EMBEDDING, REMOTE_EXTERNAL, or REMOTE_INTERNAL");
         }
+    }
+
+    private MLModel prepareMLModel(String functionName, MLModelState modelState) throws IllegalArgumentException {
+        return prepareMLModel(functionName, modelState, false);
+    }
+
+    private MLModel prepareMLModel(String functionName, boolean isHidden) throws IllegalArgumentException {
+        return prepareMLModel(functionName, MLModelState.REGISTERED, isHidden);
+    }
+
+    private MLModel prepareMLModel(String functionName) throws IllegalArgumentException {
+        return prepareMLModel(functionName, MLModelState.REGISTERED, false);
     }
 
     private MLModel prepareUnsupportedMLModel(FunctionName unsupportedCase) throws IllegalArgumentException {
@@ -881,10 +1140,144 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }
     }
 
+    private MLUpdateModelRequest prepareRemoteRequest(String remoteRequestType) throws IllegalArgumentException {
+        MLUpdateModelInput updateRemoteModelInput;
+        switch (remoteRequestType) {
+            case "REMOTE_EXTERNAL":
+                updateRemoteModelInput = MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .name("updated_test_name")
+                    .description("updated_test_description")
+                    .modelGroupId("updated_test_model_group_id")
+                    .connectorId("updated_test_connector_id")
+                    .build();
+                return MLUpdateModelRequest.builder().updateModelInput(updateRemoteModelInput).build();
+            case "REMOTE_INTERNAL":
+                MLCreateConnectorInput updateContent = MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .version("1")
+                    .description("updated description")
+                    .build();
+                updateRemoteModelInput = MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .name("updated_test_name")
+                    .description("updated_test_description")
+                    .modelGroupId("updated_test_model_group_id")
+                    .connectorUpdateContent(updateContent)
+                    .build();
+                return MLUpdateModelRequest.builder().updateModelInput(updateRemoteModelInput).build();
+            default:
+                throw new IllegalArgumentException("Please choose from REMOTE_EXTERNAL or REMOTE_INTERNAL");
+        }
+    }
+
     private GetResponse prepareGetResponse(MLModelGroup mlModelGroup) throws IOException {
         XContentBuilder content = mlModelGroup.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStateLoadingException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.LOADING).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStateLoadedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.LOADED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStatePartiallyLoadedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.PARTIALLY_LOADED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Ignore
+    @Test
+    public void testUpdateModelStatePartiallyDeployedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.PARTIALLY_DEPLOYED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 }

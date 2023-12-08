@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.apache.lucene.search.TotalHits;
@@ -61,11 +62,10 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
-    private UpdateConnectorTransportAction transportUpdateConnectorAction;
+    private UpdateConnectorTransportAction updateConnectorTransportAction;
 
     @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -157,7 +157,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
 
-        transportUpdateConnectorAction = new UpdateConnectorTransportAction(
+        updateConnectorTransportAction = new UpdateConnectorTransportAction(
             transportService,
             actionFilters,
             client,
@@ -179,8 +179,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                 .name("test")
                 .protocol("http")
                 .version("1")
-                .credential(ImmutableMap.of("api_key", "credential_value"))
-                .parameters(ImmutableMap.of("param1", "value1"))
+                .credential(Map.of("api_key", "credential_value"))
+                .parameters(Map.of("param1", "value1"))
                 .actions(
                     Arrays
                         .asList(
@@ -189,7 +189,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                                 .actionType(ConnectorAction.ActionType.PREDICT)
                                 .method("POST")
                                 .url("https://api.openai.com/v1/chat/completions")
-                                .headers(ImmutableMap.of("Authorization", "Bearer ${credential.api_key}"))
+                                .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
                                 .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
                                 .build()
                         )
@@ -203,7 +203,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_execute_connectorAccessControl_success() {
+    public void testExecuteConnectorAccessControlSuccess() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
         doAnswer(invocation -> {
@@ -218,15 +218,15 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void test_execute_connectorAccessControl_NoPermission() {
+    public void testExecuteConnectorAccessControlNoPermission() {
         doReturn(false).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -236,31 +236,31 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_execute_connectorAccessControl_AccessError() {
+    public void testExecuteConnectorAccessControlAccessError() {
         doThrow(new RuntimeException("Connector Access Control Error"))
             .when(connectorAccessControlHelper)
             .validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Connector Access Control Error", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void test_execute_connectorAccessControl_Exception() {
+    public void testExecuteConnectorAccessControlException() {
         doThrow(new RuntimeException("exception in access control"))
             .when(connectorAccessControlHelper)
             .validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("exception in access control", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void test_execute_UpdateWrongStatus() {
+    public void testExecuteUpdateWrongStatus() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
         doAnswer(invocation -> {
@@ -276,12 +276,12 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void test_execute_UpdateException() {
+    public void testExecuteUpdateException() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
         doAnswer(invocation -> {
@@ -296,14 +296,14 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("update document failure", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void test_execute_SearchResponseNotEmpty() {
+    public void testExecuteSearchResponseNotEmpty() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
         doAnswer(invocation -> {
@@ -312,7 +312,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(
@@ -321,7 +321,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_execute_SearchResponseError() {
+    public void testExecuteSearchResponseError() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
         doAnswer(invocation -> {
@@ -330,14 +330,14 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Error in Search Request", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void test_execute_SearchIndexNotFoundError() {
+    public void testExecuteSearchIndexNotFoundError() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
         doAnswer(invocation -> {
@@ -347,8 +347,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                 .name("test")
                 .protocol("http")
                 .version("1")
-                .credential(ImmutableMap.of("api_key", "credential_value"))
-                .parameters(ImmutableMap.of("param1", "value1"))
+                .credential(Map.of("api_key", "credential_value"))
+                .parameters(Map.of("param1", "value1"))
                 .actions(
                     Arrays
                         .asList(
@@ -357,7 +357,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                                 .actionType(ConnectorAction.ActionType.PREDICT)
                                 .method("POST")
                                 .url("https://api.openai.com/v1/chat/completions")
-                                .headers(ImmutableMap.of("Authorization", "Bearer ${credential.api_key}"))
+                                .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
                                 .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
                                 .build()
                         )
@@ -381,7 +381,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 

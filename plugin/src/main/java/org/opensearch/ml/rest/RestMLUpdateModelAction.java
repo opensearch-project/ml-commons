@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
@@ -64,9 +66,16 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         try {
             MLUpdateModelInput input = MLUpdateModelInput.parse(parser);
-            // Model ID can only be set here. Model version can only be set automatically.
+            if (input.getConnectorId() != null && input.getConnectorUpdateContent() != null) {
+                throw new OpenSearchStatusException(
+                    "Model cannot have both stand-alone connector and internal connector. Please check your update input body.",
+                    RestStatus.BAD_REQUEST
+                );
+            }
+            // Model ID can only be set here. Model version as well as connector field can only be set automatically.
             input.setModelId(modelId);
             input.setVersion(null);
+            input.setConnector(null);
             return new MLUpdateModelRequest(input);
         } catch (IllegalStateException e) {
             throw new OpenSearchParseException(e.getMessage());
