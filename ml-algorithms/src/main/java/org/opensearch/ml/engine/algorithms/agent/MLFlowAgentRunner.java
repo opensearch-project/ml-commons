@@ -176,6 +176,8 @@ public class MLFlowAgentRunner {
 
         } else if (output instanceof ModelTensor) {
             return toJson(((ModelTensor) output).getDataAsMap());
+        } else if (output instanceof ModelTensorOutput) {
+            return toJson(output.toString());
         } else {
             if (output instanceof String) {
                 return (String) output;
