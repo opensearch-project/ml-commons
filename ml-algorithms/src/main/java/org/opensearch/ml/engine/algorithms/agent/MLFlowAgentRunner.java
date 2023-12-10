@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
@@ -177,7 +178,13 @@ public class MLFlowAgentRunner {
         } else if (output instanceof ModelTensor) {
             return toJson(((ModelTensor) output).getDataAsMap());
         } else if (output instanceof ModelTensorOutput) {
-            return toJson(output.toString());
+            List<String> modelTensorList = ((ModelTensorOutput) output)
+                .getMlModelOutputs()
+                .stream()
+                .flatMap(modelTensors -> modelTensors.getMlModelTensors().stream())
+                .map(ModelTensor::getResult)
+                .collect(Collectors.toList());
+            return toJson(modelTensorList);
         } else {
             if (output instanceof String) {
                 return (String) output;
