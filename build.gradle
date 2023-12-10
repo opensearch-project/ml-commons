@@ -44,6 +44,7 @@ plugins {
     id 'java'
     id "io.freefair.lombok" version "8.0.1"
     id 'jacoco'
+    id "me.champeau.jmh" version "0.7.2"
 }
 
 apply plugin: "com.dorongold.task-tree"
@@ -59,6 +60,11 @@ allprojects {
     }
     plugins.withId('jacoco') {
         jacoco.toolVersion = '0.8.10'
+    }
+    plugins.withId('me.champeau.jmh') {
+        jmh {
+            include = 'your.package.name.*'
+        }
     }
 }
 
