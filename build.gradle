@@ -44,7 +44,6 @@ plugins {
     id 'java'
     id "io.freefair.lombok" version "8.0.1"
     id 'jacoco'
-    id 'org.openjdk.jmh' version '1.0.8'
 }
 
 apply plugin: "com.dorongold.task-tree"
