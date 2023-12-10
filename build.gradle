@@ -63,7 +63,7 @@ allprojects {
     }
     plugins.withId('me.champeau.jmh') {
         jmh {
-            include = 'your.package.name.*'
+            include = 'benchmarks.*'
         }
     }
 }
