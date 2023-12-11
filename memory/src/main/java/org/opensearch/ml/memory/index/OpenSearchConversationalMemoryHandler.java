@@ -389,7 +389,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
 
     public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener) {
         UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.META_INDEX_NAME, conversationId);
-        updateContent.putIfAbsent(ConversationalIndexConstants.META_UPDATED_FIELD, Instant.now());
+        updateContent.putIfAbsent(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, Instant.now());
 
         updateRequest.doc(updateContent);
         updateRequest.docAsUpsert(true);

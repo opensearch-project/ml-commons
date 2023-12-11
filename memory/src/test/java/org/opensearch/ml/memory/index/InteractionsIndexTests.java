@@ -45,6 +45,8 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchResponseSections;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.IndicesAdminClient;
@@ -53,12 +55,19 @@ import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -419,6 +428,73 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             .getValue()
             .getMessage()
             .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
+    }
+
+    public void testGetTraces_NoIndex_ThenEmpty() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
+        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
+        verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().size() == 0);
+    }
+
+    public void testGetTraces() {
+        doAnswer(invocation -> {
+            XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+            content.startObject();
+            content.field(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now());
+            content.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "sample inputs");
+            content.field(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, "conversation-id");
+            content.endObject();
+
+            SearchHit[] hits = new SearchHit[1];
+            hits[0] = new SearchHit(0, "iId", null, null).sourceRef(BytesReference.bytes(content));
+            SearchHits searchHits = new SearchHits(hits, null, Float.NaN);
+            SearchResponseSections searchSections = new SearchResponseSections(
+                searchHits,
+                InternalAggregations.EMPTY,
+                null,
+                false,
+                false,
+                null,
+                1
+            );
+            SearchResponse searchResponse = new SearchResponse(
+                searchSections,
+                null,
+                1,
+                1,
+                0,
+                11,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+            );
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        doReturn(true).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
+        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
+        verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().size() == 1);
+    }
+
+    public void testGetTraces_clientFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Client Failure")).when(client).search(any(), any());
+        ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
+        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getTracesListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Client Failure"));
     }
 
     public void testGetAll_BadMaxResults_ThenFail() {

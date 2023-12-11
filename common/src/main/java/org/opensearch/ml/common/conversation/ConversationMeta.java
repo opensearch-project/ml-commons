@@ -67,8 +67,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
      * @return a new conversationMeta object representing the map
      */
     public static ConversationMeta fromMap(String id, Map<String, Object> docFields) {
-        Instant created = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_CREATED_FIELD));
-        Instant updated = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_UPDATED_FIELD));
+        Instant created = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_CREATED_TIME_FIELD));
+        Instant updated = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_UPDATED_TIME_FIELD));
         String name = (String) docFields.get(ConversationalIndexConstants.META_NAME_FIELD);
         String user = (String) docFields.get(ConversationalIndexConstants.USER_FIELD);
         return new ConversationMeta(id, created, updated, name, user);
@@ -99,21 +99,6 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         out.writeOptionalString(user);
     }
 
-    
-    /**
-     * Convert this conversationMeta object into an IndexRequest so it can be indexed
-     * @param index the index to send this conversation to. Should usually be .conversational-meta
-     * @return the IndexRequest for the client to send
-     */
-    public IndexRequest toIndexRequest(String index) {
-        IndexRequest request = new IndexRequest(index);
-        return request.id(this.id).source(
-            ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime,
-            ConversationalIndexConstants.META_UPDATED_FIELD, this.updatedTime,
-            ConversationalIndexConstants.META_NAME_FIELD, this.name
-        );
-    }
-
     @Override
     public String toString() {
         return "{id=" + id
@@ -128,8 +113,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     public XContentBuilder toXContent(XContentBuilder builder, ToXContentObject.Params params) throws IOException {
         builder.startObject();
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, this.id);
-        builder.field(ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime);
-        builder.field(ConversationalIndexConstants.META_UPDATED_FIELD, this.updatedTime);
+        builder.field(ConversationalIndexConstants.META_CREATED_TIME_FIELD, this.createdTime);
+        builder.field(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, this.updatedTime);
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
         if(this.user != null) {
             builder.field(ConversationalIndexConstants.USER_FIELD, this.user);

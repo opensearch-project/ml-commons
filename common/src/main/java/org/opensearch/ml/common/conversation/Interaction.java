@@ -61,6 +61,7 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private Integer traceNum;
 
+    @Builder(toBuilder = true)
     public Interaction(String id, Instant createTime, String conversationId, String input, String promptTemplate, String response, String origin, Map<String, String> additionalInfo) {
         this.id = id;
         this.createTime = createTime;
@@ -90,7 +91,7 @@ public class Interaction implements Writeable, ToXContentObject {
         Map<String,String> additionalInfo  = (Map<String,String>) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
         String parentInteractionId = (String) fields.getOrDefault(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, null);
         Integer traceNum = (Integer) fields.getOrDefault(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, null);
-        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
+        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo, parentInteractionId, traceNum);
     }
 
     /**
@@ -123,7 +124,7 @@ public class Interaction implements Writeable, ToXContentObject {
         }
         String parentInteractionId = in.readOptionalString();
         Integer traceNum = in.readOptionalInt();
-        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
+        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo, parentInteractionId, traceNum);
     }
 
 

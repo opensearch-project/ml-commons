@@ -19,7 +19,6 @@ package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -54,9 +53,9 @@ public class CreateInteractionRequest extends ActionRequest {
     @Getter
     private Map<String, String> additionalInfo;
     @Getter
-    private String parent_interaction_id;
+    private String parentIid;
     @Getter
-    private Integer trace_number;
+    private Integer traceNumber;
 
     public CreateInteractionRequest(
         String conversationId,
@@ -89,8 +88,8 @@ public class CreateInteractionRequest extends ActionRequest {
         if (in.readBoolean()) {
             this.additionalInfo = in.readMap(s -> s.readString(), s -> s.readString());
         }
-        this.parent_interaction_id = in.readOptionalString();
-        this.trace_number = in.readOptionalInt();
+        this.parentIid = in.readOptionalString();
+        this.traceNumber = in.readOptionalInt();
     }
 
     @Override
@@ -107,8 +106,8 @@ public class CreateInteractionRequest extends ActionRequest {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalString(parent_interaction_id);
-        out.writeOptionalInt(trace_number);
+        out.writeOptionalString(parentIid);
+        out.writeOptionalInt(traceNumber);
     }
 
     @Override
@@ -133,7 +132,7 @@ public class CreateInteractionRequest extends ActionRequest {
 
         String input = null;
         String prompt = null;
-        String rep = null;
+        String response = null;
         String origin = null;
         Map<String, String> addinf = new HashMap<>();
         String parintid = null;
@@ -152,13 +151,13 @@ public class CreateInteractionRequest extends ActionRequest {
                     prompt = parser.text();
                     break;
                 case ActionConstants.AI_RESPONSE_FIELD:
-                    rep = parser.text();
+                    response = parser.text();
                     break;
                 case ActionConstants.RESPONSE_ORIGIN_FIELD:
                     origin = parser.text();
                     break;
                 case ActionConstants.ADDITIONAL_INFO_FIELD:
-                    addinf = getParameterMap(parser.map());
+                    addinf = parser.mapStrings();
                     break;
                 case ActionConstants.PARENT_INTERACTION_ID_FIELD:
                     parintid = parser.text();
@@ -172,7 +171,7 @@ public class CreateInteractionRequest extends ActionRequest {
             }
         }
 
-        return new CreateInteractionRequest(cid, input, prompt, rep, origin, addinf, parintid, tracenum);
+        return new CreateInteractionRequest(cid, input, prompt, response, origin, addinf, parintid, tracenum);
     }
 
 }

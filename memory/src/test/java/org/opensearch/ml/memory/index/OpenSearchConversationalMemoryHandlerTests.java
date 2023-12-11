@@ -27,15 +27,20 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.Index;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.conversation.Interaction.InteractionBuilder;
@@ -157,6 +162,34 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         }).when(conversationMetaIndex).getConversations(anyInt(), anyInt(), any());
         ActionFuture<List<ConversationMeta>> result = cmHandler.getConversations(30, 10);
         assert (result.actionGet(200).size() == 0);
+    }
+
+    public void testGetTraces() {
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> al = invocation.getArgument(3);
+            al.onResponse(List.of());
+            return null;
+        }).when(interactionsIndex).getTraces(any(), anyInt(), anyInt(), any());
+        ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
+        cmHandler.getTraces("iId", 0, 10, getTracesListener);
+        ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
+        verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().size() == 0);
+    }
+
+    public void testUpdateConversation() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> al = invocation.getArgument(1);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+            al.onResponse(updateResponse);
+            return null;
+        }).when(conversationMetaIndex).updateConversation(any(), any());
+
+        ActionListener<UpdateResponse> updateConversationListener = mock(ActionListener.class);
+        cmHandler.updateConversation("cId", new HashMap<>(), updateConversationListener);
+        ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(updateConversationListener, times(1)).onResponse(argCaptor.capture());
     }
 
     public void testDelete_NoAccess() {

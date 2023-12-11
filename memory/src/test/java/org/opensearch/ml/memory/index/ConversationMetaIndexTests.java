@@ -35,6 +35,7 @@ import org.mockito.Mock;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.refresh.RefreshResponse;
 import org.opensearch.action.delete.DeleteResponse;
@@ -42,6 +43,8 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.IndicesAdminClient;
@@ -52,6 +55,8 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.Index;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.conversation.ConversationMeta;
@@ -628,12 +633,56 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testGetConversation_ClientFails_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
-        doThrow(new RuntimeException("Clietn Failure")).when(client).admin();
+        doThrow(new RuntimeException("Client Failure")).when(client).admin();
         @SuppressWarnings("unchecked")
         ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Clietn Failure"));
+        assert (argCaptor.getValue().getMessage().equals("Client Failure"));
+    }
+
+    public void testUpdateConversation_NoIndex_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
+        conversationMetaIndex.updateConversation(new UpdateRequest(), getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor
+            .getValue()
+            .getMessage()
+            .equals(
+                "no such index [.plugins-ml-conversation-meta] and cannot update conversation since the conversation index does not exist"
+            ));
+    }
+
+    public void testUpdateConversation_Success() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+        conversationMetaIndex.updateConversation(new UpdateRequest(), getListener);
+        ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(getListener, times(1)).onResponse(argCaptor.capture());
+    }
+
+    public void testUpdateConversation_ClientFails() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
+
+        doThrow(new RuntimeException("Client Failure")).when(client).update(any(), any());
+        conversationMetaIndex.updateConversation(new UpdateRequest(), getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Client Failure"));
     }
 }

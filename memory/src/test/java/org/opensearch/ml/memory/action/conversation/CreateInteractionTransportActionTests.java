@@ -126,6 +126,29 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getId().equals("testID"));
     }
 
+    public void testCreateInteraction_Trace() {
+        CreateInteractionRequest createConversationRequest = new CreateInteractionRequest(
+            "test-cid",
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta"),
+            "parent_id",
+            1
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(6);
+            listener.onResponse("testID");
+            return null;
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        action.doExecute(null, createConversationRequest, actionListener);
+        ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().getId().equals("testID"));
+    }
+
     public void testCreateInteractionFails_thenFail() {
         log.info("testing create interaction transport");
         doAnswer(invocation -> {
