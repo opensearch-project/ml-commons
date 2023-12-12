@@ -76,6 +76,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
         restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");

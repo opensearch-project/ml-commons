@@ -63,6 +63,7 @@ public class ModelHelper {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
+        Boolean isHidden = registerModelInput.getIsHidden();
         boolean deployModel = registerModelInput.isDeployModel();
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         String modelGroupId = registerModelInput.getModelGroupId();
@@ -94,6 +95,7 @@ public class ModelHelper {
                     .url(modelZipFileUrl)
                     .deployModel(deployModel)
                     .modelNodeIds(modelNodeIds)
+                    .isHidden(isHidden)
                     .modelGroupId(modelGroupId)
                     .functionName(FunctionName.from((String) config.get("model_task_type")));
                 config.entrySet().forEach(entry -> {
@@ -138,7 +140,7 @@ public class ModelHelper {
                             }
                             builder.modelConfig(configBuilder.build());
                             break;
-                        case MLRegisterModelInput.HASH_VALUE_FIELD:
+                        case MLRegisterModelInput.MODEL_CONTENT_HASH_VALUE_FIELD:
                             builder.hashValue(entry.getValue().toString());
                             break;
                         default:

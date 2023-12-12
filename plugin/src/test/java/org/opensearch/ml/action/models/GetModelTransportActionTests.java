@@ -7,6 +7,7 @@ package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +66,8 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ClusterService clusterService;
 
+    private Settings settings;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -79,10 +82,18 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").build();
-        Settings settings = Settings.builder().build();
+        settings = Settings.builder().build();
 
         getModelTransportAction = spy(
-            new GetModelTransportAction(transportService, actionFilters, client, xContentRegistry, clusterService, modelAccessControlHelper)
+            new GetModelTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                settings,
+                xContentRegistry,
+                clusterService,
+                modelAccessControlHelper
+            )
         );
 
         doAnswer(invocation -> {
@@ -93,6 +104,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
@@ -103,7 +115,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel();
+        GetResponse getResponse = prepareMLModel(false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
@@ -113,7 +125,47 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testGetModel_Success() throws IOException {
+        GetResponse getResponse = prepareMLModel(false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+        verify(actionListener).onResponse(any(MLModelGetResponse.class));
+    }
+
+    public void testGetModelHidden_Success() throws IOException {
+        GetResponse getResponse = prepareMLModel(true);
+        mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").isUserInitiatedGetRequest(true).build();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        doReturn(true).when(getModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+        verify(actionListener).onResponse(any(MLModelGetResponse.class));
+    }
+
+    public void testGetModelHidden_SuperUserPermissionError() throws IOException {
+        GetResponse getResponse = prepareMLModel(true);
+        mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").isUserInitiatedGetRequest(true).build();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        doReturn(false).when(getModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetModel_ValidateAccessFailed() throws IOException {
@@ -123,7 +175,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel();
+        GetResponse getResponse = prepareMLModel(false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
@@ -172,12 +224,13 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
-    public GetResponse prepareMLModel() throws IOException {
+    public GetResponse prepareMLModel(boolean isHidden) throws IOException {
         MLModel mlModel = MLModel
             .builder()
             .modelId("test_id")
             .modelState(MLModelState.REGISTERED)
             .algorithm(FunctionName.TEXT_EMBEDDING)
+            .isHidden(isHidden)
             .build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);

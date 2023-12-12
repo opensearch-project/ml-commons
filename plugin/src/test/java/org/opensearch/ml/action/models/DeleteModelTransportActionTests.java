@@ -7,6 +7,7 @@ package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -109,6 +110,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                settings,
                 xContentRegistry,
                 clusterService,
                 modelAccessControlHelper
@@ -122,6 +124,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
@@ -140,7 +143,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -149,6 +152,60 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
+    }
+
+    public void testDeleteHiddenModel_Success() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(true).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        verify(actionListener).onResponse(deleteResponse);
+    }
+
+    public void testDeleteHiddenModel_NoSuperAdminPermission() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(false).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModel_Success_AlgorithmNotNull() throws IOException {
@@ -165,7 +222,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -177,7 +234,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void test_UserHasNoAccessException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID");
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID", false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -197,7 +254,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_CheckModelState() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING, null);
+        GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -240,7 +297,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -254,7 +311,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void test_ValidationFailedException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -298,7 +355,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_RuntimeException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -392,8 +449,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID) throws IOException {
-        MLModel mlModel = MLModel.builder().modelId("test_id").modelState(mlModelState).modelGroupId(modelGroupID).build();
+    public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID, boolean isHidden) throws IOException {
+        MLModel mlModel;
+        mlModel = MLModel.builder().modelId("test_id").modelState(mlModelState).modelGroupId(modelGroupID).isHidden(isHidden).build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
