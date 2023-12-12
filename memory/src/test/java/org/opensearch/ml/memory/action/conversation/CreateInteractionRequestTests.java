@@ -18,6 +18,7 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 
 import org.junit.Before;
@@ -47,7 +48,14 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
     }
 
     public void testConstructorsAndStreaming() throws IOException {
-        CreateInteractionRequest request = new CreateInteractionRequest("cid", "input", "pt", "response", "origin", "metadata");
+        CreateInteractionRequest request = new CreateInteractionRequest(
+            "cid",
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta")
+        );
         assert (request.validate() == null);
         assert (request.getConversationId().equals("cid"));
         assert (request.getInput().equals("input"));
@@ -67,14 +75,21 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
     }
 
     public void testNullCID_thenFail() {
-        CreateInteractionRequest request = new CreateInteractionRequest(null, "input", "pt", "response", "origin", "metadata");
+        CreateInteractionRequest request = new CreateInteractionRequest(
+            null,
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta")
+        );
         assert (request.validate() != null);
         assert (request.validate().validationErrors().size() == 1);
         assert (request.validate().validationErrors().get(0).equals("Interaction MUST belong to a conversation ID"));
     }
 
     public void testFromRestRequest() throws IOException {
-        Map<String, String> params = Map
+        Map<String, Object> params = Map
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
@@ -85,19 +100,57 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
                 "origin",
                 ActionConstants.ADDITIONAL_INFO_FIELD,
-                "metadata"
+                Collections.singletonMap("metadata", "some meta")
             );
+
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid"))
             .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
             .build();
         CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
+
         assert (request.validate() == null);
         assert (request.getConversationId().equals("cid"));
         assert (request.getInput().equals("input"));
         assert (request.getPromptTemplate().equals("pt"));
         assert (request.getResponse().equals("response"));
         assert (request.getOrigin().equals("origin"));
-        assert (request.getAdditionalInfo().equals("metadata"));
+        assert (request.getAdditionalInfo().equals(Collections.singletonMap("metadata", "some meta")));
+    }
+
+    public void testFromRestRequest_Trace() throws IOException {
+        Map<String, Object> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "pt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin",
+                ActionConstants.ADDITIONAL_INFO_FIELD,
+                Collections.singletonMap("metadata", "some meta"),
+                ActionConstants.PARENT_INTERACTION_ID_FIELD,
+                "parentId",
+                ActionConstants.TRACE_NUMBER_FIELD,
+                1
+            );
+
+        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "tid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
+        CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
+
+        assert (request.validate() == null);
+        assert (request.getConversationId().equals("tid"));
+        assert (request.getInput().equals("input"));
+        assert (request.getPromptTemplate().equals("pt"));
+        assert (request.getResponse().equals("response"));
+        assert (request.getOrigin().equals("origin"));
+        assert (request.getAdditionalInfo().equals(Collections.singletonMap("metadata", "some meta")));
+        assert (request.getParentIid().equals("parentId"));
+        assert (request.getTraceNumber().equals(1));
     }
 }

@@ -19,6 +19,7 @@ package org.opensearch.ml.rest;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Map;
 
 import org.apache.http.HttpEntity;
@@ -101,7 +102,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map
+        Map<String, Object> params = Map
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
@@ -112,7 +113,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
                 ActionConstants.ADDITIONAL_INFO_FIELD,
-                "some metadata"
+                Collections.singletonMap("meta data", "some meta")
             );
         Response response = TestHelper
             .makeRequest(
@@ -156,7 +157,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map
+        Map<String, Object> params = Map
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
@@ -167,7 +168,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
                 ActionConstants.ADDITIONAL_INFO_FIELD,
-                "some metadata"
+                Collections.singletonMap("meta data", "some meta")
             );
         Response response = TestHelper
             .makeRequest(
@@ -219,7 +220,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map
+        Map<String, Object> params = Map
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
@@ -230,7 +231,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
                 ActionConstants.ADDITIONAL_INFO_FIELD,
-                "some metadata"
+                Collections.singletonMap("meta data", "some meta")
             );
         Response response = TestHelper
             .makeRequest(
@@ -285,7 +286,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (((ArrayList) map1.get("interactions")).size() == 1);
         @SuppressWarnings("unchecked")
         ArrayList<Map> interactions = (ArrayList<Map>) map1.get("interactions");
-        assert (((String) interactions.get(0).get("interaction_id")).equals(iid2));
+        assert (((String) interactions.get(0).get("interaction_id")).equals(iid));
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response3 = TestHelper
@@ -307,7 +308,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         assert (((ArrayList) map3.get("interactions")).size() == 1);
         @SuppressWarnings("unchecked")
         ArrayList<Map> interactions3 = (ArrayList<Map>) map3.get("interactions");
-        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid));
+        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid2));
         assert (((Double) map3.get("next_token")).intValue() == 2);
     }
 }

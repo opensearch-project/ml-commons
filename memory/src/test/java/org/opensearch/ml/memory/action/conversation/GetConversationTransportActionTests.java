@@ -105,7 +105,7 @@ public class GetConversationTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testGetConversation() {
-        ConversationMeta result = new ConversationMeta("test-cid", Instant.now(), "name", null);
+        ConversationMeta result = new ConversationMeta("test-cid", Instant.now(), Instant.now(), "name", null);
         doAnswer(invocation -> {
             ActionListener<ConversationMeta> listener = invocation.getArgument(1);
             listener.onResponse(result);

@@ -19,6 +19,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.search.spell.LevenshteinDistance;
@@ -45,9 +46,36 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
     public void setup() {
         interactions = List
             .of(
-                new Interaction("id0", Instant.now(), "cid", "input", "pt", "response", "origin", "metadata"),
-                new Interaction("id1", Instant.now(), "cid", "input", "pt", "response", "origin", "mteadata"),
-                new Interaction("id2", Instant.now(), "cid", "input", "pt", "response", "origin", "metadata")
+                new Interaction(
+                    "id0",
+                    Instant.now(),
+                    "cid",
+                    "input",
+                    "pt",
+                    "response",
+                    "origin",
+                    Collections.singletonMap("metadata", "some meta")
+                ),
+                new Interaction(
+                    "id1",
+                    Instant.now(),
+                    "cid",
+                    "input",
+                    "pt",
+                    "response",
+                    "origin",
+                    Collections.singletonMap("metadata", "some meta")
+                ),
+                new Interaction(
+                    "id2",
+                    Instant.now(),
+                    "cid",
+                    "input",
+                    "pt",
+                    "response",
+                    "origin",
+                    Collections.singletonMap("metadata", "some meta")
+                )
             );
     }
 
@@ -74,7 +102,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":\""
             + interaction.getCreateTime()
-            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":\"metadata\"}],\"next_token\":2}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"}}],\"next_token\":2}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
@@ -91,7 +119,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":\""
             + interaction.getCreateTime()
-            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":\"metadata\"}]}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"}}]}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness

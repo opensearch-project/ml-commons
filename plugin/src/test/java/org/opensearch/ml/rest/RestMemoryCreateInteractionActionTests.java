@@ -23,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +62,7 @@ public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
     }
 
     public void testPrepareRequest() throws Exception {
-        Map<String, String> params = Map
+        Map<String, Object> params = Map
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
@@ -72,7 +73,7 @@ public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
                 "origin",
                 ActionConstants.ADDITIONAL_INFO_FIELD,
-                "metadata"
+                Collections.singletonMap("metadata", "some meta")
             );
         RestMemoryCreateInteractionAction action = new RestMemoryCreateInteractionAction();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -92,6 +93,6 @@ public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
         assert (req.getPromptTemplate().equals("pt"));
         assert (req.getResponse().equals("response"));
         assert (req.getOrigin().equals("origin"));
-        assert (req.getAdditionalInfo().equals("metadata"));
+        assert (req.getAdditionalInfo().equals(Collections.singletonMap("metadata", "some meta")));
     }
 }
