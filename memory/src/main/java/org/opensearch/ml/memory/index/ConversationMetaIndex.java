@@ -39,6 +39,8 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
@@ -71,7 +73,7 @@ public class ConversationMetaIndex {
     private Client client;
     private ClusterService clusterService;
 
-    private String userstr() {
+    private String getUserStrFromThreadContext() {
         return client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
     }
 
@@ -119,21 +121,27 @@ public class ConversationMetaIndex {
     /**
      * Adds a new conversation with the specified name to the index
      * @param name user-specified name of the conversation to be added
+     * @param applicationType the application type that creates this conversation
      * @param listener listener to wait for this to finish
      */
-    public void createConversation(String name, ActionListener<String> listener) {
+    public void createConversation(String name, String applicationType, ActionListener<String> listener) {
         initConversationMetaIndexIfAbsent(ActionListener.wrap(indexExists -> {
             if (indexExists) {
-                String userstr = userstr();
+                String userstr = getUserStrFromThreadContext();
+                Instant now = Instant.now();
                 IndexRequest request = Requests
                     .indexRequest(META_INDEX_NAME)
                     .source(
-                        ConversationalIndexConstants.META_CREATED_FIELD,
-                        Instant.now(),
+                        ConversationalIndexConstants.META_CREATED_TIME_FIELD,
+                        now,
+                        ConversationalIndexConstants.META_UPDATED_TIME_FIELD,
+                        now,
                         ConversationalIndexConstants.META_NAME_FIELD,
                         name,
                         ConversationalIndexConstants.USER_FIELD,
-                        userstr == null ? null : User.parse(userstr).getName()
+                        userstr == null ? null : User.parse(userstr).getName(),
+                        ConversationalIndexConstants.APPLICATION_TYPE_FIELD,
+                        applicationType
                     );
                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -163,7 +171,16 @@ public class ConversationMetaIndex {
      * @param listener listener to wait for this to finish
      */
     public void createConversation(ActionListener<String> listener) {
-        createConversation("", listener);
+        createConversation("", "", listener);
+    }
+
+    /**
+     * Adds a new conversation named ""
+     * @param name user-specified name of the conversation to be added
+     * @param listener listener to wait for this to finish
+     */
+    public void createConversation(String name, ActionListener<String> listener) {
+        createConversation(name, "", listener);
     }
 
     /**
@@ -175,10 +192,9 @@ public class ConversationMetaIndex {
     public void getConversations(int from, int maxResults, ActionListener<List<ConversationMeta>> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
             listener.onResponse(List.of());
-            return;
         }
         SearchRequest request = Requests.searchRequest(META_INDEX_NAME);
-        String userstr = userstr();
+        String userstr = getUserStrFromThreadContext();
         QueryBuilder queryBuilder;
         if (userstr == null)
             queryBuilder = new MatchAllQueryBuilder();
@@ -186,7 +202,7 @@ public class ConversationMetaIndex {
             queryBuilder = new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
         request.source().query(queryBuilder);
         request.source().from(from).size(maxResults);
-        request.source().sort(ConversationalIndexConstants.META_CREATED_FIELD, SortOrder.DESC);
+        request.source().sort(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<ConversationMeta>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(searchResponse -> {
@@ -228,10 +244,9 @@ public class ConversationMetaIndex {
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
             listener.onResponse(true);
-            return;
         }
         DeleteRequest delRequest = Requests.deleteRequest(META_INDEX_NAME).id(conversationId);
-        String userstr = userstr();
+        String userstr = getUserStrFromThreadContext();
         String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
         this.checkAccess(conversationId, ActionListener.wrap(access -> {
             if (access) {
@@ -272,7 +287,7 @@ public class ConversationMetaIndex {
             listener.onResponse(true);
             return;
         }
-        String userstr = userstr();
+        String userstr = getUserStrFromThreadContext();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             GetRequest getRequest = Requests.getRequest(META_INDEX_NAME).id(conversationId);
@@ -317,7 +332,7 @@ public class ConversationMetaIndex {
         QueryBuilder originalQuery = request.source().query();
         BoolQueryBuilder newQuery = new BoolQueryBuilder();
         newQuery.must(originalQuery);
-        String userstr = userstr();
+        String userstr = getUserStrFromThreadContext();
         if (userstr != null) {
             String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
             newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, user));
@@ -337,6 +352,28 @@ public class ConversationMetaIndex {
     }
 
     /**
+     * Update conversations in the index
+     * @param updateRequest original update request
+     * @param listener receives the update response for the wrapped query
+     */
+    public void updateConversation(UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
+        if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
+            listener
+                .onFailure(
+                    new IndexNotFoundException("cannot update conversation since the conversation index does not exist", META_INDEX_NAME)
+                );
+            return;
+        }
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            client.update(updateRequest, internalListener);
+        } catch (Exception e) {
+            log.error("Failed to update Conversation. Details {}:", e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
      * Get a single ConversationMeta object
      * @param conversationId id of the conversation to get
      * @param listener receives the conversationMeta object
@@ -349,7 +386,7 @@ public class ConversationMetaIndex {
                 );
             return;
         }
-        String userstr = userstr();
+        String userstr = getUserStrFromThreadContext();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<ConversationMeta> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             GetRequest request = Requests.getRequest(META_INDEX_NAME).id(conversationId);

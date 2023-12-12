@@ -24,6 +24,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -149,7 +150,21 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
         when(memoryClient.getInteractions(any(), anyInt()))
-            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}")));
+            .thenReturn(
+                List
+                    .of(
+                        new Interaction(
+                            "0",
+                            Instant.now(),
+                            "1",
+                            "question",
+                            "",
+                            "answer",
+                            "foo",
+                            Collections.singletonMap("meta data", "some meta")
+                        )
+                    )
+            );
         processor.setMemoryClient(memoryClient);
 
         SearchRequest request = new SearchRequest();
@@ -209,7 +224,21 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
         when(memoryClient.getInteractions(any(), anyInt()))
-            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}")));
+            .thenReturn(
+                List
+                    .of(
+                        new Interaction(
+                            "0",
+                            Instant.now(),
+                            "1",
+                            "question",
+                            "",
+                            "answer",
+                            "foo",
+                            Collections.singletonMap("meta data", "some meta")
+                        )
+                    )
+            );
         processor.setMemoryClient(memoryClient);
 
         SearchRequest request = new SearchRequest();
@@ -270,7 +299,21 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
         when(memoryClient.getInteractions(any(), anyInt()))
-            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}")));
+            .thenReturn(
+                List
+                    .of(
+                        new Interaction(
+                            "0",
+                            Instant.now(),
+                            "1",
+                            "question",
+                            "",
+                            "answer",
+                            "foo",
+                            Collections.singletonMap("meta data", "some meta")
+                        )
+                    )
+            );
         processor.setMemoryClient(memoryClient);
 
         SearchRequest request = new SearchRequest();
