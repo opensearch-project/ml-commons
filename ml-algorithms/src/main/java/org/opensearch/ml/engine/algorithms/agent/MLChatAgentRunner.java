@@ -332,6 +332,7 @@ public class MLChatAgentRunner {
                     MLTaskResponse llmResponse = (MLTaskResponse) output;
                     ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
                     Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+                    log.trace("Step {}, LLM response: {}", finalI, dataAsMap);
 
                     String thought = dataAsMap.get("thought") + "";
                     String action = dataAsMap.get("tool") + "";
@@ -576,6 +577,7 @@ public class MLChatAgentRunner {
                     }
                 } else {
                     Object result = output;
+                    log.trace("Step {}, Tool {} response: {}", finalI, lastAction.get(), result);
                     MLToolSpec toolSpec = toolSpecMap.get(lastAction.get());
                     if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
                         String outputString = output instanceof String

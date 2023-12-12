@@ -141,8 +141,8 @@ public class MLChatAgentRunnerTest {
             .run(Mockito.anyMap(), nextStepListenerCaptor.capture());
 
         Mockito
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 1", "action", FIRST_TOOL)))
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 2", "action", SECOND_TOOL)))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 1", "tool", FIRST_TOOL)))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 2", "tool", SECOND_TOOL)))
             .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 3", "final_answer", "This is the final answer")))
             .when(client)
             .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
