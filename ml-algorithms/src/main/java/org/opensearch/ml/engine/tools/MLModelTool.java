@@ -53,12 +53,9 @@ public class MLModelTool implements Tool {
         this.client = client;
         this.modelId = modelId;
 
-        outputParser = new Parser() {
-            @Override
-            public Object parse(Object o) {
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
+        outputParser = o -> {
+            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
         };
     }
 
@@ -72,11 +69,7 @@ public class MLModelTool implements Tool {
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.<MLTaskResponse>wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
-            if (outputParser == null) {
-                listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
-            } else {
-                listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
-            }
+            listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
         }, e -> {
             log.error("Failed to run model " + modelId, e);
             listener.onFailure(e);
