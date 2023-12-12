@@ -44,7 +44,7 @@ public class TransportSearchAgentAction extends HandledTransportAction<SearchReq
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             client.search(request, wrappedListener);
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error("failed to search the agent index", e);
             actionListener.onFailure(e);
         }
     }
