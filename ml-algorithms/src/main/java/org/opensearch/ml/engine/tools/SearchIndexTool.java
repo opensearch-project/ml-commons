@@ -139,6 +139,8 @@ public class SearchIndexTool implements Tool {
                 listener.onFailure(e);
             });
 
+            // since searching connector and model needs access control, we need
+            // to forward the request corresponding transport action
             if (Objects.equals(index, ML_CONNECTOR_INDEX)) {
                 client.execute(MLConnectorSearchAction.INSTANCE, searchRequest, actionListener);
             } else if (Objects.equals(index, ML_MODEL_INDEX)) {
