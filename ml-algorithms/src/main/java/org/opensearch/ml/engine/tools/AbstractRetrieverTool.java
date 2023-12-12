@@ -42,7 +42,8 @@ public abstract class AbstractRetrieverTool implements Tool {
     public static final String INDEX_FIELD = "index";
     public static final String SOURCE_FIELD = "source_field";
     public static final String DOC_SIZE_FIELD = "doc_size";
-
+    public static final int DEFAULT_DOC_SIZE = 2;
+    public static final int DEFAULT_K = 10;
     protected String description = DEFAULT_DESCRIPTION;
     protected Client client;
     protected NamedXContentRegistry xContentRegistry;
@@ -61,7 +62,7 @@ public abstract class AbstractRetrieverTool implements Tool {
         this.xContentRegistry = xContentRegistry;
         this.index = index;
         this.sourceFields = sourceFields;
-        this.docSize = docSize == null ? 2 : docSize;
+        this.docSize = docSize == null ? DEFAULT_DOC_SIZE : docSize;
     }
 
     protected abstract String getQueryBody(String queryText);

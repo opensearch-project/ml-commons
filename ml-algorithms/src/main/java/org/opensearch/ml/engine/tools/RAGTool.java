@@ -56,8 +56,9 @@ public class RAGTool extends AbstractRetrieverTool {
     public static final String TYPE = "RAGTool";
     private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     public static final String MODEL_ID_FIELD = "model_id";
+    public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
     public static final String EMBEDDING_FIELD = "embedding_field";
-    public static final String INDEX_FIELD = "index";
+    public static final String OUTPUT_FIELD = "output_field";
     private String name = TYPE;
     private String description = DEFAULT_DESCRIPTION;
     private Client client;
@@ -94,8 +95,8 @@ public class RAGTool extends AbstractRetrieverTool {
         this.embeddingField = embeddingField;
         this.sourceFields = sourceFields;
         this.embeddingModelId = embeddingModelId;
-        this.docSize = docSize == null ? 2 : docSize;
-        this.k = k == null ? 10 : k;
+        this.docSize = docSize == null ? DEFAULT_DOC_SIZE : docSize;
+        this.k = k == null ? DEFAULT_K : k;
         this.modelId = modelId;
 
         outputParser = new Parser() {
@@ -109,9 +110,9 @@ public class RAGTool extends AbstractRetrieverTool {
 
     @Override
     protected String getQueryBody(String queryText) {
-        if (StringUtils.isBlank(embeddingField) || StringUtils.isBlank(modelId)) {
+        if (StringUtils.isBlank(embeddingField) || StringUtils.isBlank(embeddingModelId)) {
             throw new IllegalArgumentException(
-                "Parameter [" + EMBEDDING_FIELD + "] and [" + MODEL_ID_FIELD + "] can not be null or empty."
+                "Parameter [" + EMBEDDING_FIELD + "] and [" + EMBEDDING_MODEL_ID_FIELD + "] can not be null or empty."
             );
         }
         return "{\"query\":{\"neural\":{\""
@@ -119,7 +120,7 @@ public class RAGTool extends AbstractRetrieverTool {
             + "\":{\"query_text\":\""
             + queryText
             + "\",\"model_id\":\""
-            + modelId
+            + embeddingModelId
             + "\",\"k\":"
             + k
             + "}}}"
@@ -129,23 +130,16 @@ public class RAGTool extends AbstractRetrieverTool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
-            String question = parameters.get("input");
+            String question = parameters.get(INPUT_FIELD);
             try {
                 question = gson.fromJson(question, String.class);
             } catch (Exception e) {
                 // throw new IllegalArgumentException("wrong input");
             }
-            String query = "{\"query\":{\"neural\":{\""
-                + embeddingField
-                + "\":{\"query_text\":\""
-                + question
-                + "\",\"model_id\":\""
-                + embeddingModelId
-                + "\",\"k\":"
-                + k
-                + "}}}"
-                + " }";
-
+            String query = getQueryBody(question);
+            if (StringUtils.isBlank(query)) {
+                throw new IllegalArgumentException("[" + INPUT_FIELD + "] is null or empty, can not process it.");
+            }
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             XContentParser queryParser = XContentType.JSON
                 .xContent()
@@ -182,14 +176,14 @@ public class RAGTool extends AbstractRetrieverTool {
                     && ((List) vectorDBToolOutput).get(0) instanceof ModelTensors) {
                     ModelTensors tensors = (ModelTensors) ((List) vectorDBToolOutput).get(0);
                     Object response = tensors.getMlModelTensors().get(0).getDataAsMap().get("response");
-                    tmpParameters.put("output", response + "");
+                    tmpParameters.put(OUTPUT_FIELD, response + "");
                 } else if (vectorDBToolOutput instanceof ModelTensor) {
-                    tmpParameters.put("output", escapeJson(toJson(((ModelTensor) vectorDBToolOutput).getDataAsMap())));
+                    tmpParameters.put(OUTPUT_FIELD, escapeJson(toJson(((ModelTensor) vectorDBToolOutput).getDataAsMap())));
                 } else {
                     if (vectorDBToolOutput instanceof String) {
-                        tmpParameters.put("output", (String) vectorDBToolOutput);
+                        tmpParameters.put(OUTPUT_FIELD, (String) vectorDBToolOutput);
                     } else {
-                        tmpParameters.put("output", escapeJson(toJson(vectorDBToolOutput.toString())));
+                        tmpParameters.put(OUTPUT_FIELD, escapeJson(toJson(vectorDBToolOutput.toString())));
                     }
                 }
 
@@ -240,7 +234,7 @@ public class RAGTool extends AbstractRetrieverTool {
         if (parameters == null || parameters.size() == 0) {
             return false;
         }
-        String question = parameters.get("input");
+        String question = parameters.get(INPUT_FIELD);
         return question != null;
     }
 
@@ -270,12 +264,12 @@ public class RAGTool extends AbstractRetrieverTool {
 
         @Override
         public RAGTool create(Map<String, Object> params) {
-            String embeddingModelId = (String) params.get("embedding_model_id");
+            String embeddingModelId = (String) params.get(EMBEDDING_MODEL_ID_FIELD);
             String index = (String) params.get(INDEX_FIELD);
             String embeddingField = (String) params.get(EMBEDDING_FIELD);
-            String[] sourceFields = gson.fromJson((String) params.get("source_field"), String[].class);
+            String[] sourceFields = gson.fromJson((String) params.get(SOURCE_FIELD), String[].class);
             String modelId = (String) params.get(MODEL_ID_FIELD);
-            Integer docSize = params.containsKey("doc_size") ? Integer.parseInt((String) params.get("doc_size")) : 2;
+            Integer docSize = params.containsKey(DOC_SIZE_FIELD) ? Integer.parseInt((String) params.get(DOC_SIZE_FIELD)) : 2;
             return RAGTool
                 .builder()
                 .client(client)
