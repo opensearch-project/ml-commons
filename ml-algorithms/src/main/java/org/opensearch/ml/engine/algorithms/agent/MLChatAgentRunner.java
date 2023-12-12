@@ -334,8 +334,8 @@ public class MLChatAgentRunner {
                     Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
 
                     String thought = dataAsMap.get("thought") + "";
-                    String action = dataAsMap.get("action") + "";
-                    String actionInput = dataAsMap.get("action_input") + "";
+                    String action = dataAsMap.get("tool") + "";
+                    String actionInput = dataAsMap.get("tool_input") + "";
                     String finalAnswer = (String) dataAsMap.get("final_answer");
                     if (!dataAsMap.containsKey("thought")) {
                         String response = (String) dataAsMap.get("response");
@@ -345,8 +345,8 @@ public class MLChatAgentRunner {
                             String jsonBlock = matcher.group(1);
                             Map map = gson.fromJson(jsonBlock, Map.class);
                             thought = map.get("thought") + "";
-                            action = map.get("action") + "";
-                            actionInput = map.get("action_input") + "";
+                            action = map.get("tool") + "";
+                            actionInput = map.get("tool_input") + "";
                             finalAnswer = (String) map.get("final_answer");
                         } else {
                             finalAnswer = response;
