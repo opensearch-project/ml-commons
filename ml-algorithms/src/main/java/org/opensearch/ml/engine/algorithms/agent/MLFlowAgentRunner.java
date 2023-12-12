@@ -26,6 +26,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -81,7 +82,7 @@ public class MLFlowAgentRunner {
             return;
         }
 
-        String memoryType = mlAgent.getMemory().getType();
+        MLMemorySpec memorySpec = mlAgent.getMemory();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
 
@@ -121,7 +122,7 @@ public class MLFlowAgentRunner {
                     additionalInfo.put(outputKey, outputResponse);
 
                     if (finalI == toolSpecs.size()) {
-                        updateMemory(additionalInfo, memoryType, memoryId, parentInteractionId);
+                        updateMemory(additionalInfo, memorySpec, memoryId, parentInteractionId);
                         listener.onResponse(flowAgentOutput);
                         return;
                     }
@@ -146,11 +147,12 @@ public class MLFlowAgentRunner {
         }
     }
 
-    private void updateMemory(Map<String, Object> additionalInfo, String memoryType, String memoryId, String interactionId) {
-        if (memoryId == null || interactionId == null) {
+    private void updateMemory(Map<String, Object> additionalInfo, MLMemorySpec memorySpec, String memoryId, String interactionId) {
+        if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
             return;
         }
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
+        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
+            .get(memorySpec.getType());
         conversationIndexMemoryFactory.create(memoryId, ActionListener.<ConversationIndexMemory>wrap(memory -> {
             updateInteraction(additionalInfo, interactionId, memory);
         }, e -> { log.error("Failed create memory from id: " + memoryId, e); }));

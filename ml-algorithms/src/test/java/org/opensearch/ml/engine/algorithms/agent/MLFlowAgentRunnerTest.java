@@ -150,4 +150,25 @@ public class MLFlowAgentRunnerTest {
         Assert.assertEquals("First tool response", agentOutput.get(0).getResult());
         Assert.assertEquals("Second tool response", agentOutput.get(1).getResult());
     }
+
+    @Test
+    public void testWithMemoryNotSet() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .memory(null)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
+        Assert.assertEquals(1, agentOutput.size());
+        // Respond with last tool output
+        Assert.assertEquals(SECOND_TOOL, agentOutput.get(0).getName());
+        Assert.assertEquals("Second tool response", agentOutput.get(0).getResult());
+    }
 }

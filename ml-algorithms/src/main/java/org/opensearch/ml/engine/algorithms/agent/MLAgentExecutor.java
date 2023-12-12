@@ -34,6 +34,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLValidationException;
@@ -118,7 +119,7 @@ public class MLAgentExecutor implements Executable {
                         try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             MLAgent mlAgent = MLAgent.parse(parser);
-                            String memoryType = mlAgent.getMemory().getType();
+                            MLMemorySpec memorySpec = mlAgent.getMemory();
                             String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                             String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
                             String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
@@ -129,11 +130,12 @@ public class MLAgentExecutor implements Executable {
                                 listener.onFailure(new MLValidationException("Memory id must provide for regenerate"));
                             }
 
-                            if (memoryType != null
-                                && memoryFactoryMap.containsKey(memoryType)
+                            if (memorySpec != null
+                                && memorySpec.getType() != null
+                                && memoryFactoryMap.containsKey(memorySpec.getType())
                                 && (memoryId == null || parentInteractionId == null)) {
                                 ConversationIndexMemory.Factory conversationIndexMemoryFactory =
-                                    (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
+                                    (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
                                 conversationIndexMemoryFactory.create(question, memoryId, appType, wrap(memory -> {
                                     inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
 
