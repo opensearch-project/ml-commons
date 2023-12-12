@@ -117,4 +117,40 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
         assert (request.getOrigin().equals("origin"));
         assert (request.getAdditionalInfo().equals(Collections.singletonMap("metadata", "some meta")));
     }
+
+    public void testFromRestRequest_Trace() throws IOException {
+        Map<String, Object> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "pt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin",
+                ActionConstants.ADDITIONAL_INFO_FIELD,
+                Collections.singletonMap("metadata", "some meta"),
+                ActionConstants.PARENT_INTERACTION_ID_FIELD,
+                "parentId",
+                ActionConstants.TRACE_NUMBER_FIELD,
+                1
+            );
+
+        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "tid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
+        CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
+
+        assert (request.validate() == null);
+        assert (request.getConversationId().equals("tid"));
+        assert (request.getInput().equals("input"));
+        assert (request.getPromptTemplate().equals("pt"));
+        assert (request.getResponse().equals("response"));
+        assert (request.getOrigin().equals("origin"));
+        assert (request.getAdditionalInfo().equals(Collections.singletonMap("metadata", "some meta")));
+        assert (request.getParentIid().equals("parentId"));
+        assert (request.getTraceNumber().equals(1));
+    }
 }

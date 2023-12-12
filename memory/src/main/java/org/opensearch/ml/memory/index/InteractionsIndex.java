@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.index;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
+
 import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedList;
@@ -73,7 +75,6 @@ public class InteractionsIndex {
     private Client client;
     private ClusterService clusterService;
     private ConversationMetaIndex conversationMetaIndex;
-    private final String indexName = ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
     // How big the steps should be when gathering *ALL* interactions in a conversation
     private final int resultsAtATime = 300;
 
@@ -82,14 +83,16 @@ public class InteractionsIndex {
      * @param listener gets whether the index needed to be initialized. Throws error if it fails to init
      */
     public void initInteractionsIndexIfAbsent(ActionListener<Boolean> listener) {
-        if (!clusterService.state().metadata().hasIndex(indexName)) {
+        if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             log.debug("No interactions index found. Adding it");
-            CreateIndexRequest request = Requests.createIndexRequest(indexName).mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS);
+            CreateIndexRequest request = Requests
+                .createIndexRequest(INTERACTIONS_INDEX_NAME)
+                .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                 ActionListener<CreateIndexResponse> al = ActionListener.wrap(r -> {
-                    if (r.equals(new CreateIndexResponse(true, true, indexName))) {
-                        log.info("created index [" + indexName + "]");
+                    if (r.equals(new CreateIndexResponse(true, true, INTERACTIONS_INDEX_NAME))) {
+                        log.info("created index [" + INTERACTIONS_INDEX_NAME + "]");
                         internalListener.onResponse(true);
                     } else {
                         internalListener.onResponse(false);
@@ -99,7 +102,7 @@ public class InteractionsIndex {
                         || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                         internalListener.onResponse(true);
                     } else {
-                        log.error("Failed to create index [" + indexName + "]", e);
+                        log.error("Failed to create index [" + INTERACTIONS_INDEX_NAME + "]", e);
                         internalListener.onFailure(e);
                     }
                 });
@@ -109,7 +112,7 @@ public class InteractionsIndex {
                     || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                     listener.onResponse(true);
                 } else {
-                    log.error("Failed to create index [" + indexName + "]", e);
+                    log.error("Failed to create index [" + INTERACTIONS_INDEX_NAME + "]", e);
                     listener.onFailure(e);
                 }
             }
@@ -153,7 +156,7 @@ public class InteractionsIndex {
                 this.conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
                     if (access) {
                         IndexRequest request = Requests
-                            .indexRequest(indexName)
+                            .indexRequest(INTERACTIONS_INDEX_NAME)
                             .source(
                                 ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD,
                                 origin,
@@ -251,7 +254,7 @@ public class InteractionsIndex {
      * @param listener gets the list, sorted by recency, of interactions
      */
     public void getInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
-        if (!clusterService.state().metadata().hasIndex(indexName)) {
+        if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener.onResponse(List.of());
             return;
         }
@@ -272,7 +275,7 @@ public class InteractionsIndex {
 
     @VisibleForTesting
     void innerGetInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
-        SearchRequest request = Requests.searchRequest(indexName);
+        SearchRequest request = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
 
         // Build the query
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
@@ -305,7 +308,7 @@ public class InteractionsIndex {
             client
                 .admin()
                 .indices()
-                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
+                .refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
                     internalListener.onFailure(e);
                 }));
         } catch (Exception e) {
@@ -321,11 +324,11 @@ public class InteractionsIndex {
      * @param listener gets the list, sorted by recency, of interactions
      */
     public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
-        if (!clusterService.state().metadata().hasIndex(indexName)) {
+        if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener.onResponse(List.of());
             return;
         }
-        SearchRequest request = Requests.searchRequest(indexName);
+        SearchRequest request = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
         // Build the query
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
 
@@ -410,7 +413,7 @@ public class InteractionsIndex {
      * @param listener gets whether the deletion was successful
      */
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
-        if (!clusterService.state().metadata().hasIndex(indexName)) {
+        if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener.onResponse(true);
             return;
         }
@@ -421,7 +424,7 @@ public class InteractionsIndex {
             ActionListener<List<Interaction>> searchListener = ActionListener.wrap(interactions -> {
                 BulkRequest request = Requests.bulkRequest();
                 for (Interaction interaction : interactions) {
-                    DeleteRequest delRequest = Requests.deleteRequest(indexName).id(interaction.getId());
+                    DeleteRequest delRequest = Requests.deleteRequest(INTERACTIONS_INDEX_NAME).id(interaction.getId());
                     request.add(delRequest);
                 }
                 client
@@ -455,18 +458,21 @@ public class InteractionsIndex {
             if (access) {
                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<SearchResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                    request.indices(indexName);
+                    request.indices(INTERACTIONS_INDEX_NAME);
                     QueryBuilder originalQuery = request.source().query();
                     BoolQueryBuilder newQuery = new BoolQueryBuilder();
                     newQuery.must(originalQuery);
                     newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId));
                     request.source().query(newQuery);
-                    client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> {
-                        client.search(request, internalListener);
-                    }, e -> {
-                        log.error("Failed to refresh interactions index during search interactions ", e);
-                        internalListener.onFailure(e);
-                    }));
+                    client
+                        .admin()
+                        .indices()
+                        .refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                            client.search(request, internalListener);
+                        }, e -> {
+                            log.error("Failed to refresh interactions index during search interactions ", e);
+                            internalListener.onFailure(e);
+                        }));
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }
@@ -488,15 +494,21 @@ public class InteractionsIndex {
      * @param listener receives the interaction
      */
     public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
-        if (!clusterService.state().metadata().hasIndex(indexName)) {
-            listener.onFailure(new IndexNotFoundException("cannot get interaction since the interactions index does not exist", indexName));
+        if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
+            listener
+                .onFailure(
+                    new IndexNotFoundException(
+                        "cannot get interaction since the interactions index does not exist",
+                        INTERACTIONS_INDEX_NAME
+                    )
+                );
             return;
         }
         conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
             if (access) {
                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<Interaction> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                    GetRequest request = Requests.getRequest(indexName).id(interactionId);
+                    GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
                     ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                         // If the conversation doesn't exist, fail
                         if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
@@ -508,13 +520,12 @@ public class InteractionsIndex {
                     client
                         .admin()
                         .indices()
-                        .refresh(
-                            Requests.refreshRequest(indexName),
-                            ActionListener.wrap(refreshResponse -> { client.get(request, al); }, e -> {
-                                log.error("Failed to refresh interactions index during get interaction ", e);
-                                internalListener.onFailure(e);
-                            })
-                        );
+                        .refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                            client.get(request, al);
+                        }, e -> {
+                            log.error("Failed to refresh interactions index during get interaction ", e);
+                            internalListener.onFailure(e);
+                        }));
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }

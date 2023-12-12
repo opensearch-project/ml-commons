@@ -73,6 +73,10 @@ public class ConversationMetaIndex {
     private Client client;
     private ClusterService clusterService;
 
+    private String getUserStrFromThreadContext() {
+        return client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+    }
+
     /**
      * Creates the conversational meta index if it doesn't already exist
      * @param listener listener to wait for this to finish
@@ -123,17 +127,15 @@ public class ConversationMetaIndex {
     public void createConversation(String name, String applicationType, ActionListener<String> listener) {
         initConversationMetaIndexIfAbsent(ActionListener.wrap(indexExists -> {
             if (indexExists) {
-                String userstr = client
-                    .threadPool()
-                    .getThreadContext()
-                    .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                String userstr = getUserStrFromThreadContext();
+                Instant now = Instant.now();
                 IndexRequest request = Requests
                     .indexRequest(META_INDEX_NAME)
                     .source(
                         ConversationalIndexConstants.META_CREATED_TIME_FIELD,
-                        Instant.now(),
+                        now,
                         ConversationalIndexConstants.META_UPDATED_TIME_FIELD,
-                        Instant.now(),
+                        now,
                         ConversationalIndexConstants.META_NAME_FIELD,
                         name,
                         ConversationalIndexConstants.USER_FIELD,
@@ -192,7 +194,7 @@ public class ConversationMetaIndex {
             listener.onResponse(List.of());
         }
         SearchRequest request = Requests.searchRequest(META_INDEX_NAME);
-        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String userstr = getUserStrFromThreadContext();
         QueryBuilder queryBuilder;
         if (userstr == null)
             queryBuilder = new MatchAllQueryBuilder();
@@ -244,7 +246,7 @@ public class ConversationMetaIndex {
             listener.onResponse(true);
         }
         DeleteRequest delRequest = Requests.deleteRequest(META_INDEX_NAME).id(conversationId);
-        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String userstr = getUserStrFromThreadContext();
         String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
         this.checkAccess(conversationId, ActionListener.wrap(access -> {
             if (access) {
@@ -285,7 +287,7 @@ public class ConversationMetaIndex {
             listener.onResponse(true);
             return;
         }
-        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String userstr = getUserStrFromThreadContext();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             GetRequest getRequest = Requests.getRequest(META_INDEX_NAME).id(conversationId);
@@ -330,7 +332,7 @@ public class ConversationMetaIndex {
         QueryBuilder originalQuery = request.source().query();
         BoolQueryBuilder newQuery = new BoolQueryBuilder();
         newQuery.must(originalQuery);
-        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String userstr = getUserStrFromThreadContext();
         if (userstr != null) {
             String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
             newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, user));
@@ -362,8 +364,9 @@ public class ConversationMetaIndex {
                 );
             return;
         }
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.update(updateRequest, listener);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            client.update(updateRequest, internalListener);
         } catch (Exception e) {
             log.error("Failed to update Conversation. Details {}:", e);
             listener.onFailure(e);
@@ -383,7 +386,7 @@ public class ConversationMetaIndex {
                 );
             return;
         }
-        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String userstr = getUserStrFromThreadContext();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<ConversationMeta> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             GetRequest request = Requests.getRequest(META_INDEX_NAME).id(conversationId);

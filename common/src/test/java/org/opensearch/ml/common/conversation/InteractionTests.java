@@ -30,7 +30,7 @@ public class InteractionTests {
 
     @Before
     public void setUp() {
-        time = Instant.now();
+        time = Instant.ofEpochMilli(123);
         interaction = Interaction.builder()
                 .id("test-interaction-id")
                 .createTime(time)
@@ -144,6 +144,23 @@ public class InteractionTests {
     }
 
     @Test
+    public void test_Equal() {
+        Interaction interaction1 = Interaction.builder()
+                .id("test-interaction-id")
+                .createTime(time)
+                .conversationId("conversation-id")
+                .input("sample inputs")
+                .promptTemplate("some prompt template")
+                .response("sample responses")
+                .origin("amazon bedrock")
+                .additionalInfo(Collections.singletonMap("suggestion", "new suggestion"))
+                .parentInteractionId("parent id")
+                .traceNum(1)
+                .build();
+        assertEquals(interaction.equals(interaction1), true);
+    }
+
+    @Test
     public void test_toString() {
         Interaction interaction1 = Interaction.builder()
                 .id("id")
@@ -154,5 +171,20 @@ public class InteractionTests {
                 .traceNum(1)
                 .build();
         assertEquals("Interaction{id=id,cid=conversation id,create_time=null,origin=amazon bedrock,input=null,promt_template=null,response=null,additional_info={suggestion=new suggestion},parentInteractionId=parent id,traceNum=1}", interaction1.toString());
+    }
+
+    @Test
+    public void test_ParentInteraction() {
+        Interaction parentInteraction = Interaction.builder()
+                .id("test-interaction-id")
+                .createTime(time)
+                .conversationId("conversation-id")
+                .input("sample inputs")
+                .promptTemplate("some prompt template")
+                .response("sample responses")
+                .origin("amazon bedrock")
+                .additionalInfo(Collections.singletonMap("suggestion", "new suggestion"))
+                .build();
+        assertEquals("Interaction{id=test-interaction-id,cid=conversation-id,create_time=1970-01-01T00:00:00.123Z,origin=amazon bedrock,input=sample inputs,promt_template=some prompt template,response=sample responses,additional_info={suggestion=new suggestion},parentInteractionId=null,traceNum=null}", parentInteraction.toString());
     }
 }
