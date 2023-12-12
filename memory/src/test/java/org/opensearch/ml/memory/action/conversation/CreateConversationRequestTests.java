@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -85,4 +87,17 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
         assert (request.getName().equals(name));
     }
 
+    public void testNamedRestRequest_WithAppType() throws IOException {
+        String name = "test-name";
+        String appType = "conversational-search";
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(
+                new BytesArray(gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name, APPLICATION_TYPE_FIELD, appType))),
+                MediaTypeRegistry.JSON
+            )
+            .build();
+        CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
+        assert (request.getName().equals(name));
+        assert (request.getApplicationType().equals(appType));
+    }
 }

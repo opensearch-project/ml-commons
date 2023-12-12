@@ -18,6 +18,7 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 
 import org.apache.http.HttpEntity;
@@ -66,7 +67,7 @@ public class RestMemoryGetInteractionActionIT extends MLCommonsRestTestCase {
         assert (ccmap.containsKey(ActionConstants.CONVERSATION_ID_FIELD));
         String cid = (String) ccmap.get(ActionConstants.CONVERSATION_ID_FIELD);
 
-        Map<String, String> params = Map
+        Map<String, Object> params = Map
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
@@ -77,7 +78,7 @@ public class RestMemoryGetInteractionActionIT extends MLCommonsRestTestCase {
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
                 ActionConstants.ADDITIONAL_INFO_FIELD,
-                "some metadata"
+                Collections.singletonMap("metadata", "some metadata")
             );
         Response ciresponse = TestHelper
             .makeRequest(
@@ -111,7 +112,7 @@ public class RestMemoryGetInteractionActionIT extends MLCommonsRestTestCase {
         HttpEntity gihttpEntity = giresponse.getEntity();
         String gientityString = TestHelper.httpEntityToString(gihttpEntity);
         @SuppressWarnings("unchecked")
-        Map<String, String> gimap = gson.fromJson(gientityString, Map.class);
+        Map<String, Object> gimap = gson.fromJson(gientityString, Map.class);
         assert (gimap.containsKey(ActionConstants.RESPONSE_INTERACTION_ID_FIELD)
             && gimap.get(ActionConstants.RESPONSE_INTERACTION_ID_FIELD).equals(iid));
         assert (gimap.containsKey(ActionConstants.CONVERSATION_ID_FIELD) && gimap.get(ActionConstants.CONVERSATION_ID_FIELD).equals(cid));
@@ -122,6 +123,6 @@ public class RestMemoryGetInteractionActionIT extends MLCommonsRestTestCase {
         assert (gimap.containsKey(ActionConstants.RESPONSE_ORIGIN_FIELD)
             && gimap.get(ActionConstants.RESPONSE_ORIGIN_FIELD).equals("origin"));
         assert (gimap.containsKey(ActionConstants.ADDITIONAL_INFO_FIELD)
-            && gimap.get(ActionConstants.ADDITIONAL_INFO_FIELD).equals("some metadata"));
+            && gimap.get(ActionConstants.ADDITIONAL_INFO_FIELD).equals(Collections.singletonMap("metadata", "some metadata")));
     }
 }

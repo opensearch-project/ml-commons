@@ -36,7 +36,7 @@ import org.opensearch.test.OpenSearchTestCase;
 public class GetConversationResponseTests extends OpenSearchTestCase {
 
     public void testGetConversationResponseStreaming() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), "name", null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null);
         GetConversationResponse response = new GetConversationResponse(convo);
         assert (response.getConversation().equals(convo));
 
@@ -49,12 +49,16 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
     }
 
     public void testToXContent() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), "name", null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null);
         GetConversationResponse response = new GetConversationResponse(convo);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversation_id\":\"cid\",\"create_time\":\"" + convo.getCreatedTime() + "\",\"name\":\"name\"}";
+        String expected = "{\"conversation_id\":\"cid\",\"create_time\":\""
+            + convo.getCreatedTime()
+            + "\",\"updated_time\":\""
+            + convo.getUpdatedTime()
+            + "\",\"name\":\"name\"}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         assert (ld.getDistance(result, expected) > 0.95);
