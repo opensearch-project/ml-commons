@@ -15,6 +15,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 
 import java.io.IOException;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -42,6 +44,10 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
+    public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(1000);
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(3000);
+
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -55,8 +61,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private List<String> backendRoles;
     private Boolean addAllBackendRoles;
     private AccessMode access;
-    private boolean dryRun = false;
-    private boolean updateConnector = false;
+    private boolean dryRun;
+    private boolean updateConnector;
+    private Integer maxConnections;
+    private Integer connectionTimeout;
+    private Integer readTimeout;
+
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(String name,
@@ -70,7 +80,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   Boolean addAllBackendRoles,
                                   AccessMode access,
                                   boolean dryRun,
-                                  boolean updateConnector
+                                  boolean updateConnector,
+                                  Integer maxConnections,
+                                  Integer connectionTimeout,
+                                  Integer readTimeout
+
     ) {
         if (!dryRun && !updateConnector) {
             if (name == null) {
@@ -95,6 +109,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.access = access;
         this.dryRun = dryRun;
         this.updateConnector = updateConnector;
+        this.maxConnections = Objects.requireNonNullElse(maxConnections, MAX_CONNECTION_DEFAULT_VALUE);
+        this.connectionTimeout = Objects.requireNonNullElse(connectionTimeout, CONNECTION_TIMEOUT_DEFAULT_VALUE);
+        this.readTimeout = Objects.requireNonNullElse(readTimeout, READ_TIMEOUT_DEFAULT_VALUE);
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -113,6 +130,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Boolean addAllBackendRoles = null;
         AccessMode access = null;
         boolean dryRun = false;
+        Integer maxConnections = null;
+        Integer connectionTimeout = null;
+        Integer readTimeout =  null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -161,12 +181,23 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case DRY_RUN_FIELD:
                     dryRun = parser.booleanValue();
                     break;
+                case AbstractConnector.MAX_CONNECTION_FIELD:
+                    maxConnections = parser.intValue();
+                    break;
+                case AbstractConnector.CONNECTION_TIMEOUT_FIELD:
+                    connectionTimeout = parser.intValue();
+                    break;
+                case AbstractConnector.READ_TIMEOUT_FIELD:
+                    readTimeout = parser.intValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions, backendRoles, addAllBackendRoles, access, dryRun, updateConnector);
+        return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions,
+                backendRoles, addAllBackendRoles, access, dryRun, updateConnector,
+                maxConnections, connectionTimeout, readTimeout);
     }
 
     @Override
@@ -201,6 +232,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (access != null) {
             builder.field(ACCESS_MODE_FIELD, access);
+        }
+        if (maxConnections != null) {
+            builder.field(AbstractConnector.MAX_CONNECTION_FIELD, maxConnections);
+        }
+        if (connectionTimeout != null) {
+            builder.field(AbstractConnector.CONNECTION_TIMEOUT_FIELD, connectionTimeout);
+        }
+        if (readTimeout != null) {
+            builder.field(AbstractConnector.READ_TIMEOUT_FIELD, readTimeout);
         }
         builder.endObject();
         return builder;
@@ -248,6 +288,10 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         output.writeBoolean(dryRun);
         output.writeBoolean(updateConnector);
+        output.writeInt(Objects.requireNonNullElse(maxConnections, MAX_CONNECTION_DEFAULT_VALUE));
+        output.writeInt(Objects.requireNonNullElse(connectionTimeout, CONNECTION_TIMEOUT_DEFAULT_VALUE));
+        output.writeInt(Objects.requireNonNullElse(readTimeout, READ_TIMEOUT_DEFAULT_VALUE));
+
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -277,5 +321,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         dryRun = input.readBoolean();
         updateConnector = input.readBoolean();
+        maxConnections = input.readInt();
+        connectionTimeout = input.readInt();
+        readTimeout = input.readInt();
     }
 }
