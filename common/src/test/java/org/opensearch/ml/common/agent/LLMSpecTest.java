@@ -27,7 +27,7 @@ public class LLMSpecTest {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Test
-    public void constructorNonModelID() {
+    public void constructor_NonModelID() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model id is null");
 
@@ -43,6 +43,17 @@ public class LLMSpecTest {
 
         Assert.assertEquals(spec.getModelId(), spec1.getModelId());
         Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+    }
+
+    @Test
+    public void writeTo_EmptyParameters() throws IOException {
+        LLMSpec spec = new LLMSpec("test_model", Map.of());
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        LLMSpec spec1 = new LLMSpec(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getModelId(), spec1.getModelId());
+        Assert.assertEquals(null, spec1.getParameters());
     }
 
     @Test
