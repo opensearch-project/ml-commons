@@ -8,6 +8,22 @@ package org.opensearch.ml.common;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_NAME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.USER_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD;
@@ -370,28 +386,60 @@ public class CommonValue {
             + "}";
 
     public static final String ML_MEMORY_META_INDEX_MAPPING = "{\n"
-            + "    \"_meta\": {\"schema_version\": "
-            + ML_MEMORY_META_INDEX_SCHEMA_VERSION
+            + "    \"_meta\": {\n"
+            + "        \"schema_version\": " + META_INDEX_SCHEMA_VERSION + "\n"
             + "    },\n"
             + "    \"properties\": {\n"
-            + "        \"name\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
-            + "        \"application_type\" : {\"type\":\"keyword\"},\n"
-            + "        \"created_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-            + "        \"last_updated_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "        \""
+            + META_NAME_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + META_CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \""
+            + META_UPDATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \""
+            + USER_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + APPLICATION_TYPE_FIELD
+            + "\": {\"type\": \"keyword\"}\n"
             + "    }\n"
             + "}";
 
     public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING = "{\n"
-            + "    \"_meta\": {\"schema_version\": "
-            + ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION
+            + "    \"_meta\": {\n"
+            + "        \"schema_version\": " + INTERACTIONS_INDEX_SCHEMA_VERSION + "\n"
             + "    },\n"
             + "    \"properties\": {\n"
-            + "        \"question\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
-            + "        \"response\" : {\"type\":\"text\"},\n"
-            + "        \"session_id\" : {\"type\":\"keyword\"},\n"
-            + "        \"final_answer\" : {\"type\":\"boolean\"},\n"
-            + "        \"created_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-            + "        \"last_updated_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "        \""
+            + INTERACTIONS_CONVERSATION_ID_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + INTERACTIONS_CREATE_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \""
+            + INTERACTIONS_INPUT_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + INTERACTIONS_PROMPT_TEMPLATE_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + INTERACTIONS_RESPONSE_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + INTERACTIONS_ORIGIN_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + INTERACTIONS_ADDITIONAL_INFO_FIELD
+            + "\": {\"type\": \"flat_object\"},\n"
+            + "        \""
+            + PARENT_INTERACTIONS_ID_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + INTERACTIONS_TRACE_NUMBER_FIELD
+            + "\": {\"type\": \"long\"}\n"
             + "    }\n"
             + "}";
 }
