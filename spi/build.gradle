@@ -7,15 +7,15 @@ import com.github.jengelman.gradle.plugins.shadow.ShadowBasePlugin
 import org.opensearch.gradle.test.RestIntegTestTask
 
 plugins {
-    id 'com.github.johnrengelman.shadow'
+    id 'java'
+    id "io.freefair.lombok"
     id 'jacoco'
+    id 'com.github.johnrengelman.shadow'
     id 'maven-publish'
+    id 'com.diffplug.spotless' version '6.18.0'
     id 'signing'
 }
 
-apply plugin: 'opensearch.java'
-apply plugin: 'opensearch.testclusters'
-apply plugin: 'opensearch.java-rest-test'
 
 repositories {
     mavenLocal()
@@ -48,7 +48,8 @@ dependencies {
     compileOnly "org.opensearch:opensearch:${opensearch_version}"
 
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
-    testImplementation "org.apache.logging.log4j:log4j-core:${versions.log4j}"
+    testImplementation group: 'junit', name: 'junit', version: '4.13.2'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
 }
 
 configurations.all {
@@ -78,10 +79,6 @@ task integTest(type: RestIntegTestTask) {
     dependsOn test
 }
 check.dependsOn integTest
-
-testClusters.javaRestTest {
-    testDistribution = 'INTEG_TEST'
-}
 
 task sourcesJar(type: Jar) {
     archiveClassifier.set 'sources'

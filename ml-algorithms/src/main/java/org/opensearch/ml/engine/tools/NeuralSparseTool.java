@@ -30,7 +30,6 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
     public static final String TYPE = "NeuralSparseTool";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String EMBEDDING_FIELD = "embedding_field";
-    private String name = TYPE;
     private String modelId;
     private String embeddingField;
 
@@ -45,7 +44,7 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
         Integer docSize,
         String modelId
     ) {
-        super(client, xContentRegistry, index, sourceFields, docSize);
+        super(TYPE, DEFAULT_DESCRIPTION, client, xContentRegistry, index, sourceFields, docSize);
         this.modelId = modelId;
         this.embeddingField = embeddingField;
     }
@@ -65,21 +64,6 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
             + modelId
             + "\"}}}"
             + " }";
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     public static class Factory extends AbstractRetrieverTool.Factory<NeuralSparseTool> {
