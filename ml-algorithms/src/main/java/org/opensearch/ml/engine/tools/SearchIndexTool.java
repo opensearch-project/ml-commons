@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
-import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
@@ -96,9 +95,11 @@ public class SearchIndexTool implements Tool {
             String index = "";
             String query = "";
             try {
+                // need this try catch block, because index, query field may not exist
                 JsonObject jsonObject = gson.fromJson(input, JsonObject.class);
                 index = jsonObject.get(INDEX_FIELD).getAsString();
                 query = jsonObject.get(QUERY_FIELD).toString();
+                query = "{\"query\": " + query + "}";
             } catch (Exception e) {
                 // throw new IllegalArgumentException("wrong input");
             }
@@ -148,8 +149,8 @@ public class SearchIndexTool implements Tool {
             } else {
                 client.search(searchRequest, actionListener);
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            listener.onFailure(e);
         }
     }
 
