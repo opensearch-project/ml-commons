@@ -77,4 +77,15 @@ public class LLMSpecTest {
         Assert.assertEquals(spec.getModelId(), "test_model");
         Assert.assertEquals(spec.getParameters(), Map.of("test_key", "test_value"));
     }
+
+    @Test
+    public void fromStream() throws IOException {
+        LLMSpec spec = new LLMSpec("test_model", Map.of("test_key", "test_value"));
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        LLMSpec spec1 = LLMSpec.fromStream(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getModelId(), spec1.getModelId());
+        Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+    }
 }

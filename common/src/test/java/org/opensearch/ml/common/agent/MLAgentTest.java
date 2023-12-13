@@ -125,4 +125,19 @@ public class MLAgentTest {
         Assert.assertEquals(agent.getMemory().getSessionId(), "123");
         Assert.assertEquals(agent.getParameters(), Map.of("test", "test"));
     }
+
+    @Test
+    public void fromStream() throws IOException {
+        MLAgent agent = new MLAgent("test", "test", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test");
+        BytesStreamOutput output = new BytesStreamOutput();
+        agent.writeTo(output);
+        MLAgent agent1 = MLAgent.fromStream(output.bytes().streamInput());
+
+        Assert.assertEquals(agent.getAppType(), agent1.getAppType());
+        Assert.assertEquals(agent.getDescription(), agent1.getDescription());
+        Assert.assertEquals(agent.getCreatedTime(), agent1.getCreatedTime());
+        Assert.assertEquals(agent.getName(), agent1.getName());
+        Assert.assertEquals(agent.getParameters(), agent1.getParameters());
+        Assert.assertEquals(agent.getType(), agent1.getType());
+    }
 }

@@ -54,4 +54,16 @@ public class MLMemorySpecTest {
         Assert.assertEquals(spec.getWindowSize(), Integer.valueOf(0));
         Assert.assertEquals(spec.getSessionId(), "123");
     }
+
+    @Test
+    public void fromStream() throws IOException {
+        MLMemorySpec spec = new MLMemorySpec("test", "123", 0);
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        MLMemorySpec spec1 = MLMemorySpec.fromStream(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getType(), spec1.getType());
+        Assert.assertEquals(spec.getSessionId(), spec1.getSessionId());
+        Assert.assertEquals(spec.getWindowSize(), spec1.getWindowSize());
+    }
 }

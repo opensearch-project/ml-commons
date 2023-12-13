@@ -58,4 +58,18 @@ public class MLToolSpecTest {
         Assert.assertEquals(spec.getParameters(), Map.of("test", "test"));
         Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), false);
     }
+
+    @Test
+    public void fromStream() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getType(), spec1.getType());
+        Assert.assertEquals(spec.getName(), spec1.getName());
+        Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+        Assert.assertEquals(spec.getDescription(), spec1.getDescription());
+        Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+    }
 }
