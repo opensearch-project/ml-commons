@@ -123,8 +123,10 @@ public class MLChatAgentRunner {
                 Iterator<Interaction> iterator = r.iterator();
                 while (iterator.hasNext()) {
                     Interaction next = iterator.next();
+                    // ignore regenerate interaction question/answer as chat history context to send to LLM
                     if (next.getId().equals(regenerateInteractionId)) {
-                        // there may have other new interactions happened after this interaction
+                        // there may have other new interactions happened after this interaction,
+                        // include them as well for chat history context
                         continue;
                     }
                     String question = next.getInput();

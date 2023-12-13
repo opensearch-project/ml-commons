@@ -149,6 +149,7 @@ public class MLAgentExecutor implements Executable {
                                     ConversationIndexMessage msg = ConversationIndexMessage
                                         .conversationIndexMessageBuilder()
                                         .type(appType)
+                                        // regenerate will use question from original interaction
                                         .question(inputDataSet.getParameters().get(QUESTION))
                                         .response("")
                                         .finalAnswer(true)
@@ -176,6 +177,7 @@ public class MLAgentExecutor implements Executable {
                                 executeAgent(inputDataSet, mlAgent, agentActionListener);
                             }
                         } catch (Exception ex) {
+                            log.error("Failed to execute agent", ex);
                             listener.onFailure(ex);
                         }
                     } else {
@@ -197,14 +199,14 @@ public class MLAgentExecutor implements Executable {
      * @param inputDataSet input parameters
      */
     private void getQuestionFromInteraction(String memoryId, String interactionId, RemoteInferenceInputDataSet inputDataSet) {
-        PlainActionFuture<GetInteractionResponse> future = PlainActionFuture.newFuture();
-        client.execute(GetInteractionAction.INSTANCE, new GetInteractionRequest(memoryId, interactionId), future);
         try {
+            PlainActionFuture<GetInteractionResponse> future = PlainActionFuture.newFuture();
+            client.execute(GetInteractionAction.INSTANCE, new GetInteractionRequest(memoryId, interactionId), future);
+
             GetInteractionResponse interactionResponse = future.get();
             inputDataSet.getParameters().computeIfAbsent(QUESTION, key -> interactionResponse.getInteraction().getInput());
         } catch (Exception ex) {
-            log.error("Can't get regenerate interaction {}", interactionId, ex);
-            throw new MLException(ex);
+            throw new MLException("Can't get regenerate interaction " + interactionId, ex);
         }
     }
 
