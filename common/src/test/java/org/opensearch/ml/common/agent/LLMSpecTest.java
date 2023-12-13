@@ -1,7 +1,9 @@
 package org.opensearch.ml.common.agent;
 
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -20,6 +22,17 @@ import java.util.Map;
 import static org.junit.Assert.*;
 
 public class LLMSpecTest {
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Test
+    public void constructorNonModelID() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model id is null");
+
+        LLMSpec spec = new LLMSpec(null, Map.of("test_key", "test_value"));
+    }
 
     @Test
     public void writeTo() throws IOException {
