@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import org.junit.Before;
@@ -58,7 +59,7 @@ public class MLCreateConnectorInputTests {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
-            "\"access_mode\":\"PUBLIC\"}";
+            "\"access_mode\":\"PUBLIC\",\"max_connection\":30,\"connection_timeout\":1000,\"read_timeout\":1000}";
 
     @Before
     public void setUp(){
@@ -83,6 +84,9 @@ public class MLCreateConnectorInputTests {
                 .access(AccessMode.PUBLIC)
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .addAllBackendRoles(false)
+                .maxConnections(30)
+                .connectionTimeout(1000)
+                .readTimeout(1000)
                 .build();
 
         mlCreateDryRunConnectorInput = MLCreateConnectorInput.builder()
@@ -159,7 +163,7 @@ public class MLCreateConnectorInputTests {
         mlCreateDryRunConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{}", jsonStr);
+        assertEquals("{\"max_connection\":30,\"connection_timeout\":1000,\"read_timeout\":3000}", jsonStr);
     }
 
     @Test
@@ -208,10 +212,13 @@ public class MLCreateConnectorInputTests {
                 .name("test_connector_name")
                 .version("1")
                 .protocol("http")
+                .maxConnections(30)
+
                 .build();
         readInputStream(mlCreateMinimalConnectorInput, parsedInput -> {
             assertEquals(mlCreateMinimalConnectorInput.getName(), parsedInput.getName());
             assertNull(parsedInput.getActions());
+            assertEquals(Integer.valueOf(30), parsedInput.getMaxConnections());
         });
     }
 

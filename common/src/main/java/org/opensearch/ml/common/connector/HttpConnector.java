@@ -52,7 +52,8 @@ public class HttpConnector extends AbstractConnector {
     @Builder
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
-                         List<String> backendRoles, AccessMode accessMode, User owner) {
+                         List<String> backendRoles, AccessMode accessMode, User owner, Integer maxConnections,
+                         Integer connectionTimeoutInMillis, Integer readTimeoutInMillis) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -64,6 +65,9 @@ public class HttpConnector extends AbstractConnector {
         this.backendRoles = backendRoles;
         this.access = accessMode;
         this.owner = owner;
+        this.maxConnections = maxConnections;
+        this.connectionTimeoutInMillis = connectionTimeoutInMillis;
+        this.readTimeoutInMillis = readTimeoutInMillis;
     }
 
     public HttpConnector(String protocol, XContentParser parser) throws IOException {
@@ -121,6 +125,12 @@ public class HttpConnector extends AbstractConnector {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case MAX_CONNECTION_FIELD:
+                    maxConnections = parser.intValue();
+                case CONNECTION_TIMEOUT_FIELD:
+                    connectionTimeoutInMillis = parser.intValue();
+                case READ_TIMEOUT_FIELD:
+                    readTimeoutInMillis = parser.intValue();
                 default:
                     parser.skipChildren();
                     break;
