@@ -3,7 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.indices;
+package org.opensearch.ml.engine.indices;
+
+import org.junit.Before;
+import org.opensearch.action.admin.indices.create.CreateIndexRequest;
+import org.opensearch.action.admin.indices.create.CreateIndexResponse;
+import org.opensearch.client.AdminClient;
+import org.opensearch.client.Client;
+import org.opensearch.client.IndicesAdminClient;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.test.OpenSearchIntegTestCase;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -18,23 +33,8 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_SCHEMA_VERSION;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-
-import org.junit.Before;
-import org.opensearch.action.admin.indices.create.CreateIndexRequest;
-import org.opensearch.action.admin.indices.create.CreateIndexResponse;
-import org.opensearch.client.AdminClient;
-import org.opensearch.client.Client;
-import org.opensearch.client.IndicesAdminClient;
-import org.opensearch.cluster.metadata.IndexMetadata;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.test.OpenSearchIntegTestCase;
-
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST, numDataNodes = 2)
-public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
+public class MLIndicesHandlerIT extends OpenSearchIntegTestCase {
     ClusterService clusterService;
     Client client;
     MLIndicesHandler mlIndicesHandler;

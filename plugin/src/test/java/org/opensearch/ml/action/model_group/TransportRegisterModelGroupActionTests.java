@@ -30,7 +30,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;

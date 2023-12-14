@@ -28,7 +28,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.threadpool.ThreadPool;
 
 public class MockHelper {

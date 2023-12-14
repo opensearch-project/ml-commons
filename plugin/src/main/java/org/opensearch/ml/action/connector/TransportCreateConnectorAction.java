@@ -38,7 +38,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;

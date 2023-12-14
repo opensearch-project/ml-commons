@@ -46,12 +46,32 @@ public class MLIndicesHandler {
         }
     }
 
+    public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MODEL_GROUP, listener);
+    }
+
+    public void initModelIndexIfAbsent(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MODEL, listener);
+    }
+
+    public void initMLTaskIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.TASK, listener);
+    }
+
+    public void initMLConnectorIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.CONNECTOR, listener);
+    }
+
     public void initMemoryMetaIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.MEMORY_META, listener);
     }
 
     public void initMemoryMessageIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.MEMORY_MESSAGE, listener);
+    }
+
+    public void initMLConfigIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.CONFIG, listener);
     }
 
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
