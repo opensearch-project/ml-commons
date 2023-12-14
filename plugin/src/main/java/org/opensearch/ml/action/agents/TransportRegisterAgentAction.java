@@ -17,6 +17,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -109,14 +110,21 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).build();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
-                IndexRequest indexRequest = new IndexRequest(ML_AGENT_INDEX);
-                XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
-                mlAgent.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                indexRequest.source(builder);
-                client.index(indexRequest, ActionListener.wrap(r -> { listener.onResponse(new MLRegisterAgentResponse(r.getId())); }, e -> {
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    IndexRequest indexRequest = new IndexRequest(ML_AGENT_INDEX);
+                    XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+                    mlAgent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                    indexRequest.source(builder);
+                    client.index(indexRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+                        listener.onResponse(new MLRegisterAgentResponse(r.getId()));
+                    }, e -> {
+                        log.error("Failed to index ML agent", e);
+                        listener.onFailure(e);
+                    }), context::restore));
+                } catch (Exception e) {
                     log.error("Failed to index ML agent", e);
                     listener.onFailure(e);
-                }));
+                }
             } else {
                 log.error("Failed to create ML agent index");
             }
