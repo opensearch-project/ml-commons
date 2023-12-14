@@ -8,7 +8,6 @@ import org.opensearch.gradle.test.RestIntegTestTask
 
 plugins {
     id 'java'
-    id "io.freefair.lombok"
     id 'jacoco'
     id 'com.github.johnrengelman.shadow'
     id 'maven-publish'
@@ -71,14 +70,6 @@ test {
     }
     systemProperty 'tests.security.manager', 'false'
 }
-
-task integTest(type: RestIntegTestTask) {
-    description 'Run integ test with opensearch test framework'
-    group 'verification'
-    systemProperty 'tests.security.manager', 'false'
-    dependsOn test
-}
-check.dependsOn integTest
 
 task sourcesJar(type: Jar) {
     archiveClassifier.set 'sources'

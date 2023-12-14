@@ -32,7 +32,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -71,10 +70,6 @@ public class RAGTool extends AbstractRetrieverTool {
     private String embeddingModelId;
     private Integer docSize;
     private Integer k;
-    @Setter
-    private Parser inputParser;
-    @Setter
-    private Parser outputParser;
 
     @Builder
     public RAGTool(
@@ -88,7 +83,7 @@ public class RAGTool extends AbstractRetrieverTool {
         String embeddingModelId,
         String modelId
     ) {
-        super(client, xContentRegistry, index, sourceFields, docSize);
+        super(TYPE, DEFAULT_DESCRIPTION, client, xContentRegistry, index, sourceFields, docSize);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.index = index;
@@ -99,13 +94,10 @@ public class RAGTool extends AbstractRetrieverTool {
         this.k = k == null ? DEFAULT_K : k;
         this.modelId = modelId;
 
-        outputParser = new Parser() {
-            @Override
-            public Object parse(Object o) {
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
+        this.setOutputParser(o -> {
+            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
+        });
     }
 
     @Override
@@ -195,10 +187,10 @@ public class RAGTool extends AbstractRetrieverTool {
                 client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.<MLTaskResponse>wrap(resp -> {
                     ModelTensorOutput modelTensorOutput = (ModelTensorOutput) resp.getOutput();
                     modelTensorOutput.getMlModelOutputs();
-                    if (outputParser == null) {
+                    if (this.getOutputParser() == null) {
                         listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
                     } else {
-                        listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+                        listener.onResponse((T) this.getOutputParser().parse(modelTensorOutput.getMlModelOutputs()));
                     }
                 }, e -> {
                     log.error("Failed to run model " + modelId, e);
@@ -212,21 +204,6 @@ public class RAGTool extends AbstractRetrieverTool {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override
