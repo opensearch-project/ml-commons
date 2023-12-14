@@ -45,8 +45,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLValidationException;
-import org.opensearch.ml.common.model.MLModelController;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
@@ -221,14 +221,17 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
         boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
         // This flag is used to decide if we need to re-deploy the predictor(model) when performing the in-place update
-        boolean isPredictorUpdate = updateModelInput.getConnectorUpdateContent() != null || relinkConnectorId != null;
-        if (updateModelInput.getModelController() != null) {
-            MLModelController modelController = mlModel.getModelController();
-            if (modelController != null) {
-                modelController.update(updateModelInput.getModelController());
-                updateModelInput.setModelController(modelController);
+        boolean isPredictorUpdate = (updateModelInput.getConnectorUpdateContent() != null)
+            || (relinkConnectorId != null)
+            || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled());
+        if (updateModelInput.getModelRateLimiterConfig() != null) {
+            MLRateLimiter modelRateLimiterConfig = mlModel.getModelRateLimiterConfig();
+            isPredictorUpdate = isPredictorUpdate
+                || MLRateLimiter.canUpdate(modelRateLimiterConfig, updateModelInput.getModelRateLimiterConfig());
+            if (modelRateLimiterConfig != null) {
+                modelRateLimiterConfig.update(updateModelInput.getModelRateLimiterConfig());
+                updateModelInput.setModelRateLimiterConfig(modelRateLimiterConfig);
             }
-            isPredictorUpdate = true;
         }
         // This flag is used to decide if we need to perform an in-place update
         boolean isUpdateModelCache = isPredictorUpdate && isModelDeployed;

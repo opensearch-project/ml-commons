@@ -16,7 +16,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.MLModelController;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
@@ -33,7 +33,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String MODEL_VERSION_FIELD = "model_version"; // passively set when register model to a new model group
     public static final String MODEL_NAME_FIELD = "name"; // optional
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
-    public static final String MODEL_CONTROLLER_FIELD = "model_controller"; // optional
+    public static final String IS_ENABLED_FIELD = "is_enabled"; // optional
+    public static final String MODEL_RATE_LIMITER_CONFIG_FIELD = "model_rate_limiter_config"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
     public static final String CONNECTOR_FIELD = "connector"; // optional
     public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
@@ -47,7 +48,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String version;
     private String name;
     private String modelGroupId;
-    private MLModelController modelController;
+    private Boolean isEnabled;
+    private MLRateLimiter modelRateLimiterConfig;
     private MLModelConfig modelConfig;
     private Connector connector;
     private String connectorId;
@@ -56,14 +58,15 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
-                              MLModelController modelController, MLModelConfig modelConfig,
+                              Boolean isEnabled, MLRateLimiter modelRateLimiterConfig, MLModelConfig modelConfig,
                               Connector connector, String connectorId, MLCreateConnectorInput connectorUpdateContent, Instant lastUpdateTime) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
         this.name = name;
         this.modelGroupId = modelGroupId;
-        this.modelController = modelController;
+        this.isEnabled = isEnabled;
+        this.modelRateLimiterConfig = modelRateLimiterConfig;
         this.modelConfig = modelConfig;
         this.connector = connector;
         this.connectorId = connectorId;
@@ -77,8 +80,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         version = in.readOptionalString();
         name = in.readOptionalString();
         modelGroupId = in.readOptionalString();
+        isEnabled = in.readOptionalBoolean();
         if (in.readBoolean()) {
-            modelController = new MLModelController(in);
+            modelRateLimiterConfig = new MLRateLimiter(in);
         }
         if (in.readBoolean()) {
             modelConfig = new TextEmbeddingModelConfig(in);
@@ -109,8 +113,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelGroupId != null) {
             builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
         }
-        if (modelController != null) {
-            builder.field(MODEL_CONTROLLER_FIELD, modelController);
+        if (isEnabled != null) {
+            builder.field(IS_ENABLED_FIELD, isEnabled);
+        }
+        if (modelRateLimiterConfig != null) {
+            builder.field(MODEL_RATE_LIMITER_CONFIG_FIELD, modelRateLimiterConfig);
         }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
@@ -138,9 +145,10 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(version);
         out.writeOptionalString(name);
         out.writeOptionalString(modelGroupId);
-        if (modelController != null) {
+        out.writeOptionalBoolean(isEnabled);
+        if (modelRateLimiterConfig != null) {
             out.writeBoolean(true);
-            modelController.writeTo(out);
+            modelRateLimiterConfig.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -172,7 +180,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         String version = null;
         String name = null;
         String modelGroupId = null;
-        MLModelController modelController = null;
+        Boolean isEnabled = null;
+        MLRateLimiter modelRateLimiterConfig = null;
         MLModelConfig modelConfig = null;
         Connector connector = null;
         String connectorId = null;
@@ -199,8 +208,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
                     break;
-                case MODEL_CONTROLLER_FIELD:
-                    modelController = MLModelController.parse(parser);
+                case IS_ENABLED_FIELD:
+                    isEnabled = parser.booleanValue();
+                    break;
+                case MODEL_RATE_LIMITER_CONFIG_FIELD:
+                    modelRateLimiterConfig = MLRateLimiter.parse(parser);
                     break;
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
@@ -223,6 +235,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             }
         }
         // Model ID can only be set through RestRequest. Model version can only be set automatically.
-        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, modelController, modelConfig, connector, connectorId, connectorUpdateContent, lastUpdateTime);
+        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, modelRateLimiterConfig, modelConfig, connector, connectorId, connectorUpdateContent, lastUpdateTime);
     }
 }

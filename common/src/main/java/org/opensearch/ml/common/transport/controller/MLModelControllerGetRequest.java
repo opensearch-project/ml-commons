@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.model_group;
+package org.opensearch.ml.common.transport.controller;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -27,50 +27,54 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLRegisterModelGroupRequest extends ActionRequest {
-
-    MLRegisterModelGroupInput registerModelGroupInput;
+public class MLModelControllerGetRequest extends ActionRequest {
+    
+    String modelId;
+    boolean returnContent;
 
     @Builder
-    public MLRegisterModelGroupRequest(MLRegisterModelGroupInput registerModelGroupInput) {
-        this.registerModelGroupInput = registerModelGroupInput;
+    public MLModelControllerGetRequest(String modelId, boolean returnContent) {
+        this.modelId = modelId;
+        this.returnContent = returnContent;
     }
 
-    public MLRegisterModelGroupRequest(StreamInput in) throws IOException {
+    public MLModelControllerGetRequest(StreamInput in) throws IOException {
         super(in);
-        this.registerModelGroupInput = new MLRegisterModelGroupInput(in);
-    }
-
-    @Override
-    public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
-        if (registerModelGroupInput == null) {
-            exception = addValidationError("Model meta input can't be null", exception);
-        }
-
-        return exception;
+        this.modelId = in.readString();
+        this.returnContent = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        this.registerModelGroupInput.writeTo(out);
+        out.writeString(this.modelId);
+        out.writeBoolean(returnContent);
     }
 
-    public static MLRegisterModelGroupRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLRegisterModelGroupRequest) {
-            return (MLRegisterModelGroupRequest) actionRequest;
+    @Override
+    public ActionRequestValidationException validate() {
+        ActionRequestValidationException exception = null;
+
+        if (this.modelId == null) {
+            exception = addValidationError("ML model id can't be null", exception);
+        }
+
+        return exception;
+    }
+
+    public static MLModelControllerGetRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLModelControllerGetRequest) {
+            return (MLModelControllerGetRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+            OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLRegisterModelGroupRequest(input);
+                return new MLModelControllerGetRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLRegisterModelGroupRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLModelControllerGetRequest", e);
         }
-
     }
 }

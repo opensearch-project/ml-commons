@@ -106,14 +106,19 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         new MLValidationException("User Doesn't have privilege to perform this operation on this model")
                                     );
                             } else {
-                                if (modelCacheHelper.getIsRequestAccepted(modelId) != null
-                                    && !modelCacheHelper.getIsRequestAccepted(modelId)) {
+                                if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
                                     wrappedListener
                                         .onFailure(new OpenSearchStatusException("Quota is depleted.", RestStatus.TOO_MANY_REQUESTS));
                                 } else {
                                     if (FunctionName.isDLModel(functionName)) {
-                                        if (modelCacheHelper.getRateLimiter(modelId) != null
-                                            && !modelCacheHelper.getRateLimiter(modelId).request()) {
+                                        if (modelCacheHelper.getModelRateLimiter(modelId) != null
+                                            && !modelCacheHelper.getModelRateLimiter(modelId).request()) {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)
+                                                );
+                                        } else if (modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
+                                            && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
                                             wrappedListener
                                                 .onFailure(
                                                     new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)

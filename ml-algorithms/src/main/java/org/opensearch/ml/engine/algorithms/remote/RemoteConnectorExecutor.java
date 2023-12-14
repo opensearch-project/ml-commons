@@ -16,6 +16,8 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
@@ -82,6 +84,10 @@ public interface RemoteConnectorExecutor {
 
     TokenBucket getModelRateLimiter();
 
+    Map<String, TokenBucket> getUserRateLimiterMap();
+
+    Client getClient();
+
     default void setClient(Client client) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
@@ -89,6 +95,8 @@ public interface RemoteConnectorExecutor {
     default void setClusterService(ClusterService clusterService) {}
 
     default void setModelRateLimiter(TokenBucket modelRateLimiter) {}
+
+    default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
@@ -108,7 +116,16 @@ public interface RemoteConnectorExecutor {
         }
         String payload = connector.createPredictPayload(parameters);
         connector.validatePayload(payload);
+        String userStr = getClient()
+            .threadPool()
+            .getThreadContext()
+            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String userName = User.parse(userStr).getName();
         if (getModelRateLimiter() != null && !getModelRateLimiter().request()) {
+            throw new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS);
+        } else if (getUserRateLimiterMap() != null
+            && getUserRateLimiterMap().get(userName) != null
+            && !getUserRateLimiterMap().get(userName).request()) {
             throw new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS);
         } else {
             // invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);

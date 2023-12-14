@@ -113,7 +113,7 @@ public class UpdateModelCacheTransportAction extends
         String localNodeId = clusterService.localNode().getId();
 
         mlModelManager.inplaceUpdateModel(modelId, ActionListener.wrap(r -> {
-            log.info("Successfully performing in-place update model {} on node {}", modelId, localNodeId);
+            log.info("Successfully performed in-place update model {} on node {}", modelId, localNodeId);
         }, e -> { log.error("Failed to perform in-place update model for model {} on node {}", modelId, localNodeId); }));
         return new MLUpdateModelCacheNodeResponse(clusterService.localNode(), modelUpdateStatus);
     }

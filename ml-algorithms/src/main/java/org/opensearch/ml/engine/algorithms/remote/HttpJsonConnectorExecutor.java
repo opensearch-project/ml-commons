@@ -30,6 +30,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.rest.RestStatus;
@@ -67,6 +68,12 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     @Setter
     @Getter
     private TokenBucket modelRateLimiter;
+    @Setter
+    @Getter
+    private Map<String, TokenBucket> userRateLimiterMap;
+    @Setter
+    @Getter
+    private Client client;
 
     public HttpJsonConnectorExecutor(Connector connector) {
         this.connector = (HttpConnector) connector;
