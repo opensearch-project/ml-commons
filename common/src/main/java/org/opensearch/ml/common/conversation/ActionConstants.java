@@ -29,6 +29,8 @@ public class ActionConstants {
     public final static String RESPONSE_CONVERSATION_LIST_FIELD = "conversations";
     /** name of list on interactions in all responses */
     public final static String RESPONSE_INTERACTION_LIST_FIELD = "interactions";
+    /** name of list on interactions in all responses */
+    public final static String RESPONSE_TRACES_LIST_FIELD = "traces";
     /** name of interaction Id field in all responses */
     public final static String RESPONSE_INTERACTION_ID_FIELD = "interaction_id";
 
@@ -56,20 +58,28 @@ public class ActionConstants {
     public final static String SUCCESS_FIELD = "success";
 
     private final static String BASE_REST_PATH = "/_plugins/_ml/memory/conversation";
+    private final static String BASE_REST_INTERACTION_PATH = "/_plugins/_ml/memory/interaction";
     /** path for create conversation */
     public final static String CREATE_CONVERSATION_REST_PATH = BASE_REST_PATH + "/_create";
     /** path for get conversations */
     public final static String GET_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/_list";
+    /** path for update conversations */
+    public final static String UPDATE_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/{conversation_id}/_update";
+    /** path for put interaction */
     /** path for create interaction */
     public final static String CREATE_INTERACTION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_create";
     /** path for get interactions */
     public final static String GET_INTERACTIONS_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_list";
+    /** path for get interactions */
+    public final static String GET_TRACES_REST_PATH = "/_plugins/_ml/memory/trace" + "/{interaction_id}/_list";
     /** path for delete conversation */
     public final static String DELETE_CONVERSATION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_delete";
     /** path for search conversations */
     public final static String SEARCH_CONVERSATIONS_REST_PATH = BASE_REST_PATH + "/_search";
     /** path for search interactions */
     public final static String SEARCH_INTERACTIONS_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_search";
+    /** path for update interactions */
+    public final static String UPDATE_INTERACTIONS_REST_PATH = BASE_REST_INTERACTION_PATH + "/{interaction_id}/_update";
     /** path for get conversation */
     public final static String GET_CONVERSATION_REST_PATH = BASE_REST_PATH + "/{conversation_id}";
     /** path for get interaction */
