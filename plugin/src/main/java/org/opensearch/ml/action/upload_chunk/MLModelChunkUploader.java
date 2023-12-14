@@ -34,8 +34,8 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 
 import lombok.extern.log4j.Log4j2;

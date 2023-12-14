@@ -8,11 +8,8 @@ package org.opensearch.ml.engine.memory;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 
-import java.time.Instant;
-import java.util.Collections;
 import java.util.Map;
 
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.Client;
@@ -29,7 +26,6 @@ import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
@@ -40,7 +36,13 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public class ConversationIndexMemory implements Memory {
     public static final String TYPE = "conversation_index";
-    public static final String SESSION_ID = "session_id";
+    public static final String CONVERSATION_ID = "conversation_id";
+    public static final String FINAL_ANSWER = "final_answer";
+    public static final String CREATED_TIME = "created_time";
+    public static final String MEMORY_NAME = "memory_name";
+    public static final String MEMORY_ID = "memory_id";
+    public static final String APP_TYPE = "app_type";
+    public static int LAST_N_INTERACTIONS = 10;
     protected String memoryMetaIndexName;
     protected String memoryMessageIndexName;
     protected String conversationId;
@@ -109,17 +111,7 @@ public class ConversationIndexMemory implements Memory {
     public void save(Message message, String parentId, Integer traceNum, String action, ActionListener listener) {
         ConversationIndexMessage msg = (ConversationIndexMessage) message;
         memoryManager
-            .createInteraction(
-                conversationId,
-                msg.getQuestion(),
-                null,
-                msg.getResponse(),
-                action,
-                Collections.singletonMap("None", "None"),
-                parentId,
-                traceNum,
-                listener
-            );
+            .createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), action, null, parentId, traceNum, listener);
     }
 
     @Override
@@ -128,31 +120,35 @@ public class ConversationIndexMemory implements Memory {
         searchRequest.indices(memoryMessageIndexName);
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.size(10000);
-        QueryBuilder sessionIdQueryBuilder = new TermQueryBuilder(SESSION_ID, id);
+        QueryBuilder sessionIdQueryBuilder = new TermQueryBuilder(CONVERSATION_ID, id);
 
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.must(sessionIdQueryBuilder);
 
         if (retrieveFinalAnswer) {
-            QueryBuilder finalAnswerQueryBuilder = new TermQueryBuilder("final_answer", true);
+            QueryBuilder finalAnswerQueryBuilder = new TermQueryBuilder(FINAL_ANSWER, true);
             boolQueryBuilder.must(finalAnswerQueryBuilder);
         }
 
         sourceBuilder.query(boolQueryBuilder);
-        sourceBuilder.sort("created_time", SortOrder.ASC);
+        sourceBuilder.sort(CREATED_TIME, SortOrder.ASC);
         searchRequest.source(sourceBuilder);
         client.search(searchRequest, listener);
     }
 
     public void getMessages(ActionListener listener) {
-        memoryManager.getFinalInteractions(conversationId, 10, listener);
+        memoryManager.getFinalInteractions(conversationId, LAST_N_INTERACTIONS, listener);
     }
 
     @Override
-    public void clear() {}
+    public void clear() {
+        throw new RuntimeException("clear method is not supported in ConversationIndexMemory");
+    }
 
     @Override
-    public void remove(String id) {}
+    public void remove(String id) {
+        throw new RuntimeException("remove method is not supported in ConversationIndexMemory");
+    }
 
     public static class Factory implements Memory.Factory<ConversationIndexMemory> {
         private Client client;
@@ -174,53 +170,17 @@ public class ConversationIndexMemory implements Memory {
                 return;
             }
 
-            if (map.containsKey("memory_index_name")) {
-                memoryMetaIndexName = (String) map.get("memory_index_name");
+            String memoryId = (String) map.get(MEMORY_ID);
+            if (Strings.isEmpty(memoryId)) {
+                listener.onFailure(new IllegalArgumentException("Memory id is required for creating ConversationIndexMemory"));
             }
-            if (map.containsKey("memory_message_index_name")) {
-                memoryMessageIndexName = (String) map.get("memory_message_index_name");
-            }
-            if (map.containsKey(SESSION_ID)) {
-                String conversationId = (String) map.get(SESSION_ID);
-                GetRequest getRequest = new GetRequest(memoryMetaIndexName).id(conversationId);
-                client.get(getRequest, ActionListener.wrap(r -> {
-                    listener
-                        .onResponse(
-                            new ConversationIndexMemory(
-                                client,
-                                mlIndicesHandler,
-                                memoryMetaIndexName,
-                                memoryMessageIndexName,
-                                r.getId(),
-                                null
-                            )
-                        );
-                }, e -> { listener.onFailure(new IllegalArgumentException("Can't find conversation " + conversationId)); }));
-            } else if (map.containsKey("question")) {
-                String question = (String) map.get("question");
-                mlIndicesHandler.initMemoryMetaIndex(ActionListener.wrap(created -> {
-                    if (created) {
-                        IndexRequest indexRequest = new IndexRequest(memoryMetaIndexName);
-                        indexRequest.source(ImmutableMap.of("name", question, "created_time", Instant.now().toEpochMilli()));
-                        client.index(indexRequest, ActionListener.wrap(r -> {
-                            listener
-                                .onResponse(
-                                    new ConversationIndexMemory(
-                                        client,
-                                        mlIndicesHandler,
-                                        memoryMetaIndexName,
-                                        memoryMessageIndexName,
-                                        r.getId(),
-                                        null
-                                    )
-                                );
-                        }, e -> { listener.onFailure(e); }));
-                    } else {
-                        listener.onFailure(new RuntimeException("Failed to create memory meta index"));
-                    }
-                }, e -> { listener.onFailure(new RuntimeException("Failed to create memory meta index")); }));
+
+            String name = (String) map.get(MEMORY_NAME);
+            String appType = (String) map.get(APP_TYPE);
+            if (Strings.isEmpty(name) || Strings.isEmpty(appType)) {
+                create(memoryId, listener);
             } else {
-                listener.onFailure(new IllegalArgumentException("Invalid input parameter. Must set conversation id or question"));
+                create(name, memoryId, appType, listener);
             }
         }
 

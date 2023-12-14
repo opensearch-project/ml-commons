@@ -2,9 +2,14 @@ package org.opensearch.ml.engine.memory;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.util.Map;
 
@@ -90,11 +95,15 @@ public class ConversationIndexMemoryTest {
 
     @Test
     public void clear() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("clear method is not supported in ConversationIndexMemory");
         indexMemory.clear();
     }
 
     @Test
     public void remove() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("remove method is not supported in ConversationIndexMemory");
         indexMemory.remove("test_id");
     }
 
@@ -102,35 +111,31 @@ public class ConversationIndexMemoryTest {
     public void factory_create_emptyMap() {
         ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
         memoryFactory.create(Map.of(), listener);
+
+        verify(listener).onFailure(isA(IllegalArgumentException.class));
     }
 
     @Test
-    public void factory_create_session() {
+    public void factory_create() {
         ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-        memoryFactory.create(Map.of("memory_index_name", "test", "memory_message_index_name", "test", "session_id", "123"), listener);
+        memoryFactory.create(Map.of(MEMORY_ID, "123", MEMORY_NAME, "name", APP_TYPE, "app"), listener);
+
+        verify(listener).onResponse(isA(ConversationIndexMemory.class));
     }
 
     @Test
-    public void factory_create_question() {
+    public void factory_create_no_memory_id() {
         ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-        memoryFactory.create(Map.of("memory_index_name", "test", "memory_message_index_name", "test", "question", "question"), listener);
+        memoryFactory.create(Map.of(MEMORY_NAME, "name", APP_TYPE, "app"), listener);
+
+        verify(listener).onFailure(isA(IllegalArgumentException.class));
     }
 
     @Test
-    public void factory_create_no_question_no_session() {
+    public void factory_create_only_memory_id() {
         ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-        memoryFactory.create(Map.of("memory_index_name", "test", "memory_message_index_name", "test"), listener);
-    }
+        memoryFactory.create(Map.of(MEMORY_ID, "123"), listener);
 
-    @Test
-    public void factory_create_with_memory() {
-        ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-        memoryFactory.create("test", "memory_id", "test", listener);
-    }
-
-    @Test
-    public void factory_create_without_memory() {
-        ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-        memoryFactory.create("test", null, "test", listener);
+        verify(listener).onResponse(isA(ConversationIndexMemory.class));
     }
 }

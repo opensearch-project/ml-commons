@@ -53,7 +53,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
