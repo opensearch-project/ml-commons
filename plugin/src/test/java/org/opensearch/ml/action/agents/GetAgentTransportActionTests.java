@@ -115,7 +115,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         Task task = mock(Task.class);
 
-        Exception exceptionToThrow = new IndexNotFoundException("Failed to get ML agent " + agentId);
+        Exception exceptionToThrow = new IndexNotFoundException("Failed to get agent index " + agentId);
 
         doAnswer(invocation -> {
             ActionListener<MLAgentGetResponse> listener = invocation.getArgument(1);
@@ -126,7 +126,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         getAgentTransportAction.doExecute(task, getRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find agent", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get agent index", argumentCaptor.getValue().getMessage());
     }
 
     @Test

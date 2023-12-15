@@ -83,7 +83,7 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
                     log.error("Failed to get agent index", e);
-                    actionListener.onFailure(new OpenSearchStatusException("Failed to find agent", RestStatus.NOT_FOUND));
+                    actionListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                 } else {
                     log.error("Failed to get ML agent " + agentId, e);
                     actionListener.onFailure(e);
