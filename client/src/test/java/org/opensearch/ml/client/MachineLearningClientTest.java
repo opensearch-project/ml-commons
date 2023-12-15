@@ -31,6 +31,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.Input;
@@ -91,6 +92,8 @@ public class MachineLearningClientTest {
     private String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
+    private ToolMetadata toolMetadata;
+    private List<ToolMetadata> toolsList;
 
     @Before
     public void setUp() {
@@ -101,6 +104,32 @@ public class MachineLearningClientTest {
 
         String modelContent = "test content";
         mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("test").content(modelContent).build();
+
+        toolMetadata = ToolMetadata.builder()
+                .name("SearchWikipediaTool")
+                .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
+                .build();
+
+        toolsList = new ArrayList<>(
+                Arrays.asList(
+                        ToolMetadata.builder()
+                                .name("LanguageModelTool")
+                                .description("Useful for answering any general questions.")
+                                .build(),
+                        ToolMetadata.builder()
+                                .name("MathTool")
+                                .description("Use this tool to calculate any math problem.")
+                                .build(),
+                        ToolMetadata.builder()
+                                .name("SearchIndexTool")
+                                .description("Useful for when you don't know answer for some question or need to search my private data in OpenSearch index.")
+                                .build(),
+                        ToolMetadata.builder()
+                                .name("SearchWikipediaTool")
+                                .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
+                                .build()
+                )
+        );
 
         machineLearningClient = new MachineLearningClient() {
             @Override
@@ -171,6 +200,16 @@ public class MachineLearningClientTest {
             @Override
             public void execute(FunctionName name, Input input, ActionListener<MLExecuteTaskResponse> listener) {
                 listener.onResponse(mlExecuteTaskResponse);
+            }
+
+            @Override
+            public void listTools(ActionListener<List<ToolMetadata>> listener) {
+                listener.onResponse(toolsList);
+            }
+
+            @Override
+            public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
+                listener.onResponse(toolMetadata);
             }
 
             public void registerModelGroup(

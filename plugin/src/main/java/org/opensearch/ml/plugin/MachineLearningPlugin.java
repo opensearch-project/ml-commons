@@ -65,6 +65,8 @@ import org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction;
 import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
 import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
+import org.opensearch.ml.action.tools.GetToolTransportAction;
+import org.opensearch.ml.action.tools.ListToolsTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
@@ -90,6 +92,9 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.spi.MLCommonsExtension;
+import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -114,6 +119,8 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
+import org.opensearch.ml.common.transport.tools.MLGetToolAction;
+import org.opensearch.ml.common.transport.tools.MLListToolsAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
@@ -128,6 +135,7 @@ import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelatio
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -165,6 +173,8 @@ import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
+import org.opensearch.ml.rest.RestMLGetToolAction;
+import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
@@ -209,6 +219,7 @@ import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -232,7 +243,7 @@ import com.google.common.collect.ImmutableList;
 
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin {
+public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin, ExtensiblePlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -276,6 +287,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     private ConversationalMemoryHandler cmHandler;
 
     private volatile boolean ragSearchPipelineEnabled;
+
+    private Map<String, Tool.Factory> externalToolFactories;
+    private Map<String, Tool.Factory> toolFactories;
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
@@ -321,7 +335,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
                 new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
                 new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
-                new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class)
+                new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class),
+                new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
+                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class)
             );
     }
 
@@ -490,6 +506,37 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             encryptor
         );
 
+        toolFactories = new HashMap<>();
+
+//        MLModelTool.Factory.getInstance().init(client);
+//        MathTool.Factory.getInstance().init(scriptService);
+//        VectorDBTool.Factory.getInstance().init(client, xContentRegistry);
+//        NeuralSparseTool.Factory.getInstance().init(client, xContentRegistry);
+//        AgentTool.Factory.getInstance().init(client);
+        CatIndexTool.Factory.getInstance().init(client, clusterService);
+//        PainlessScriptTool.Factory.getInstance().init(client, scriptService);
+//        VisualizationsTool.Factory.getInstance().init(client);
+//        RAGTool.Factory.getInstance().init(client, xContentRegistry);
+//        SearchAlertsTool.Factory.getInstance().init(client);
+//        IndexMappingTool.Factory.getInstance().init(client);
+
+//        toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
+//        toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
+//        toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
+//        toolFactories.put(NeuralSparseTool.TYPE, NeuralSparseTool.Factory.getInstance());
+//        toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
+//        toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
+//        toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
+//        toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
+//        toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
+//        toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
+
+        if (externalToolFactories != null) {
+            toolFactories.putAll(externalToolFactories);
+        }
+
+
         // TODO move this into MLFeatureEnabledSetting
         // search processor factories below will get BooleanSupplier that supplies the current value being updated through this.
         clusterService
@@ -577,6 +624,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
+        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
+        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -615,7 +664,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,
-                restGetInteractionAction
+                restGetInteractionAction,
+                restMLListToolsAction,
+                restMLGetToolAction
             );
     }
 
@@ -774,5 +825,23 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             );
 
         return responseProcessors;
+    }
+
+    @Override
+    public void loadExtensions(ExtensiblePlugin.ExtensionLoader loader) {
+        externalToolFactories = new HashMap<>();
+        for (MLCommonsExtension extension : loader.loadExtensions(MLCommonsExtension.class)) {
+            List<Tool.Factory<? extends Tool>> toolFactories = extension.getToolFactories();
+            for (Tool.Factory<? extends Tool> toolFactory : toolFactories) {
+                ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
+                if (toolAnnotation == null) {
+                    throw new IllegalArgumentException(
+                            "Missing ToolAnnotation for Tool " + toolFactory.getClass().getDeclaringClass().getSimpleName()
+                    );
+                }
+                String annotationValue = toolAnnotation.value();
+                externalToolFactories.put(annotationValue, toolFactory);
+            }
+        }
     }
 }
