@@ -107,12 +107,6 @@ import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
-import org.opensearch.ml.common.transport.tools.MLGetToolAction;
-import org.opensearch.ml.common.transport.tools.MLListToolsAction;
-import org.opensearch.ml.common.transport.tools.MLToolGetRequest;
-import org.opensearch.ml.common.transport.tools.MLToolGetResponse;
-import org.opensearch.ml.common.transport.tools.MLToolsListRequest;
-import org.opensearch.ml.common.transport.tools.MLToolsListResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
@@ -172,12 +166,6 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLExecuteTaskResponse> executeTaskResponseActionListener;
-
-    @Mock
-    ActionListener<List<ToolMetadata>> listToolsActionListener;
-
-    @Mock
-    ActionListener<ToolMetadata> getToolActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -780,50 +768,6 @@ public class MachineLearningNodeClientTest {
         verify(executeTaskResponseActionListener).onResponse(argumentCaptor.capture());
         assertEquals(FunctionName.METRICS_CORRELATION, argumentCaptor.getValue().getFunctionName());
         assertTrue(argumentCaptor.getValue().getOutput() instanceof MetricsCorrelationOutput);
-    }
-
-    @Test
-    public void listTools() {
-        List<ToolMetadata> toolMetadataList = new ArrayList<>();
-        ToolMetadata toolMetadata = ToolMetadata.builder()
-                .name("SearchWikipediaTool")
-                .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
-                .build();
-        toolMetadataList.add(toolMetadata);
-        doAnswer(invocation -> {
-            ActionListener<MLToolsListResponse> actionListener = invocation.getArgument(2);
-
-            actionListener.onResponse(MLToolsListResponse.builder().toolMetadata(toolMetadataList).build());
-            return null;
-        }).when(client).execute(eq(MLListToolsAction.INSTANCE), any(), any());
-        ArgumentCaptor<List> argumentCaptor = ArgumentCaptor.forClass(List.class);
-        machineLearningNodeClient.listTools(listToolsActionListener);
-
-        verify(client).execute(eq(MLListToolsAction.INSTANCE), isA(MLToolsListRequest.class), any());
-        verify(listToolsActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(toolMetadataList, argumentCaptor.getValue());
-    }
-
-    @Test
-    public void getTool() {
-        ToolMetadata toolMetadata = ToolMetadata.builder()
-                .name("SearchWikipediaTool")
-                .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
-                .build();
-        doAnswer(invocation -> {
-            ActionListener<MLToolGetResponse> actionListener = invocation.getArgument(2);
-
-            actionListener.onResponse(MLToolGetResponse.builder().toolMetadata(toolMetadata).build());
-            return null;
-        }).when(client).execute(eq(MLGetToolAction.INSTANCE), any(), any());
-        ArgumentCaptor<ToolMetadata> argumentCaptor = ArgumentCaptor.forClass(ToolMetadata.class);
-        machineLearningNodeClient.getTool("SearchWikipediaTool", getToolActionListener);
-
-        verify(client).execute(eq(MLGetToolAction.INSTANCE), isA(MLToolGetRequest.class), any());
-        verify(getToolActionListener).onResponse(argumentCaptor.capture());
-        assertEquals("SearchWikipediaTool", argumentCaptor.getValue().getName());
-        assertEquals("Useful when you need to use this tool to search general knowledge on wikipedia.", argumentCaptor.getValue().getDescription());
-
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
