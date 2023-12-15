@@ -214,7 +214,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -237,7 +236,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
-        // verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -248,7 +246,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
-        // verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager, never()).add(any(MLTask.class));
         verify(client, never()).get(any(), any());
     }
@@ -277,7 +274,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -291,7 +287,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client, never()).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -305,7 +300,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());

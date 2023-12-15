@@ -92,7 +92,7 @@ public class ConversationIndexMemory implements Memory {
             } else {
                 listener.onFailure(new RuntimeException("Failed to create memory message index"));
             }
-        }, e -> { listener.onFailure(new RuntimeException("Failed to create memory message index")); }));
+        }, e -> { listener.onFailure(new RuntimeException("Failed to create memory message index", e)); }));
     }
 
     public void save(Message message, String parentId, Integer traceNum, String action) {
@@ -171,24 +171,16 @@ public class ConversationIndexMemory implements Memory {
             }
 
             String memoryId = (String) map.get(MEMORY_ID);
-            if (Strings.isEmpty(memoryId)) {
-                listener.onFailure(new IllegalArgumentException("Memory id is required for creating ConversationIndexMemory"));
-            }
-
             String name = (String) map.get(MEMORY_NAME);
             String appType = (String) map.get(APP_TYPE);
-            if (Strings.isEmpty(name) || Strings.isEmpty(appType)) {
-                create(memoryId, listener);
-            } else {
-                create(name, memoryId, appType, listener);
-            }
+            create(name, memoryId, appType, listener);
         }
 
         public void create(String name, String memoryId, String appType, ActionListener<ConversationIndexMemory> listener) {
             if (Strings.isEmpty(memoryId)) {
                 memoryManager.createConversation(name, appType, ActionListener.<CreateConversationResponse>wrap(r -> {
                     create(r.getId(), listener);
-                    log.info("Created conversation on memory layer, conversation id: {}", r.getId());
+                    log.debug("Created conversation on memory layer, conversation id: {}", r.getId());
                 }, e -> {
                     log.error("Failed to save interaction", e);
                     listener.onFailure(e);
