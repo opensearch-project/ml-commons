@@ -29,7 +29,7 @@ public class ActionConstants {
     public final static String RESPONSE_CONVERSATION_LIST_FIELD = "conversations";
     /** name of list on interactions in all responses */
     public final static String RESPONSE_INTERACTION_LIST_FIELD = "interactions";
-    /** name of list on interactions in all responses */
+    /** name of list on traces in all responses */
     public final static String RESPONSE_TRACES_LIST_FIELD = "traces";
     /** name of interaction Id field in all responses */
     public final static String RESPONSE_INTERACTION_ID_FIELD = "interaction_id";
@@ -65,12 +65,11 @@ public class ActionConstants {
     public final static String GET_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/_list";
     /** path for update conversations */
     public final static String UPDATE_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/{conversation_id}/_update";
-    /** path for put interaction */
     /** path for create interaction */
     public final static String CREATE_INTERACTION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_create";
     /** path for get interactions */
     public final static String GET_INTERACTIONS_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_list";
-    /** path for get interactions */
+    /** path for get traces */
     public final static String GET_TRACES_REST_PATH = "/_plugins/_ml/memory/trace" + "/{interaction_id}/_list";
     /** path for delete conversation */
     public final static String DELETE_CONVERSATION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_delete";

@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -26,8 +25,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -47,9 +44,6 @@ public class GetTracesTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
-
-    @Mock
-    ClusterService clusterService;
 
     @Mock
     TransportService transportService;
@@ -82,11 +76,8 @@ public class GetTracesTransportActionTests extends OpenSearchTestCase {
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
-        when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
 
-        this.action = spy(new GetTracesTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
+        this.action = spy(new GetTracesTransportAction(transportService, actionFilters, cmHandler, client));
     }
 
     public void testGetTraces_noMorePages() {

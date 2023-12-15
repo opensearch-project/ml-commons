@@ -10,7 +10,6 @@ import java.util.List;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -33,15 +32,13 @@ public class GetTracesTransportAction extends HandledTransportAction<GetTracesRe
      * @param actionFilters for filtering actions
      * @param cmHandler Handler for conversational memory operations
      * @param client OS Client for dealing with OS
-     * @param clusterService for some cluster ops
      */
     @Inject
     public GetTracesTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         OpenSearchConversationalMemoryHandler cmHandler,
-        Client client,
-        ClusterService clusterService
+        Client client
     ) {
         super(GetTracesAction.NAME, transportService, actionFilters, GetTracesRequest::new);
         this.client = client;
@@ -53,6 +50,7 @@ public class GetTracesTransportAction extends HandledTransportAction<GetTracesRe
         int maxResults = request.getMaxResults();
         int from = request.getFrom();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
+            // TODO: check this newStoredContext() method and remove it if it's redundant
             ActionListener<GetTracesResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<List<Interaction>> al = ActionListener.wrap(tracesList -> {
                 internalListener.onResponse(new GetTracesResponse(tracesList, from + maxResults, tracesList.size() == maxResults));

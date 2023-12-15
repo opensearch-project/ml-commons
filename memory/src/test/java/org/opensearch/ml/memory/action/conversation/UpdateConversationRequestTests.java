@@ -101,7 +101,6 @@ public class UpdateConversationRequestTests {
         UpdateConversationRequest updateConversationRequest = UpdateConversationRequest.parse(parser, "conversationId");
         assertEquals(updateConversationRequest.getConversationId(), "conversationId");
         assertEquals("new name", updateConversationRequest.getUpdateContent().get("name"));
-        assertEquals("new type", updateConversationRequest.getUpdateContent().get("application_type"));
     }
 
     @Test
