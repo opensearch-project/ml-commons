@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableList;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -22,6 +21,8 @@ import org.opensearch.ml.common.transport.tools.MLToolGetRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+
+import com.google.common.collect.ImmutableList;
 
 public class RestMLGetToolAction extends BaseRestHandler {
 
@@ -41,7 +42,7 @@ public class RestMLGetToolAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-                .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tools/{%s}", ML_BASE_URI, PARAMETER_TOOL_NAME)));
+            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tools/{%s}", ML_BASE_URI, PARAMETER_TOOL_NAME)));
     }
 
     /**
@@ -61,7 +62,7 @@ public class RestMLGetToolAction extends BaseRestHandler {
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
         toolFactories
-                .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
+            .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
         String toolName = getParameterId(request, PARAMETER_TOOL_NAME);
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().toolName(toolName).externalTools(toolList).build();
         return channel -> client.execute(MLGetToolAction.INSTANCE, mlToolGetRequest, new RestToXContentListener<>(channel));

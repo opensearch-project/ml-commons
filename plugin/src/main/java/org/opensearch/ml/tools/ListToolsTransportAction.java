@@ -39,23 +39,23 @@ public class ListToolsTransportAction extends HandledTransportAction<ActionReque
 
         List<ToolMetadata> externalTools = mlToolsGetRequest.getExternalTools();
         List<ToolMetadata> toolsList = new ArrayList<>(
-                Arrays
-                        .asList(
-                                ToolMetadata.builder().name("LanguageModelTool").description("Useful for answering any general questions.").build(),
-                                ToolMetadata.builder().name("MathTool").description("Use this tool to calculate any math problem.").build(),
-                                ToolMetadata
-                                        .builder()
-                                        .name("SearchIndexTool")
-                                        .description(
-                                                "Useful for when you don't know answer for some question or need to search my private data in OpenSearch index."
-                                        )
-                                        .build(),
-                                ToolMetadata
-                                        .builder()
-                                        .name("SearchWikipediaTool")
-                                        .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
-                                        .build()
+            Arrays
+                .asList(
+                    ToolMetadata.builder().name("LanguageModelTool").description("Useful for answering any general questions.").build(),
+                    ToolMetadata.builder().name("MathTool").description("Use this tool to calculate any math problem.").build(),
+                    ToolMetadata
+                        .builder()
+                        .name("SearchIndexTool")
+                        .description(
+                            "Useful for when you don't know answer for some question or need to search my private data in OpenSearch index."
                         )
+                        .build(),
+                    ToolMetadata
+                        .builder()
+                        .name("SearchWikipediaTool")
+                        .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
+                        .build()
+                )
         );
         toolsList.addAll(externalTools);
         try {

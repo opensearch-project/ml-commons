@@ -508,34 +508,33 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         toolFactories = new HashMap<>();
 
-//        MLModelTool.Factory.getInstance().init(client);
-//        MathTool.Factory.getInstance().init(scriptService);
-//        VectorDBTool.Factory.getInstance().init(client, xContentRegistry);
-//        NeuralSparseTool.Factory.getInstance().init(client, xContentRegistry);
-//        AgentTool.Factory.getInstance().init(client);
+        // MLModelTool.Factory.getInstance().init(client);
+        // MathTool.Factory.getInstance().init(scriptService);
+        // VectorDBTool.Factory.getInstance().init(client, xContentRegistry);
+        // NeuralSparseTool.Factory.getInstance().init(client, xContentRegistry);
+        // AgentTool.Factory.getInstance().init(client);
         CatIndexTool.Factory.getInstance().init(client, clusterService);
-//        PainlessScriptTool.Factory.getInstance().init(client, scriptService);
-//        VisualizationsTool.Factory.getInstance().init(client);
-//        RAGTool.Factory.getInstance().init(client, xContentRegistry);
-//        SearchAlertsTool.Factory.getInstance().init(client);
-//        IndexMappingTool.Factory.getInstance().init(client);
+        // PainlessScriptTool.Factory.getInstance().init(client, scriptService);
+        // VisualizationsTool.Factory.getInstance().init(client);
+        // RAGTool.Factory.getInstance().init(client, xContentRegistry);
+        // SearchAlertsTool.Factory.getInstance().init(client);
+        // IndexMappingTool.Factory.getInstance().init(client);
 
-//        toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
-//        toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
-//        toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
-//        toolFactories.put(NeuralSparseTool.TYPE, NeuralSparseTool.Factory.getInstance());
-//        toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        // toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
+        // toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
+        // toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
+        // toolFactories.put(NeuralSparseTool.TYPE, NeuralSparseTool.Factory.getInstance());
+        // toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
-//        toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
-//        toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
-//        toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
-//        toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
-//        toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
+        // toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
+        // toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
+        // toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
+        // toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
+        // toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
-
 
         // TODO move this into MLFeatureEnabledSetting
         // search processor factories below will get BooleanSupplier that supplies the current value being updated through this.
@@ -836,7 +835,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
                 if (toolAnnotation == null) {
                     throw new IllegalArgumentException(
-                            "Missing ToolAnnotation for Tool " + toolFactory.getClass().getDeclaringClass().getSimpleName()
+                        "Missing ToolAnnotation for Tool " + toolFactory.getClass().getDeclaringClass().getSimpleName()
                     );
                 }
                 String annotationValue = toolAnnotation.value();

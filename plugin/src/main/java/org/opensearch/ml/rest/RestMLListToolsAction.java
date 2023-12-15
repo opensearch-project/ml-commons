@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableList;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -22,6 +21,8 @@ import org.opensearch.ml.common.transport.tools.MLToolsListRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+
+import com.google.common.collect.ImmutableList;
 
 public class RestMLListToolsAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_ACTION = "ml_get_tools_action";
@@ -59,7 +60,7 @@ public class RestMLListToolsAction extends BaseRestHandler {
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
         toolFactories
-                .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
+            .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
         MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().externalTools(toolList).build();
         return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsGetRequest, new RestToXContentListener<>(channel));
     }
