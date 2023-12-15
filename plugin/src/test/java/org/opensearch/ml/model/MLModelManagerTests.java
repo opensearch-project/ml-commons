@@ -21,9 +21,11 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
@@ -49,8 +51,10 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.PrivilegedActionException;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +98,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
@@ -168,6 +173,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     @Mock
     private ScriptService scriptService;
 
+    @Mock
+    private MLTask pretrainedMLTask;
+
     @Before
     public void setup() throws URISyntaxException {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
@@ -209,6 +217,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .modelFormat(modelFormat)
             .modelConfig(modelConfig)
             .url(url)
+            .isHidden(false)
             .build();
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
@@ -371,6 +380,96 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any(), any());
+    }
+
+    public void testRegisterMLModel_RegisterPreBuildModel() throws PrivilegedActionException, IOException {
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+        MLRegisterModelInput pretrainedInput = mockPretrainedInput();
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelInput> listener = (ActionListener<MLRegisterModelInput>) invocation.getArguments()[2];
+            listener.onResponse(pretrainedInput);
+            return null;
+        }).when(modelHelper).downloadPrebuiltModelConfig(any(), any(), any());
+
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        String[] newChunks = createTempChunkFiles();
+        doAnswer(invocation -> {
+            ActionListener<Map<String, Object>> listener = invocation.getArgument(7);
+            Map<String, Object> result = new HashMap<>();
+            result.put(MODEL_SIZE_IN_BYTES, modelContentSize);
+            result.put(CHUNK_FILES, Arrays.asList(newChunks[0], newChunks[1]));
+            result.put(MODEL_FILE_HASH, randomAlphaOfLength(10));
+            listener.onResponse(result);
+            return null;
+        }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any(), any(), any());
+        MLTask pretrainedTask = MLTask
+            .builder()
+            .taskId("pretrained")
+            .modelId("pretrained")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .build();
+        modelManager.registerMLModel(pretrainedInput, pretrainedTask);
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.SPARSE_ENCODING);
+        verify(mlTaskManager)
+            .updateMLTask(
+                eq("pretrained"),
+                eq(ImmutableMap.of(FUNCTION_NAME_FIELD, FunctionName.SPARSE_ENCODING)),
+                eq((long) TIMEOUT_IN_MILLIS),
+                eq(false)
+            );
+    }
+
+    public void testRegisterMLRemoteModel() throws PrivilegedActionException {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    public void testIndexRemoteModel() throws PrivilegedActionException {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+        modelManager.indexRemoteModel(pretrainedInput, pretrainedTask, "1.0.0");
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(modelManager).deployModelAfterRegistering(any(), anyString());
+
     }
 
     @Ignore
@@ -826,6 +925,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     @Mock
     private IndexResponse indexResponse;
 
+    @Mock
+    private UpdateResponse updateResponse;
+
     private String[] createTempChunkFiles() throws IOException {
         String tmpFolder = randomAlphaOfLength(10);
         String newChunk0 = chunk0.substring(0, chunk0.length() - 2) + "/" + tmpFolder + "/0";
@@ -913,7 +1015,33 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 )
             )
             .totalChunks(2)
+            .isHidden(true)
             .build();
         return input;
+    }
+
+    private MLRegisterModelInput mockPretrainedInput() {
+        return MLRegisterModelInput
+            .builder()
+            .modelName(modelName)
+            .version(version)
+            .modelGroupId("modelGroupId")
+            .modelFormat(modelFormat)
+            .functionName(FunctionName.SPARSE_ENCODING)
+            .isHidden(true)
+            .build();
+    }
+
+    private MLRegisterModelInput mockRemoteModelInput(boolean isHidden) {
+        return MLRegisterModelInput
+            .builder()
+            .modelName(modelName)
+            .version(version)
+            .modelGroupId("modelGroupId")
+            .modelFormat(modelFormat)
+            .functionName(FunctionName.REMOTE)
+            .isHidden(isHidden)
+            .deployModel(true)
+            .build();
     }
 }

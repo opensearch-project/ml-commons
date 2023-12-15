@@ -48,19 +48,32 @@ public class ActionConstants {
     public final static String PROMPT_TEMPLATE_FIELD = "prompt_template";
     /** name of metadata field in all requests */
     public final static String ADDITIONAL_INFO_FIELD = "additional_info";
+    /** name of metadata field in all requests */
+    public final static String PARENT_INTERACTION_ID_FIELD = "parent_interaction_id";
+    /** name of metadata field in all requests */
+    public final static String TRACE_NUMBER_FIELD = "trace_number";
     /** name of success field in all requests */
     public final static String SUCCESS_FIELD = "success";
 
+    private final static String BASE_REST_PATH = "/_plugins/_ml/memory/conversation";
     /** path for create conversation */
-    public final static String CREATE_CONVERSATION_REST_PATH = "/_plugins/_ml/memory/conversation";
-    /** path for list conversations */
-    public final static String GET_CONVERSATIONS_REST_PATH  = "/_plugins/_ml/memory/conversation";
-    /** path for put interaction */
-    public final static String CREATE_INTERACTION_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
+    public final static String CREATE_CONVERSATION_REST_PATH = BASE_REST_PATH + "/_create";
+    /** path for get conversations */
+    public final static String GET_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/_list";
+    /** path for create interaction */
+    public final static String CREATE_INTERACTION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_create";
     /** path for get interactions */
-    public final static String GET_INTERACTIONS_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
+    public final static String GET_INTERACTIONS_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_list";
     /** path for delete conversation */
-    public final static String DELETE_CONVERSATION_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
+    public final static String DELETE_CONVERSATION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_delete";
+    /** path for search conversations */
+    public final static String SEARCH_CONVERSATIONS_REST_PATH = BASE_REST_PATH + "/_search";
+    /** path for search interactions */
+    public final static String SEARCH_INTERACTIONS_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_search";
+    /** path for get conversation */
+    public final static String GET_CONVERSATION_REST_PATH = BASE_REST_PATH + "/{conversation_id}";
+    /** path for get interaction */
+    public final static String GET_INTERACTION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/{interaction_id}";
 
     /** default max results returned by get operations */
     public final static int DEFAULT_MAX_RESULTS = 10;

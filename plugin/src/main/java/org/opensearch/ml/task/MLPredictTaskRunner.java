@@ -119,8 +119,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         ActionListener<MLTaskResponse> listener
     ) {
         String modelId = request.getModelId();
-        MLInput input = request.getMlInput();
-        FunctionName algorithm = input.getAlgorithm();
         try {
             ActionListener<DiscoveryNode> actionListener = ActionListener.wrap(node -> {
                 if (clusterService.localNode().getId().equals(node.getId())) {
@@ -133,9 +131,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
                 }
             }, e -> { listener.onFailure(e); });
-            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, algorithm, true);
+            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
             if (workerNodes == null || workerNodes.length == 0) {
-                if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
+                if (functionName == FunctionName.TEXT_EMBEDDING || functionName == FunctionName.REMOTE) {
                     listener
                         .onFailure(
                             new IllegalArgumentException(
@@ -144,7 +142,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         );
                     return;
                 } else {
-                    workerNodes = nodeHelper.getEligibleNodeIds(algorithm);
+                    workerNodes = nodeHelper.getEligibleNodeIds(functionName);
                 }
             }
             mlTaskDispatcher.dispatchPredictTask(workerNodes, actionListener);
@@ -215,9 +213,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         FunctionName algorithm = mlInput.getAlgorithm();
         // run predict
         if (modelId != null) {
-            try {
-                Predictable predictor = mlModelManager.getPredictor(modelId);
-                if (predictor != null) {
+            Predictable predictor = mlModelManager.getPredictor(modelId);
+            if (predictor != null) {
+                try {
                     if (!predictor.isModelReady()) {
                         throw new IllegalArgumentException("Model not ready: " + modelId);
                     }
@@ -231,11 +229,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     MLTaskResponse response = MLTaskResponse.builder().output(output).build();
                     internalListener.onResponse(response);
                     return;
-                } else if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
-                    throw new IllegalArgumentException("Model not ready to be used: " + modelId);
+                } catch (Exception e) {
+                    handlePredictFailure(mlTask, internalListener, e, false, modelId);
+                    return;
                 }
-            } catch (Exception e) {
-                handlePredictFailure(mlTask, internalListener, e, false, modelId);
+            } else if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
+                throw new IllegalArgumentException("Model not ready to be used: " + modelId);
             }
 
             // search model by model id.
@@ -254,6 +253,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         GetResponse getResponse = r;
                         String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
                         MLModel mlModel = MLModel.parse(xContentParser, algorithmName);
+                        mlModel.setModelId(modelId);
                         User resourceUser = mlModel.getUser();
                         User requestUser = getUserContext(client);
                         if (!checkUserPermissions(requestUser, resourceUser, modelId)) {
@@ -265,7 +265,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             return;
                         }
                         // run predict
-                        mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
+                        if (mlTaskManager.contains(mlTask.getTaskId())) {
+                            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
+                        }
                         MLOutput output = mlEngine.predict(mlInput, mlModel);
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());

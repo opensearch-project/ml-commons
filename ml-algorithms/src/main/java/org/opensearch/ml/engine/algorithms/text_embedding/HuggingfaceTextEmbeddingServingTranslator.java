@@ -5,20 +5,21 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
+
+import java.util.Collections;
+import java.util.List;
+
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensors;
+
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
 import ai.djl.ndarray.NDList;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorContext;
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensors;
-
-import java.util.Collections;
-import java.util.List;
-
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
 
 public class HuggingfaceTextEmbeddingServingTranslator implements Translator<Input, Output> {
 
@@ -57,13 +58,14 @@ public class HuggingfaceTextEmbeddingServingTranslator implements Translator<Inp
         for (int i = 0; i < ret.length; i++) {
             data[i] = ret[i];
         }
-        long[] shape = new long[]{1, ret.length};
-        ModelTensor tensor = ModelTensor.builder()
-                .name(SENTENCE_EMBEDDING)
-                .data(data)
-                .shape(shape)
-                .dataType(MLResultDataType.FLOAT32)
-                .build();
+        long[] shape = new long[] { 1, ret.length };
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .name(SENTENCE_EMBEDDING)
+            .data(data)
+            .shape(shape)
+            .dataType(MLResultDataType.FLOAT32)
+            .build();
         List<ModelTensor> outputs = Collections.singletonList(tensor);
 
         Output output = new Output();

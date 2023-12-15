@@ -5,12 +5,16 @@
 
 package org.opensearch.ml.engine.algorithms.ad;
 
-import com.oracle.labs.mlrg.olcut.util.Pair;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
@@ -22,7 +26,6 @@ import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.tribuo.Dataset;
@@ -32,9 +35,7 @@ import org.tribuo.anomaly.Event;
 import org.tribuo.anomaly.example.AnomalyDataGenerator;
 import org.tribuo.common.libsvm.LibSVMModel;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import com.oracle.labs.mlrg.olcut.util.Pair;
 
 public class AnomalyDetectionLibSVMTest {
 
@@ -67,7 +68,11 @@ public class AnomalyDetectionLibSVMTest {
         predictionLabels = new ArrayList<>();
         predictionDataFrame = constructDataFrame(test, false, predictionLabels);
         predictionDataFrameInputDataset = new DataFrameInputDataset(predictionDataFrame);
-        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.AD_LIBSVM).inputDataset(predictionDataFrameInputDataset).build();
+        predictionDataFrameInput = MLInput
+            .builder()
+            .algorithm(FunctionName.AD_LIBSVM)
+            .inputDataset(predictionDataFrameInputDataset)
+            .build();
     }
 
     private DataFrame constructDataFrame(Dataset<Event> data, boolean training, List<Event.EventType> labels) {
@@ -97,7 +102,13 @@ public class AnomalyDetectionLibSVMTest {
         return dataFrame;
     }
 
-    private void addRow(List<ColumnValue> columnValues, boolean training, Example<Event> example, DataFrame dataFrame, List<Event.EventType> labels) {
+    private void addRow(
+        List<ColumnValue> columnValues,
+        boolean training,
+        Example<Event> example,
+        DataFrame dataFrame,
+        List<Event.EventType> labels
+    ) {
         Row row = new Row(columnValues.toArray(new ColumnValue[columnValues.size()]));
         if (training) {
             if (example.getOutput().getType() == Event.EventType.EXPECTED) {
@@ -128,7 +139,16 @@ public class AnomalyDetectionLibSVMTest {
 
     @Test
     public void trainWithFullParams() {
-        AnomalyDetectionLibSVMParams parameters = AnomalyDetectionLibSVMParams.builder().gamma(gamma).nu(nu).cost(1.0).coeff(0.01).epsilon(0.001).degree(1).kernelType(AnomalyDetectionLibSVMParams.ADKernelType.LINEAR).build();
+        AnomalyDetectionLibSVMParams parameters = AnomalyDetectionLibSVMParams
+            .builder()
+            .gamma(gamma)
+            .nu(nu)
+            .cost(1.0)
+            .coeff(0.01)
+            .epsilon(0.001)
+            .degree(1)
+            .kernelType(AnomalyDetectionLibSVMParams.ADKernelType.LINEAR)
+            .build();
         AnomalyDetectionLibSVM anomalyDetection = new AnomalyDetectionLibSVM(parameters);
         MLModel model = anomalyDetection.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());

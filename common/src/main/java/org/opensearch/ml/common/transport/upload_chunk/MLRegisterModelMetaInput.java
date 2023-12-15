@@ -16,6 +16,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -46,6 +47,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
     public static final String ACCESS_MODE = "access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
+    public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
+
 
     private FunctionName functionName;
     private String name;
@@ -65,11 +68,14 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private List<String> backendRoles;
     private AccessMode accessMode;
     private Boolean isAddAllBackendRoles;
+    private Boolean doesVersionCreateModelGroup;
+    private Boolean isHidden;
 
     @Builder(toBuilder = true)
     public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
                                     AccessMode accessMode,
-                                    Boolean isAddAllBackendRoles) {
+                                    Boolean isAddAllBackendRoles,
+                                    Boolean doesVersionCreateModelGroup, Boolean isHidden) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -103,6 +109,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.backendRoles = backendRoles;
         this.accessMode = accessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
+        this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
+        this.isHidden = isHidden;
     }
 
     public MLRegisterModelMetaInput(StreamInput in) throws IOException{
@@ -128,6 +136,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
             accessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
+        this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        this.isHidden = in.readOptionalBoolean();
     }
 
     @Override
@@ -171,21 +181,23 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isAddAllBackendRoles);
+        out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        out.writeOptionalBoolean(isHidden);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
-        builder.field(MODEL_NAME_FIELD, name);
-        builder.field(FUNCTION_NAME_FIELD, functionName);
+        builder.field(MLModel.MODEL_NAME_FIELD, name);
+        builder.field(MLModel.FUNCTION_NAME_FIELD, functionName);
         if (modelGroupId != null) {
-            builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
+            builder.field(MLModel.MODEL_GROUP_ID_FIELD, modelGroupId);
         }
         if (version != null) {
             builder.field(VERSION_FIELD, version);
         }
         if (description != null) {
-            builder.field(DESCRIPTION_FIELD, description);
+            builder.field(MLModel.DESCRIPTION_FIELD, description);
         }
         builder.field(MODEL_FORMAT_FIELD, modelFormat);
         if (modelState != null) {
@@ -206,6 +218,12 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
         }
+        if (doesVersionCreateModelGroup != null) {
+            builder.field(DOES_VERSION_CREATE_MODEL_GROUP, doesVersionCreateModelGroup);
+        }
+        if (isHidden != null) {
+            builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
+        }
         builder.endObject();
         return builder;
     }
@@ -225,6 +243,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         List<String> backendRoles = null;
         AccessMode accessMode = null;
         Boolean isAddAllBackendRoles = null;
+        Boolean doesVersionCreateModelGroup = null;
+        Boolean isHidden = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -277,12 +297,18 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
                     break;
+                case DOES_VERSION_CREATE_MODEL_GROUP:
+                    doesVersionCreateModelGroup = parser.booleanValue();
+                    break;
+                case MLModel.IS_HIDDEN_FIELD:
+                    isHidden = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles);
+        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup, isHidden);
     }
 
 }

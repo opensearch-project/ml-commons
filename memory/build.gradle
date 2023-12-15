@@ -20,7 +20,7 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
-    id 'com.diffplug.spotless' version '6.18.0'
+    id 'com.diffplug.spotless' version '6.23.0'
 }
 
 dependencies {
@@ -46,37 +46,31 @@ test {
 
 jacocoTestReport {
     reports {
-        html.required = true
-        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
+        xml.getRequired().set(true)
+        csv.getRequired().set(false)
+        html.getRequired().set(true)
     }
 
     dependsOn test
 }
 
-List<String> jacocoExclusions = []
 
 jacocoTestCoverageVerification {
     violationRules {
         rule {
-            element = 'CLASS'
-            excludes = jacocoExclusions
-            limit {
-                counter = 'BRANCH'
-                minimum = 0.7  //TODO: change this value to 0.7
-            }
-        }
-        rule {
-            element = 'CLASS'
-            excludes = jacocoExclusions
             limit {
                 counter = 'LINE'
-                value = 'COVEREDRATIO'
-                minimum = 0.8  //TODO: change this value to 0.8
+                minimum = 0.7 //TODO: increase coverage to 0.8
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.8 //TODO: increase coverage to 0.9
             }
         }
     }
     dependsOn jacocoTestReport
 }
+check.dependsOn jacocoTestCoverageVerification
 
 spotless {
     java {

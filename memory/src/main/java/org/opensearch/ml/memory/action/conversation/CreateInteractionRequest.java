@@ -18,14 +18,17 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
@@ -48,7 +51,27 @@ public class CreateInteractionRequest extends ActionRequest {
     @Getter
     private String origin;
     @Getter
-    private String additionalInfo;
+    private Map<String, String> additionalInfo;
+    @Getter
+    private String parentIid;
+    @Getter
+    private Integer traceNumber;
+
+    public CreateInteractionRequest(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo
+    ) {
+        this.conversationId = conversationId;
+        this.input = input;
+        this.promptTemplate = promptTemplate;
+        this.response = response;
+        this.origin = origin;
+        this.additionalInfo = additionalInfo;
+    }
 
     /**
      * Constructor
@@ -62,7 +85,11 @@ public class CreateInteractionRequest extends ActionRequest {
         this.promptTemplate = in.readString();
         this.response = in.readString();
         this.origin = in.readOptionalString();
-        this.additionalInfo = in.readOptionalString();
+        if (in.readBoolean()) {
+            this.additionalInfo = in.readMap(s -> s.readString(), s -> s.readString());
+        }
+        this.parentIid = in.readOptionalString();
+        this.traceNumber = in.readOptionalInt();
     }
 
     @Override
@@ -73,7 +100,14 @@ public class CreateInteractionRequest extends ActionRequest {
         out.writeString(promptTemplate);
         out.writeString(response);
         out.writeOptionalString(origin);
-        out.writeOptionalString(additionalInfo);
+        if (additionalInfo != null) {
+            out.writeBoolean(true);
+            out.writeMap(additionalInfo, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalString(parentIid);
+        out.writeOptionalInt(traceNumber);
     }
 
     @Override
@@ -92,14 +126,52 @@ public class CreateInteractionRequest extends ActionRequest {
      * @throws IOException if something goes wrong reading from request
      */
     public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
-        Map<String, String> body = request.contentParser().mapStrings();
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
-        String inp = body.get(ActionConstants.INPUT_FIELD);
-        String prmpt = body.get(ActionConstants.PROMPT_TEMPLATE_FIELD);
-        String rsp = body.get(ActionConstants.AI_RESPONSE_FIELD);
-        String ogn = body.get(ActionConstants.RESPONSE_ORIGIN_FIELD);
-        String addinf = body.get(ActionConstants.ADDITIONAL_INFO_FIELD);
-        return new CreateInteractionRequest(cid, inp, prmpt, rsp, ogn, addinf);
+        XContentParser parser = request.contentParser();
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+
+        String input = null;
+        String prompt = null;
+        String response = null;
+        String origin = null;
+        Map<String, String> addinf = new HashMap<>();
+        String parintid = null;
+        Integer tracenum = null;
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case ActionConstants.INPUT_FIELD:
+                    input = parser.text();
+                    break;
+                case ActionConstants.PROMPT_TEMPLATE_FIELD:
+                    prompt = parser.text();
+                    break;
+                case ActionConstants.AI_RESPONSE_FIELD:
+                    response = parser.text();
+                    break;
+                case ActionConstants.RESPONSE_ORIGIN_FIELD:
+                    origin = parser.text();
+                    break;
+                case ActionConstants.ADDITIONAL_INFO_FIELD:
+                    addinf = parser.mapStrings();
+                    break;
+                case ActionConstants.PARENT_INTERACTION_ID_FIELD:
+                    parintid = parser.text();
+                    break;
+                case ActionConstants.TRACE_NUMBER_FIELD:
+                    tracenum = parser.intValue(false);
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+
+        return new CreateInteractionRequest(cid, input, prompt, response, origin, addinf, parintid, tracenum);
     }
 
 }

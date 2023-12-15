@@ -37,6 +37,7 @@ import org.opensearch.ml.action.profile.MLProfileResponse;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
@@ -65,6 +66,9 @@ import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
@@ -381,9 +385,15 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLModel getModel(String modelId) {
-        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false);
+        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true);
         MLModelGetResponse response = client().execute(MLModelGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModel();
+    }
+
+    public MLModelGroup getModelGroup(String modelGroupId) {
+        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId);
+        MLModelGroupGetResponse response = client().execute(MLModelGroupGetAction.INSTANCE, getRequest).actionGet(5000);
+        return response.getMlModelGroup();
     }
 
     public SearchResponse searchModelChunks(String modelId) {

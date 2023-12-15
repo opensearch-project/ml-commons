@@ -5,16 +5,10 @@
 
 package org.opensearch.ml.engine;
 
-import ai.djl.training.util.DownloadUtils;
-import ai.djl.training.util.ProgressBar;
-import com.google.gson.stream.JsonReader;
-import lombok.extern.log4j.Log4j2;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
+import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+import static org.opensearch.ml.engine.utils.FileUtils.splitFileIntoChunks;
 
 import java.io.File;
 import java.io.FileReader;
@@ -31,10 +25,18 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
-import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
-import static org.opensearch.ml.engine.utils.FileUtils.splitFileIntoChunks;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+
+import com.google.gson.stream.JsonReader;
+
+import ai.djl.training.util.DownloadUtils;
+import ai.djl.training.util.ProgressBar;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class ModelHelper {
@@ -53,10 +55,15 @@ public class ModelHelper {
         this.mlEngine = mlEngine;
     }
 
-    public void downloadPrebuiltModelConfig(String taskId, MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelInput> listener) {
+    public void downloadPrebuiltModelConfig(
+        String taskId,
+        MLRegisterModelInput registerModelInput,
+        ActionListener<MLRegisterModelInput> listener
+    ) {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
+        Boolean isHidden = registerModelInput.getIsHidden();
         boolean deployModel = registerModelInput.isDeployModel();
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         String modelGroupId = registerModelInput.getModelGroupId();
@@ -82,12 +89,16 @@ public class ModelHelper {
 
                 MLRegisterModelInput.MLRegisterModelInputBuilder builder = MLRegisterModelInput.builder();
 
-                builder.modelName(modelName)
-                        .version(version)
-                        .url(modelZipFileUrl)
-                        .deployModel(deployModel)
-                        .modelNodeIds(modelNodeIds)
-                        .modelGroupId(modelGroupId);
+                builder
+                    .modelName(modelName)
+                    .version(version)
+                    .url(modelZipFileUrl)
+                    .deployModel(deployModel)
+                    .modelNodeIds(modelNodeIds)
+                    .isHidden(isHidden)
+                    .modelGroupId(modelGroupId)
+                    .functionName(FunctionName.from((String) config.get("model_task_type")));
+
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
                         case MLRegisterModelInput.MODEL_FORMAT_FIELD:
@@ -105,19 +116,24 @@ public class ModelHelper {
                                         configBuilder.allConfig(configEntry.getValue().toString());
                                         break;
                                     case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
-                                        configBuilder.embeddingDimension(((Double)configEntry.getValue()).intValue());
+                                        configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
                                         break;
                                     case TextEmbeddingModelConfig.FRAMEWORK_TYPE_FIELD:
-                                        configBuilder.frameworkType(TextEmbeddingModelConfig.FrameworkType.from(configEntry.getValue().toString()));
+                                        configBuilder
+                                            .frameworkType(TextEmbeddingModelConfig.FrameworkType.from(configEntry.getValue().toString()));
                                         break;
                                     case TextEmbeddingModelConfig.POOLING_MODE_FIELD:
-                                        configBuilder.poolingMode(TextEmbeddingModelConfig.PoolingMode.from(configEntry.getValue().toString().toUpperCase(Locale.ROOT)));
+                                        configBuilder
+                                            .poolingMode(
+                                                TextEmbeddingModelConfig.PoolingMode
+                                                    .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
+                                            );
                                         break;
                                     case TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD:
                                         configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
                                         break;
                                     case TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD:
-                                        configBuilder.modelMaxLength(((Double)configEntry.getValue()).intValue());
+                                        configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
                                         break;
                                     default:
                                         break;
@@ -125,7 +141,7 @@ public class ModelHelper {
                             }
                             builder.modelConfig(configBuilder.build());
                             break;
-                        case MLRegisterModelInput.HASH_VALUE_FIELD:
+                        case MLRegisterModelInput.MODEL_CONTENT_HASH_VALUE_FIELD:
                             builder.hashValue(entry.getValue().toString());
                             break;
                         default:
@@ -147,11 +163,13 @@ public class ModelHelper {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
-        for (Object meta: modelMetaList) {
-            String name = (String) ((Map<String, Object>)meta).get("name");
-            List<String> versions = (List) ((Map<String, Object>)meta).get("version");
-            List<String> formats = (List) ((Map<String, Object>)meta).get("format");
-            if (name.equals(modelName) && versions.contains(version.toLowerCase(Locale.ROOT)) && formats.contains(modelFormat.toString().toLowerCase(Locale.ROOT))) {
+        for (Object meta : modelMetaList) {
+            String name = (String) ((Map<String, Object>) meta).get("name");
+            List<String> versions = (List) ((Map<String, Object>) meta).get("version");
+            List<String> formats = (List) ((Map<String, Object>) meta).get("format");
+            if (name.equals(modelName)
+                && versions.contains(version.toLowerCase(Locale.ROOT))
+                && formats.contains(modelFormat.toString().toLowerCase(Locale.ROOT))) {
                 return true;
             }
         }
@@ -191,11 +209,20 @@ public class ModelHelper {
      * @param modelContentHash model content hash value
      * @param listener action listener
      */
-    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, String modelContentHash, FunctionName functionName, ActionListener<Map<String, Object>> listener) {
+    public void downloadAndSplit(
+        MLModelFormat modelFormat,
+        String taskId,
+        String modelName,
+        String version,
+        String url,
+        String modelContentHash,
+        FunctionName functionName,
+        ActionListener<Map<String, Object>> listener
+    ) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
-                String modelPath = registerModelPath +".zip";
+                String modelPath = registerModelPath + ".zip";
                 Path modelPartsPath = registerModelPath.resolve("chunks");
                 File modelZipFile = new File(modelPath);
                 log.debug("download model to file {}", modelZipFile.getAbsolutePath());
@@ -222,7 +249,8 @@ public class ModelHelper {
         }
     }
 
-    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath, String modelName, FunctionName functionName) throws IOException {
+    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath, String modelName, FunctionName functionName)
+        throws IOException {
         boolean hasPtFile = false;
         boolean hasOnnxFile = false;
         boolean hasTokenizerFile = false;
@@ -247,7 +275,13 @@ public class ModelHelper {
         }
     }
 
-    private static boolean hasModelFile(MLModelFormat modelFormat, MLModelFormat targetModelFormat, String fileExtension, boolean hasModelFile, String fileName) {
+    private static boolean hasModelFile(
+        MLModelFormat modelFormat,
+        MLModelFormat targetModelFormat,
+        String fileExtension,
+        boolean hasModelFile,
+        String fileName
+    ) {
         if (fileName.endsWith(fileExtension)) {
             if (modelFormat != targetModelFormat) {
                 throw new IllegalArgumentException("Model format is " + modelFormat + ", but find " + fileExtension + " file");

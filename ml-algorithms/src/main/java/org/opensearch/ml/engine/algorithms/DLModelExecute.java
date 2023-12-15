@@ -1,13 +1,21 @@
 package org.opensearch.ml.engine.algorithms;
 
-import ai.djl.Application;
-import ai.djl.Device;
-import ai.djl.engine.Engine;
-import ai.djl.inference.Predictor;
-import ai.djl.repository.zoo.Criteria;
-import ai.djl.repository.zoo.ZooModel;
-import ai.djl.translate.Translator;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
+import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -21,21 +29,14 @@ import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
-import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
-import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+import ai.djl.Application;
+import ai.djl.Device;
+import ai.djl.engine.Engine;
+import ai.djl.inference.Predictor;
+import ai.djl.repository.zoo.Criteria;
+import ai.djl.repository.zoo.ZooModel;
+import ai.djl.translate.Translator;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public abstract class DLModelExecute implements MLExecutable {
@@ -71,9 +72,9 @@ public abstract class DLModelExecute implements MLExecutable {
             throw new IllegalArgumentException("unsupported engine");
         }
 
-        File modelZipFile = (File)params.get(MODEL_ZIP_FILE);
-        modelHelper = (ModelHelper)params.get(MODEL_HELPER);
-        mlEngine = (MLEngine)params.get(ML_ENGINE);
+        File modelZipFile = (File) params.get(MODEL_ZIP_FILE);
+        modelHelper = (ModelHelper) params.get(MODEL_HELPER);
+        mlEngine = (MLEngine) params.get(ML_ENGINE);
         if (modelZipFile == null) {
             throw new IllegalArgumentException("model file is null");
         }
@@ -90,13 +91,7 @@ public abstract class DLModelExecute implements MLExecutable {
         if (model.getAlgorithm() != FunctionName.METRICS_CORRELATION) {
             throw new IllegalArgumentException("wrong function name");
         }
-        loadModel(
-                modelZipFile,
-                modelId,
-                model.getName(),
-                model.getVersion(),
-                engine
-        );
+        loadModel(modelZipFile, modelId, model.getName(), model.getVersion(), engine);
     }
 
     @Override
@@ -125,10 +120,9 @@ public abstract class DLModelExecute implements MLExecutable {
      * @param modelId id of the model
      * @param modelName name of the model
      * @param version version of the model
-     * @param engine engine where model will be run. For now we are supporting only pytorch engine only.
+     * @param engine engine where model will be run. For now, we are supporting only pytorch engine only.
      */
-    private void loadModel(File modelZipFile, String modelId, String modelName, String version,
-                           String engine) {
+    private void loadModel(File modelZipFile, String modelId, String modelName, String version, String engine) {
         try {
             List<Predictor<ai.djl.modality.Input, ai.djl.modality.Output>> predictorList = new ArrayList<>();
             List<ZooModel<ai.djl.modality.Input, ai.djl.modality.Output>> modelList = new ArrayList<>();
@@ -168,12 +162,13 @@ public abstract class DLModelExecute implements MLExecutable {
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
                         log.debug("Deploy model {} on device {}: {}", modelId, i, devices[i]);
-                        Criteria.Builder<ai.djl.modality.Input, ai.djl.modality.Output> criteriaBuilder = Criteria.builder()
-                                .setTypes(ai.djl.modality.Input.class, ai.djl.modality.Output.class)
-                                .optApplication(Application.UNDEFINED)
-                                .optEngine(engine)
-                                .optDevice(devices[i])
-                                .optModelPath(modelPath);
+                        Criteria.Builder<ai.djl.modality.Input, ai.djl.modality.Output> criteriaBuilder = Criteria
+                            .builder()
+                            .setTypes(ai.djl.modality.Input.class, ai.djl.modality.Output.class)
+                            .optApplication(Application.UNDEFINED)
+                            .optEngine(engine)
+                            .optDevice(devices[i])
+                            .optModelPath(modelPath);
                         Translator translator = getTranslator();
                         if (translator != null) {
                             criteriaBuilder.optTranslator(translator);

@@ -75,6 +75,8 @@ public class MLModel implements ToXContentObject {
     public static final String CURRENT_WORKER_NODE_COUNT_FIELD = "current_worker_node_count";
     public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
     public static final String DEPLOY_TO_ALL_NODES_FIELD = "deploy_to_all_nodes";
+
+    public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
 
@@ -110,6 +112,9 @@ public class MLModel implements ToXContentObject {
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
 
+    //is domain manager creates any special hidden model in the cluster this status will be true. Otherwise,
+    // False by default
+    private Boolean isHidden;
     @Setter
     private Connector connector;
     private String connectorId;
@@ -139,6 +144,7 @@ public class MLModel implements ToXContentObject {
                    Integer currentWorkerNodeCount,
                    String[] planningWorkerNodes,
                    boolean deployToAllNodes,
+                   Boolean isHidden,
                    Connector connector,
                    String connectorId) {
         this.name = name;
@@ -166,6 +172,7 @@ public class MLModel implements ToXContentObject {
         this.currentWorkerNodeCount = currentWorkerNodeCount;
         this.planningWorkerNodes = planningWorkerNodes;
         this.deployToAllNodes = deployToAllNodes;
+        this.isHidden = isHidden;
         this.connector = connector;
         this.connectorId = connectorId;
     }
@@ -191,7 +198,11 @@ public class MLModel implements ToXContentObject {
             modelContentSizeInBytes = input.readOptionalLong();
             modelContentHash = input.readOptionalString();
             if (input.readBoolean()) {
-                modelConfig = new TextEmbeddingModelConfig(input);
+                if (algorithm.equals(FunctionName.METRICS_CORRELATION)) {
+                    modelConfig = new MetricsCorrelationModelConfig(input);
+                } else {
+                    modelConfig = new TextEmbeddingModelConfig(input);
+                }
             }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();
@@ -206,6 +217,7 @@ public class MLModel implements ToXContentObject {
             currentWorkerNodeCount = input.readOptionalInt();
             planningWorkerNodes = input.readOptionalStringArray();
             deployToAllNodes = input.readBoolean();
+            isHidden = input.readOptionalBoolean();
             modelGroupId = input.readOptionalString();
             if (input.readBoolean()) {
                 connector = Connector.fromStream(input);
@@ -259,6 +271,7 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInt(currentWorkerNodeCount);
         out.writeOptionalStringArray(planningWorkerNodes);
         out.writeBoolean(deployToAllNodes);
+        out.writeOptionalBoolean(isHidden);
         out.writeOptionalString(modelGroupId);
         if (connector != null) {
             out.writeBoolean(true);
@@ -347,6 +360,9 @@ public class MLModel implements ToXContentObject {
         if (deployToAllNodes) {
             builder.field(DEPLOY_TO_ALL_NODES_FIELD, deployToAllNodes);
         }
+        if (isHidden != null) {
+            builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
+        }
         if (connector != null) {
             builder.field(CONNECTOR_FIELD, connector);
         }
@@ -389,6 +405,7 @@ public class MLModel implements ToXContentObject {
         Integer currentWorkerNodeCount = null;
         List<String> planningWorkerNodes = new ArrayList<>();
         boolean deployToAllNodes = false;
+        boolean isHidden = false;
         Connector connector = null;
         String connectorId = null;
 
@@ -472,6 +489,9 @@ public class MLModel implements ToXContentObject {
                 case DEPLOY_TO_ALL_NODES_FIELD:
                     deployToAllNodes = parser.booleanValue();
                     break;
+                case IS_HIDDEN_FIELD:
+                    isHidden = parser.booleanValue();
+                    break;
                 case CONNECTOR_FIELD:
                     connector = createConnector(parser);
                     break;
@@ -533,6 +553,7 @@ public class MLModel implements ToXContentObject {
                 .currentWorkerNodeCount(currentWorkerNodeCount)
                 .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
                 .deployToAllNodes(deployToAllNodes)
+                .isHidden(isHidden)
                 .connector(connector)
                 .connectorId(connectorId)
                 .build();

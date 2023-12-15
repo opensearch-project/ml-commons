@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
@@ -78,6 +79,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+
+    Settings settings;
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
     MLStats mlStats;
@@ -124,6 +127,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.settings = settings;
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
@@ -136,17 +140,77 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
-        User user = RestActionUtils.getUserContext(client);
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
-        modelAccessControlHelper
-            .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-                if (!access) {
-                    log.error("You don't have permissions to perform this operation on this model.");
-                    listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+        registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
+        if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
+            mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
+                if (modelGroups != null
+                    && modelGroups.getHits().getTotalHits() != null
+                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
+                    registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
+                    checkUserAccess(registerModelInput, listener, true);
                 } else {
                     doRegister(registerModelInput, listener);
                 }
+            }, e -> {
+                log.error("Failed to search model group index", e);
+                listener.onFailure(e);
+            }));
+        } else {
+            checkUserAccess(registerModelInput, listener, false);
+        }
+    }
+
+    private void checkUserAccess(
+        MLRegisterModelInput registerModelInput,
+        ActionListener<MLRegisterModelResponse> listener,
+        Boolean isModelNameAlreadyExisting
+    ) {
+        User user = RestActionUtils.getUserContext(client);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
+                if (access) {
+                    doRegister(registerModelInput, listener);
+                    return;
+                }
+                // if the user does not have access, we need to check three more conditions before throwing exception.
+                // if we are checking the access based on the name provided in the input, we let user know the name is already used by a
+                // model group they do not have access to.
+                if (isModelNameAlreadyExisting) {
+                    // This case handles when user is using the same pre-trained model already registered by another user on the cluster.
+                    // The only way here is for the user to first create model group and use its ID in the request
+                    if (registerModelInput.getUrl() == null
+                        && registerModelInput.getFunctionName() != FunctionName.REMOTE
+                        && registerModelInput.getConnectorId() == null) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "Without a model group ID, the system will use the model name {"
+                                        + registerModelInput.getModelName()
+                                        + "} to create a new model group. However, this name is taken by another group with id {"
+                                        + registerModelInput.getModelGroupId()
+                                        + "} you can't access. To register this pre-trained model, create a new model group and use its ID in your request."
+                                )
+                            );
+                    } else {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "The name {"
+                                        + registerModelInput.getModelName()
+                                        + "} you provided is unavailable because it is used by another model group with id {"
+                                        + registerModelInput.getModelGroupId()
+                                        + "} to which you do not have access. Please provide a different name."
+                                )
+                            );
+                    }
+                    return;
+                }
+                // if user does not have access to the model group ID provided in the input, we let user know they do not have access to the
+                // specified model group
+                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
             }, listener::onFailure));
     }
 
@@ -196,12 +260,14 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(registerModelInput);
             mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
                 registerModelInput.setModelGroupId(modelGroupId);
+                registerModelInput.setDoesVersionCreateModelGroup(true);
                 registerModel(registerModelInput, listener);
             }, e -> {
                 logException("Failed to create Model Group", e, log);
                 listener.onFailure(e);
             }));
         } else {
+            registerModelInput.setDoesVersionCreateModelGroup(false);
             registerModel(registerModelInput, listener);
         }
     }

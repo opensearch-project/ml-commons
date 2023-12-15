@@ -18,7 +18,11 @@
 package org.opensearch.ml.memory;
 
 import java.util.List;
+import java.util.Map;
 
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
@@ -57,6 +61,14 @@ public interface ConversationalMemoryHandler {
     public ActionFuture<String> createConversation(String name);
 
     /**
+     * Create a new conversation
+     * @param name the name of the new conversation
+     * @param applicationType the application that creates this conversation
+     * @param listener listener to wait for this op to finish, gets unique id of new conversation
+     */
+    public void createConversation(String name, String applicationType, ActionListener<String> listener);
+
+    /**
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction
@@ -72,7 +84,7 @@ public interface ConversationalMemoryHandler {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo,
+        Map<String, String> additionalInfo,
         ActionListener<String> listener
     );
 
@@ -92,7 +104,31 @@ public interface ConversationalMemoryHandler {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo
+        Map<String, String> additionalInfo
+    );
+
+    /**
+     * Adds an interaction to the conversation indicated, updating the conversational metadata
+     * @param conversationId the conversation to add the interaction to
+     * @param input the human input for the interaction
+     * @param promptTemplate the prompt template used for this interaction
+     * @param response the Gen AI response for this interaction
+     * @param origin the name of the GenAI agent in this interaction
+     * @param additionalInfo additional information used in constructing the LLM prompt
+     * @param interactionId the parent interactionId of this interaction
+     * @param traceNumber the trace number for a parent interaction
+     * @param listener gets the ID of the new interaction
+     */
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        ActionListener<String> listener,
+        String interactionId,
+        Integer traceNumber
     );
 
     /**
@@ -117,6 +153,15 @@ public interface ConversationalMemoryHandler {
      * @param listener gets the list of interactions in this conversation, sorted by recency
      */
     public void getInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener);
+
+    /**
+     * Get the traces associate with this interaction, sorted by recency
+     * @param interactionId the interaction whose traces to get
+     * @param from where to start listing from
+     * @param maxResults how many traces to get
+     * @param listener gets the list of traces in this conversation, sorted by recency
+     */
+    public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener);
 
     /**
      * Get the interactions associate with this conversation, sorted by recency
@@ -170,5 +215,72 @@ public interface ConversationalMemoryHandler {
      * @return ActionFuture for whether the conversationMeta object and all of its interactions were deleted. i.e. false => the ConvoMeta or a subset of its Interactions were not deleted
      */
     public ActionFuture<Boolean> deleteConversation(String conversationId);
+
+    /**
+     * Search over conversations index
+     * @param request search request over the conversations index
+     * @param listener receives the search response
+     */
+    public void searchConversations(SearchRequest request, ActionListener<SearchResponse> listener);
+
+    /**
+     * Search over conversations index
+     * @param request search request over the conversations index
+     * @return ActionFuture for the search response
+     */
+    public ActionFuture<SearchResponse> searchConversations(SearchRequest request);
+
+    /**
+     * Search over interactions of a conversation
+     * @param conversationId id of the conversation to search through
+     * @param request search request over the interactions
+     * @param listener receives the search response
+     */
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener);
+
+    /**
+     * Search over interactions of a conversation
+     * @param conversationId id of the conversation to search through
+     * @param request search request over the interactions
+     * @return ActionFuture for the search response
+     */
+    public ActionFuture<SearchResponse> searchInteractions(String conversationId, SearchRequest request);
+
+    /**
+     * Update a conversation
+     * @param updateContent update content for the conversations index
+     * @param listener receives the update response
+     */
+    public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener);
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @param listener receives the conversationMeta object
+     */
+    public void getConversation(String conversationId, ActionListener<ConversationMeta> listener);
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @return ActionFuture for the conversationMeta object
+     */
+    public ActionFuture<ConversationMeta> getConversation(String conversationId);
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @param listener receives the interaction
+     */
+    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener);
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @return ActionFuture for the interaction
+     */
+    public ActionFuture<Interaction> getInteraction(String conversationId, String interactionId);
 
 }

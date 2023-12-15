@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.anomalylocalization;
 
+import static org.opensearch.core.action.ActionListener.wrap;
+import static org.opensearch.search.aggregations.MultiBucketConsumerService.MAX_BUCKET_SETTING;
+
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,9 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.LatchedActionListener;
-import org.opensearch.core.action.NotifyOnceListener;
 import org.opensearch.action.search.MultiSearchRequest;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -31,16 +32,18 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.action.NotifyOnceListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
 import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
-import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregationBuilders;
@@ -56,9 +59,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
-
-import static org.opensearch.core.action.ActionListener.wrap;
-import static org.opensearch.search.aggregations.MultiBucketConsumerService.MAX_BUCKET_SETTING;
 
 /**
  * Implementation of AnomalyLocalizer.
@@ -87,10 +87,11 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
      * @param settings Settings information.
      */
     public AnomalyLocalizerImpl(
-            Client client,
-            Settings settings,
-            ClusterService clusterService,
-            IndexNameExpressionResolver indexNameExpressionResolver) {
+        Client client,
+        Settings settings,
+        ClusterService clusterService,
+        IndexNameExpressionResolver indexNameExpressionResolver
+    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -116,23 +117,39 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
     /**
      * Bucketizes data by time and get overall aggregates.
      */
-    private void localizeByBuckets(AnomalyLocalizationInput input, AggregationBuilder agg, AnomalyLocalizationOutput output,
-                                   ActionListener<AnomalyLocalizationOutput> listener) {
+    private void localizeByBuckets(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         LocalizationTimeBuckets timeBuckets = getTimeBuckets(input);
         getOverallAggregates(input, timeBuckets, agg, output, listener);
     }
 
-    private void getOverallAggregates(AnomalyLocalizationInput input, LocalizationTimeBuckets timeBuckets, AggregationBuilder agg,
-                                      AnomalyLocalizationOutput output,
-                                      ActionListener<AnomalyLocalizationOutput> listener) {
+    private void getOverallAggregates(
+        AnomalyLocalizationInput input,
+        LocalizationTimeBuckets timeBuckets,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         MultiSearchRequest searchRequest = newSearchRequestForOverallAggregates(input, agg, timeBuckets);
-        client.multiSearch(searchRequest, wrap(r -> onOverallAggregatesResponse(r, input, agg, output, timeBuckets, listener),
-                listener::onFailure));
+        client
+            .multiSearch(
+                searchRequest,
+                wrap(r -> onOverallAggregatesResponse(r, input, agg, output, timeBuckets, listener), listener::onFailure)
+            );
     }
 
-    private void onOverallAggregatesResponse(MultiSearchResponse response, AnomalyLocalizationInput input, AggregationBuilder agg,
-                                             AnomalyLocalizationOutput output,
-                                             LocalizationTimeBuckets timeBuckets, ActionListener<AnomalyLocalizationOutput> listener) {
+    private void onOverallAggregatesResponse(
+        MultiSearchResponse response,
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput output,
+        LocalizationTimeBuckets timeBuckets,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
         List<Map.Entry<Long, Long>> intervals = timeBuckets.getAllIntervals();
 
@@ -153,10 +170,10 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
             listener.onFailure(new IndexNotFoundException("Failed to find index: " + input.getIndexName()));
         }
     }
-    
+
     private boolean isIndexExist(String indexName) {
-        String[] concreteIndices = indexNameExpressionResolver.concreteIndexNames(clusterService.state(),
-                IndicesOptions.lenientExpandOpen(), indexName);
+        String[] concreteIndices = indexNameExpressionResolver
+            .concreteIndexNames(clusterService.state(), IndicesOptions.lenientExpandOpen(), indexName);
         if (concreteIndices == null || concreteIndices.length == 0) {
             return false;
         }
@@ -166,13 +183,20 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
     /**
      * Identifies buckets of data that need localization and localizes entities in the bucket.
      */
-    private void getLocalizedEntities(AnomalyLocalizationInput input, AggregationBuilder agg, AnomalyLocalizationOutput.Result result,
-                                      AnomalyLocalizationOutput output,
-                                      ActionListener<AnomalyLocalizationOutput> listener) {
+    private void getLocalizedEntities(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Result result,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         if (setBase(result, input)) {
             Counter counter = new HybridCounter();
-            result.getBuckets().stream().filter(e -> e.getBase().isPresent() && e.getBase().get().equals(e))
-                    .forEach(e -> processBaseEntry(input, agg, result, e, counter, Optional.empty(), output, listener));
+            result
+                .getBuckets()
+                .stream()
+                .filter(e -> e.getBase().isPresent() && e.getBase().get().equals(e))
+                .forEach(e -> processBaseEntry(input, agg, result, e, counter, Optional.empty(), output, listener));
         }
         outputIfResultsAreComplete(output, listener);
     }
@@ -188,24 +212,37 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         return result.getBuckets().stream().allMatch(e -> e.getCompleted() == null || e.getCompleted().get() == true);
     }
 
-    private void processBaseEntry(AnomalyLocalizationInput input, AggregationBuilder agg, AnomalyLocalizationOutput.Result result,
-                                  AnomalyLocalizationOutput.Bucket bucket, Counter counter,
-                                  Optional<Map<String, Object>> afterKey, AnomalyLocalizationOutput output,
-                                  ActionListener<AnomalyLocalizationOutput> listener) {
+    private void processBaseEntry(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Result result,
+        AnomalyLocalizationOutput.Bucket bucket,
+        Counter counter,
+        Optional<Map<String, Object>> afterKey,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         SearchRequest request = newSearchRequestForEntry(input, agg, bucket, afterKey);
-        client.search(request, wrap(r -> onBaseEntryResponse(r, input, agg, result, bucket, counter, output, listener),
-                listener::onFailure));
+        client
+            .search(request, wrap(r -> onBaseEntryResponse(r, input, agg, result, bucket, counter, output, listener), listener::onFailure));
     }
 
     /**
      * Keeps info from entities in the base bucket to compare entities from new buckets against.
      */
-    private void onBaseEntryResponse(SearchResponse response, AnomalyLocalizationInput input, AggregationBuilder agg,
-                                     AnomalyLocalizationOutput.Result result,
-                                     AnomalyLocalizationOutput.Bucket bucket, Counter counter, AnomalyLocalizationOutput output,
-                                     ActionListener<AnomalyLocalizationOutput> listener) {
-        Optional<CompositeAggregation> respAgg =
-                Optional.ofNullable(response.getAggregations()).map(aggs -> (CompositeAggregation) aggs.get(agg.getName()));
+    private void onBaseEntryResponse(
+        SearchResponse response,
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Result result,
+        AnomalyLocalizationOutput.Bucket bucket,
+        Counter counter,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
+        Optional<CompositeAggregation> respAgg = Optional
+            .ofNullable(response.getAggregations())
+            .map(aggs -> (CompositeAggregation) aggs.get(agg.getName()));
         respAgg.map(a -> a.getBuckets()).orElse(Collections.emptyList()).stream().forEach(b -> {
             counter.increment(toStringKey(b.getKey(), input), getDoubleValue((SingleValue) b.getAggregations().get(agg.getName())));
         });
@@ -214,27 +251,36 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
             processBaseEntry(input, agg, result, bucket, counter, afterKey, output, listener);
         } else {
             bucket.setCounter(Optional.of(counter));
-            result.getBuckets().stream().filter(e -> e.getCompleted() != null && e.getCompleted().get() == false)
-                    .forEach(e -> {
-                        PriorityQueue<AnomalyLocalizationOutput.Entity> queue;
-                        int queueSize = Math.max(input.getNumOutputs(), MIN_CONTRIBUTOR_CANDIDATE);
-                        if (e.getOverallAggValue() > 0) {
-                            queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(queueSize,
-                                    (a, b) -> (int) Math.signum(a.getContributionValue() - b.getContributionValue()));
-                        } else {
-                            queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(queueSize,
-                                    (a, b) -> (int) Math.signum(b.getContributionValue() - a.getContributionValue()));
-                        }
-                        ;
-                        processNewEntry(input, agg, result, e, Optional.empty(), queue, output, listener);
-                    });
+            result.getBuckets().stream().filter(e -> e.getCompleted() != null && e.getCompleted().get() == false).forEach(e -> {
+                PriorityQueue<AnomalyLocalizationOutput.Entity> queue;
+                int queueSize = Math.max(input.getNumOutputs(), MIN_CONTRIBUTOR_CANDIDATE);
+                if (e.getOverallAggValue() > 0) {
+                    queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(
+                        queueSize,
+                        (a, b) -> (int) Math.signum(a.getContributionValue() - b.getContributionValue())
+                    );
+                } else {
+                    queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(
+                        queueSize,
+                        (a, b) -> (int) Math.signum(b.getContributionValue() - a.getContributionValue())
+                    );
+                }
+                ;
+                processNewEntry(input, agg, result, e, Optional.empty(), queue, output, listener);
+            });
         }
     }
 
-    private void processNewEntry(AnomalyLocalizationInput input, AggregationBuilder agg, AnomalyLocalizationOutput.Result result,
-                                 AnomalyLocalizationOutput.Bucket bucket, Optional<Map<String,
-            Object>> afterKey, PriorityQueue<AnomalyLocalizationOutput.Entity> queue, AnomalyLocalizationOutput output,
-                                 ActionListener<AnomalyLocalizationOutput> listener) {
+    private void processNewEntry(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Result result,
+        AnomalyLocalizationOutput.Bucket bucket,
+        Optional<Map<String, Object>> afterKey,
+        PriorityQueue<AnomalyLocalizationOutput.Entity> queue,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         SearchRequest request = newSearchRequestForEntry(input, agg, bucket, afterKey);
         client.search(request, wrap(r -> onNewEntryResponse(r, input, agg, result, bucket, queue, output, listener), listener::onFailure));
     }
@@ -242,13 +288,19 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
     /**
      * Chooses entities from the new bucket that contribute the most to the overall change.
      */
-    private void onNewEntryResponse(SearchResponse response, AnomalyLocalizationInput input, AggregationBuilder agg,
-                                    AnomalyLocalizationOutput.Result result,
-                                    AnomalyLocalizationOutput.Bucket outputBucket, PriorityQueue<AnomalyLocalizationOutput.Entity> queue,
-                                    AnomalyLocalizationOutput output,
-                                    ActionListener<AnomalyLocalizationOutput> listener) {
-        Optional<CompositeAggregation> respAgg =
-                Optional.ofNullable(response.getAggregations()).map(aggs -> (CompositeAggregation) aggs.get(agg.getName()));
+    private void onNewEntryResponse(
+        SearchResponse response,
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Result result,
+        AnomalyLocalizationOutput.Bucket outputBucket,
+        PriorityQueue<AnomalyLocalizationOutput.Entity> queue,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
+        Optional<CompositeAggregation> respAgg = Optional
+            .ofNullable(response.getAggregations())
+            .map(aggs -> (CompositeAggregation) aggs.get(agg.getName()));
         for (CompositeAggregation.Bucket bucket : respAgg.map(a -> a.getBuckets()).orElse(Collections.emptyList())) {
             List<String> key = toStringKey(bucket.getKey(), input);
             AnomalyLocalizationOutput.Entity entity = new AnomalyLocalizationOutput.Entity();
@@ -269,19 +321,27 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         } else {
             List<List<String>> keys = queue.stream().map(AnomalyLocalizationOutput.Entity::getKey).collect(Collectors.toList());
             SearchRequest request = newSearchRequestForEntityKeys(input, agg, outputBucket, keys);
-            client.search(request, wrap(r -> onEntityKeysResponse(r, input, agg, result, outputBucket, queue, output, listener),
-                    listener::onFailure));
+            client
+                .search(
+                    request,
+                    wrap(r -> onEntityKeysResponse(r, input, agg, result, outputBucket, queue, output, listener), listener::onFailure)
+                );
         }
     }
 
     /**
      * Updates to date entity contribution values in final output.
      */
-    private void onEntityKeysResponse(SearchResponse response, AnomalyLocalizationInput input, AggregationBuilder agg,
-                                      AnomalyLocalizationOutput.Result result,
-                                      AnomalyLocalizationOutput.Bucket bucket, PriorityQueue<AnomalyLocalizationOutput.Entity> queue,
-                                      AnomalyLocalizationOutput output,
-                                      ActionListener<AnomalyLocalizationOutput> listener) {
+    private void onEntityKeysResponse(
+        SearchResponse response,
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Result result,
+        AnomalyLocalizationOutput.Bucket bucket,
+        PriorityQueue<AnomalyLocalizationOutput.Entity> queue,
+        AnomalyLocalizationOutput output,
+        ActionListener<AnomalyLocalizationOutput> listener
+    ) {
         List<AnomalyLocalizationOutput.Entity> entities = new ArrayList<AnomalyLocalizationOutput.Entity>(queue);
         Optional<Filters> respAgg = Optional.ofNullable(response.getAggregations()).map(aggs -> (Filters) aggs.get(agg.getName()));
         for (Filters.Bucket respBucket : respAgg.map(a -> a.getBuckets()).orElse(Collections.emptyList())) {
@@ -293,28 +353,36 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
             entity.setContributionValue(entity.getNewValue() - entity.getBaseValue());
         }
         double newChangeSign = Math.signum(bucket.getOverallAggValue() - bucket.getBase().get().getOverallAggValue());
-        entities =
-                entities.stream().filter(entity -> Math.signum(entity.getContributionValue()) == newChangeSign).sorted(queue.comparator().reversed()).collect(Collectors.toList());
+        entities = entities
+            .stream()
+            .filter(entity -> Math.signum(entity.getContributionValue()) == newChangeSign)
+            .sorted(queue.comparator().reversed())
+            .collect(Collectors.toList());
         bucket.setEntities(entities);
         bucket.getCompleted().set(true);
 
         outputIfResultsAreComplete(output, listener);
     }
 
-    private SearchRequest newSearchRequestForEntityKeys(AnomalyLocalizationInput input, AggregationBuilder agg,
-                                                        AnomalyLocalizationOutput.Bucket bucket,
-                                                        List<List<String>> keys) {
+    private SearchRequest newSearchRequestForEntityKeys(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Bucket bucket,
+        List<List<String>> keys
+    ) {
         RangeQueryBuilder timeRangeFilter = new RangeQueryBuilder(input.getTimeFieldName())
-                .from(bucket.getBase().get().getStartTime(), true)
-                .to(bucket.getBase().get().getEndTime(), true);
+            .from(bucket.getBase().get().getStartTime(), true)
+            .to(bucket.getBase().get().getEndTime(), true);
         BoolQueryBuilder filter = QueryBuilders.boolQuery().filter(timeRangeFilter);
         input.getFilterQuery().ifPresent(q -> filter.filter(q));
-        KeyedFilter[] filters = IntStream.range(0, keys.size()).mapToObj(i -> new KeyedFilter(Integer.toString(i),
-                newQueryByKey(keys.get(i), input))).toArray(KeyedFilter[]::new);
+        KeyedFilter[] filters = IntStream
+            .range(0, keys.size())
+            .mapToObj(i -> new KeyedFilter(Integer.toString(i), newQueryByKey(keys.get(i), input)))
+            .toArray(KeyedFilter[]::new);
         FiltersAggregationBuilder filtersAgg = AggregationBuilders.filters(agg.getName(), filters);
         filtersAgg.subAggregation(agg);
         SearchSourceBuilder search = new SearchSourceBuilder().size(0).query(filter).aggregation(filtersAgg);
-        SearchRequest searchRequest = new SearchRequest(new String[]{input.getIndexName()}, search);
+        SearchRequest searchRequest = new SearchRequest(new String[] { input.getIndexName() }, search);
         return searchRequest;
     }
 
@@ -328,22 +396,27 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         return input.getAttributeFieldNames().stream().map(name -> key.get(name).toString()).collect(Collectors.toList());
     }
 
-    private SearchRequest newSearchRequestForEntry(AnomalyLocalizationInput input, AggregationBuilder agg,
-                                                   AnomalyLocalizationOutput.Bucket bucket, Optional<Map<String,
-            Object>> afterKey) {
+    private SearchRequest newSearchRequestForEntry(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        AnomalyLocalizationOutput.Bucket bucket,
+        Optional<Map<String, Object>> afterKey
+    ) {
         RangeQueryBuilder timeRangeFilter = new RangeQueryBuilder(input.getTimeFieldName())
-                .from(bucket.getStartTime(), true)
-                .to(bucket.getEndTime(), true);
+            .from(bucket.getStartTime(), true)
+            .to(bucket.getEndTime(), true);
         BoolQueryBuilder filter = QueryBuilders.boolQuery().filter(timeRangeFilter);
         input.getFilterQuery().ifPresent(q -> filter.filter(q));
-        CompositeAggregationBuilder compositeAgg = new CompositeAggregationBuilder(agg.getName(),
-                input.getAttributeFieldNames().stream().map(name -> new TermsValuesSourceBuilder(name).field(name)).collect(Collectors.toList())).size(MAX_BUCKET_SETTING.get(this.settings));
+        CompositeAggregationBuilder compositeAgg = new CompositeAggregationBuilder(
+            agg.getName(),
+            input.getAttributeFieldNames().stream().map(name -> new TermsValuesSourceBuilder(name).field(name)).collect(Collectors.toList())
+        ).size(MAX_BUCKET_SETTING.get(this.settings));
         compositeAgg.subAggregation(agg);
         if (afterKey.isPresent()) {
             compositeAgg.aggregateAfter(afterKey.get());
         }
         SearchSourceBuilder search = new SearchSourceBuilder().size(0).query(filter).aggregation(compositeAgg);
-        SearchRequest searchRequest = new SearchRequest(new String[]{input.getIndexName()}, search);
+        SearchRequest searchRequest = new SearchRequest(new String[] { input.getIndexName() }, search);
         return searchRequest;
     }
 
@@ -372,17 +445,20 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         return newEntry;
     }
 
-    private MultiSearchRequest newSearchRequestForOverallAggregates(AnomalyLocalizationInput input, AggregationBuilder agg,
-                                                                    LocalizationTimeBuckets timeBuckets) {
+    private MultiSearchRequest newSearchRequestForOverallAggregates(
+        AnomalyLocalizationInput input,
+        AggregationBuilder agg,
+        LocalizationTimeBuckets timeBuckets
+    ) {
         MultiSearchRequest multiSearchRequest = new MultiSearchRequest();
         timeBuckets.getAllIntervals().stream().map(i -> {
             RangeQueryBuilder timeRangeFilter = new RangeQueryBuilder(input.getTimeFieldName())
-                    .from(i.getKey(), true)
-                    .to(i.getValue(), true);
+                .from(i.getKey(), true)
+                .to(i.getValue(), true);
             BoolQueryBuilder filter = QueryBuilders.boolQuery().filter(timeRangeFilter);
             input.getFilterQuery().ifPresent(q -> filter.filter(q));
             SearchSourceBuilder search = new SearchSourceBuilder().size(0).query(filter).aggregation(agg);
-            SearchRequest searchRequest = new SearchRequest(new String[]{input.getIndexName()}, search);
+            SearchRequest searchRequest = new SearchRequest(new String[] { input.getIndexName() }, search);
             return searchRequest;
         }).forEach(multiSearchRequest::add);
         return multiSearchRequest;
@@ -400,13 +476,19 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
             int numBuckets = Math.min((int) ((end - anomalyStart) / input.getMinTimeInterval()), MAX_TIME_BUCKETS - 1);
             long bucketInterval = (end - anomalyStart) / numBuckets;
             long start = Math.min(input.getStartTime(), anomalyStart - bucketInterval);
-            buckets = new LocalizationTimeBuckets(bucketInterval, start,
-                    IntStream.range(0, numBuckets).mapToLong(i -> anomalyStart + i * bucketInterval).toArray());
+            buckets = new LocalizationTimeBuckets(
+                bucketInterval,
+                start,
+                IntStream.range(0, numBuckets).mapToLong(i -> anomalyStart + i * bucketInterval).toArray()
+            );
         } else {
             int numBuckets = Math.min((int) ((input.getEndTime() - input.getStartTime()) / input.getMinTimeInterval()), MAX_TIME_BUCKETS);
             long bucketIntervalMillis = (input.getEndTime() - input.getStartTime()) / numBuckets;
-            buckets = new LocalizationTimeBuckets(bucketIntervalMillis, input.getStartTime(),
-                    IntStream.rangeClosed(1, numBuckets - 1).mapToLong(i -> input.getStartTime() + i * bucketIntervalMillis).toArray());
+            buckets = new LocalizationTimeBuckets(
+                bucketIntervalMillis,
+                input.getStartTime(),
+                IntStream.rangeClosed(1, numBuckets - 1).mapToLong(i -> input.getStartTime() + i * bucketIntervalMillis).toArray()
+            );
         }
         return buckets;
     }
@@ -449,8 +531,10 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<AnomalyLocalizationOutput> outRef = new AtomicReference<>();
         AtomicReference<Exception> exRef = new AtomicReference<>();
-        getLocalizationResults((AnomalyLocalizationInput) input,
-                new LatchedActionListener(ActionListener.<AnomalyLocalizationOutput>wrap(o -> outRef.set(o), e -> exRef.set(e)), latch));
+        getLocalizationResults(
+            (AnomalyLocalizationInput) input,
+            new LatchedActionListener(ActionListener.<AnomalyLocalizationOutput>wrap(o -> outRef.set(o), e -> exRef.set(e)), latch)
+        );
         try {
             latch.await();
         } catch (InterruptedException e) {

@@ -18,9 +18,11 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -30,6 +32,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -61,6 +64,9 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -144,7 +150,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Before
-    public void setup() {
+    public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         settings = Settings
             .builder()
@@ -158,6 +164,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
         transportRegisterModelAction = new TransportRegisterModelAction(
             transportService,
             actionFilters,
@@ -198,6 +205,13 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             listener.onResponse(node1);
             return null;
         }).when(mlTaskDispatcher).dispatch(any(), any());
+
+        SearchResponse searchResponse = createModelGroupSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
 
         when(clusterService.localNode()).thenReturn(node2);
         when(node2.getId()).thenReturn("node2Id");
@@ -461,6 +475,97 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    public void test_ModelNameAlreadyExists() throws IOException {
+        when(node1.getId()).thenReturn("NodeId1");
+        when(node2.getId()).thenReturn("NodeId2");
+        MLForwardResponse forwardResponse = Mockito.mock(MLForwardResponse.class);
+        doAnswer(invocation -> {
+            ActionListenerResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
+            handler.handleResponse(forwardResponse);
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any());
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+
+        transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", null), actionListener);
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void test_FailureWhenPreBuildModelNameAlreadyExists() throws IOException {
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-MiniLM-L12-v2")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .version("1")
+            .build();
+
+        transportRegisterModelAction.doExecute(task, new MLRegisterModelRequest(registerModelInput), actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Without a model group ID, the system will use the model name {huggingface/sentence-transformers/all-MiniLM-L12-v2} to create a new model group. However, this name is taken by another group with id {model_group_ID} you can't access. To register this pre-trained model, create a new model group and use its ID in your request.",
+            argumentCaptor.getValue().getMessage()
+
+        );
+    }
+
+    public void test_FailureWhenSearchingModelGroupName() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Runtime exception"));
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+
+        transportRegisterModelAction.doExecute(task, prepareRequest("Test URL", null), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Runtime exception", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_NoAccessWhenModelNameAlreadyExists() throws IOException {
+
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        transportRegisterModelAction.doExecute(task, prepareRequest("Test URL", null), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "The name {Test Model} you provided is unavailable because it is used by another model group with id {model_group_ID} to which you do not have access. Please provide a different name.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
     private MLRegisterModelRequest prepareRequest(String url, String modelGroupID) {
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -483,6 +588,24 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             .url(url)
             .build();
         return new MLRegisterModelRequest(registerModelInput);
+    }
+
+    private SearchResponse createModelGroupSearchResponse(long totalHits) throws IOException {
+
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        String modelContent = "{\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"access\": \"public\",\n"
+            + "                    \"latest_version\": 0,\n"
+            + "                    \"last_updated_time\": 1684981986069,\n"
+            + "                    \"_id\": \"model_group_ID\",\n"
+            + "                    \"name\": \"Test Model\",\n"
+            + "                    \"description\": \"This is an example description\"\n"
+            + "                }";
+        SearchHit modelGroup = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { modelGroup }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
     }
 
 }

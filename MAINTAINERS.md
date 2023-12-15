@@ -5,7 +5,7 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 ## Current Maintainers
 
 | Maintainer           | GitHub ID                                           | Affiliation |
-| -------------------- | --------------------------------------------------- | ----------- |
+|----------------------|-----------------------------------------------------|-------------|
 | Bhavana Goud Ramaram | [rbhavna](https://github.com/rbhavna)               | Amazon      |
 | Charlie Yang         | [model-collapse](https://github.com/model-collapse) | Amazon      |
 | Dhrubo Saha          | [dhrubo-os](https://github.com/dhrubo-os)           | Amazon      |
@@ -15,6 +15,8 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Xun Zhang            | [Zhangxunmt](https://github.com/Zhangxunmt)         | Amazon      |
 | Yaliang Wu           | [ylwu-amzn](https://github.com/ylwu-amzn)           | Amazon      |
 | Zan Niu              | [zane-neo](https://github.com/zane-neo)             | Amazon      |
+| Austin Lee           | [austintlee](https://github.com/austintlee)         | Aryn        |
+| Henry Lindeman       | [HenryL27](https://github.com/HenryL27)             | Aryn        |
 
 ## Emeritus
 

@@ -5,6 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -18,13 +25,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
-
 public interface RemoteConnectorExecutor {
 
     default ModelTensorOutput executePredict(MLInput mlInput) {
@@ -32,19 +32,56 @@ public interface RemoteConnectorExecutor {
 
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-            List<String> textDocs = new ArrayList<>(textDocsInputDataSet.getDocs());
-            preparePayloadAndInvokeRemoteModel(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build()).build(), tensorOutputs);
+            int processedDocs = 0;
+            while (processedDocs < textDocsInputDataSet.getDocs().size()) {
+                List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
+                List<ModelTensors> tempTensorOutputs = new ArrayList<>();
+                preparePayloadAndInvokeRemoteModel(
+                    MLInput
+                        .builder()
+                        .algorithm(FunctionName.TEXT_EMBEDDING)
+                        .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
+                        .build(),
+                    tempTensorOutputs
+                );
+                int tensorCount = 0;
+                if (tempTensorOutputs.size() > 0 && tempTensorOutputs.get(0).getMlModelTensors() != null) {
+                    tensorCount = tempTensorOutputs.get(0).getMlModelTensors().size();
+                }
+                // This is to support some model which takes N text docs and embedding size is less than N.
+                // We need to tell executor what's the step size for each model run.
+                Map<String, String> parameters = getConnector().getParameters();
+                if (parameters != null && parameters.containsKey("input_docs_processed_step_size")) {
+                    int stepSize = Integer.parseInt(parameters.get("input_docs_processed_step_size"));
+                    // We need to check the parameter on runtime as parameter can be passed into predict request
+                    if (stepSize <= 0) {
+                        throw new IllegalArgumentException(
+                            "Invalid parameter: input_docs_processed_step_size. It must be positive integer."
+                        );
+                    }
+                    processedDocs += stepSize;
+                } else {
+                    processedDocs += Math.max(tensorCount, 1);
+                }
+                tensorOutputs.addAll(tempTensorOutputs);
+            }
         } else {
             preparePayloadAndInvokeRemoteModel(mlInput, tensorOutputs);
         }
         return new ModelTensorOutput(tensorOutputs);
     }
-    default void setScriptService(ScriptService scriptService){}
+
+    default void setScriptService(ScriptService scriptService) {}
+
     ScriptService getScriptService();
+
     Connector getConnector();
-    default void setClient(Client client){}
-    default void setXContentRegistry(NamedXContentRegistry xContentRegistry){}
-    default void setClusterService(ClusterService clusterService){}
+
+    default void setClient(Client client) {}
+
+    default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
+
+    default void setClusterService(ClusterService clusterService) {}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
@@ -68,6 +105,5 @@ public interface RemoteConnectorExecutor {
     }
 
     void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);
-
 
 }

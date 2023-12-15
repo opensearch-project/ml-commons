@@ -63,30 +63,74 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         MLRegisterModelMetaRequest registerModelMetaRequest = MLRegisterModelMetaRequest.fromActionRequest(request);
         MLRegisterModelMetaInput mlUploadInput = registerModelMetaRequest.getMlRegisterModelMetaInput();
 
-        User user = RestActionUtils.getUserContext(client);
+        if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
+            mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), ActionListener.wrap(modelGroups -> {
+                if (modelGroups != null
+                    && modelGroups.getHits().getTotalHits() != null
+                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
+                    mlUploadInput.setModelGroupId(modelGroupIdOfTheNameProvided);
+                    checkUserAccess(mlUploadInput, listener, true);
+                } else {
+                    createModelGroup(mlUploadInput, listener);
+                }
+            }, e -> {
+                log.error("Failed to search model group index", e);
+                listener.onFailure(e);
+            }));
+        } else {
+            checkUserAccess(mlUploadInput, listener, false);
+        }
+    }
 
+    private void checkUserAccess(
+        MLRegisterModelMetaInput mlUploadInput,
+        ActionListener<MLRegisterModelMetaResponse> listener,
+        Boolean isModelNameAlreadyExisting
+    ) {
+
+        User user = RestActionUtils.getUserContext(client);
         modelAccessControlHelper.validateModelGroupAccess(user, mlUploadInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-            if (!access) {
+            if (access) {
+                createModelGroup(mlUploadInput, listener);
+                return;
+            }
+            if (isModelNameAlreadyExisting) {
+                listener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "The name {"
+                                + mlUploadInput.getName()
+                                + "} you provided is unavailable because it is used by another model group with id {"
+                                + mlUploadInput.getModelGroupId()
+                                + "} to which you do not have access. Please provide a different name."
+                        )
+                    );
+            } else {
                 log.error("You don't have permissions to perform this operation on this model.");
                 listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
-            } else {
-                if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
-                    MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(mlUploadInput);
-                    mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
-                        mlUploadInput.setModelGroupId(modelGroupId);
-                        registerModelMeta(mlUploadInput, listener);
-                    }, e -> {
-                        logException("Failed to create Model Group", e, log);
-                        listener.onFailure(e);
-                    }));
-                } else {
-                    registerModelMeta(mlUploadInput, listener);
-                }
             }
         }, e -> {
             logException("Failed to validate model access", e, log);
             listener.onFailure(e);
         }));
+    }
+
+    private void createModelGroup(MLRegisterModelMetaInput mlUploadInput, ActionListener<MLRegisterModelMetaResponse> listener) {
+        if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
+            MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(mlUploadInput);
+            mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
+                mlUploadInput.setModelGroupId(modelGroupId);
+                mlUploadInput.setDoesVersionCreateModelGroup(true);
+                registerModelMeta(mlUploadInput, listener);
+            }, e -> {
+                logException("Failed to create Model Group", e, log);
+                listener.onFailure(e);
+            }));
+        } else {
+            mlUploadInput.setDoesVersionCreateModelGroup(false);
+            registerModelMeta(mlUploadInput, listener);
+        }
     }
 
     private MLRegisterModelGroupInput createRegisterModelGroupRequest(MLRegisterModelMetaInput mlUploadInput) {

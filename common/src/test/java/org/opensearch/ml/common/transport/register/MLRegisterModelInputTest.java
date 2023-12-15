@@ -22,6 +22,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.search.SearchModule;
 
@@ -43,10 +44,21 @@ public class MLRegisterModelInputTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
-            "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"," +
-            "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"" +
-            "},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
+            "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\"," +
+            "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\"," +
+            "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100," +
+            "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\"," +
+            "\\\"field2\\\":\\\"value2\\\"}\"},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]," +
+            "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\"," +
+            "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
+            "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +
+            "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
+            "\"headers\":{\"api_key\":\"${credential.key}\"}," +
+            "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
+            "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
+            "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
+            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
     private final String modelName = "modelName";
     private final String version = "version";
@@ -62,6 +74,7 @@ public class MLRegisterModelInputTest {
                 .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
                 .embeddingDimension(100)
                 .build();
+        HttpConnector connector = HttpConnectorTest.createHttpConnector();
 
         input = MLRegisterModelInput.builder()
                 .functionName(functionName)
@@ -73,8 +86,11 @@ public class MLRegisterModelInputTest {
                 .modelConfig(config)
                 .deployModel(true)
                 .modelNodeIds(new String[]{"modelNodeIds" })
+                .isHidden(false)
+                .description("test description")
+                .hashValue("hash_value_test")
+                .connector(connector)
                 .build();
-
     }
 
     @Test
@@ -155,7 +171,16 @@ public class MLRegisterModelInputTest {
     public void testToXContent_Incomplete() throws Exception {
         String expectedIncompleteInputStr =
                 "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
-                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"deploy_model\":true}";
+                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\"," +
+                "\"model_content_hash_value\":\"hash_value_test\",\"deploy_model\":true,\"connector\":" +
+                "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
+                "\"protocol\":\"http\",\"parameters\":{\"input\":\"test input value\"}," +
+                "\"credential\":{\"key\":\"test_key_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":" +
+                "\"POST\",\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}," +
+                "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\",\"pre_process_function\":" +
+                "\"connector.pre_process.openai.embedding\",\"post_process_function\":" +
+                "\"connector.post_process.openai.embedding\"}],\"backend_roles\":[\"role1\",\"role2\"]," +
+                "\"access\":\"public\"},\"is_hidden\":false}";
         input.setUrl(null);
         input.setModelConfig(null);
         input.setModelFormat(null);
@@ -254,6 +279,59 @@ public class MLRegisterModelInputTest {
             assertNull(parsedInput.getModelConfig());
             assertNull(parsedInput.getModelFormat());
             assertEquals(input.getConnector(), parsedInput.getConnector());
+        });
+    }
+
+    @Test
+    public void testMCorrInput() throws IOException {
+        String testString = "{\"function_name\":\"METRICS_CORRELATION\",\"name\":\"METRICS_CORRELATION\",\"version\":\"1.0.0b1\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+
+        MetricsCorrelationModelConfig mcorrConfig = MetricsCorrelationModelConfig.builder()
+                .modelType("testModelType")
+                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .build();
+
+        MLRegisterModelInput mcorrInput = MLRegisterModelInput.builder()
+                .functionName(FunctionName.METRICS_CORRELATION)
+                .modelName(FunctionName.METRICS_CORRELATION.name())
+                .version("1.0.0b1")
+                .modelGroupId(modelGroupId)
+                .url(url)
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .modelConfig(mcorrConfig)
+                .deployModel(true)
+                .modelNodeIds(new String[]{"modelNodeIds" })
+                .build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        mcorrInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertEquals(testString, jsonStr);
+    }
+
+    @Test
+    public void readInputStream_MCorr() throws IOException {
+        MetricsCorrelationModelConfig mcorrConfig = MetricsCorrelationModelConfig.builder()
+                .modelType("testModelType")
+                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .build();
+
+        MLRegisterModelInput mcorrInput = MLRegisterModelInput.builder()
+                .functionName(FunctionName.METRICS_CORRELATION)
+                .modelName(FunctionName.METRICS_CORRELATION.name())
+                .version("1.0.0b1")
+                .modelGroupId(modelGroupId)
+                .url(url)
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .modelConfig(mcorrConfig)
+                .deployModel(true)
+                .modelNodeIds(new String[]{"modelNodeIds" })
+                .build();
+        readInputStream(mcorrInput, parsedInput -> {
+            assertEquals(parsedInput.getModelConfig().getModelType(), mcorrConfig.getModelType());
+            assertEquals(parsedInput.getModelConfig().getAllConfig(), mcorrConfig.getAllConfig());
+            assertEquals(parsedInput.getFunctionName(), FunctionName.METRICS_CORRELATION);
+            assertEquals(parsedInput.getModelName(), FunctionName.METRICS_CORRELATION.name());
+            assertEquals(parsedInput.getModelGroupId(), modelGroupId);
         });
     }
 

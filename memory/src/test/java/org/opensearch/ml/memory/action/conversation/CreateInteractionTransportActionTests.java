@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Set;
 
 import org.junit.Before;
@@ -91,7 +92,14 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
-        this.request = new CreateInteractionRequest("test-cid", "input", "pt", "response", "origin", "metadata");
+        this.request = new CreateInteractionRequest(
+            "test-cid",
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta")
+        );
 
         Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);
@@ -113,6 +121,29 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
+        ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().getId().equals("testID"));
+    }
+
+    public void testCreateInteraction_Trace() {
+        CreateInteractionRequest createConversationRequest = new CreateInteractionRequest(
+            "test-cid",
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta"),
+            "parent_id",
+            1
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(6);
+            listener.onResponse("testID");
+            return null;
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        action.doExecute(null, createConversationRequest, actionListener);
         ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         assert (argCaptor.getValue().getId().equals("testID"));

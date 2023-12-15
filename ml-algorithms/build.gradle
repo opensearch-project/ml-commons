@@ -9,6 +9,7 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
+    id 'com.diffplug.spotless' version '6.23.0'
 }
 
 repositories {
@@ -17,6 +18,7 @@ repositories {
 
 dependencies {
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
+    implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
     implementation project(':opensearch-ml-common')
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
@@ -57,20 +59,21 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.20.19')
+    implementation platform('software.amazon.awssdk:bom:2.21.15')
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
     implementation 'com.jayway.jsonpath:json-path:2.8.0'
-    implementation group: 'org.json', name: 'json', version: '20230227'
+    implementation group: 'org.json', name: 'json', version: '20231013'
 }
 
 lombok {
-    version = "1.18.28"
+    version = "1.18.30"
 }
 
 configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'org.apache.commons:commons-compress:1.25.0'
 }
 
 jacocoTestReport {
@@ -99,3 +102,12 @@ jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
 }
 check.dependsOn jacocoTestCoverageVerification
+
+spotless {
+    java {
+        removeUnusedImports()
+        importOrder 'java', 'javax', 'org', 'com'
+
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    }
+}

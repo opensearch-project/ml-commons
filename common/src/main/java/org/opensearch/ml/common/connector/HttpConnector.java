@@ -34,6 +34,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 @Log4j2
 @NoArgsConstructor
@@ -245,6 +246,38 @@ public class HttpConnector extends AbstractConnector {
             owner.writeTo(out);
         } else {
             out.writeBoolean(false);
+        }
+    }
+
+    @Override
+    public void update(MLCreateConnectorInput updateContent, Function<String, String> function) {
+        if (updateContent.getName() != null) {
+            this.name = updateContent.getName();
+        }
+        if (updateContent.getDescription() != null) {
+            this.description = updateContent.getDescription();
+        }
+        if (updateContent.getVersion() != null) {
+            this.version = updateContent.getVersion();
+        }
+        if (updateContent.getProtocol() != null) {
+            this.protocol = updateContent.getProtocol();
+        }
+        if (updateContent.getParameters() != null && updateContent.getParameters().size() > 0) {
+            this.parameters = updateContent.getParameters();
+        }
+        if (updateContent.getCredential() != null && updateContent.getCredential().size() > 0) {
+            this.credential = updateContent.getCredential();
+            encrypt(function);
+        }
+        if (updateContent.getActions() != null) {
+            this.actions = updateContent.getActions();
+        }
+        if (updateContent.getBackendRoles() != null) {
+            this.backendRoles = updateContent.getBackendRoles();
+        }
+        if (updateContent.getAccess() != null) {
+            this.access = updateContent.getAccess();
         }
     }
 

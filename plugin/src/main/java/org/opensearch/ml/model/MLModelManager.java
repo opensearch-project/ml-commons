@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
+import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
@@ -123,6 +124,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
@@ -284,17 +286,28 @@ public class MLModelManager {
                     .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
                     .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
                     .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                    .isHidden(mlRegisterModelMetaInput.getIsHidden())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                 indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
+
+                if (mlRegisterModelMetaInput.getIsHidden()) {
+                    indexRequest.id(modelName);
+                }
+                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
                     log.debug("Index model meta doc successfully {}", modelName);
                     wrappedListener.onResponse(response.getId());
                 }, e -> {
+                    deleteOrUpdateModelGroup(
+                        mlRegisterModelMetaInput.getModelGroupId(),
+                        mlRegisterModelMetaInput.getDoesVersionCreateModelGroup(),
+                        version
+                    );
                     log.error("Failed to index model meta doc", e);
                     wrappedListener.onFailure(e);
                 }));
@@ -327,10 +340,6 @@ public class MLModelManager {
 
             String modelGroupId = mlRegisterModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (Strings.isBlank(modelGroupId)) {
-                indexRemoteModel(mlRegisterModelInput, mlTask, "1", listener);
-            }
-
             client.get(getModelGroupRequest, ActionListener.wrap(getModelGroupResponse -> {
                 if (getModelGroupResponse.isExists()) {
                     Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
@@ -398,9 +407,6 @@ public class MLModelManager {
 
             String modelGroupId = registerModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (Strings.isBlank(modelGroupId)) {
-                uploadModel(registerModelInput, mlTask, "1");
-            }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.get(getModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
@@ -511,9 +517,13 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -543,7 +553,8 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
+    @VisibleForTesting
+    void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -569,8 +580,12 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 // create model meta doc
@@ -628,10 +643,14 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
                     indexModelMetaRequest.id(functionName.name());
+                }
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
                 }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
@@ -707,8 +726,12 @@ public class MLModelManager {
                             .content(Base64.getEncoder().encodeToString(bytes))
                             .createdTime(now)
                             .lastUpdateTime(now)
+                            .isHidden(registerModelInput.getIsHidden())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                        if (registerModelInput.getIsHidden()) {
+                            indexRequest.id(modelName);
+                        }
                         String chunkId = getModelChunkId(modelId, chunkNum);
                         indexRequest.id(chunkId);
                         indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -722,7 +745,8 @@ public class MLModelManager {
                                     modelId,
                                     modelSizeInBytes,
                                     chunkFiles,
-                                    hashValue
+                                    hashValue,
+                                    version
                                 );
                             } else {
                                 deleteFileQuietly(file);
@@ -734,7 +758,7 @@ public class MLModelManager {
                             handleException(functionName, taskId, e);
                             deleteFileQuietly(file);
                             // remove model doc as failed to upload model
-                            deleteModel(modelId);
+                            deleteModel(modelId, registerModelInput, version);
                             semaphore.release();
                             deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                         }));
@@ -742,7 +766,7 @@ public class MLModelManager {
                 }, e -> {
                     log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-                    deleteModel(modelId);
+                    deleteModel(modelId, registerModelInput, version);
                     handleException(functionName, taskId, e);
                 })
             );
@@ -756,6 +780,14 @@ public class MLModelManager {
             throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
         }
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
+            mlTask.setFunctionName(mlRegisterModelInput.getFunctionName());
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    ImmutableMap.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()),
+                    TIMEOUT_IN_MILLIS,
+                    false
+                );
             registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
@@ -783,7 +815,8 @@ public class MLModelManager {
         String modelId,
         Long modelSizeInBytes,
         List<String> chunkFiles,
-        String hashValue
+        String hashValue,
+        String version
     ) {
         FunctionName functionName = registerModelInput.getFunctionName();
         deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
@@ -809,11 +842,12 @@ public class MLModelManager {
         }, e -> {
             log.error("Failed to update model", e);
             handleException(functionName, taskId, e);
-            deleteModel(modelId);
+            deleteModel(modelId, registerModelInput, version);
         }));
     }
 
-    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+    @VisibleForTesting
+    void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);
@@ -822,7 +856,7 @@ public class MLModelManager {
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
     }
 
-    private void deleteModel(String modelId) {
+    private void deleteModel(String modelId, MLRegisterModelInput registerModelInput, String modelVersion) {
         DeleteRequest deleteRequest = new DeleteRequest();
         deleteRequest.index(ML_MODEL_INDEX).id(modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest);
@@ -831,6 +865,38 @@ public class MLModelManager {
             .setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN)
             .setAbortOnVersionConflict(false);
         client.execute(DeleteByQueryAction.INSTANCE, deleteChunksRequest);
+        deleteOrUpdateModelGroup(registerModelInput.getModelGroupId(), registerModelInput.getDoesVersionCreateModelGroup(), modelVersion);
+    }
+
+    private void deleteOrUpdateModelGroup(String modelGroupID, Boolean doesVersionCreateModelGroup, String modelVersion) {
+        // This checks if model group is created when registering the version. If yes, model group is deleted since the version registration
+        // had failed. Else model group latest version is decremented by 1
+        if (doesVersionCreateModelGroup) {
+            DeleteRequest deleteModelGroupRequest = new DeleteRequest();
+            deleteModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupID).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            client.delete(deleteModelGroupRequest);
+        } else {
+            updateLatestVersionInModelGroup(
+                modelGroupID,
+                Integer.parseInt(modelVersion) - 1,
+                ActionListener
+                    .wrap(r -> log.debug("model group updated, response {}", r), e -> log.error("Failed to update model group", e))
+            );
+        }
+    }
+
+    private void updateLatestVersionInModelGroup(String modelGroupID, Integer latestVersion, ActionListener<UpdateResponse> listener) {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put(MLModelGroup.LATEST_VERSION_FIELD, latestVersion);
+        updatedFields.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_GROUP_INDEX, modelGroupID);
+        updateRequest.doc(updatedFields);
+        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
@@ -901,8 +967,8 @@ public class MLModelManager {
                             CLUSTER_SERVICE,
                             clusterService
                         );
-                    // deploy remote model or model trained by built-in algorithm like kmeans
-                    if (mlModel.getConnector() != null) {
+                    // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
+                    if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
                         setupPredictable(modelId, mlModel, params);
                         wrappedListener.onResponse("successful");
                         return;
@@ -911,6 +977,7 @@ public class MLModelManager {
                     GetRequest getConnectorRequest = new GetRequest();
                     FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
                     getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
+                    // get connector and deploy remote model with standalone connector
                     client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
                         if (getResponse != null && getResponse.isExists()) {
                             try (

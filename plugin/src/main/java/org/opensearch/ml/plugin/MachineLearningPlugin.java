@@ -40,18 +40,21 @@ import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.action.connector.TransportCreateConnectorAction;
+import org.opensearch.ml.action.connector.UpdateConnectorTransportAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction;
+import org.opensearch.ml.action.model_group.GetModelGroupTransportAction;
 import org.opensearch.ml.action.model_group.SearchModelGroupTransportAction;
 import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
 import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
+import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
@@ -91,6 +94,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -98,7 +102,9 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
@@ -133,10 +139,18 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionAction;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionTransportAction;
 import org.opensearch.ml.memory.action.conversation.DeleteConversationAction;
 import org.opensearch.ml.memory.action.conversation.DeleteConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationsTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
+import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
+import org.opensearch.ml.memory.action.conversation.SearchConversationsTransportAction;
+import org.opensearch.ml.memory.action.conversation.SearchInteractionsAction;
+import org.opensearch.ml.memory.action.conversation.SearchInteractionsTransportAction;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -149,6 +163,7 @@ import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
+import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
@@ -163,13 +178,19 @@ import org.opensearch.ml.rest.RestMLStatsAction;
 import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
+import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
+import org.opensearch.ml.rest.RestMLUpdateModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
 import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
 import org.opensearch.ml.rest.RestMemoryDeleteConversationAction;
+import org.opensearch.ml.rest.RestMemoryGetConversationAction;
 import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
+import org.opensearch.ml.rest.RestMemoryGetInteractionAction;
 import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
+import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
+import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -279,22 +300,28 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLUndeployModelsAction.INSTANCE, TransportUndeployModelsAction.class),
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
+                new ActionHandler<>(MLUpdateModelAction.INSTANCE, UpdateModelTransportAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
                 new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),
                 new ActionHandler<>(MLUpdateModelGroupAction.INSTANCE, TransportUpdateModelGroupAction.class),
+                new ActionHandler<>(MLModelGroupGetAction.INSTANCE, GetModelGroupTransportAction.class),
                 new ActionHandler<>(MLModelGroupSearchAction.INSTANCE, SearchModelGroupTransportAction.class),
                 new ActionHandler<>(MLModelGroupDeleteAction.INSTANCE, DeleteModelGroupTransportAction.class),
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
-
                 new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
                 new ActionHandler<>(GetConversationsAction.INSTANCE, GetConversationsTransportAction.class),
                 new ActionHandler<>(CreateInteractionAction.INSTANCE, CreateInteractionTransportAction.class),
                 new ActionHandler<>(GetInteractionsAction.INSTANCE, GetInteractionsTransportAction.class),
-                new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class)
+                new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class),
+                new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
+                new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
+                new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
+                new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
+                new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class)
             );
     }
 
@@ -532,18 +559,24 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
         RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
+        RestMLGetModelGroupAction restMLGetModelGroupAction = new RestMLGetModelGroupAction();
         RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
-
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
         RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();
         RestMemoryCreateInteractionAction restCreateInteractionAction = new RestMemoryCreateInteractionAction();
         RestMemoryGetInteractionsAction restListInteractionsAction = new RestMemoryGetInteractionsAction();
         RestMemoryDeleteConversationAction restDeleteConversationAction = new RestMemoryDeleteConversationAction();
+        RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
+        RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction();
+        RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
+        RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
+        RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -554,6 +587,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLGetModelAction,
                 restMLDeleteModelAction,
                 restMLSearchModelAction,
+                restMLUpdateModelAction,
                 restMLGetTaskAction,
                 restMLDeleteTaskAction,
                 restMLSearchTaskAction,
@@ -565,6 +599,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLUploadModelChunkAction,
                 restMLCreateModelGroupAction,
                 restMLUpdateModelGroupAction,
+                restMLGetModelGroupAction,
                 restMLSearchModelGroupAction,
                 restMLDeleteModelGroupAction,
                 restMLCreateConnectorAction,
@@ -575,7 +610,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restListConversationsAction,
                 restCreateInteractionAction,
                 restListInteractionsAction,
-                restDeleteConversationAction
+                restDeleteConversationAction,
+                restMLUpdateConnectorAction,
+                restSearchConversationsAction,
+                restSearchInteractionsAction,
+                restGetConversationAction,
+                restGetInteractionAction
             );
     }
 

@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.engine;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
+import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.UUID;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -15,6 +25,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -22,28 +33,17 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.UUID;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
-import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
-import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
 
 public class MLEngineTest {
     @Rule
@@ -64,8 +64,14 @@ public class MLEngineTest {
         MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
         String prebuiltModelPath = mlEngine.getPrebuiltModelPath(modelName, version, modelFormat);
         String prebuiltModelConfigPath = mlEngine.getPrebuiltModelConfigPath(modelName, version, modelFormat);
-        assertEquals("https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/sentence-transformers_msmarco-distilbert-base-tas-b-1.0.1-torch_script.zip", prebuiltModelPath);
-        assertEquals("https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/config.json", prebuiltModelConfigPath);
+        assertEquals(
+            "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/sentence-transformers_msmarco-distilbert-base-tas-b-1.0.1-torch_script.zip",
+            prebuiltModelPath
+        );
+        assertEquals(
+            "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/config.json",
+            prebuiltModelConfigPath
+        );
     }
 
     @Test
@@ -74,7 +80,7 @@ public class MLEngineTest {
         DataFrame predictionDataFrame = constructTestDataFrame(10);
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
         Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLPredictionOutput output = (MLPredictionOutput)mlEngine.predict(mlInput, model);
+        MLPredictionOutput output = (MLPredictionOutput) mlEngine.predict(mlInput, model);
         DataFrame predictions = output.getPredictionResult();
         assertEquals(10, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
@@ -86,11 +92,10 @@ public class MLEngineTest {
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
         Input mlInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build();
-        MLPredictionOutput output = (MLPredictionOutput)mlEngine.predict(mlInput, model);
+        MLPredictionOutput output = (MLPredictionOutput) mlEngine.predict(mlInput, model);
         DataFrame predictions = output.getPredictionResult();
         assertEquals(2, predictions.size());
     }
-
 
     @Test
     public void deployLinearRegressionModel() {
@@ -98,7 +103,8 @@ public class MLEngineTest {
         Predictable predictor = mlEngine.deploy(model, null);
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
-        MLPredictionOutput output = (MLPredictionOutput)predictor.predict(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build());
+        MLPredictionOutput output = (MLPredictionOutput) predictor
+            .predict(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build());
         DataFrame predictions = output.getPredictionResult();
         assertEquals(2, predictions.size());
     }
@@ -129,7 +135,7 @@ public class MLEngineTest {
         Assert.assertNotNull(model.getContent());
     }
 
-    //TODO: fix mockito error
+    // TODO: fix mockito error
     @Ignore
     @Test
     public void train_NullInput() {
@@ -142,7 +148,7 @@ public class MLEngineTest {
         }
     }
 
-    //TODO: fix mockito error
+    // TODO: fix mockito error
     @Ignore
     @Test
     public void train_NullInputDataSet() {
@@ -155,7 +161,7 @@ public class MLEngineTest {
         }
     }
 
-    //TODO: fix mockito error
+    // TODO: fix mockito error
     @Ignore
     @Test
     public void train_NullDataFrame() {
@@ -169,7 +175,7 @@ public class MLEngineTest {
         }
     }
 
-    //TODO: fix mockito error
+    // TODO: fix mockito error
     @Ignore
     @Test
     public void train_EmptyDataFrame() {
@@ -183,7 +189,7 @@ public class MLEngineTest {
         }
     }
 
-    //TODO: fix mockito error
+    // TODO: fix mockito error
     @Ignore
     @Test
     public void train_UnsupportedAlgorithm() {
@@ -222,7 +228,7 @@ public class MLEngineTest {
         mlEngine.predict(mlInput, null);
     }
 
-    //TODO: fix mockito error
+    // TODO: fix mockito error
     @Ignore
     @Test
     public void predictUnsupportedAlgorithm() {
@@ -286,13 +292,13 @@ public class MLEngineTest {
         mlEngine.execute(input);
     }
 
-
     private MLModel trainKMeansModel() {
-        KMeansParams parameters = KMeansParams.builder()
-                .centroids(2)
-                .iterations(10)
-                .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
-                .build();
+        KMeansParams parameters = KMeansParams
+            .builder()
+            .centroids(2)
+            .iterations(10)
+            .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
+            .build();
         DataFrame trainDataFrame = constructTestDataFrame(100);
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(trainDataFrame).build();
         Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(parameters).inputDataset(inputDataset).build();
@@ -300,18 +306,24 @@ public class MLEngineTest {
     }
 
     private MLModel trainLinearRegressionModel() {
-        LinearRegressionParams parameters = LinearRegressionParams.builder()
-                .objectiveType(LinearRegressionParams.ObjectiveType.SQUARED_LOSS)
-                .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
-                .learningRate(0.01)
-                .epsilon(1e-6)
-                .beta1(0.9)
-                .beta2(0.99)
-                .target("price")
-                .build();
+        LinearRegressionParams parameters = LinearRegressionParams
+            .builder()
+            .objectiveType(LinearRegressionParams.ObjectiveType.SQUARED_LOSS)
+            .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
+            .learningRate(0.01)
+            .epsilon(1e-6)
+            .beta1(0.9)
+            .beta2(0.99)
+            .target("price")
+            .build();
         DataFrame trainDataFrame = constructLinearRegressionTrainDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(trainDataFrame).build();
-        Input mlInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).parameters(parameters).inputDataset(inputDataset).build();
+        Input mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.LINEAR_REGRESSION)
+            .parameters(parameters)
+            .inputDataset(inputDataset)
+            .build();
 
         return mlEngine.train(mlInput);
     }

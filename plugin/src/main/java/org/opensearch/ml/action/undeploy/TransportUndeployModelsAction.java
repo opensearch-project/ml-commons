@@ -5,15 +5,18 @@
 
 package org.opensearch.ml.action.undeploy;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
@@ -33,6 +36,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -43,6 +48,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+
+    Settings settings;
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
@@ -58,6 +65,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
+        Settings settings,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
@@ -76,6 +84,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.settings = settings;
     }
 
     @Override
@@ -97,7 +106,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
                     client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
                         listener.onResponse(new MLUndeployModelsResponse(r));
-                    }, listener::onFailure));
+                    }, e -> { listener.onFailure(e); }));
                 } else {
                     listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
                 }
@@ -114,18 +123,39 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
     private void validateAccess(String modelId, ActionListener<Boolean> listener) {
         User user = RestActionUtils.getUserContext(client);
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
-                modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+                Boolean isHidden = mlModel.getIsHidden();
+                if (isHidden != null && isHidden) {
+                    if (isSuperAdmin) {
+                        listener.onResponse(true);
+                    } else {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User doesn't have privilege to perform this operation on this model",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
+                    }
+                } else {
+                    modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+                }
             }, e -> {
                 log.error("Failed to find Model", e);
                 listener.onFailure(e);
-            }), () -> context.restore()));
+            }), context::restore));
         } catch (Exception e) {
             log.error("Failed to undeploy ML model");
             listener.onFailure(e);
         }
+    }
+
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 
 }

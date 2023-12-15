@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.engine.httpclient;
 
-import com.google.common.annotations.VisibleForTesting;
-import lombok.extern.log4j.Log4j2;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
@@ -17,18 +20,16 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
-import org.apache.logging.log4j.util.Strings;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.Arrays;
+import com.google.common.annotations.VisibleForTesting;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLHttpClientFactory {
 
     public static CloseableHttpClient getCloseableHttpClient() {
-       return createHttpClient();
+        return createHttpClient();
     }
 
     private static CloseableHttpClient createHttpClient() {
@@ -57,10 +58,6 @@ public class MLHttpClientFactory {
 
     @VisibleForTesting
     protected static void validateSchemaAndPort(HttpHost host) {
-        if (Strings.isBlank(host.getHostName())) {
-            log.error("Remote inference host name is empty!");
-            throw new IllegalArgumentException("Host name is empty!");
-        }
         String scheme = host.getSchemeName();
         if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
             String[] hostNamePort = host.getHostName().split(":");

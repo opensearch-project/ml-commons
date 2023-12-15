@@ -212,7 +212,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode() {
         setupMocks(true, false, false, false);
 
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -220,10 +220,22 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         verify(mlTaskManager).remove(anyString());
     }
 
+    public void testExecuteTask_OnLocalNode_RemoteModel() {
+        setupMocks(true, false, false, false);
+
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Model not ready yet."));
+        verify(mlTaskManager, never()).add(any(MLTask.class));
+        verify(client, never()).get(any(), any());
+    }
+
     public void testExecuteTask_OnLocalNode_QueryInput() {
         setupMocks(true, false, false, false);
 
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         // verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -234,7 +246,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_QueryInput_Failure() {
         setupMocks(true, true, false, false);
 
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         // verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager, never()).add(any(MLTask.class));
@@ -245,7 +257,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         setupMocks(true, true, false, false);
         threadContext.stashContext();
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "test_user|test_role|test_tenant");
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlTaskManager).add(any(MLTask.class));
         verify(mlTaskManager).remove(anyString());
         verify(client).get(any(), any());
@@ -256,14 +268,14 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnRemoteNode() {
         setupMocks(false, false, false, false);
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLPredictionTaskAction.NAME), eq(requestWithDataFrame), any());
     }
 
     public void testExecuteTask_OnLocalNode_GetModelFail() {
         setupMocks(true, false, true, false);
 
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -277,7 +289,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         setupMocks(true, false, false, false);
         requestWithDataFrame = MLPredictionTaskRequest.builder().mlInput(mlInputWithDataFrame).build();
 
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -291,7 +303,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_NullGetResponse() {
         setupMocks(true, false, false, true);
 
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         // verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));

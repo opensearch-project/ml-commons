@@ -129,6 +129,7 @@ public class RestMLDeployModelActionTests extends OpenSearchTestCase {
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
+
         return request;
     }
 }

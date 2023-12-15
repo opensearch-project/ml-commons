@@ -1,6 +1,9 @@
 .gradle/
 build/
 .idea/
+.project
+.classpath
+.settings
 client/build/
 common/build/
 ml-algorithms/build/

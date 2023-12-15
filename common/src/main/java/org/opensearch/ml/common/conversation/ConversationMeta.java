@@ -44,6 +44,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     @Getter
     private Instant createdTime;
     @Getter
+    private Instant updatedTime;
+    @Getter
     private String name;
     @Getter
     private String user;
@@ -65,10 +67,11 @@ public class ConversationMeta implements Writeable, ToXContentObject {
      * @return a new conversationMeta object representing the map
      */
     public static ConversationMeta fromMap(String id, Map<String, Object> docFields) {
-        Instant created = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_CREATED_FIELD));
+        Instant created = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_CREATED_TIME_FIELD));
+        Instant updated = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_UPDATED_TIME_FIELD));
         String name = (String) docFields.get(ConversationalIndexConstants.META_NAME_FIELD);
         String user = (String) docFields.get(ConversationalIndexConstants.USER_FIELD);
-        return new ConversationMeta(id, created, name, user);
+        return new ConversationMeta(id, created, updated, name, user);
     }
 
     /**
@@ -81,31 +84,19 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     public static ConversationMeta fromStream(StreamInput in) throws IOException {
         String id = in.readString();
         Instant created = in.readInstant();
+        Instant updated = in.readInstant();
         String name = in.readString();
         String user = in.readOptionalString();
-        return new ConversationMeta(id, created, name, user);
+        return new ConversationMeta(id, created, updated, name, user);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
         out.writeInstant(createdTime);
+        out.writeInstant(updatedTime);
         out.writeString(name);
         out.writeOptionalString(user);
-    }
-
-    
-    /**
-     * Convert this conversationMeta object into an IndexRequest so it can be indexed
-     * @param index the index to send this conversation to. Should usually be .conversational-meta
-     * @return the IndexRequest for the client to send
-     */
-    public IndexRequest toIndexRequest(String index) {
-        IndexRequest request = new IndexRequest(index);
-        return request.id(this.id).source(
-            ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime,
-            ConversationalIndexConstants.META_NAME_FIELD, this.name
-        );
     }
 
     @Override
@@ -113,6 +104,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         return "{id=" + id
             + ", name=" + name
             + ", created=" + createdTime.toString()
+            + ", updated=" + updatedTime.toString()
             + ", user=" + user
             + "}";
     }
@@ -121,7 +113,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     public XContentBuilder toXContent(XContentBuilder builder, ToXContentObject.Params params) throws IOException {
         builder.startObject();
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, this.id);
-        builder.field(ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime);
+        builder.field(ConversationalIndexConstants.META_CREATED_TIME_FIELD, this.createdTime);
+        builder.field(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, this.updatedTime);
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
         if(this.user != null) {
             builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
@@ -137,9 +130,10 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         }
         ConversationMeta otherConversation = (ConversationMeta) other;
         return Objects.equals(this.id, otherConversation.id) &&
-           Objects.equals(this.user, otherConversation.user) &&
-           Objects.equals(this.createdTime, otherConversation.createdTime) &&
-           Objects.equals(this.name, otherConversation.name);
+            Objects.equals(this.user, otherConversation.user) &&
+            Objects.equals(this.createdTime, otherConversation.createdTime) &&
+            Objects.equals(this.updatedTime, otherConversation.updatedTime) &&
+            Objects.equals(this.name, otherConversation.name);
     }
     
 }

@@ -19,8 +19,8 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.output.sample.SampleAlgoOutput;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
+import org.opensearch.ml.common.output.sample.SampleAlgoOutput;
 
 public class SampleAlgoTest {
     @Rule
@@ -44,13 +44,17 @@ public class SampleAlgoTest {
         trainDataFrameInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(trainDataFrameInputDataSet).build();
         predictionDataFrame = constructDataFrame(3);
         predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
-        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(predictionDataFrameInputDataSet).build();
+        predictionDataFrameInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SAMPLE_ALGO)
+            .inputDataset(predictionDataFrameInputDataSet)
+            .build();
     }
 
     @Test
     public void predict() {
         MLModel model = sampleAlgo.train(trainDataFrameInput);
-        SampleAlgoOutput output = (SampleAlgoOutput)sampleAlgo.predict(predictionDataFrameInput, model);
+        SampleAlgoOutput output = (SampleAlgoOutput) sampleAlgo.predict(predictionDataFrameInput, model);
         Assert.assertEquals(3.0, output.getSampleResult().doubleValue(), 1e-5);
     }
 
@@ -62,10 +66,10 @@ public class SampleAlgoTest {
     }
 
     private DataFrame constructDataFrame(int dataSize) {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("value", ColumnType.INTEGER)};
+        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("value", ColumnType.INTEGER) };
         DataFrame dataFrame = new DefaultDataFrame(columnMetas);
         for (int i = 0; i < dataSize; i++) {
-            dataFrame.appendRow(new Object[]{i});
+            dataFrame.appendRow(new Object[] { i });
         }
         return dataFrame;
     }

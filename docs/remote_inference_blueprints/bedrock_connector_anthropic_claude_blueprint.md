@@ -1,6 +1,8 @@
-### Bedrock connector blueprint example
+# Bedrock connector blueprint example for Claude V2 model
 
-1. Add connector endpoint to trusted URLs:
+## 1. Add connector endpoint to trusted URLs:
+
+Note: no need to do this after 2.11.0
 
 ```json
 PUT /_cluster/settings
@@ -13,7 +15,7 @@ PUT /_cluster/settings
 }
 ```
 
-2. Create connector for Amazon Bedrock:
+## 2. Create connector for Amazon Bedrock:
 
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
@@ -78,12 +80,14 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-Response:
+Sample response:
 ```json
-{"connector_id":"SHDj-ooB0wiuGR4S5sM4"}
+{
+  "connector_id": "SHDj-ooB0wiuGR4S5sM4"
+}
 ```
 
-3. Create model group:
+## 3. Create model group:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -93,12 +97,15 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-Response:
+Sample response:
 ```json
-{"model_group_id":"SXDn-ooB0wiuGR4SrcNN","status":"CREATED"}
+{
+  "model_group_id": "SXDn-ooB0wiuGR4SrcNN",
+  "status": "CREATED"
+}
 ```
 
-4. Register model to model group & deploy model:
+## 4. Register model to model group & deploy model:
 
 ```json
 POST /_plugins/_ml/models/_register
@@ -111,20 +118,25 @@ POST /_plugins/_ml/models/_register
 }
 ```
 
-Response:
+Sample response:
 ```json
-{"task_id":"SnDo-ooB0wiuGR4SfMNS","status":"CREATED"}
+{
+  "task_id": "SnDo-ooB0wiuGR4SfMNS",
+  "status": "CREATED"
+}
 ```
 
+Get model id from task
 ```json
 GET /_plugins/_ml/tasks/SnDo-ooB0wiuGR4SfMNS
 ```
+Deploy model, in this demo the model id is `S3Do-ooB0wiuGR4SfcNv`
 
 ```json
 POST /_plugins/_ml/models/S3Do-ooB0wiuGR4SfcNv/_deploy
 ```
 
-5. Test model inference
+## 5. Test model inference
 
 ```json
 POST /_plugins/_ml/models/S3Do-ooB0wiuGR4SfcNv/_predict
@@ -135,7 +147,21 @@ POST /_plugins/_ml/models/S3Do-ooB0wiuGR4SfcNv/_predict
 }
 ```
 
-Response:
+Sample response:
 ```json
-{"inference_results":[{"output":[{"name":"response","dataAsMap":{"completion":" There is no single, universally agreed upon meaning of life. The meaning of life is subjective and personal. Some common perspectives include finding happiness, purpose, spiritual fulfillment, connecting with others, contributing value, and leaving a positive legacy. Ultimately, the meaning of life is what you make of it.","stop_reason":"stop_sequence"}}]}]}
+{
+  "inference_results": [
+    {
+      "output": [
+        {
+          "name": "response",
+          "dataAsMap": {
+            "completion": " There is no single, universally agreed upon meaning of life. The meaning of life is subjective and personal. Some common perspectives include finding happiness, purpose, spiritual fulfillment, connecting with others, contributing value, and leaving a positive legacy. Ultimately, the meaning of life is what you make of it.",
+            "stop_reason": "stop_sequence"
+          }
+        }
+      ]
+    }
+  ]
+}
 ```
