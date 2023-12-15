@@ -7,7 +7,6 @@ package org.opensearch.ml.action.agents;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -22,8 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.ActionRequest;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
@@ -34,9 +31,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -221,15 +219,47 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testDoExecute_Success() {
+    public void testDoExecute_NoAgentId() throws IOException {
+        GetResponse getResponse = prepareMLAgent(null);
         String agentId = "test-agent-id";
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
         MLAgentGetRequest request = new MLAgentGetRequest(agentId);
         Task task = mock(Task.class);
 
-        GetResponse getResponse = mock(GetResponse.class);
-        BytesReference bytesReference = mock(BytesReference.class);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        try {
+            getAgentTransportAction.doExecute(task, request, actionListener);
+        } catch (Exception e) {
+            assertEquals(e.getClass(), IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    public void testDoExecute_Success() throws IOException {
+
+        String agentId = "test-agent-id";
+        GetResponse getResponse = prepareMLAgent(agentId);
+        ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getAgentTransportAction.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLAgentGetResponse.class));
+    }
+
+    public GetResponse prepareMLAgent(String agentId) throws IOException {
 
         mlAgent = new MLAgent(
             "test",
@@ -244,31 +274,10 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             "test"
         );
 
-        GetRequest getRequest = new GetRequest(ML_AGENT_INDEX).id(agentId);
-
-        when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsBytesRef()).thenReturn(bytesReference);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(eq(getRequest), any());
-
-        // Create MLAgentGetResponse from GetResponse
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
-
-        // Pass the MLAgentGetResponse to the actionListener.onResponse
-        doAnswer(invocation -> {
-            ActionListener<MLAgentGetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(mlAgentGetResponse);
-            return null;
-        }).when(actionListener).onResponse(any());
-
-        getAgentTransportAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<MLAgentGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
-
+        XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", agentId, 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        return getResponse;
     }
-
 }
