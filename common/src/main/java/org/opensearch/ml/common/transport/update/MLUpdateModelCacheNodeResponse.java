@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.model;
+package org.opensearch.ml.common.transport.update;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -19,23 +19,23 @@ import java.util.Map;
 
 @Getter
 @Log4j2
-public class MLInPlaceUpdateModelNodeResponse extends BaseNodeResponse implements ToXContentFragment {
+public class MLUpdateModelCacheNodeResponse extends BaseNodeResponse implements ToXContentFragment {
     private Map<String, String> modelUpdateStatus;
 
-    public MLInPlaceUpdateModelNodeResponse(DiscoveryNode node, Map<String, String> modelUpdateStatus) {
+    public MLUpdateModelCacheNodeResponse(DiscoveryNode node, Map<String, String> modelUpdateStatus) {
         super(node);
         this.modelUpdateStatus = modelUpdateStatus;
     }
 
-    public MLInPlaceUpdateModelNodeResponse(StreamInput in) throws IOException {
+    public MLUpdateModelCacheNodeResponse(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
             this.modelUpdateStatus = in.readMap(StreamInput::readString, StreamInput::readString);
         }
     }
 
-    public static MLInPlaceUpdateModelNodeResponse readStats(StreamInput in) throws IOException {
-        return new MLInPlaceUpdateModelNodeResponse(in);
+    public static MLUpdateModelCacheNodeResponse readStats(StreamInput in) throws IOException {
+        return new MLUpdateModelCacheNodeResponse(in);
     }
 
     @Override
@@ -51,6 +51,7 @@ public class MLInPlaceUpdateModelNodeResponse extends BaseNodeResponse implement
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        // Similar to deploy on node or undeploy on node response, this stat map is used to track update status on each node.
         builder.startObject("stats");
         if (!isModelUpdateStatusEmpty()) {
             for (Map.Entry<String, String> stat : modelUpdateStatus.entrySet()) {

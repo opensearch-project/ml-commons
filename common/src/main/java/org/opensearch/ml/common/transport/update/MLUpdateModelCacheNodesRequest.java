@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.model;
+package org.opensearch.ml.common.transport.update;
 
 import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
@@ -12,26 +12,26 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import java.io.IOException;
 
-public class MLInPlaceUpdateModelNodesRequest extends BaseNodesRequest<MLInPlaceUpdateModelNodesRequest> {
+public class MLUpdateModelCacheNodesRequest extends BaseNodesRequest<MLUpdateModelCacheNodesRequest> {
 
     @Getter
     private String modelId;
     @Getter
     private boolean predictorUpdate;
 
-    public MLInPlaceUpdateModelNodesRequest(StreamInput in) throws IOException {
+    public MLUpdateModelCacheNodesRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
         this.predictorUpdate = in.readBoolean();
     }
 
-    public MLInPlaceUpdateModelNodesRequest(String[] nodeIds, String modelId, boolean predictorUpdate) {
+    public MLUpdateModelCacheNodesRequest(String[] nodeIds, String modelId, boolean predictorUpdate) {
         super(nodeIds);
         this.modelId = modelId;
         this.predictorUpdate = predictorUpdate;
     }
 
-    public MLInPlaceUpdateModelNodesRequest(DiscoveryNode[] nodeIds, String modelId, boolean predictorUpdate) {
+    public MLUpdateModelCacheNodesRequest(DiscoveryNode[] nodeIds, String modelId, boolean predictorUpdate) {
         super(nodeIds);
         this.modelId = modelId;
         this.predictorUpdate = predictorUpdate;

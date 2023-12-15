@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.model;
+package org.opensearch.ml.common.transport.update;
 
 import lombok.AccessLevel;
 import lombok.Builder;

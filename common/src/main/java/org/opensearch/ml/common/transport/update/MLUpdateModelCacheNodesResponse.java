@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.model;
+package org.opensearch.ml.common.transport.update;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.nodes.BaseNodesResponse;
@@ -18,13 +18,13 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import java.io.IOException;
 import java.util.List;
 
-public class MLInPlaceUpdateModelNodesResponse extends BaseNodesResponse<MLInPlaceUpdateModelNodeResponse> implements ToXContentObject {
+public class MLUpdateModelCacheNodesResponse extends BaseNodesResponse<MLUpdateModelCacheNodeResponse> implements ToXContentObject {
 
-    public MLInPlaceUpdateModelNodesResponse(StreamInput in) throws IOException {
-        super(new ClusterName(in), in.readList(MLInPlaceUpdateModelNodeResponse::readStats), in.readList(FailedNodeException::new));
+    public MLUpdateModelCacheNodesResponse(StreamInput in) throws IOException {
+        super(new ClusterName(in), in.readList(MLUpdateModelCacheNodeResponse::readStats), in.readList(FailedNodeException::new));
     }
 
-    public MLInPlaceUpdateModelNodesResponse(ClusterName clusterName, List<MLInPlaceUpdateModelNodeResponse> nodes, List<FailedNodeException> failures) {
+    public MLUpdateModelCacheNodesResponse(ClusterName clusterName, List<MLUpdateModelCacheNodeResponse> nodes, List<FailedNodeException> failures) {
         super(clusterName, nodes, failures);
     }
 
@@ -34,13 +34,13 @@ public class MLInPlaceUpdateModelNodesResponse extends BaseNodesResponse<MLInPla
     }
 
     @Override
-    public void writeNodesTo(StreamOutput out, List<MLInPlaceUpdateModelNodeResponse> nodes) throws IOException {
+    public void writeNodesTo(StreamOutput out, List<MLUpdateModelCacheNodeResponse> nodes) throws IOException {
         out.writeList(nodes);
     }
 
     @Override
-    public List<MLInPlaceUpdateModelNodeResponse> readNodesFrom(StreamInput in) throws IOException {
-        return in.readList(MLInPlaceUpdateModelNodeResponse::readStats);
+    public List<MLUpdateModelCacheNodeResponse> readNodesFrom(StreamInput in) throws IOException {
+        return in.readList(MLUpdateModelCacheNodeResponse::readStats);
     }
 
     @Override
@@ -48,7 +48,7 @@ public class MLInPlaceUpdateModelNodesResponse extends BaseNodesResponse<MLInPla
         String nodeId;
         DiscoveryNode node;
         builder.startObject();
-        for (MLInPlaceUpdateModelNodeResponse updateStats : getNodes()) {
+        for (MLUpdateModelCacheNodeResponse updateStats : getNodes()) {
             if (!updateStats.isModelUpdateStatusEmpty()) {
                 node = updateStats.getNode();
                 nodeId = node.getId();

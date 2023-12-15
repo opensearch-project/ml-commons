@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.model;
+package org.opensearch.ml.common.transport.update;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -22,20 +22,20 @@ import static org.junit.Assert.assertEquals;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 @RunWith(MockitoJUnitRunner.class)
-public class MLInPlaceUpdateModelNodesRequestTest {
+public class MLUpdateModelCacheNodesRequestTest {
 
     @Test
     public void testConstructorSerialization1() throws IOException {
         String modelId = "testModelId";
         String[] nodeIds = {"nodeId1", "nodeId2", "nodeId3"};
 
-        MLInPlaceUpdateModelNodeRequest inPlaceUpdateModelNodeRequest = new  MLInPlaceUpdateModelNodeRequest(
-                new  MLInPlaceUpdateModelNodesRequest(nodeIds, modelId, true)
+        MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = new MLUpdateModelCacheNodeRequest(
+                new MLUpdateModelCacheNodesRequest(nodeIds, modelId, true)
         );
         BytesStreamOutput output = new BytesStreamOutput();
 
-        inPlaceUpdateModelNodeRequest.writeTo(output);
-        assertEquals("testModelId", inPlaceUpdateModelNodeRequest.getMlInPlaceUpdateModelNodesRequest().getModelId());
+        updateModelCacheNodeRequest.writeTo(output);
+        assertEquals("testModelId", updateModelCacheNodeRequest.getUpdateModelCacheNodesRequest().getModelId());
     }
 
     @Test
@@ -58,10 +58,10 @@ public class MLInPlaceUpdateModelNodesRequestTest {
                 Version.CURRENT
         );
         DiscoveryNode[] nodes = {localNode1, localNode2};
-        MLInPlaceUpdateModelNodeRequest inPlaceUpdateModelNodeRequest = new  MLInPlaceUpdateModelNodeRequest(
-                new MLInPlaceUpdateModelNodesRequest(nodes, modelId, true)
+        MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = new MLUpdateModelCacheNodeRequest(
+                new MLUpdateModelCacheNodesRequest(nodes, modelId, true)
         );
-        assertEquals(2, inPlaceUpdateModelNodeRequest.getMlInPlaceUpdateModelNodesRequest().concreteNodes().length);
+        assertEquals(2, updateModelCacheNodeRequest.getUpdateModelCacheNodesRequest().concreteNodes().length);
     }
 
     @Test
@@ -69,15 +69,15 @@ public class MLInPlaceUpdateModelNodesRequestTest {
         String modelId = "testModelId";
         String[] nodeIds = {"nodeId1", "nodeId2", "nodeId3"};
 
-        MLInPlaceUpdateModelNodeRequest inPlaceUpdateModelNodeRequest = new  MLInPlaceUpdateModelNodeRequest(
-                new MLInPlaceUpdateModelNodesRequest(nodeIds, modelId, true)
+        MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = new MLUpdateModelCacheNodeRequest(
+                new MLUpdateModelCacheNodesRequest(nodeIds, modelId, true)
         );
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-        inPlaceUpdateModelNodeRequest.writeTo(bytesStreamOutput);
+        updateModelCacheNodeRequest.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        MLInPlaceUpdateModelNodeRequest parsedNodeRequest = new MLInPlaceUpdateModelNodeRequest(streamInput);
+        MLUpdateModelCacheNodeRequest parsedNodeRequest = new MLUpdateModelCacheNodeRequest(streamInput);
 
-        assertEquals(inPlaceUpdateModelNodeRequest.getMlInPlaceUpdateModelNodesRequest().getModelId(), parsedNodeRequest.getMlInPlaceUpdateModelNodesRequest().getModelId());
+        assertEquals(updateModelCacheNodeRequest.getUpdateModelCacheNodesRequest().getModelId(), parsedNodeRequest.getUpdateModelCacheNodesRequest().getModelId());
     }
 }
