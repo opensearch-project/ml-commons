@@ -13,11 +13,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -39,13 +41,13 @@ public class UpdateInteractionRequest extends ActionRequest {
     @Builder
     public UpdateInteractionRequest(String interactionId, Map<String, Object> updateContent) {
         this.interactionId = interactionId;
-        this.updateContent = filterMapContent(updateContent);
+        this.updateContent = filterUpdateContent(updateContent);
     }
 
     public UpdateInteractionRequest(StreamInput in) throws IOException {
         super(in);
         this.interactionId = in.readString();
-        this.updateContent = filterMapContent(in.readMap());
+        this.updateContent = filterUpdateContent(in.readMap());
     }
 
     @Override
@@ -62,6 +64,9 @@ public class UpdateInteractionRequest extends ActionRequest {
         if (this.interactionId == null) {
             exception = addValidationError("interaction id can't be null", exception);
         }
+        if (this.updateContent == null) {
+            exception = addValidationError("Update Interaction content can't be null", exception);
+        }
 
         return exception;
     }
@@ -69,6 +74,10 @@ public class UpdateInteractionRequest extends ActionRequest {
     public static UpdateInteractionRequest parse(XContentParser parser, String interactionId) throws IOException {
         Map<String, Object> dataAsMap = null;
         dataAsMap = parser.map();
+
+        if (dataAsMap == null) {
+            throw new OpenSearchParseException("Failed to parse UpdateInteractionRequest due to Null update content");
+        }
 
         return UpdateInteractionRequest.builder().interactionId(interactionId).updateContent(dataAsMap).build();
     }
@@ -88,8 +97,11 @@ public class UpdateInteractionRequest extends ActionRequest {
         }
     }
 
-    private Map<String, Object> filterMapContent(Map<String, Object> mapContent) {
-        return mapContent
+    private Map<String, Object> filterUpdateContent(Map<String, Object> updateContent) {
+        if (updateContent == null) {
+            return new HashMap<>();
+        }
+        return updateContent
             .entrySet()
             .stream()
             .filter(map -> allowedList.contains(map.getKey()))

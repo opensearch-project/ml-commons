@@ -42,7 +42,7 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.update(updateRequest, getUpdateResponseListener(conversationId, listener, context));
         } catch (Exception e) {
-            log.error("Failed to update Conversation for conversation id {}. Details {}:", conversationId, e);
+            log.error("Failed to update Conversation for conversation id" + conversationId, e);
             listener.onFailure(e);
         }
     }
@@ -53,15 +53,15 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
         ThreadContext.StoredContext context
     ) {
         return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
-            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+            if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+                log.info("Successfully updated the Conversation with ID: {}", conversationId);
+                actionListener.onResponse(updateResponse);
+            } else {
                 log.info("Failed to update the Conversation with ID: {}", conversationId);
                 actionListener.onResponse(updateResponse);
-                return;
             }
-            log.info("Successfully updated the Conversation with ID: {}", conversationId);
-            actionListener.onResponse(updateResponse);
         }, exception -> {
-            log.error("Failed to update ML Conversation with ID {}. Details: {}", conversationId, exception);
+            log.error("Failed to update ML Conversation with ID " + conversationId, exception);
             actionListener.onFailure(exception);
         }), context::restore);
     }

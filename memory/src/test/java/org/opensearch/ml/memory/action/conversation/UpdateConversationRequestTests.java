@@ -82,6 +82,12 @@ public class UpdateConversationRequestTests {
     }
 
     @Test
+    public void testConstructor_NullUpdateContent() throws IOException {
+        UpdateConversationRequest updateConversationRequest = new UpdateConversationRequest(null, null);
+        assert updateConversationRequest.validate().getMessage().equals("Validation Failed: 1: conversation id can't be null;");
+    }
+
+    @Test
     public void testParse_Success() throws IOException {
         String jsonStr = "{\"name\":\"new name\",\"application_type\":\"new type\"}";
         XContentParser parser = XContentType.JSON

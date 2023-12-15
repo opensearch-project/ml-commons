@@ -19,6 +19,7 @@ import org.opensearch.ml.common.conversation.Interaction;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NonNull;
 
 /**
  * Action Response for get traces for an interaction
@@ -26,6 +27,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public class GetTracesResponse extends ActionResponse implements ToXContentObject {
     @Getter
+    @NonNull
     private List<Interaction> traces;
     @Getter
     private int nextToken;

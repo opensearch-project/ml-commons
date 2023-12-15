@@ -6,6 +6,7 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -81,6 +82,12 @@ public class UpdateInteractionRequestTests {
     }
 
     @Test
+    public void testConstructor_NullUpdateContent() throws IOException {
+        UpdateInteractionRequest updateInteractionRequest = new UpdateInteractionRequest(null, null);
+        assert updateInteractionRequest.validate().getMessage().equals("Validation Failed: 1: interaction id can't be null;");
+    }
+
+    @Test
     public void testParse_Success() throws IOException {
         String jsonStr = "{\"additional_info\": {\n" + "      \"feedback\": \"thumbs up!\"\n" + "    }}";
         XContentParser parser = XContentType.JSON
@@ -94,6 +101,23 @@ public class UpdateInteractionRequestTests {
         UpdateInteractionRequest updateInteractionRequest = UpdateInteractionRequest.parse(parser, "interaction_id");
         assertEquals(updateInteractionRequest.getInteractionId(), "interaction_id");
         assertEquals(Map.of("feedback", "thumbs up!"), updateInteractionRequest.getUpdateContent().get(INTERACTIONS_ADDITIONAL_INFO_FIELD));
+    }
+
+    @Test
+    public void testParse_UpdateContentNotAllowed() throws IOException {
+        String jsonStr = "{\"response\": \"new response!\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        UpdateInteractionRequest updateInteractionRequest = UpdateInteractionRequest.parse(parser, "interaction_id");
+        assertEquals(updateInteractionRequest.getInteractionId(), "interaction_id");
+        assertEquals(0, updateInteractionRequest.getUpdateContent().size());
+        assertNotEquals(null, updateInteractionRequest.getUpdateContent());
     }
 
     @Test

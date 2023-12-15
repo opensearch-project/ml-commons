@@ -51,7 +51,7 @@ public class MLMemoryManager {
     public void createConversation(String name, String applicationType, ActionListener<CreateConversationResponse> actionListener) {
         try {
             client.execute(CreateConversationAction.INSTANCE, new CreateConversationRequest(name, applicationType), actionListener);
-        } catch (RuntimeException exception) {
+        } catch (Exception exception) {
             actionListener.onFailure(exception);
         }
     }
@@ -100,13 +100,13 @@ public class MLMemoryManager {
                     ),
                     actionListener
                 );
-        } catch (RuntimeException exception) {
+        } catch (Exception exception) {
             actionListener.onFailure(exception);
         }
     }
 
     /**
-     * Get the interactions associate with this conversation, sorted by recency
+     * Get the interactions associate with this conversation that are not traces, sorted by recency
      * @param conversationId the conversation whose interactions to get
      * @param lastNInteraction Return how many interactions
      * @param actionListener get all the final interactions that are not traces
@@ -114,7 +114,7 @@ public class MLMemoryManager {
     public void getFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> actionListener) {
         Preconditions.checkNotNull(conversationId);
         Preconditions.checkArgument(lastNInteraction > 0, "lastN must be at least 1.");
-        log.info("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
+        log.debug("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
 
         ActionListener<GetInteractionsResponse> al = ActionListener.wrap(getInteractionsResponse -> {
             actionListener.onResponse(getInteractionsResponse.getInteractions());
@@ -122,7 +122,7 @@ public class MLMemoryManager {
 
         try {
             client.execute(GetInteractionsAction.INSTANCE, new GetInteractionsRequest(conversationId, lastNInteraction), al);
-        } catch (RuntimeException exception) {
+        } catch (Exception exception) {
             actionListener.onFailure(exception);
         }
     }
@@ -134,7 +134,7 @@ public class MLMemoryManager {
      */
     public void getTraces(String parentInteractionId, ActionListener<List<Interaction>> actionListener) {
         Preconditions.checkNotNull(parentInteractionId);
-        log.info("Getting traces for conversationId {}", parentInteractionId);
+        log.debug("Getting traces for conversationId {}", parentInteractionId);
 
         ActionListener<GetTracesResponse> al = ActionListener.wrap(getTracesResponse -> {
             actionListener.onResponse(getTracesResponse.getTraces());
@@ -142,7 +142,7 @@ public class MLMemoryManager {
 
         try {
             client.execute(GetTracesAction.INSTANCE, new GetTracesRequest(parentInteractionId), al);
-        } catch (RuntimeException exception) {
+        } catch (Exception exception) {
             actionListener.onFailure(exception);
         }
     }
@@ -157,7 +157,7 @@ public class MLMemoryManager {
         Preconditions.checkNotNull(updateContent);
         try {
             client.execute(UpdateInteractionAction.INSTANCE, new UpdateInteractionRequest(interactionId, updateContent), actionListener);
-        } catch (RuntimeException exception) {
+        } catch (Exception exception) {
             actionListener.onFailure(exception);
         }
     }

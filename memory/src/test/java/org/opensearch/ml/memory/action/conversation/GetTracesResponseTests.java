@@ -12,6 +12,7 @@ import java.util.List;
 
 import org.apache.lucene.search.spell.LevenshteinDistance;
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -101,4 +102,8 @@ public class GetTracesResponseTests extends OpenSearchTestCase {
         assert (ld.getDistance(result, expected) > 0.95);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void testConstructor_NullTraces() {
+        GetTracesResponse response = new GetTracesResponse(null, 0, false);
+    }
 }

@@ -44,7 +44,7 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.update(updateRequest, getUpdateResponseListener(interactionId, listener, context));
         } catch (Exception e) {
-            log.error("Failed to update Interaction for interaction id {}. Details {}:", interactionId, e);
+            log.error("Failed to update Interaction for interaction id " + interactionId, e);
             listener.onFailure(e);
         }
     }
@@ -55,15 +55,15 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
         ThreadContext.StoredContext context
     ) {
         return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
-            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+            if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+                log.info("Successfully updated the interaction with ID: {}", interactionId);
+                actionListener.onResponse(updateResponse);
+            } else {
                 log.info("Failed to update the interaction with ID: {}", interactionId);
                 actionListener.onResponse(updateResponse);
-                return;
             }
-            log.info("Successfully updated the interaction with ID: {}", interactionId);
-            actionListener.onResponse(updateResponse);
         }, exception -> {
-            log.error("Failed to update ML interaction with ID {}. Details: {}", interactionId, exception);
+            log.error("Failed to update ML interaction with ID " + interactionId, exception);
             actionListener.onFailure(exception);
         }), context::restore);
     }

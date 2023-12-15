@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -40,13 +41,13 @@ public class UpdateConversationRequest extends ActionRequest {
     @Builder
     public UpdateConversationRequest(String conversationId, Map<String, Object> updateContent) {
         this.conversationId = conversationId;
-        this.updateContent = filterMapContent(updateContent);
+        this.updateContent = filterUpdateContent(updateContent);
     }
 
     public UpdateConversationRequest(StreamInput in) throws IOException {
         super(in);
         this.conversationId = in.readString();
-        this.updateContent = filterMapContent(in.readMap());
+        this.updateContent = filterUpdateContent(in.readMap());
     }
 
     @Override
@@ -62,6 +63,9 @@ public class UpdateConversationRequest extends ActionRequest {
 
         if (this.conversationId == null) {
             exception = addValidationError("conversation id can't be null", exception);
+        }
+        if (this.updateContent == null) {
+            exception = addValidationError("Update conversation content can't be null", exception);
         }
 
         return exception;
@@ -89,8 +93,11 @@ public class UpdateConversationRequest extends ActionRequest {
         }
     }
 
-    private Map<String, Object> filterMapContent(Map<String, Object> mapContent) {
-        return mapContent
+    private Map<String, Object> filterUpdateContent(Map<String, Object> updateContent) {
+        if (updateContent == null) {
+            return new HashMap<>();
+        }
+        return updateContent
             .entrySet()
             .stream()
             .filter(map -> allowedList.contains(map.getKey()))
