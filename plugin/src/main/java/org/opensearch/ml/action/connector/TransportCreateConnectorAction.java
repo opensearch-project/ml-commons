@@ -93,7 +93,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         try {
             XContentBuilder builder = XContentFactory.jsonBuilder();
             mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
-            RestActionUtils.connectorValidationInManagedServiceWithCreateConnectorInput(mlCreateConnectorInput);
             Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
 

@@ -120,26 +120,19 @@ public interface RemoteConnectorExecutor {
             .threadPool()
             .getThreadContext()
             .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        String userName = User.parse(userStr).getName();
+        User user = User.parse(userStr);
         if (getModelRateLimiter() != null && !getModelRateLimiter().request()) {
             throw new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS);
-        } else if (getUserRateLimiterMap() != null
-            && getUserRateLimiterMap().get(userName) != null
-            && !getUserRateLimiterMap().get(userName).request()) {
+        } else if (user != null
+            && getUserRateLimiterMap() != null
+            && getUserRateLimiterMap().get(user.getName()) != null
+            && !getUserRateLimiterMap().get(user.getName()).request()) {
             throw new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS);
         } else {
-            // invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
-            invokeRemoteModelInManagedService(mlInput, parameters, payload, tensorOutputs);
+            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
         }
     }
 
     void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);
-
-    void invokeRemoteModelInManagedService(
-        MLInput mlInput,
-        Map<String, String> parameters,
-        String payload,
-        List<ModelTensors> tensorOutputs
-    );
 
 }

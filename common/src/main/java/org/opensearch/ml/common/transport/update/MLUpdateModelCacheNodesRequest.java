@@ -27,7 +27,7 @@ public class MLUpdateModelCacheNodesRequest extends BaseNodesRequest<MLUpdateMod
         this.modelId = modelId;
     }
 
-    public MLInPlaceUpdateModelNodesRequest(DiscoveryNode[] nodeIds, String modelId) {
+    public MLUpdateModelCacheNodesRequest(DiscoveryNode[] nodeIds, String modelId) {
         super(nodeIds);
         this.modelId = modelId;
     }

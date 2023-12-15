@@ -69,7 +69,6 @@ import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -851,7 +850,7 @@ public class MLModelManager {
     }
 
     @VisibleForTesting
-    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+    void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);

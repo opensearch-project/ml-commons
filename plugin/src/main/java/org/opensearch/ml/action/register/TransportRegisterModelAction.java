@@ -286,7 +286,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             log.error("Connector endpoint is required when creating a remote model without connector id!");
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
-        RestActionUtils.connectorValidationInManagedServiceWithRegisterModelInput(registerModelInput);
         // check if the connector url is trusted
         registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
     }

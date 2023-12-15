@@ -46,7 +46,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
@@ -131,13 +130,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                         if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
                             if (isSuperAdmin) {
-                                updateRemoteOrTextEmbeddingModel(
-                                    modelId,
-                                    updateModelInput,
-                                    mlModel,
-                                    user,
-                                    wrappedListener
-                                );
+                                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, wrappedListener);
                             } else {
                                 wrappedListener
                                     .onFailure(
@@ -151,13 +144,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             modelAccessControlHelper
                                 .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                                     if (hasPermission) {
-                                        updateRemoteOrTextEmbeddingModel(
-                                            modelId,
-                                            updateModelInput,
-                                            mlModel,
-                                            user,
-                                            wrappedListener
-                                        );
+                                        updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, wrappedListener);
                                     } else {
                                         wrappedListener
                                             .onFailure(
@@ -217,12 +204,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String newModelGroupId = (Strings.hasLength(updateModelInput.getModelGroupId())
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
-
-        String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
         boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
         // This flag is used to decide if we need to re-deploy the predictor(model) when performing the in-place update
         boolean isPredictorUpdate = (updateModelInput.getConnectorUpdateContent() != null)
-            || (relinkConnectorId != null)
+            || (newConnectorId != null)
             || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled());
         if (updateModelInput.getModelRateLimiterConfig() != null) {
             MLRateLimiter modelRateLimiterConfig = mlModel.getModelRateLimiterConfig();
@@ -398,10 +383,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {
                 String[] targetNodeIds = getAllNodes();
-                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(
-                    targetNodeIds,
-                    modelId
-                );
+                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
                 client
                     .update(
                         updateRequest,
@@ -443,10 +425,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {
                 String[] targetNodeIds = getAllNodes();
-                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(
-                    targetNodeIds,
-                    modelId
-                );
+                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
                 client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
                     client
                         .update(
