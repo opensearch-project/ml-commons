@@ -81,13 +81,11 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLUndeployModelsResponse> listener) {
-        log.info("Undeploying model: dhrubo");
         MLUndeployModelsRequest undeployModelsRequest = MLUndeployModelsRequest.fromActionRequest(request);
         String[] modelIds = undeployModelsRequest.getModelIds();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
 
         if (modelAccessControlHelper.isModelAccessControlEnabled()) {
-            log.info("checking model access control model: dhrubo");
             // Only allow user undeploy one model if model access control enabled.
             if (modelIds == null || modelIds.length != 1) {
                 throw new IllegalArgumentException("only support undeploy one model");
