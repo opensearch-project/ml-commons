@@ -147,10 +147,16 @@ import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetTracesAction;
+import org.opensearch.ml.memory.action.conversation.GetTracesTransportAction;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsTransportAction;
 import org.opensearch.ml.memory.action.conversation.SearchInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.SearchInteractionsTransportAction;
+import org.opensearch.ml.memory.action.conversation.UpdateConversationAction;
+import org.opensearch.ml.memory.action.conversation.UpdateConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;
+import org.opensearch.ml.memory.action.conversation.UpdateInteractionTransportAction;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -189,8 +195,11 @@ import org.opensearch.ml.rest.RestMemoryGetConversationAction;
 import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
 import org.opensearch.ml.rest.RestMemoryGetInteractionAction;
 import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
+import org.opensearch.ml.rest.RestMemoryGetTracesAction;
 import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
+import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
+import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -321,7 +330,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
                 new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
                 new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
-                new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class)
+                new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class),
+                new ActionHandler<>(UpdateConversationAction.INSTANCE, UpdateConversationTransportAction.class),
+                new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
+                new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class)
             );
     }
 
@@ -577,6 +589,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
+        RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
+        RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
+        RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -615,7 +630,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,
-                restGetInteractionAction
+                restGetInteractionAction,
+                restMemoryUpdateConversationAction,
+                restMemoryUpdateInteractionAction,
+                restMemoryGetTracesAction
             );
     }
 
