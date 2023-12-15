@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.action.models;
+package org.opensearch.ml.action.update;
 
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,17 +36,17 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelNodeRequest;
-import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelNodeResponse;
-import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelNodesRequest;
-import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelNodesResponse;
+import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodeRequest;
+import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodeResponse;
+import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodesRequest;
+import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.transport.TransportService;
 
 @RunWith(MockitoJUnitRunner.class)
-public class InPlaceUpdateModelTransportActionTests {
+public class UpdateModelCacheTransportActionTests {
 
     @Mock
     private TransportService transportService;
@@ -72,7 +72,7 @@ public class InPlaceUpdateModelTransportActionTests {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
-    private InPlaceUpdateModelTransportAction action;
+    private UpdateModelCacheTransportAction action;
 
     private DiscoveryNode localNode;
 
@@ -81,7 +81,7 @@ public class InPlaceUpdateModelTransportActionTests {
 
     @Before
     public void setUp() throws Exception {
-        action = new InPlaceUpdateModelTransportAction(
+        action = new UpdateModelCacheTransportAction(
             transportService,
             actionFilters,
             mlModelManager,
@@ -108,55 +108,55 @@ public class InPlaceUpdateModelTransportActionTests {
             ActionListener<String> listener = invocation.getArgument(2);
             listener.onResponse("successful");
             return null;
-        }).when(mlModelManager).inplaceUpdateModel(any(), any(Boolean.class), any());
+        }).when(mlModelManager).updateModelCache(any(), any(Boolean.class), any());
     }
 
     @Test
     public void testNewResponses() {
-        final MLInPlaceUpdateModelNodesRequest nodesRequest = new MLInPlaceUpdateModelNodesRequest(
+        final MLUpdateModelCacheNodesRequest nodesRequest = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
             "testModelId",
             true
         );
-        Map<String, String> modelInPlaceUpdateStatusMap = new HashMap<>();
-        modelInPlaceUpdateStatusMap.put("modelName:version", "response");
-        MLInPlaceUpdateModelNodeResponse response = new MLInPlaceUpdateModelNodeResponse(localNode, modelInPlaceUpdateStatusMap);
-        final List<MLInPlaceUpdateModelNodeResponse> responses = List.of(response);
+        Map<String, String> modelUpdateModelCacheStatusMap = new HashMap<>();
+        modelUpdateModelCacheStatusMap.put("modelName:version", "response");
+        MLUpdateModelCacheNodeResponse response = new MLUpdateModelCacheNodeResponse(localNode, modelUpdateModelCacheStatusMap);
+        final List<MLUpdateModelCacheNodeResponse> responses = List.of(response);
         final List<FailedNodeException> failures = new ArrayList<>();
-        MLInPlaceUpdateModelNodesResponse response1 = action.newResponse(nodesRequest, responses, failures);
+        MLUpdateModelCacheNodesResponse response1 = action.newResponse(nodesRequest, responses, failures);
         assertNotNull(response1);
     }
 
     @Test
     public void testNewNodeRequest() {
-        final MLInPlaceUpdateModelNodesRequest request = new MLInPlaceUpdateModelNodesRequest(
+        final MLUpdateModelCacheNodesRequest request = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
             "testModelId",
             true
         );
-        final MLInPlaceUpdateModelNodeRequest inPlaceUpdateModelNodeRequest = action.newNodeRequest(request);
-        assertNotNull(inPlaceUpdateModelNodeRequest);
+        final MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = action.newNodeRequest(request);
+        assertNotNull(updateModelCacheNodeRequest);
     }
 
     @Test
     public void testNewNodeStreamRequest() throws IOException {
-        Map<String, String> inPlaceUpdateModelStatus = new HashMap<>();
-        inPlaceUpdateModelStatus.put("modelId1", "response");
-        MLInPlaceUpdateModelNodeResponse response = new MLInPlaceUpdateModelNodeResponse(localNode, inPlaceUpdateModelStatus);
+        Map<String, String> updateModelCacheStatus = new HashMap<>();
+        updateModelCacheStatus.put("modelId1", "response");
+        MLUpdateModelCacheNodeResponse response = new MLUpdateModelCacheNodeResponse(localNode, updateModelCacheStatus);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        final MLInPlaceUpdateModelNodeResponse inPlaceUpdateModelNodeResponse = action.newNodeResponse(output.bytes().streamInput());
-        assertNotNull(inPlaceUpdateModelNodeResponse);
+        final MLUpdateModelCacheNodeResponse updateModelCacheNodeResponse = action.newNodeResponse(output.bytes().streamInput());
+        assertNotNull(updateModelCacheNodeResponse);
     }
 
     @Test
     public void testNodeOperation() {
-        final MLInPlaceUpdateModelNodesRequest request = new MLInPlaceUpdateModelNodesRequest(
+        final MLUpdateModelCacheNodesRequest request = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
             "testModelId",
             true
         );
-        final MLInPlaceUpdateModelNodeResponse response = action.nodeOperation(new MLInPlaceUpdateModelNodeRequest(request));
+        final MLUpdateModelCacheNodeResponse response = action.nodeOperation(new MLUpdateModelCacheNodeRequest(request));
         assertNotNull(response);
     }
 
@@ -166,13 +166,13 @@ public class InPlaceUpdateModelTransportActionTests {
             ActionListener<String> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Test exception"));
             return null;
-        }).when(mlModelManager).inplaceUpdateModel(any(), any(Boolean.class), any());
-        final MLInPlaceUpdateModelNodesRequest request = new MLInPlaceUpdateModelNodesRequest(
+        }).when(mlModelManager).updateModelCache(any(), any(Boolean.class), any());
+        final MLUpdateModelCacheNodesRequest request = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
             "testModelId",
             true
         );
-        final MLInPlaceUpdateModelNodeResponse response = action.nodeOperation(new MLInPlaceUpdateModelNodeRequest(request));
+        final MLUpdateModelCacheNodeResponse response = action.nodeOperation(new MLUpdateModelCacheNodeRequest(request));
         assertNotNull(response);
     }
 

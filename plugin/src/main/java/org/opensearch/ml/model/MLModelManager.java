@@ -907,7 +907,7 @@ public class MLModelManager {
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
-    public synchronized void inplaceUpdateModel(String modelId, boolean isPredictorUpdate, ActionListener<String> listener) {
+    public synchronized void updateModelCache(String modelId, boolean isPredictorUpdate, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
             getModel(modelId, ActionListener.wrap(mlModel -> {
