@@ -34,7 +34,8 @@ public class AgentTool extends AbstractTool {
 
     private String agentId;
 
-    private static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
+    @VisibleForTesting
+    static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
 
     public AgentTool(Client client, String agentId) {
         super(TYPE, DEFAULT_DESCRIPTION);
