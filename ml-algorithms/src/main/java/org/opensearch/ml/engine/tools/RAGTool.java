@@ -54,7 +54,8 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(RAGTool.TYPE)
 public class RAGTool extends AbstractRetrieverTool {
     public static final String TYPE = "RAGTool";
-    private static String DEFAULT_DESCRIPTION = "Use this tool to retrieve helpful information to optimize the output of the large language model to answer questions.";
+    private static String DEFAULT_DESCRIPTION =
+        "Use this tool to retrieve helpful information to optimize the output of the large language model to answer questions.";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
     public static final String EMBEDDING_FIELD = "embedding_field";
