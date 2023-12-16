@@ -19,9 +19,9 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -38,15 +38,19 @@ public class MLModelTool implements Tool {
     @Setter
     @Getter
     private String name = TYPE;
-    private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
+    @VisibleForTesting
+    static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
+    @Getter
     private Client client;
+    @Getter
     private String modelId;
     @Setter
     private Parser inputParser;
     @Setter
+    @Getter
     private Parser outputParser;
 
     public MLModelTool(Client client, String modelId) {
@@ -66,7 +70,7 @@ public class MLModelTool implements Tool {
             modelId,
             MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build()
         );
-        client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.<MLTaskResponse>wrap(r -> {
+        client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
             listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
