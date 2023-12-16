@@ -13,8 +13,8 @@ public class BaseMessageTest {
 
     @Test
     public void testToString() {
-        BaseMessage baseMessage = new BaseMessage("test", "test");
-        Assert.assertEquals("test: test", baseMessage.toString());
+        BaseMessage message = new BaseMessage("test", "test");
+        Assert.assertEquals("test: test", message.toString());
     }
 
     @Test
