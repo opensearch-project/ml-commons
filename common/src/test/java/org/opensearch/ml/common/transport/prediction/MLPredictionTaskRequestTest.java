@@ -16,6 +16,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.dataframe.ColumnType;
@@ -53,9 +54,11 @@ public class MLPredictionTaskRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
+        User user = User.parse("admin|role-1|all_access");
 
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
             .mlInput(mlInput)
+            .user(user)
             .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
@@ -73,13 +76,18 @@ public class MLPredictionTaskRequestTest {
         assertEquals(1, dataFrame.getRow(0).size());
         assertEquals(2.00, dataFrame.getRow(0).getValue(0).getValue());
 
+        User userExpect = request.getUser();
+        assertEquals(user.getName(), userExpect.getName());
+
         assertNull(request.getModelId());
     }
 
     @Test
     public void validate_Success() {
+        User user = User.parse("admin|role-1|all_access");
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
             .mlInput(mlInput)
+            .user(user)
             .build();
 
         assertNull(request.validate());
@@ -133,8 +141,10 @@ public class MLPredictionTaskRequestTest {
     }
 
     private void fromActionRequest_Success_WithNonMLPredictionTaskRequest(MLInput mlInput) {
+        User user = User.parse("admin|role-1|all_access");
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
                 .mlInput(mlInput)
+                .user(user)
                 .build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -151,6 +161,7 @@ public class MLPredictionTaskRequestTest {
         assertNotSame(result, request);
         assertEquals(request.getMlInput().getAlgorithm(), result.getMlInput().getAlgorithm());
         assertEquals(request.getMlInput().getInputDataset().getInputDataType(), result.getMlInput().getInputDataset().getInputDataType());
+        assertEquals(request.getUser().getName(), request.getUser().getName());
     }
 
     @Test(expected = UncheckedIOException.class)

@@ -24,7 +24,8 @@ public enum FunctionName {
     SPARSE_ENCODING,
     SPARSE_TOKENIZE,
     METRICS_CORRELATION,
-    REMOTE;
+    REMOTE,
+    AGENT;
 
     public static FunctionName from(String value) {
         try {
