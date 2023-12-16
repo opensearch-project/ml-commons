@@ -36,6 +36,8 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
+import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
@@ -90,6 +92,8 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
+import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -161,12 +165,14 @@ import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
+import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
+import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
@@ -331,6 +337,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
                 new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
                 new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class),
+                new ActionHandler<>(MLAgentGetAction.INSTANCE, GetAgentTransportAction.class),
+                new ActionHandler<>(MLAgentDeleteAction.INSTANCE, DeleteAgentTransportAction.class),
                 new ActionHandler<>(UpdateConversationAction.INSTANCE, UpdateConversationTransportAction.class),
                 new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
                 new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class)
@@ -589,6 +597,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
+        RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction();
+        RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction();
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
@@ -631,6 +641,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restSearchInteractionsAction,
                 restGetConversationAction,
                 restGetInteractionAction,
+                restMLGetAgentAction,
+                restMLDeleteAgentAction,
                 restMemoryUpdateConversationAction,
                 restMemoryUpdateInteractionAction,
                 restMemoryGetTracesAction
