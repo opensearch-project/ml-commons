@@ -45,6 +45,10 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         this.user = user;
     }
 
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput) {
+        this(modelId, mlInput, true, null);
+    }
+
     public MLPredictionTaskRequest(String modelId, MLInput mlInput, User user) {
         this(modelId, mlInput, true, user);
     }
