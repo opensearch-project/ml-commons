@@ -63,7 +63,7 @@ public class MLMemoryManagerTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        memoryManager = new MLMemoryManager(client, clusterService, conversationMetaIndex);
+        memoryManager = new MLMemoryManager(client);
         doNothing().when(client).execute(any(), any(), any());
         doNothing().when(client).update(any(), any());
         when(client.admin()).thenReturn(adminClient);
@@ -101,12 +101,6 @@ public class MLMemoryManagerTest {
     public void getFinalInteractions() {
         ActionListener<List<Interaction>> actionListener = mock(ActionListener.class);
         memoryManager.getFinalInteractions("test", 1, actionListener);
-    }
-
-    @Test
-    public void innerGetFinalInteractions() {
-        ActionListener<List<Interaction>> actionListener = mock(ActionListener.class);
-        memoryManager.innerGetFinalInteractions("test", 1, actionListener);
     }
 
     @Test
