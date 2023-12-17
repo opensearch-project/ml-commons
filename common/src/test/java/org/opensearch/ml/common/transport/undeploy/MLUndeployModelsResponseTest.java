@@ -6,7 +6,9 @@
 package org.opensearch.ml.common.transport.undeploy;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
@@ -21,6 +23,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,14 +31,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.*;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 public class MLUndeployModelsResponseTest {
 
     MLUndeployModelNodesResponse undeployModelNodesResponse;
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
@@ -81,7 +84,7 @@ public class MLUndeployModelsResponseTest {
     }
 
     @Test
-    public void fromActionResponse_Sucess() {
+    public void fromActionResponse_Success() {
         MLUndeployModelsResponse undeployModelsResponse = new MLUndeployModelsResponse(undeployModelNodesResponse);
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -93,5 +96,26 @@ public class MLUndeployModelsResponseTest {
         assertNotSame(undeployModelsResponse, parsedResponse);
         assertEquals(1, parsedResponse.getResponse().getNodes().size());
         assertEquals("test_node_id", parsedResponse.getResponse().getNodes().get(0).getNode().getId());
+    }
+
+    @Test
+    public void fromActionResponse_Success_MLUndeployModelsResponse() {
+        MLUndeployModelsResponse undeployModelsResponse = new MLUndeployModelsResponse(undeployModelNodesResponse);
+        MLUndeployModelsResponse parsedResponse = MLUndeployModelsResponse.fromActionResponse(undeployModelsResponse);
+        assertSame(undeployModelsResponse, parsedResponse);
+    }
+
+    @Test
+    public void fromActionResponse_Exception() {
+        exceptionRule.expect(UncheckedIOException.class);
+        exceptionRule.expectMessage("Failed to parse ActionResponse into MLUndeployModelsResponse");
+        MLUndeployModelsResponse undeployModelsResponse = new MLUndeployModelsResponse(undeployModelNodesResponse);
+        ActionResponse actionResponse = new ActionResponse() {
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                throw new IOException();
+            }
+        };
+        MLUndeployModelsResponse.fromActionResponse(actionResponse);
     }
 }

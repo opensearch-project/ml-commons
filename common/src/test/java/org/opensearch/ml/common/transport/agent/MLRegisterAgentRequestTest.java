@@ -17,13 +17,10 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class MLRegisterAgentRequestTest {
 
@@ -88,4 +85,29 @@ public class MLRegisterAgentRequestTest {
         assertEquals(registerAgentRequest.getMlAgent(), parsedRequest.getMlAgent());
     }
 
+    @Test
+    public void fromActionRequest_Success_MLRegisterAgentRequest() {
+        MLRegisterAgentRequest registerAgentRequest = new MLRegisterAgentRequest(mlAgent);
+        MLRegisterAgentRequest parsedRequest = MLRegisterAgentRequest.fromActionRequest(registerAgentRequest);
+        assertSame(registerAgentRequest, parsedRequest);
+    }
+
+    @Test
+    public void fromActionRequest_Exception() {
+        exceptionRule.expect(UncheckedIOException.class);
+        exceptionRule.expectMessage("Failed to parse ActionRequest into MLRegisterAgentRequest");
+        MLRegisterAgentRequest registerAgentRequest = new MLRegisterAgentRequest(mlAgent);
+        ActionRequest actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                throw new IOException();
+            }
+        };
+        MLRegisterAgentRequest.fromActionRequest(actionRequest);
+    }
 }

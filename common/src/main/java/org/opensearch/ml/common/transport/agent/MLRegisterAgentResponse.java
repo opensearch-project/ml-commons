@@ -59,7 +59,7 @@ public class MLRegisterAgentResponse extends ActionResponse implements ToXConten
                 return new MLRegisterAgentResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionResponse into MLRegisterAgentResponse", e);
+            throw new UncheckedIOException("Failed to parse ActionResponse into MLRegisterAgentResponse", e);
         }
     }
 }

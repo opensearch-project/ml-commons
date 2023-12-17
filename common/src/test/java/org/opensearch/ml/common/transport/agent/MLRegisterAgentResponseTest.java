@@ -18,10 +18,9 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.*;
 
 public class MLRegisterAgentResponseTest {
     String agentId;
@@ -72,4 +71,27 @@ public class MLRegisterAgentResponseTest {
         assertNotSame(registerAgentResponse, parsedResponse);
         assertEquals(registerAgentResponse.getAgentId(), parsedResponse.getAgentId());
     }
+
+    @Test
+    public void fromActionResponse_Success_MLRegisterAgentResponse() {
+        MLRegisterAgentResponse registerAgentResponse = new MLRegisterAgentResponse(agentId);
+        MLRegisterAgentResponse parsedResponse = MLRegisterAgentResponse.fromActionResponse(registerAgentResponse);
+        assertSame(registerAgentResponse, parsedResponse);
+    }
+
+    @Test
+    public void fromActionResponse_Exception() {
+        exceptionRule.expect(UncheckedIOException.class);
+        exceptionRule.expectMessage("Failed to parse ActionResponse into MLRegisterAgentResponse");
+        MLRegisterAgentResponse registerAgentResponse = new MLRegisterAgentResponse(agentId);
+        ActionResponse actionResponse = new ActionResponse() {
+
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                throw new IOException();
+            }
+        };
+        MLRegisterAgentResponse.fromActionResponse(actionResponse);
+    }
+
 }

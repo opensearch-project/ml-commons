@@ -65,9 +65,6 @@ public class MLAgent implements ToXContentObject, Writeable {
                    Instant createdTime,
                    Instant lastUpdateTime,
                    String appType) {
-        if (name == null) {
-            throw new IllegalArgumentException("agent name is null");
-        }
         this.name = name;
         this.type = type;
         this.description = description;
@@ -78,6 +75,24 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
         this.appType = appType;
+        validate();
+    }
+
+    private void validate() {
+        if (name == null) {
+            throw new IllegalArgumentException("agent name is null");
+        }
+        Set<String> toolNames = new HashSet<>();
+        if (tools != null) {
+            for (MLToolSpec toolSpec : tools) {
+                String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
+                if (toolNames.contains(toolName)) {
+                    throw new IllegalArgumentException("Duplicate tool defined: " + toolName);
+                } else {
+                    toolNames.add(toolName);
+                }
+            }
+        }
     }
 
     public MLAgent(StreamInput input) throws IOException{
@@ -103,17 +118,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         createdTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
         appType = input.readOptionalString();
-        if (!"flow".equals(type)) {
-            Set<String> toolNames = new HashSet<>();
-            if (tools != null) {
-                for (MLToolSpec toolSpec : tools) {
-                    String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
-                    if (toolNames.contains(toolName)) {
-                        throw new IllegalArgumentException("Tool has duplicate name or alias: " + toolName);
-                    }
-                }
-            }
-        }
+        validate();
     }
 
     public void writeTo(StreamOutput out) throws IOException {

@@ -70,7 +70,7 @@ public class MLRegisterAgentRequest extends ActionRequest {
                 return new MLRegisterAgentRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLRegisterModelRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLRegisterAgentRequest", e);
         }
 
     }

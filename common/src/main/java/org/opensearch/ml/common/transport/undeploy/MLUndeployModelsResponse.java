@@ -67,7 +67,7 @@ public class MLUndeployModelsResponse extends ActionResponse implements ToXConte
                 return new MLUndeployModelsResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionResponse into MLUndeployModelsResponse", e);
+            throw new UncheckedIOException("Failed to parse ActionResponse into MLUndeployModelsResponse", e);
         }
     }
 }
