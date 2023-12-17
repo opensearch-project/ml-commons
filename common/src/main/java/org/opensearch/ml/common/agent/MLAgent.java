@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agent;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -26,7 +27,7 @@ import java.util.Set;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
-
+@EqualsAndHashCode
 @Getter
 public class MLAgent implements ToXContentObject, Writeable {
     public static final String AGENT_NAME_FIELD = "name";
@@ -64,9 +65,6 @@ public class MLAgent implements ToXContentObject, Writeable {
                    Instant createdTime,
                    Instant lastUpdateTime,
                    String appType) {
-        if (name == null) {
-            throw new IllegalArgumentException("agent name is null");
-        }
         this.name = name;
         this.type = type;
         this.description = description;
@@ -77,6 +75,24 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
         this.appType = appType;
+        validate();
+    }
+
+    private void validate() {
+        if (name == null) {
+            throw new IllegalArgumentException("agent name is null");
+        }
+        Set<String> toolNames = new HashSet<>();
+        if (tools != null) {
+            for (MLToolSpec toolSpec : tools) {
+                String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
+                if (toolNames.contains(toolName)) {
+                    throw new IllegalArgumentException("Duplicate tool defined: " + toolName);
+                } else {
+                    toolNames.add(toolName);
+                }
+            }
+        }
     }
 
     public MLAgent(StreamInput input) throws IOException{
@@ -99,18 +115,10 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             memory = new MLMemorySpec(input);
         }
-        createdTime = input.readInstant();
-        lastUpdateTime = input.readInstant();
-        appType = input.readString();
-        if (!"flow".equals(type)) {
-            Set<String> toolNames = new HashSet<>();
-            for (MLToolSpec toolSpec : tools) {
-                String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
-                if (toolNames.contains(toolName)) {
-                    throw new IllegalArgumentException("Tool has duplicate name or alias: " + toolName);
-                }
-            }
-        }
+        createdTime = input.readOptionalInstant();
+        lastUpdateTime = input.readOptionalInstant();
+        appType = input.readOptionalString();
+        validate();
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -144,9 +152,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeInstant(createdTime);
-        out.writeInstant(lastUpdateTime);
-        out.writeString(appType);
+        out.writeOptionalInstant(createdTime);
+        out.writeOptionalInstant(lastUpdateTime);
+        out.writeOptionalString(appType);
     }
 
     @Override
