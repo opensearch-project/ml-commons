@@ -101,6 +101,11 @@ public class MetricsCorrelation extends DLModelExecute {
         this.clusterService = clusterService;
     }
 
+    @Override
+    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) throws ExecuteException {
+
+    }
+
     /**
      * @param input input data for metrics correlation. This input expects a list of float array (List<float[]>)
      * @return MetricsCorrelationOutput output of the metrics correlation algorithm is a list of objects. Each object

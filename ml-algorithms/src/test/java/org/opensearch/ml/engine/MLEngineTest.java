@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
@@ -23,6 +24,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
@@ -40,6 +42,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -265,8 +268,11 @@ public class MLEngineTest {
     @Test
     public void executeLocalSampleCalculator() throws Exception {
         Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
-        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) mlEngine.execute(input);
-        assertEquals(3.0, output.getResult(), 1e-5);
+        ActionListener<Output> listener = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(3.0, output.getResult(), 1e-5);
+        }, e -> { fail("Test failed"); });
+        mlEngine.execute(input, listener);
     }
 
     @Test
@@ -289,7 +295,11 @@ public class MLEngineTest {
                 return null;
             }
         };
-        mlEngine.execute(input);
+        ActionListener<Output> listener = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(3.0, output.getResult(), 1e-5);
+        }, e -> { fail("Test failed"); });
+        mlEngine.execute(input, listener);
     }
 
     private MLModel trainKMeansModel() {
@@ -327,4 +337,56 @@ public class MLEngineTest {
 
         return mlEngine.train(mlInput);
     }
+
+    @Test
+    public void getRegisterModelPath_ReturnsCorrectPath() {
+        String modelId = "testModel";
+        String modelName = "myModel";
+        String version = "1.0";
+
+        Path basePath = mlEngine.getMlCachePath().getParent(); // Get the actual base path used in the setup
+        Path expectedPath = basePath
+            .resolve("ml_cache")
+            .resolve("models_cache")
+            .resolve(MLEngine.REGISTER_MODEL_FOLDER)
+            .resolve(modelId)
+            .resolve(version)
+            .resolve(modelName);
+        Path actualPath = mlEngine.getRegisterModelPath(modelId, modelName, version);
+
+        assertEquals(expectedPath.toString(), actualPath.toString());
+    }
+
+    @Test
+    public void getDeployModelPath_ReturnsCorrectPath() {
+        String modelId = "deployedModel";
+
+        // Use the actual base path from the mlEngine instance
+        Path basePath = mlEngine.getMlCachePath().getParent();
+        Path expectedPath = basePath.resolve("ml_cache").resolve("models_cache").resolve(MLEngine.DEPLOY_MODEL_FOLDER).resolve(modelId);
+        Path actualPath = mlEngine.getDeployModelPath(modelId);
+
+        assertEquals(expectedPath.toString(), actualPath.toString());
+    }
+
+    @Test
+    public void getModelCachePath_ReturnsCorrectPath() {
+        String modelId = "cachedModel";
+        String modelName = "modelName";
+        String version = "1.2";
+
+        // Use the actual base path from the mlEngine instance
+        Path basePath = mlEngine.getMlCachePath().getParent();
+        Path expectedPath = basePath
+            .resolve("ml_cache")
+            .resolve("models_cache")
+            .resolve("models")
+            .resolve(modelId)
+            .resolve(version)
+            .resolve(modelName);
+        Path actualPath = mlEngine.getModelCachePath(modelId, modelName, version);
+
+        assertEquals(expectedPath.toString(), actualPath.toString());
+    }
+
 }
