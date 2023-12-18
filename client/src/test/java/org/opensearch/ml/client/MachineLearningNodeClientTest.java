@@ -6,6 +6,7 @@
 package org.opensearch.ml.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,6 +45,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.ClusterName;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -58,6 +60,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.Input;
@@ -74,6 +77,13 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTen
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
+import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -109,6 +119,10 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -158,13 +172,25 @@ public class MachineLearningNodeClientTest {
     ActionListener<MLDeployModelResponse> deployModelActionListener;
 
     @Mock
+    ActionListener<MLUndeployModelsResponse> undeployModelsActionListener;
+
+    @Mock
     ActionListener<MLCreateConnectorResponse> createConnectorActionListener;
+
+    @Mock
+    ActionListener<DeleteResponse> deleteConnectorActionListener;
 
     @Mock
     ActionListener<MLRegisterModelGroupResponse> registerModelGroupResponseActionListener;
 
     @Mock
     ActionListener<MLExecuteTaskResponse> executeTaskResponseActionListener;
+
+    @Mock
+    ActionListener<MLRegisterAgentResponse> registerAgentResponseActionListener;
+
+    @Mock
+    ActionListener<DeleteResponse> deleteAgentActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -650,6 +676,33 @@ public class MachineLearningNodeClientTest {
     }
 
     @Test
+    public void undeploy() {
+        ClusterName clusterName = new ClusterName("clusterName");
+        String[] modelIds = new String[] { "modelId" };
+        String[] nodeIds = new String[] { "nodeId" };
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelsResponse> actionListener = invocation.getArgument(2);
+            MLUndeployModelNodesResponse mlUndeployModelNodesResponse = new MLUndeployModelNodesResponse(
+                clusterName,
+                Collections.emptyList(),
+                Collections.emptyList()
+            );
+            MLUndeployModelsResponse output = new MLUndeployModelsResponse(mlUndeployModelNodesResponse);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLUndeployModelsAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLUndeployModelsResponse> argumentCaptor = ArgumentCaptor.forClass(MLUndeployModelsResponse.class);
+        machineLearningNodeClient.undeploy(modelIds, nodeIds, undeployModelsActionListener);
+
+        verify(client).execute(eq(MLUndeployModelsAction.INSTANCE), isA(MLUndeployModelsRequest.class), any());
+        verify(undeployModelsActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(clusterName, (argumentCaptor.getValue()).getResponse().getClusterName());
+        assertTrue((argumentCaptor.getValue()).getResponse().getNodes().isEmpty());
+        assertFalse((argumentCaptor.getValue()).getResponse().hasFailures());
+    }
+
+    @Test
     public void createConnector() {
 
         String connectorId = "connectorId";
@@ -767,6 +820,71 @@ public class MachineLearningNodeClientTest {
         verify(executeTaskResponseActionListener).onResponse(argumentCaptor.capture());
         assertEquals(FunctionName.METRICS_CORRELATION, argumentCaptor.getValue().getFunctionName());
         assertTrue(argumentCaptor.getValue().getOutput() instanceof MetricsCorrelationOutput);
+    }
+
+    @Test
+    public void deleteConnector() {
+
+        String connectorId = "connectorId";
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            DeleteResponse output = new DeleteResponse(shardId, connectorId, 1, 1, 1, true);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLConnectorDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+
+        machineLearningNodeClient.deleteConnector(connectorId, deleteConnectorActionListener);
+
+        verify(client).execute(eq(MLConnectorDeleteAction.INSTANCE), isA(MLConnectorDeleteRequest.class), any());
+        verify(deleteConnectorActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(connectorId, (argumentCaptor.getValue()).getId());
+    }
+
+    @Test
+    public void testRegisterAgent() {
+        String agentId = "agentId";
+
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterAgentResponse> actionListener = invocation.getArgument(2);
+            MLRegisterAgentResponse output = new MLRegisterAgentResponse(agentId);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLRegisterAgentAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        MLAgent mlAgent = MLAgent.builder().name("Agent name").build();
+
+        machineLearningNodeClient.registerAgent(mlAgent, registerAgentResponseActionListener);
+
+        verify(client).execute(eq(MLRegisterAgentAction.INSTANCE), isA(MLRegisterAgentRequest.class), any());
+        verify(registerAgentResponseActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(agentId, (argumentCaptor.getValue()).getAgentId());
+    }
+
+    @Test
+    public void deleteAgent() {
+
+        String agentId = "agentId";
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            DeleteResponse output = new DeleteResponse(shardId, agentId, 1, 1, 1, true);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLAgentDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+
+        machineLearningNodeClient.deleteAgent(agentId, deleteAgentActionListener);
+
+        verify(client).execute(eq(MLAgentDeleteAction.INSTANCE), isA(MLAgentDeleteRequest.class), any());
+        verify(deleteAgentActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(agentId, (argumentCaptor.getValue()).getId());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
