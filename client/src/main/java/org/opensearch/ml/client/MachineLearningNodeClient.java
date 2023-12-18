@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.input.InputHelper.convertArgumentToMLPara
 import static org.opensearch.ml.common.input.InputHelper.getAction;
 import static org.opensearch.ml.common.input.InputHelper.getFunctionName;
 
-import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -27,12 +26,19 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.ToolMetadata;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
+import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
+import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -74,6 +80,9 @@ import org.opensearch.ml.common.transport.tools.MLToolsListResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -90,11 +99,11 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         validateMLInput(mlInput, true);
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
-            .builder()
-            .mlInput(mlInput)
-            .modelId(modelId)
-            .dispatchTask(true)
-            .build();
+                .builder()
+                .mlInput(mlInput)
+                .modelId(modelId)
+                .dispatchTask(true)
+                .build();
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, getMlPredictionTaskResponseActionListener(listener));
     }
 
@@ -110,11 +119,11 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
         MLTrainingTaskRequest trainingTaskRequest = MLTrainingTaskRequest
-            .builder()
-            .mlInput(mlInput)
-            .async(asyncTask)
-            .dispatchTask(true)
-            .build();
+                .builder()
+                .mlInput(mlInput)
+                .async(asyncTask)
+                .dispatchTask(true)
+                .build();
 
         client.execute(MLTrainingTaskAction.INSTANCE, trainingTaskRequest, getMlPredictionTaskResponseActionListener(listener));
     }
@@ -178,25 +187,25 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         client
-            .execute(
-                MLModelSearchAction.INSTANCE,
-                searchRequest,
-                ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
-            );
+                .execute(
+                        MLModelSearchAction.INSTANCE,
+                        searchRequest,
+                        ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
+                );
     }
 
     @Override
     public void registerModelGroup(
-        MLRegisterModelGroupInput mlRegisterModelGroupInput,
-        ActionListener<MLRegisterModelGroupResponse> listener
+            MLRegisterModelGroupInput mlRegisterModelGroupInput,
+            ActionListener<MLRegisterModelGroupResponse> listener
     ) {
         MLRegisterModelGroupRequest mlRegisterModelGroupRequest = new MLRegisterModelGroupRequest(mlRegisterModelGroupInput);
         client
-            .execute(
-                MLRegisterModelGroupAction.INSTANCE,
-                mlRegisterModelGroupRequest,
-                getMlRegisterModelGroupResponseActionListener(listener)
-            );
+                .execute(
+                        MLRegisterModelGroupAction.INSTANCE,
+                        mlRegisterModelGroupRequest,
+                        getMlRegisterModelGroupResponseActionListener(listener)
+                );
     }
 
     /**
@@ -231,11 +240,11 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         client
-            .execute(
-                MLTaskSearchAction.INSTANCE,
-                searchRequest,
-                ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
-            );
+                .execute(
+                        MLTaskSearchAction.INSTANCE,
+                        searchRequest,
+                        ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
+                );
     }
 
     @Override
@@ -251,9 +260,37 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+        MLUndeployModelsRequest undeployModelRequest = new MLUndeployModelsRequest(modelIds, nodeIds);
+        client.execute(MLUndeployModelsAction.INSTANCE, undeployModelRequest, getMlUndeployModelsResponseActionListener(listener));
+    }
+
+    @Override
     public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
         client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, getMlCreateConnectorResponseActionListener(listener));
+    }
+
+    @Override
+    public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
+        MLConnectorDeleteRequest connectorDeleteRequest = new MLConnectorDeleteRequest(connectorId);
+        client.execute(MLConnectorDeleteAction.INSTANCE, connectorDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
+        MLRegisterAgentRequest mlRegisterAgentRequest = MLRegisterAgentRequest.builder().mlAgent(mlAgent).build();
+        client.execute(MLRegisterAgentAction.INSTANCE, mlRegisterAgentRequest, getMLRegisterAgentResponseActionListener(listener));
+    }
+
+    @Override
+    public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+        MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
     }
 
     @Override
@@ -292,9 +329,19 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         return actionListener;
     }
 
+    private ActionListener<MLRegisterAgentResponse> getMLRegisterAgentResponseActionListener(
+            ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        ActionListener<MLRegisterAgentResponse> actionListener = wrapActionListener(listener, res -> {
+            MLRegisterAgentResponse mlRegisterAgentResponse = MLRegisterAgentResponse.fromActionResponse(res);
+            return mlRegisterAgentResponse;
+        });
+        return actionListener;
+    }
+
     private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {
         ActionListener<MLTaskGetResponse> internalListener = ActionListener
-            .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
+                .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
         ActionListener<MLTaskGetResponse> actionListener = wrapActionListener(internalListener, response -> {
             MLTaskGetResponse getResponse = MLTaskGetResponse.fromActionResponse(response);
             return getResponse;
@@ -310,8 +357,18 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         return actionListener;
     }
 
+    private ActionListener<MLUndeployModelsResponse> getMlUndeployModelsResponseActionListener(
+            ActionListener<MLUndeployModelsResponse> listener
+    ) {
+        ActionListener<MLUndeployModelsResponse> actionListener = wrapActionListener(listener, response -> {
+            MLUndeployModelsResponse deployModelResponse = MLUndeployModelsResponse.fromActionResponse(response);
+            return deployModelResponse;
+        });
+        return actionListener;
+    }
+
     private ActionListener<MLCreateConnectorResponse> getMlCreateConnectorResponseActionListener(
-        ActionListener<MLCreateConnectorResponse> listener
+            ActionListener<MLCreateConnectorResponse> listener
     ) {
         ActionListener<MLCreateConnectorResponse> actionListener = wrapActionListener(listener, response -> {
             MLCreateConnectorResponse createConnectorResponse = MLCreateConnectorResponse.fromActionResponse(response);
@@ -321,7 +378,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLRegisterModelGroupResponse> getMlRegisterModelGroupResponseActionListener(
-        ActionListener<MLRegisterModelGroupResponse> listener
+            ActionListener<MLRegisterModelGroupResponse> listener
     ) {
         ActionListener<MLRegisterModelGroupResponse> actionListener = wrapActionListener(listener, response -> {
             MLRegisterModelGroupResponse registerModelGroupResponse = MLRegisterModelGroupResponse.fromActionResponse(response);
@@ -342,7 +399,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLRegisterModelResponse> getMLRegisterModelResponseActionListener(
-        ActionListener<MLRegisterModelResponse> listener
+            ActionListener<MLRegisterModelResponse> listener
     ) {
         ActionListener<MLRegisterModelResponse> actionListener = wrapActionListener(listener, res -> {
             MLRegisterModelResponse registerModelResponse = MLRegisterModelResponse.fromActionResponse(res);
@@ -352,8 +409,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private <T extends ActionResponse> ActionListener<T> wrapActionListener(
-        final ActionListener<T> listener,
-        final Function<ActionResponse, T> recreate
+            final ActionListener<T> listener,
+            final Function<ActionResponse, T> recreate
     ) {
         ActionListener<T> actionListener = ActionListener.wrap(r -> {
             listener.onResponse(recreate.apply(r));
