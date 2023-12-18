@@ -8,9 +8,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MEMORY_ID;
 
 import java.util.Arrays;
 import java.util.HashMap;

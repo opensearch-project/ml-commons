@@ -69,7 +69,6 @@ import lombok.extern.log4j.Log4j2;
 public class MLChatAgentRunner {
 
     public static final String SESSION_ID = "session_id";
-    public static final String MEMORY_ID = "memory_id";
     public static final String PROMPT_PREFIX = "prompt_prefix";
     public static final String LLM_TOOL_PROMPT_PREFIX = "LanguageModelTool.prompt_prefix";
     public static final String LLM_TOOL_PROMPT_SUFFIX = "LanguageModelTool.prompt_suffix";
