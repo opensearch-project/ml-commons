@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.indices;
+package org.opensearch.ml.engine.indices;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,19 +34,6 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLInputDatasetHandler {
     Client client;
-
-    // /**
-    // * Retrieve DataFrame from DataFrameInputDataset
-    // * @param mlInputDataset MLInputDataset
-    // * @return DataFrame
-    // */
-    // public DataFrame parseDataFrameInput(MLInputDataset mlInputDataset) {
-    // if (!mlInputDataset.getInputDataType().equals(MLInputDataType.DATA_FRAME)) {
-    // throw new IllegalArgumentException("Input dataset is not DATA_FRAME type.");
-    // }
-    // DataFrameInputDataset inputDataset = (DataFrameInputDataset) mlInputDataset;
-    // return inputDataset.getDataFrame();
-    // }
 
     /**
      * Create DataFrame based on given search query
