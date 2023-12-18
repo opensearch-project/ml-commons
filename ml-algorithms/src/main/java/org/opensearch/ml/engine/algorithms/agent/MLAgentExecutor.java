@@ -143,7 +143,9 @@ public class MLAgentExecutor implements Executable {
                                                 GetInteractionAction.INSTANCE,
                                                 new GetInteractionRequest(memoryId, regenerateInteractionId),
                                                 ActionListener.wrap(interactionRes -> {
-                                                    inputDataSet.getParameters().computeIfAbsent(QUESTION, (key) -> interactionRes.getInteraction().getInput());
+                                                    inputDataSet
+                                                        .getParameters()
+                                                        .computeIfAbsent(QUESTION, (key) -> interactionRes.getInteraction().getInput());
                                                     saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
                                                 }, e -> {
                                                     log.error("Failed to get existing interaction for regeneration", e);
@@ -176,7 +178,6 @@ public class MLAgentExecutor implements Executable {
         }
 
     }
-
 
     /**
      * save root interaction and start execute the agent
