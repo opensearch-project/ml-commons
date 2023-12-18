@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.core.action.ActionListener.wrap;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
@@ -15,12 +14,10 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -36,8 +33,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.Output;
@@ -53,7 +48,6 @@ import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
-import org.opensearch.ml.memory.action.conversation.GetInteractionResponse;
 
 import com.google.gson.Gson;
 
@@ -127,7 +121,7 @@ public class MLAgentExecutor implements Executable {
                             String question = inputDataSet.getParameters().get(QUESTION);
 
                             if (memoryId == null && regenerateInteractionId != null) {
-                                listener.onFailure(new MLValidationException("Memory id must provide for regenerate"));
+                                throw new IllegalArgumentException("A memory ID must be provided to regenerate.");
                             }
 
                             if (memorySpec != null
@@ -136,38 +130,29 @@ public class MLAgentExecutor implements Executable {
                                 && (memoryId == null || parentInteractionId == null)) {
                                 ConversationIndexMemory.Factory conversationIndexMemoryFactory =
                                     (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
-                                conversationIndexMemoryFactory.create(question, memoryId, appType, wrap(memory -> {
+                                conversationIndexMemoryFactory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
                                     inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
 
-                                    // get regenerate interaction question
-                                    Optional.ofNullable(regenerateInteractionId).ifPresent(interactionId -> {
-                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                                        getQuestionFromInteraction(memoryId, interactionId, inputDataSet);
-                                    });
+                                    ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
 
-                                    // Create root interaction ID
-                                    ConversationIndexMessage msg = ConversationIndexMessage
-                                        .conversationIndexMessageBuilder()
-                                        .type(appType)
-                                        // regenerate will use question from original interaction
-                                        .question(inputDataSet.getParameters().get(QUESTION))
-                                        .response("")
-                                        .finalAnswer(true)
-                                        .sessionId(memory.getConversationId())
-                                        .build();
-                                    memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
-                                        log.info("Created parent interaction ID: " + interaction.getId());
-                                        inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
-                                        ActionListener<Object> agentActionListener = createAgentActionListener(
-                                            listener,
-                                            outputs,
-                                            modelTensors
-                                        );
-                                        executeAgent(inputDataSet, mlAgent, agentActionListener);
-                                    }, ex -> {
-                                        log.error("Failed to create parent interaction", ex);
-                                        listener.onFailure(ex);
-                                    }));
+                                    // get question for regenerate
+                                    if (regenerateInteractionId != null) {
+                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
+                                        client
+                                            .execute(
+                                                GetInteractionAction.INSTANCE,
+                                                new GetInteractionRequest(memoryId, regenerateInteractionId),
+                                                ActionListener.wrap(interactionRes -> {
+                                                    inputDataSet.getParameters().computeIfAbsent(QUESTION, (key) -> interactionRes.getInteraction().getInput());
+                                                    saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
+                                                }, e -> {
+                                                    log.error("Failed to get existing interaction for regeneration", e);
+                                                    listener.onFailure(e);
+                                                })
+                                            );
+                                    } else {
+                                        saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
+                                    }
                                 }, ex -> {
                                     log.error("Failed to read conversation memory", ex);
                                     listener.onFailure(ex);
@@ -192,22 +177,39 @@ public class MLAgentExecutor implements Executable {
 
     }
 
-    /**
-     * Get question from existing interaction
-     * @param memoryId conversation id
-     * @param interactionId interaction id
-     * @param inputDataSet input parameters
-     */
-    private void getQuestionFromInteraction(String memoryId, String interactionId, RemoteInferenceInputDataSet inputDataSet) {
-        try {
-            PlainActionFuture<GetInteractionResponse> future = PlainActionFuture.newFuture();
-            client.execute(GetInteractionAction.INSTANCE, new GetInteractionRequest(memoryId, interactionId), future);
 
-            GetInteractionResponse interactionResponse = future.get();
-            inputDataSet.getParameters().computeIfAbsent(QUESTION, key -> interactionResponse.getInteraction().getInput());
-        } catch (Exception ex) {
-            throw new MLException("Can't get regenerate interaction " + interactionId, ex);
-        }
+    /**
+     * save root interaction and start execute the agent
+     * @param listener callback listener
+     * @param memory memory instance
+     * @param inputDataSet input
+     * @param mlAgent agent to run
+     */
+    private void saveRootInteractionAndExecute(
+        ActionListener<Object> listener,
+        ConversationIndexMemory memory,
+        RemoteInferenceInputDataSet inputDataSet,
+        MLAgent mlAgent
+    ) {
+        String appType = mlAgent.getAppType();
+        String question = inputDataSet.getParameters().get(QUESTION);
+        // Create root interaction ID
+        ConversationIndexMessage msg = ConversationIndexMessage
+            .conversationIndexMessageBuilder()
+            .type(appType)
+            .question(question)
+            .response("")
+            .finalAnswer(true)
+            .sessionId(memory.getConversationId())
+            .build();
+        memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
+            log.info("Created parent interaction ID: " + interaction.getId());
+            inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
+            executeAgent(inputDataSet, mlAgent, listener);
+        }, ex -> {
+            log.error("Failed to create parent interaction", ex);
+            listener.onFailure(ex);
+        }));
     }
 
     private void executeAgent(RemoteInferenceInputDataSet inputDataSet, MLAgent mlAgent, ActionListener<Object> agentActionListener) {
@@ -249,7 +251,7 @@ public class MLAgentExecutor implements Executable {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors
     ) {
-        return wrap(output -> {
+        return ActionListener.wrap(output -> {
             if (output != null) {
                 Gson gson = new Gson();
                 if (output instanceof ModelTensorOutput) {
