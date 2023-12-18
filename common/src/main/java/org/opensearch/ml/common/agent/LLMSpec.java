@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agent;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -19,7 +20,7 @@ import java.util.Map;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
-
+@EqualsAndHashCode
 @Getter
 public class LLMSpec implements ToXContentObject {
     public static final String MODEL_ID_FIELD = "model_id";

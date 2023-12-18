@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agent;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -18,7 +19,7 @@ import java.io.IOException;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
-
+@EqualsAndHashCode
 @Getter
 public class MLMemorySpec implements ToXContentObject {
     public static final String MEMORY_TYPE_FIELD = "type";

@@ -36,6 +36,14 @@ public class MLAgentTest {
     }
 
     @Test
+    public void constructor_DuplicateTool() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Duplicate tool defined: test_tool_name");
+        MLToolSpec mlToolSpec = new MLToolSpec("test_tool_type", "test_tool_name", "test", Collections.EMPTY_MAP, false);
+        MLAgent agent = new MLAgent("test_name", "test_type", "test_description", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec, mlToolSpec), null, null, Instant.EPOCH, Instant.EPOCH, "test");
+    }
+
+    @Test
     public void writeTo() throws IOException {
         MLAgent agent = new MLAgent("test", "test", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test");
         BytesStreamOutput output = new BytesStreamOutput();
