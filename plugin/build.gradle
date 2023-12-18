@@ -46,6 +46,7 @@ opensearchplugin {
 }
 
 dependencies {
+    implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
     implementation project(':opensearch-ml-common')
     implementation project(':opensearch-ml-algorithms')
     implementation project(':opensearch-ml-search-processors')
