@@ -67,7 +67,6 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
             mlModelManager.removeWorkerNodes(removedNodeIds, false);
         } else if (delta.added()) {
             List<String> addedNodesIds = delta.addedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toList());
-            mlModelManager.addModelWorkerNodes(addedNodesIds);
             mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodesIds, state.getNodes().getClusterManagerNodeId());
         }
     }
