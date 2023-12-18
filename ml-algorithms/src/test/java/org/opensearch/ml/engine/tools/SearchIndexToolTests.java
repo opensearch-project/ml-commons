@@ -6,18 +6,24 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
@@ -34,6 +40,7 @@ public class SearchIndexToolTests {
 
     private SearchIndexTool mockedSearchIndexTool;
 
+    private String mockedSearchResponseString;
     @Before
     @SneakyThrows
     public void setup() {
@@ -43,6 +50,12 @@ public class SearchIndexToolTests {
                 SearchIndexTool.class,
                 Mockito.withSettings().useConstructor(client, TEST_XCONTENT_REGISTRY_FOR_QUERY).defaultAnswer(Mockito.CALLS_REAL_METHODS)
             );
+
+        try (InputStream searchResponseIns = AbstractRetrieverTool.class.getResourceAsStream("retrieval_tool_search_response.json")) {
+            if (searchResponseIns != null) {
+                mockedSearchResponseString = new String(searchResponseIns.readAllBytes());
+            }
+        }
     }
 
     @Test
@@ -92,6 +105,32 @@ public class SearchIndexToolTests {
         mockedSearchIndexTool.run(parameters, null);
         Mockito.verify(client, never()).search(any(), any());
         Mockito.verify(client, times(1)).execute(eq(MLModelSearchAction.INSTANCE), any(), any());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithSearchResults() {
+        SearchResponse mockedSearchResponse = SearchResponse
+                .fromXContent(
+                        JsonXContent.jsonXContent
+                                .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+                );
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"match_all\": {}}}";
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+        Map<String, String> parameters = Map.of("input", inputString);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        future.join();
+
+        Mockito.verify(client, times(1)).search(any(), any());
+        Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
     }
 
     @Test
