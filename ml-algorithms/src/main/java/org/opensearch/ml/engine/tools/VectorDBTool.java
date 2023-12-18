@@ -49,7 +49,7 @@ public class VectorDBTool extends AbstractRetrieverTool {
         super(client, xContentRegistry, index, sourceFields, docSize);
         this.modelId = modelId;
         this.embeddingField = embeddingField;
-        this.k = k == null ? 10 : k;
+        this.k = k == null ? DEFAULT_K : k;
     }
 
     @Override

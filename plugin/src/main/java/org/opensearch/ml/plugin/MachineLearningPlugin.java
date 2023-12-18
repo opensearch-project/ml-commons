@@ -516,6 +516,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         CatIndexTool.Factory.getInstance().init(client, clusterService);
         PainlessScriptTool.Factory.getInstance().init(client, scriptService);
         VisualizationsTool.Factory.getInstance().init(client);
+        RAGTool.Factory.getInstance().init(client, xContentRegistry);
         SearchAlertsTool.Factory.getInstance().init(client);
         IndexMappingTool.Factory.getInstance().init(client);
 
@@ -529,6 +530,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
+        toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);

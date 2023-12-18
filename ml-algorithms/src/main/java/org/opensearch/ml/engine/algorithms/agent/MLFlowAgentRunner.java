@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -23,6 +24,7 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -170,14 +172,14 @@ public class MLFlowAgentRunner {
             );
     }
 
-    private String parseResponse(Object output) {
+    private String parseResponse(Object output) throws IOException {
         if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
             ModelTensors tensors = (ModelTensors) ((List) output).get(0);
-            Object response = tensors.getMlModelTensors().get(0).getDataAsMap().get("response");
-            return response + "";
-
+            return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
         } else if (output instanceof ModelTensor) {
-            return toJson(((ModelTensor) output).getDataAsMap());
+            return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
+        } else if (output instanceof ModelTensorOutput) {
+            return ((ModelTensorOutput) output).toXContent(JsonXContent.contentBuilder(), null).toString();
         } else {
             if (output instanceof String) {
                 return (String) output;
