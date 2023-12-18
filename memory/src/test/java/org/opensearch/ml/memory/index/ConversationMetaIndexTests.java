@@ -574,9 +574,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals(
-                "no such index [.plugins-ml-conversation-meta] and cannot get conversation since the conversation index does not exist"
-            ));
+            .equals("no such index [.plugins-ml-memory-meta] and cannot get conversation since the conversation index does not exist"));
     }
 
     public void testGetConversation_ResponseNotExist_ThenFail() {
@@ -652,13 +650,12 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals(
-                "no such index [.plugins-ml-conversation-meta] and cannot update conversation since the conversation index does not exist"
-            ));
+            .equals("no such index [.plugins-ml-memory-meta] and cannot update conversation since the conversation index does not exist"));
     }
 
     public void testUpdateConversation_Success() {
         doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
 
@@ -676,6 +673,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testUpdateConversation_ClientFails() {
         doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
 

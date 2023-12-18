@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.memory.action.conversation;
 
+import java.time.Instant;
+import java.util.Map;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -36,9 +39,11 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
         UpdateConversationRequest updateConversationRequest = UpdateConversationRequest.fromActionRequest(request);
         String conversationId = updateConversationRequest.getConversationId();
         UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.META_INDEX_NAME, conversationId);
-        updateRequest.doc(updateConversationRequest.getUpdateContent());
-        updateRequest.docAsUpsert(true);
+        Map<String, Object> updateContent = updateConversationRequest.getUpdateContent();
+        updateContent.putIfAbsent(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, Instant.now());
 
+        updateRequest.doc(updateContent);
+        updateRequest.docAsUpsert(true);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.update(updateRequest, getUpdateResponseListener(conversationId, listener, context));
         } catch (Exception e) {

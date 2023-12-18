@@ -366,7 +366,12 @@ public class ConversationMetaIndex {
         }
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            client.update(updateRequest, internalListener);
+            client.admin().indices().refresh(Requests.refreshRequest(META_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                client.update(updateRequest, internalListener);
+            }, e -> {
+                log.error("Failed to refresh memory-meta index during update conversation ", e);
+                internalListener.onFailure(e);
+            }));
         } catch (Exception e) {
             log.error("Failed to update Conversation. Details {}:", e);
             listener.onFailure(e);
