@@ -1,9 +1,24 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.*;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT_SUFFIX;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -25,8 +40,7 @@ public class AgentUtils {
 
             String examplePrefix = Optional.ofNullable(parameters.get("examples.example.prefix")).orElse("<example>\n");
             String exampleSuffix = Optional.ofNullable(parameters.get("examples.example.suffix")).orElse("\n</example>\n");
-            for (int i = 0; i < exampleList.size(); i++) {
-                String example = exampleList.get(i);
+            for (String example : exampleList) {
                 exampleBuilder.append(examplePrefix).append(example).append(exampleSuffix);
             }
             exampleBuilder.append(examplesSuffix);
@@ -40,8 +54,8 @@ public class AgentUtils {
 
     public static String addPrefixSuffixToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> prefixMap = new HashMap<>();
-        String prefix = parameters.containsKey(PROMPT_PREFIX) ? parameters.get(PROMPT_PREFIX) : "";
-        String suffix = parameters.containsKey(PROMPT_SUFFIX) ? parameters.get(PROMPT_SUFFIX) : "";
+        String prefix = parameters.getOrDefault(PROMPT_PREFIX, "");
+        String suffix = parameters.getOrDefault(PROMPT_SUFFIX, "");
         prefixMap.put(PROMPT_PREFIX, prefix);
         prefixMap.put(PROMPT_SUFFIX, suffix);
         StringSubstitutor substitutor = new StringSubstitutor(prefixMap, "${parameters.", "}");
@@ -108,23 +122,16 @@ public class AgentUtils {
 
     public static String addChatHistoryToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> chatHistoryMap = new HashMap<>();
-        String chatHistory = parameters.containsKey(CHAT_HISTORY) ? parameters.get(CHAT_HISTORY) : "";
+        String chatHistory = parameters.getOrDefault(CHAT_HISTORY, "");
         chatHistoryMap.put(CHAT_HISTORY, chatHistory);
         parameters.put(CHAT_HISTORY, chatHistory);
-        if (chatHistoryMap.size() > 0) {
-            StringSubstitutor substitutor = new StringSubstitutor(chatHistoryMap, "${parameters.", "}");
-            return substitutor.replace(prompt);
-        }
-        return prompt;
+        StringSubstitutor substitutor = new StringSubstitutor(chatHistoryMap, "${parameters.", "}");
+        return substitutor.replace(prompt);
     }
 
     public static String addContextToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> contextMap = new HashMap<>();
-        if (parameters.containsKey(CONTEXT)) {
-            contextMap.put(CONTEXT, parameters.get(CONTEXT));
-        } else {
-            contextMap.put(CONTEXT, "");
-        }
+        contextMap.put(CONTEXT, parameters.getOrDefault(CONTEXT, ""));
         parameters.put(CONTEXT, contextMap.get(CONTEXT));
         if (contextMap.size() > 0) {
             StringSubstitutor substitutor = new StringSubstitutor(contextMap, "${parameters.", "}");
