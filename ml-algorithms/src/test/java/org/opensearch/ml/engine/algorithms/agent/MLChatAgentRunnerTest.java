@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
@@ -48,25 +49,17 @@ import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 public class MLChatAgentRunnerTest {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
-
     @Mock
     private Client client;
-
     private Settings settings;
-
     @Mock
     private ClusterService clusterService;
-
     @Mock
     private NamedXContentRegistry xContentRegistry;
-
     private Map<String, Tool.Factory> toolFactories;
-
     @Mock
     private Map<String, Memory.Factory> memoryMap;
-
     private MLChatAgentRunner mlChatAgentRunner;
-
     @Mock
     private Tool.Factory firstToolFactory;
 
@@ -117,7 +110,6 @@ public class MLChatAgentRunnerTest {
         }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
         when(conversationIndexMemory.getConversationId()).thenReturn("conversation_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
-        ArgumentCaptor<ActionListener<Boolean>> argumentCaptor = ArgumentCaptor.forClass(ActionListener.class);
         doAnswer(invocation -> {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
             listener.onResponse(conversationIndexMemory);
@@ -128,7 +120,9 @@ public class MLChatAgentRunnerTest {
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
         when(firstTool.getName()).thenReturn(FIRST_TOOL);
+        when(firstTool.getDescription()).thenReturn("First tool description");
         when(secondTool.getName()).thenReturn(SECOND_TOOL);
+        when(secondTool.getDescription()).thenReturn("Second tool description");
         when(firstTool.validate(Mockito.anyMap())).thenReturn(true);
         when(secondTool.validate(Mockito.anyMap())).thenReturn(true);
         Mockito
@@ -195,14 +189,29 @@ public class MLChatAgentRunnerTest {
 
     @Test
     public void testChatHistoryExcludeOngoingQuestion() {
-        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .parameters(Map.of("firsttoolspec", "firsttoolspec"))
+            .description("first tool spec")
+            .type(FIRST_TOOL)
+            .includeOutputInAgentResponse(false)
+            .build();
+        MLToolSpec secondToolSpec = MLToolSpec
+            .builder()
+            .name(SECOND_TOOL)
+            .parameters(Map.of("secondtoolspec", "secondtoolspec"))
+            .description("second tool spec")
+            .type(SECOND_TOOL)
+            .includeOutputInAgentResponse(true)
+            .build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
             .memory(mlMemorySpec)
             .llm(llmSpec)
+            .description("mlagent description")
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
 
@@ -220,7 +229,87 @@ public class MLChatAgentRunnerTest {
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
+    }
 
+    @Test
+    public void testChatHistoryWithVerboseMoreInteraction() {
+        testInteractions("4");
+    }
+
+    @Test
+    public void testChatHistoryWithVerboseLessInteraction() {
+        testInteractions("2");
+    }
+
+    private void testInteractions(String maxInteraction) {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", maxInteraction)).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .parameters(Map.of("firsttoolspec", "firsttoolspec"))
+            .description("first tool spec")
+            .type(FIRST_TOOL)
+            .includeOutputInAgentResponse(false)
+            .build();
+        MLToolSpec secondToolSpec = MLToolSpec
+            .builder()
+            .name(SECOND_TOOL)
+            .parameters(Map.of("secondtoolspec", "secondtoolspec"))
+            .description("second tool spec")
+            .type(SECOND_TOOL)
+            .includeOutputInAgentResponse(true)
+            .build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .description("mlagent description")
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            List<Interaction> interactionList = generateInteractions(2);
+            Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
+            interactionList.add(inProgressInteraction);
+            listener.onResponse(interactionList);
+            return null;
+        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
+
+        HashMap<String, String> params = new HashMap<>();
+        params.put("verbose", "true");
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
+        Assert.assertFalse(chatHistory.contains("input-99"));
+    }
+
+    @Test
+    public void testChatHistoryException() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        doAnswer(invocation -> {
+
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            listener.onFailure(new RuntimeException("Test Exception"));
+            return null;
+        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
+
+        HashMap<String, String> params = new HashMap<>();
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verifying that onFailure was called
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
     }
 
     private List<Interaction> generateInteractions(int size) {

@@ -6,11 +6,9 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
 import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,7 +34,9 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 import lombok.Data;
@@ -79,7 +79,7 @@ public class MLFlowAgentRunner {
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        if (toolSpecs.size() == 0) {
+        if (toolSpecs == null || toolSpecs.size() == 0) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
@@ -92,7 +92,7 @@ public class MLFlowAgentRunner {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 Tool tool = createTool(toolSpec);
-                firstStepListener = new StepListener();
+                firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
                 firstToolExecuteParams = getToolExecuteParams(toolSpec, params);
@@ -112,7 +112,7 @@ public class MLFlowAgentRunner {
                         } else {
                             String result = output instanceof String
                                 ? (String) output
-                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
 
                             ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
                             flowAgentOutput.add(stepOutput);
@@ -155,12 +155,19 @@ public class MLFlowAgentRunner {
         }
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
             .get(memorySpec.getType());
-        conversationIndexMemoryFactory.create(memoryId, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            updateInteraction(additionalInfo, interactionId, memory);
-        }, e -> { log.error("Failed create memory from id: " + memoryId, e); }));
+        conversationIndexMemoryFactory
+            .create(
+                memoryId,
+                ActionListener
+                    .<ConversationIndexMemory>wrap(
+                        memory -> updateInteraction(additionalInfo, interactionId, memory),
+                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                    )
+            );
     }
 
-    private void updateInteraction(Map<String, Object> additionalInfo, String interactionId, ConversationIndexMemory memory) {
+    @VisibleForTesting
+    void updateInteraction(Map<String, Object> additionalInfo, String interactionId, ConversationIndexMemory memory) {
         memory
             .getMemoryManager()
             .updateInteraction(
@@ -172,7 +179,8 @@ public class MLFlowAgentRunner {
             );
     }
 
-    private String parseResponse(Object output) throws IOException {
+    @VisibleForTesting
+    String parseResponse(Object output) throws IOException {
         if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
             ModelTensors tensors = (ModelTensors) ((List) output).get(0);
             return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
@@ -184,26 +192,13 @@ public class MLFlowAgentRunner {
             if (output instanceof String) {
                 return (String) output;
             } else {
-                return toJson(output);
+                return StringUtils.toJson(output);
             }
         }
     }
 
-    private String toJson(Object value) {
-        try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                if (value instanceof String) {
-                    return (String) value;
-                } else {
-                    return gson.toJson(value);
-                }
-            });
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private Tool createTool(MLToolSpec toolSpec) {
+    @VisibleForTesting
+    Tool createTool(MLToolSpec toolSpec) {
         Map<String, String> toolParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
@@ -222,7 +217,8 @@ public class MLFlowAgentRunner {
         return tool;
     }
 
-    private Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
+    @VisibleForTesting
+    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
         Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
