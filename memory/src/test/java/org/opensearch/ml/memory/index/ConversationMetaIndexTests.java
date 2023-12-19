@@ -655,7 +655,6 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testUpdateConversation_Success() {
         doReturn(true).when(metadata).hasIndex(anyString());
-        setupRefreshSuccess();
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
 
@@ -673,7 +672,6 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testUpdateConversation_ClientFails() {
         doReturn(true).when(metadata).hasIndex(anyString());
-        setupRefreshSuccess();
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
 

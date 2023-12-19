@@ -12,6 +12,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -44,6 +45,7 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
 
         updateRequest.doc(updateContent);
         updateRequest.docAsUpsert(true);
+        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.update(updateRequest, getUpdateResponseListener(conversationId, listener, context));
         } catch (Exception e) {

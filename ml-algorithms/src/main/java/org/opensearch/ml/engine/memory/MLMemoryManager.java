@@ -23,14 +23,11 @@ import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.ConfigConstants;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
@@ -136,7 +133,7 @@ public class MLMemoryManager {
      */
     public void getFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> actionListener) {
         Preconditions.checkArgument(lastNInteraction > 0, "lastN must be at least 1.");
-        log.info("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
+        log.debug("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
@@ -147,12 +144,7 @@ public class MLMemoryManager {
                 if (access) {
                     innerGetFinalInteractions(conversationId, lastNInteraction, actionListener);
                 } else {
-                    String userstr = client
-                        .threadPool()
-                        .getThreadContext()
-                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                    throw new OpenSearchSecurityException("User does not have access to conversation " + conversationId);
                 }
             }, e -> { actionListener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
@@ -193,9 +185,7 @@ public class MLMemoryManager {
                 }
                 internalListener.onResponse(result);
             }, e -> { internalListener.onFailure(e); });
-            client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(r -> {
-                client.search(searchRequest, al);
-            }, e -> { internalListener.onFailure(e); }));
+            client.search(searchRequest, al);
         } catch (Exception e) {
             listener.onFailure(e);
         }

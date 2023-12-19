@@ -13,7 +13,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -30,7 +29,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.admin.indices.refresh.RefreshResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -50,7 +48,6 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
@@ -228,12 +225,6 @@ public class MLMemoryManagerTests {
         }).when(conversationMetaIndex).checkAccess(anyString(), any());
 
         doAnswer(invocation -> {
-            ActionListener<RefreshResponse> al = invocation.getArgument(1);
-            al.onResponse(mock(RefreshResponse.class));
-            return null;
-        }).when(indicesAdminClient).refresh(any(), any());
-
-        doAnswer(invocation -> {
             ActionListener<SearchResponse> al = invocation.getArgument(1);
             al.onFailure(new Exception("Failure in Search"));
             return null;
@@ -242,41 +233,6 @@ public class MLMemoryManagerTests {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(interactionListActionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Failure in Search"));
-    }
-
-    @Test
-    public void testGetInteractions_RefreshFails_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        doAnswer(invocation -> {
-            ActionListener<Boolean> al = invocation.getArgument(1);
-            al.onResponse(true);
-            return null;
-        }).when(conversationMetaIndex).checkAccess(anyString(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<RefreshResponse> al = invocation.getArgument(1);
-            al.onFailure(new Exception("Failed to Refresh"));
-            return null;
-        }).when(indicesAdminClient).refresh(any(), any());
-        mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(interactionListActionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Failed to Refresh"));
-    }
-
-    @Test
-    public void testGetInteractions_ClientFails_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        doAnswer(invocation -> {
-            ActionListener<Boolean> al = invocation.getArgument(1);
-            al.onResponse(true);
-            return null;
-        }).when(conversationMetaIndex).checkAccess(anyString(), any());
-        doThrow(new RuntimeException("Client Failure")).when(indicesAdminClient).refresh(any(), any());
-        mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(interactionListActionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Client Failure"));
     }
 
     @Test
@@ -297,10 +253,7 @@ public class MLMemoryManagerTests {
         mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(interactionListActionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor
-            .getValue()
-            .getMessage()
-            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
+        assert (argCaptor.getValue().getMessage().equals("User does not have access to conversation cid"));
     }
 
     @Test
@@ -311,12 +264,6 @@ public class MLMemoryManagerTests {
             al.onResponse(true);
             return null;
         }).when(conversationMetaIndex).checkAccess(anyString(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<RefreshResponse> al = invocation.getArgument(1);
-            al.onResponse(mock(RefreshResponse.class));
-            return null;
-        }).when(indicesAdminClient).refresh(any(), any());
 
         doAnswer(invocation -> {
             XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
