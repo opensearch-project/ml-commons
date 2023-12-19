@@ -16,13 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.search.MultiSearchRequest;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -527,23 +524,10 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
     }
 
     @Override
-    public Output execute(Input input) {
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicReference<AnomalyLocalizationOutput> outRef = new AtomicReference<>();
-        AtomicReference<Exception> exRef = new AtomicReference<>();
+    public void execute(Input input, ActionListener<Output> listener) {
         getLocalizationResults(
             (AnomalyLocalizationInput) input,
-            new LatchedActionListener(ActionListener.<AnomalyLocalizationOutput>wrap(o -> outRef.set(o), e -> exRef.set(e)), latch)
+            ActionListener.wrap(o -> listener.onResponse(o), e -> listener.onFailure(e))
         );
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException(e);
-        }
-        if (exRef.get() != null) {
-            throw new RuntimeException(exRef.get());
-        } else {
-            return outRef.get();
-        }
     }
 }

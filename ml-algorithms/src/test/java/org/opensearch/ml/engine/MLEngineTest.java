@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
@@ -23,6 +25,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
@@ -40,6 +43,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -265,8 +269,12 @@ public class MLEngineTest {
     @Test
     public void executeLocalSampleCalculator() throws Exception {
         Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
-        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) mlEngine.execute(input);
-        assertEquals(3.0, output.getResult(), 1e-5);
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(3.0, output.getResult(), 1e-5);
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        mlEngine.execute(input, actionListener);
+
     }
 
     @Test
@@ -289,7 +297,8 @@ public class MLEngineTest {
                 return null;
             }
         };
-        mlEngine.execute(input);
+        ActionListener<Output> actionListener = mock(ActionListener.class);
+        mlEngine.execute(input, actionListener);
     }
 
     private MLModel trainKMeansModel() {
