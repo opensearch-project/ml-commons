@@ -46,6 +46,7 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import com.google.gson.Gson;
 
@@ -170,36 +171,21 @@ public class MLAgentExecutor implements Executable {
     }
 
     private void executeAgent(RemoteInferenceInputDataSet inputDataSet, MLAgent mlAgent, ActionListener<Object> agentActionListener) {
-        if ("flow".equals(mlAgent.getType())) {
-            MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(
-                client,
-                settings,
-                clusterService,
-                xContentRegistry,
-                toolFactories,
-                memoryFactoryMap
-            );
-            flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
-        } else if ("cot".equals(mlAgent.getType())) {
-            MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(
-                client,
-                settings,
-                clusterService,
-                xContentRegistry,
-                toolFactories,
-                memoryFactoryMap
-            );
-            reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
-        } else if ("conversational".equals(mlAgent.getType())) {
-            MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(
-                client,
-                settings,
-                clusterService,
-                xContentRegistry,
-                toolFactories,
-                memoryFactoryMap
-            );
-            chatAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+        MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
+        mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+    }
+
+    @VisibleForTesting
+    protected MLAgentRunner getAgentRunner(MLAgent mlAgent) {
+        switch (mlAgent.getType()) {
+            case "flow":
+                return new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+            case "cot":
+                return new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+            case "conversational":
+                return new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+            default:
+                throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
         }
     }
 
