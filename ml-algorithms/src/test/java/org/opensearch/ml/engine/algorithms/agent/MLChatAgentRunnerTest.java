@@ -1,9 +1,13 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -143,6 +147,43 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
+    public void testParsingJsonBlockFromResponse() {
+        // Prepare the response with JSON block
+        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
+            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
+        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
+
+        // Mock LLM response to not contain "thought" but contain "response" with JSON block
+        Map<String, String> llmResponse = new HashMap<>();
+        llmResponse.put("response", responseWithJsonBlock);
+        doAnswer(getLLMAnswer(llmResponse))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        // Create an MLAgent and run the MLChatAgentRunner
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put("verbose", "true");
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Capture the response passed to the listener
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(agentActionListener).onResponse(responseCaptor.capture());
+
+        // Extract the captured response
+        Object capturedResponse = responseCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+
+        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
+        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(2).getMlModelTensors().get(0);
+
+        // Verify that the parsed values from JSON block are correctly set
+        assertEquals("Thought: parsed thought", modelTensor1.getResult());
+        assertEquals("parsed final answer", modelTensor2.getResult());
+    }
+
+    @Test
     public void testRunWithIncludeOutputNotSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
@@ -158,9 +199,9 @@ public class MLChatAgentRunnerTest {
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors();
-        Assert.assertEquals(1, agentOutput.size());
+        assertEquals(1, agentOutput.size());
         // Respond with last tool output
-        Assert.assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
+        assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
     }
 
     @Test
@@ -180,11 +221,11 @@ public class MLChatAgentRunnerTest {
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors();
-        Assert.assertEquals(1, agentOutput.size());
+        assertEquals(1, agentOutput.size());
         // Respond with last tool output
-        Assert.assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
+        assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
         Map<String, List<String>> additionalInfos = (Map<String, List<String>>) agentOutput.get(0).getDataAsMap().get("additional_info");
-        Assert.assertEquals("Second tool response", additionalInfos.get(String.format("%s.output", SECOND_TOOL)).get(0));
+        assertEquals("Second tool response", additionalInfos.get(String.format("%s.output", SECOND_TOOL)).get(0));
     }
 
     @Test
@@ -310,6 +351,81 @@ public class MLChatAgentRunnerTest {
 
         // Verifying that onFailure was called
         verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testToolValidationSuccess() {
+        // Mock tool validation to return true
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with tools
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called
+        verify(firstTool).run(any(), any());
+    }
+
+    @Test
+    public void testToolValidationFailure() {
+        // Mock tool validation to return false
+        when(firstTool.validate(any())).thenReturn(false);
+
+        // Create an MLAgent with tools
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "invalidInput");
+
+        Mockito
+                .doAnswer(generateToolResponse("First tool response"))
+                .when(firstTool)
+                .run(Mockito.anyMap(), nextStepListenerCaptor.capture());
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was not called
+        verify(firstTool, never()).run(any(), any());
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testToolNotFound() {
+        // Create an MLAgent without tools
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent.builder().memory(mlMemorySpec).llm(llmSpec).name("TestAgent").build();
+
+        // Create parameters for the agent with a non-existent tool
+        Map<String, String> params = createAgentParamsWithAction("nonExistentTool", "someInput");
+
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that no tool's run method was called
+        verify(firstTool, never()).run(any(), any());
+        verify(secondTool, never()).run(any(), any());
+    }
+
+    // Helper methods to create MLAgent and parameters
+    private MLAgent createMLAgentWithTools() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        return MLAgent.builder().name("TestAgent").tools(Arrays.asList(firstToolSpec)).memory(mlMemorySpec).llm(llmSpec).build();
+    }
+
+    private Map<String, String> createAgentParamsWithAction(String action, String actionInput) {
+        Map<String, String> params = new HashMap<>();
+        params.put("action", action);
+        params.put("action_input", actionInput);
+        return params;
     }
 
     private List<Interaction> generateInteractions(int size) {
