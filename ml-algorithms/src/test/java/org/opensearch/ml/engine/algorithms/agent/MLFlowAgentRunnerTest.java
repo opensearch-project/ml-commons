@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
-import static org.reflections.Reflections.log;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -32,7 +31,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 import org.opensearch.action.StepListener;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -69,7 +67,6 @@ public class MLFlowAgentRunnerTest {
 
     @Mock
     MLMemoryManager memoryManager;
-
 
     private Settings settings;
 
@@ -247,6 +244,7 @@ public class MLFlowAgentRunnerTest {
         assertEquals("value4", result.get("param4"));
         assertFalse(result.containsKey("toolType.param2"));
     }
+
     @Test
     public void testGetToolExecuteParamsWithInputSubstitution() {
         // Setup ToolSpec with parameters
@@ -256,12 +254,17 @@ public class MLFlowAgentRunnerTest {
         when(toolSpec.getName()).thenReturn("toolName");
 
         // Setup params with a special 'input' key for substitution
-        Map<String, String> params = Map.of(
-                "toolType.param2", "value2",
-                "toolName.param3", "value3",
-                "param4", "value4",
-                "input", "Input contains ${parameters.param1}, ${parameters.param4}"
-        );
+        Map<String, String> params = Map
+            .of(
+                "toolType.param2",
+                "value2",
+                "toolName.param3",
+                "value3",
+                "param4",
+                "value4",
+                "input",
+                "Input contains ${parameters.param1}, ${parameters.param4}"
+            );
 
         // Execute the method
         Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
@@ -276,8 +279,6 @@ public class MLFlowAgentRunnerTest {
         String expectedInput = "Input contains value1, value4";
         assertEquals(expectedInput, result.get("input"));
     }
-
-
 
     @Test
     public void testCreateTool() {
@@ -310,7 +311,9 @@ public class MLFlowAgentRunnerTest {
         // Test for List containing ModelTensors
         ModelTensors tensorsInList = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         List<ModelTensors> tensorList = Arrays.asList(tensorsInList);
-        String expectedListJson = "{\"output\":[{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}]}"; // Replace with the actual JSON representation
+        String expectedListJson = "{\"output\":[{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}]}"; // Replace with
+                                                                                                                          // the actual JSON
+                                                                                                                          // representation
         assertEquals(expectedListJson, mlFlowAgentRunner.parseResponse(tensorList));
 
         // Test for a non-string, non-model object

@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
@@ -127,7 +129,7 @@ public class MLEngineTest {
         MLModel model = trainKMeansModel();
         assertEquals(FunctionName.KMEANS.name(), model.getName());
         assertEquals("1.0.0", model.getVersion());
-        Assert.assertNotNull(model.getContent());
+        assertNotNull(model.getContent());
     }
 
     @Test
@@ -135,7 +137,7 @@ public class MLEngineTest {
         MLModel model = trainLinearRegressionModel();
         assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
         assertEquals("1.0.0", model.getVersion());
-        Assert.assertNotNull(model.getContent());
+        assertNotNull(model.getContent());
     }
 
     // TODO: fix mockito error
@@ -387,6 +389,36 @@ public class MLEngineTest {
         Path actualPath = mlEngine.getModelCachePath(modelId, modelName, version);
 
         assertEquals(expectedPath.toString(), actualPath.toString());
+    }
+
+    @Test
+    public void testMLEngineInitialization() {
+        Path testPath = Path.of("/tmp/test" + UUID.randomUUID());
+        mlEngine = new MLEngine(testPath, new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+
+        Path expectedMlCachePath = testPath.resolve("ml_cache");
+        Path expectedMlConfigPath = expectedMlCachePath.resolve("config");
+
+        assertEquals(expectedMlCachePath, mlEngine.getMlCachePath());
+        assertEquals(expectedMlConfigPath, mlEngine.getMlConfigPath());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testTrainWithInvalidInput() {
+        mlEngine.train(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testPredictWithInvalidInput() {
+        mlEngine.predict(null, null);
+    }
+
+    @Test
+    public void testEncryptMethod() {
+        String testString = "testString";
+        String encryptedString = mlEngine.encrypt(testString);
+        assertNotNull(encryptedString);
+        assertNotEquals(testString, encryptedString);
     }
 
 }
