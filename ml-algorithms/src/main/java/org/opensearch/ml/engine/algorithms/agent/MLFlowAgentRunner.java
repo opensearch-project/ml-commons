@@ -149,7 +149,8 @@ public class MLFlowAgentRunner {
         }
     }
 
-    private void updateMemory(Map<String, Object> additionalInfo, MLMemorySpec memorySpec, String memoryId, String interactionId) {
+    @VisibleForTesting
+    void updateMemory(Map<String, Object> additionalInfo, MLMemorySpec memorySpec, String memoryId, String interactionId) {
         if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
             return;
         }
@@ -159,7 +160,7 @@ public class MLFlowAgentRunner {
             .create(
                 memoryId,
                 ActionListener
-                    .<ConversationIndexMemory>wrap(
+                    .wrap(
                         memory -> updateInteraction(additionalInfo, interactionId, memory),
                         e -> log.error("Failed create memory from id: " + memoryId, e)
                     )
