@@ -15,7 +15,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
@@ -41,6 +40,7 @@ public class SearchIndexToolTests {
     private SearchIndexTool mockedSearchIndexTool;
 
     private String mockedSearchResponseString;
+
     @Before
     @SneakyThrows
     public void setup() {
@@ -111,10 +111,10 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testRunWithSearchResults() {
         SearchResponse mockedSearchResponse = SearchResponse
-                .fromXContent(
-                        JsonXContent.jsonXContent
-                                .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
-                );
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(mockedSearchResponse);
