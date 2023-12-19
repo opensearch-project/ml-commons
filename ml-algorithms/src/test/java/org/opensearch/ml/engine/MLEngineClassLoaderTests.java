@@ -43,17 +43,25 @@ public class MLEngineClassLoaderTests {
         MLEngineClassLoader.deregister(FunctionName.LOCAL_SAMPLE_CALCULATOR);
         final LocalSampleCalculator instance = MLEngineClassLoader
             .initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
+
         ActionListener<Output> actionListener = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             assertEquals(d1 + d2, output.getResult(), 1e-6);
             assertEquals(client, instance.getClient());
             assertEquals(settings, instance.getSettings());
         }, e -> { fail("Test failed: " + e.getMessage()); });
+
         instance.execute(input, actionListener);
 
         // don't set properties
-        final LocalSampleCalculator instance1 = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class);
-        instance1.execute(input, actionListener);
+        final LocalSampleCalculator instance2 = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class);
+        ActionListener<Output> actionListener2 = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(d1 + d2, output.getResult(), 1e-6);
+            assertNull(instance2.getClient());
+            assertNull(instance2.getSettings());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        instance2.execute(input, actionListener2);
     }
 
     @Test

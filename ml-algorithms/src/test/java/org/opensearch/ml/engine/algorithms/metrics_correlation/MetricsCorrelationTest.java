@@ -10,6 +10,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.anyLong;
@@ -85,6 +86,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
@@ -328,10 +330,13 @@ public class MetricsCorrelationTest {
             return null;
         }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
 
-        MetricsCorrelationOutput output = metricsCorrelation.execute(input);
-        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
-        assert mlModelOutputs.size() == 1;
-        assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            MetricsCorrelationOutput output = (MetricsCorrelationOutput) o;
+            List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+            assert mlModelOutputs.size() == 1;
+            assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        metricsCorrelation.execute(input, actionListener);
     }
 
     @Ignore
@@ -360,10 +365,13 @@ public class MetricsCorrelationTest {
             return null;
         }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
 
-        MetricsCorrelationOutput output = metricsCorrelation.execute(input);
-        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
-        assert mlModelOutputs.size() == 1;
-        assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            MetricsCorrelationOutput output = (MetricsCorrelationOutput) o;
+            List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+            assert mlModelOutputs.size() == 1;
+            assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        metricsCorrelation.execute(input, actionListener);
     }
 
     @Test
@@ -387,12 +395,15 @@ public class MetricsCorrelationTest {
         when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
         when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
 
-        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
-        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
-        assert mlModelOutputs.size() == 1;
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            MetricsCorrelationOutput output = (MetricsCorrelationOutput) o;
+            List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+            assert mlModelOutputs.size() == 1;
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        metricsCorrelation.execute(extendedInput, actionListener);
     }
 
     @Ignore
@@ -428,12 +439,15 @@ public class MetricsCorrelationTest {
             return mlRegisterModelResponse;
         }).when(client).execute(any(MLRegisterModelAction.class), any(MLRegisterModelRequest.class), isA(ActionListener.class));
 
-        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
-        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
-        assert mlModelOutputs.size() == 1;
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            MetricsCorrelationOutput output = (MetricsCorrelationOutput) o;
+            List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+            assert mlModelOutputs.size() == 1;
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        metricsCorrelation.execute(extendedInput, actionListener);
     }
 
     @Ignore
@@ -475,12 +489,15 @@ public class MetricsCorrelationTest {
             return mlDeployModelResponse;
         }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
 
-        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
-        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
-        assert mlModelOutputs.size() == 1;
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            MetricsCorrelationOutput output = (MetricsCorrelationOutput) o;
+            List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+            assert mlModelOutputs.size() == 1;
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        metricsCorrelation.execute(extendedInput, actionListener);
     }
 
     @Ignore
@@ -517,12 +534,15 @@ public class MetricsCorrelationTest {
             return mlRegisterModelResponse;
         }).when(client).execute(any(MLRegisterModelAction.class), any(MLRegisterModelRequest.class), isA(ActionListener.class));
 
-        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
-        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
-        assert mlModelOutputs.size() == 1;
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
-        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            MetricsCorrelationOutput output = (MetricsCorrelationOutput) o;
+            List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+            assert mlModelOutputs.size() == 1;
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+            assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        metricsCorrelation.execute(extendedInput, actionListener);
     }
 
     // working
@@ -650,7 +670,7 @@ public class MetricsCorrelationTest {
     @Test
     public void testWrongInput() throws ExecuteException {
         exceptionRule.expect(ExecuteException.class);
-        metricsCorrelation.execute(mock(LocalSampleCalculatorInput.class));
+        metricsCorrelation.execute(mock(LocalSampleCalculatorInput.class), mock(ActionListener.class));
     }
 
     @Test

@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.ml.common.annotation.Connector;
 import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.annotation.ExecuteOutput;
@@ -15,9 +16,11 @@ import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.annotation.MLInput;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLOutputType;
 import org.reflections.Reflections;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -203,12 +206,27 @@ public class MLCommonsClassLoader {
 
     @SuppressWarnings("unchecked")
     public static <T extends Enum<T>, S, I extends Object> S initExecuteInputInstance(T type, I in, Class<?> constructorParamClass) {
-        return init(executeInputClassMap, type, in, constructorParamClass);
+        try {
+            return init(executeInputClassMap, type, in, constructorParamClass);
+        } catch (Exception e) {
+            return init(mlInputClassMap, type, in, constructorParamClass);
+        }
     }
 
     @SuppressWarnings("unchecked")
     public static <T extends Enum<T>, S, I extends Object> S initExecuteOutputInstance(T type, I in, Class<?> constructorParamClass) {
-        return init(executeOutputClassMap, type, in, constructorParamClass);
+        try {
+            return init(executeOutputClassMap, type, in, constructorParamClass);
+        } catch (Exception e) {
+            if (in instanceof StreamInput) {
+                try {
+                    return (S) MLOutput.fromStream((StreamInput) in);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+            throw e;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -259,7 +277,7 @@ public class MLCommonsClassLoader {
             Throwable cause = e.getCause();
             if (cause instanceof MLException) {
                 throw (MLException)cause;
-	    } else if (cause instanceof IllegalArgumentException) {
+            } else if (cause instanceof IllegalArgumentException) {
                 throw (IllegalArgumentException) cause;
             } else {
                 log.error("Failed to init instance for type " + type, e);

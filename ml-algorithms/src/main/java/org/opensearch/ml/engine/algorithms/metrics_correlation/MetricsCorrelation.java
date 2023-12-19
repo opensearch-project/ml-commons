@@ -101,19 +101,20 @@ public class MetricsCorrelation extends DLModelExecute {
         this.clusterService = clusterService;
     }
 
-    @Override
-    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) throws ExecuteException {
-
-    }
-
     /**
      * @param input input data for metrics correlation. This input expects a list of float array (List<float[]>)
      * @return MetricsCorrelationOutput output of the metrics correlation algorithm is a list of objects. Each object
      *  contains 3 properties  event_window, event_pattern and suspected_metrics
      * @throws ExecuteException
      */
+    /**
+     *
+     * @param input input data for metrics correlation. This input expects a list of float array (List<float[]>)
+     * @param listener action listener which response is MetricsCorrelationOutput, output of the metrics correlation
+     *  algorithm is a list of objects. Each object contains 3 properties  event_window, event_pattern and suspected_metrics
+     */
     @Override
-    public MetricsCorrelationOutput execute(Input input) throws ExecuteException {
+    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) {
         if (!(input instanceof MetricsCorrelationInput)) {
             throw new ExecuteException("wrong input");
         }
@@ -153,7 +154,7 @@ public class MetricsCorrelation extends DLModelExecute {
             } else {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     GetRequest getModelRequest = new GetRequest(ML_MODEL_INDEX).id(FunctionName.METRICS_CORRELATION.name());
-                    ActionListener<GetResponse> listener = ActionListener.wrap(r -> {
+                    ActionListener<GetResponse> actionListener = ActionListener.wrap(r -> {
                         if (r.isExists()) {
                             modelId = r.getId();
                             Map<String, Object> sourceAsMap = r.getSourceAsMap();
@@ -181,7 +182,7 @@ public class MetricsCorrelation extends DLModelExecute {
                             );
                         }
                     }, e -> { log.error("Failed to get model", e); });
-                    client.get(getModelRequest, ActionListener.runBefore(listener, context::restore));
+                    client.get(getModelRequest, ActionListener.runBefore(actionListener, context::restore));
                 }
             }
         } else {
@@ -232,7 +233,7 @@ public class MetricsCorrelation extends DLModelExecute {
         }
 
         tensorOutputs.add(parseModelTensorOutput(djlOutput, null));
-        return new MetricsCorrelationOutput(tensorOutputs);
+        listener.onResponse(new MetricsCorrelationOutput(tensorOutputs));
     }
 
     @VisibleForTesting
