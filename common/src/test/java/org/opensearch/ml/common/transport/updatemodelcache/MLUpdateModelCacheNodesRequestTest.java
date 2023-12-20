@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.update;
+package org.opensearch.ml.common.transport.updatemodelcache;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;

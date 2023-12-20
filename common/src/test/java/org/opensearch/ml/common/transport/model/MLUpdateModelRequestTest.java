@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.update;
+package org.opensearch.ml.common.transport.model;
 
 import org.junit.Before;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -15,8 +15,8 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.transport.update.MLUpdateModelInput;
-import org.opensearch.ml.common.transport.update.MLUpdateModelRequest;
+import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
+import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.action.update;
+package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -62,9 +62,9 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
-import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodesResponse;
-import org.opensearch.ml.common.transport.update.MLUpdateModelInput;
-import org.opensearch.ml.common.transport.update.MLUpdateModelRequest;
+import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
+import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.update;
+package org.opensearch.ml.common.transport.model;
 
 import lombok.Data;
 import lombok.Builder;
@@ -27,9 +27,9 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @Data
 public class MLUpdateModelInput implements ToXContentObject, Writeable {
     
-    public static final String MODEL_ID_FIELD = "model_id"; // passively set
+    public static final String MODEL_ID_FIELD = "model_id"; // passively set when passing url to rest API
     public static final String DESCRIPTION_FIELD = "description"; // optional
-    public static final String MODEL_VERSION_FIELD = "model_version"; // passively set
+    public static final String MODEL_VERSION_FIELD = "model_version"; // passively set when register model to a new model group
     public static final String MODEL_NAME_FIELD = "name"; // optional
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
@@ -37,7 +37,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
     // The field CONNECTOR_UPDATE_CONTENT_FIELD need to be declared because the update of Connector class relies on the MLCreateConnectorInput class
     public static final String CONNECTOR_UPDATE_CONTENT_FIELD = "connector_update_content";
-    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set when sending update request
 
     @Getter
     private String modelId;

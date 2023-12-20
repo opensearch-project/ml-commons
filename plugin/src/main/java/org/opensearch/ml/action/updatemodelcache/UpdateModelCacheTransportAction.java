@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.action.update;
+package org.opensearch.ml.action.updatemodelcache;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -20,11 +20,11 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.transport.update.MLUpdateModelCacheAction;
-import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodeRequest;
-import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodeResponse;
-import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodesRequest;
-import org.opensearch.ml.common.transport.update.MLUpdateModelCacheNodesResponse;
+import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheAction;
+import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheNodeRequest;
+import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheNodeResponse;
+import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheNodesRequest;
+import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStats;
@@ -114,8 +114,12 @@ public class UpdateModelCacheTransportAction extends
         String localNodeId = clusterService.localNode().getId();
 
         mlModelManager.updateModelCache(modelId, isPredictorUpdate, ActionListener.wrap(r -> {
+            modelUpdateStatus.replace(modelId, "success");
             log.info("Successfully performing in-place update model {} on node {}", modelId, localNodeId);
-        }, e -> { log.error("Failed to perform in-place update model for model {} on node {}", modelId, localNodeId); }));
+        }, e -> {
+            modelUpdateStatus.replace(modelId, "failed");
+            log.error("Failed to perform in-place update model for model {} on node {}", modelId, localNodeId);
+        }));
         return new MLUpdateModelCacheNodeResponse(clusterService.localNode(), modelUpdateStatus);
     }
 }
