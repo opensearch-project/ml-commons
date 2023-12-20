@@ -5,10 +5,13 @@
 package org.opensearch.ml.common.transport.agent;
 
 import org.junit.Test;
+import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.action.ValidateActions.addValidationError;
@@ -56,10 +59,46 @@ public class MLAgentDeleteRequestTest {
     }
 
     @Test
-    public void fromActionRequest() throws IOException {
+    public void fromActionRequest_Success() throws IOException {
         agentId = "test-lmn";
         MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
         assertEquals(mLAgentDeleteRequest.fromActionRequest(mLAgentDeleteRequest), mLAgentDeleteRequest);
 
+    }
+    @Test
+    public void fromActionRequest_Success_fromActionRequest() throws IOException {
+        agentId = "test-opq";
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+
+        ActionRequest actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                mLAgentDeleteRequest.writeTo(out);
+            }
+        };
+        MLAgentDeleteRequest request = mLAgentDeleteRequest.fromActionRequest(actionRequest);
+        assertEquals(request.agentId, agentId);
+    }
+
+    @Test(expected = UncheckedIOException.class)
+    public void fromActionRequest_IOException() {
+        agentId = "test-rst";
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        ActionRequest actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                throw new IOException();
+            }
+        };
+        mLAgentDeleteRequest.fromActionRequest(actionRequest);
     }
 }
