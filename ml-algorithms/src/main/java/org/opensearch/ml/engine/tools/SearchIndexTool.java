@@ -81,11 +81,7 @@ public class SearchIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || !parameters.containsKey(INPUT_FIELD)) {
-            return false;
-        }
-        String input = parameters.get(INPUT_FIELD);
-        return input != null;
+        return parameters != null && parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
     }
 
     @Override
