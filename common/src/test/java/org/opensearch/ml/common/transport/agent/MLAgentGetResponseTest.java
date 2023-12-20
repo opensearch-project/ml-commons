@@ -99,11 +99,40 @@ public class MLAgentGetResponseTest {
     }
 
     @Test
-    public void FromActionResponse() throws IOException {
+    public void fromActionResponse_Success() throws IOException {
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
                 .mlAgent(mlAgent)
                 .build();
         assertEquals(mlAgentGetResponse.fromActionResponse(mlAgentGetResponse), mlAgentGetResponse);
 
         }
+    @Test
+    public void fromActionResponse_Success_fromActionResponse() throws IOException {
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
+                .mlAgent(mlAgent)
+                .build();
+
+        ActionResponse actionResponse = new ActionResponse() {
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                mlAgentGetResponse.writeTo(out);
+            }
+        };
+        MLAgentGetResponse response = mlAgentGetResponse.fromActionResponse(actionResponse);
+        assertEquals(response.getMlAgent(), mlAgent);
+    }
+
+    @Test(expected = UncheckedIOException.class)
+    public void fromActionResponse_IOException() {
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
+                .mlAgent(mlAgent)
+                .build();
+        ActionResponse actionResponse = new ActionResponse() {
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                throw new IOException();
+            }
+        };
+        mlAgentGetResponse.fromActionResponse(actionResponse);
+    }
     }
