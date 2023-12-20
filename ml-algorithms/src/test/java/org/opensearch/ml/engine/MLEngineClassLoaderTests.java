@@ -5,21 +5,19 @@
 
 package org.opensearch.ml.engine;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.mock;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.junit.Test;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 
@@ -43,19 +41,27 @@ public class MLEngineClassLoaderTests {
 
         // set properties
         MLEngineClassLoader.deregister(FunctionName.LOCAL_SAMPLE_CALCULATOR);
-        LocalSampleCalculator instance = MLEngineClassLoader
+        final LocalSampleCalculator instance = MLEngineClassLoader
             .initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
-        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) instance.execute(input);
-        assertEquals(d1 + d2, output.getResult(), 1e-6);
-        assertEquals(client, instance.getClient());
-        assertEquals(settings, instance.getSettings());
+
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(d1 + d2, output.getResult(), 1e-6);
+            assertEquals(client, instance.getClient());
+            assertEquals(settings, instance.getSettings());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+
+        instance.execute(input, actionListener);
 
         // don't set properties
-        instance = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class);
-        output = (LocalSampleCalculatorOutput) instance.execute(input);
-        assertEquals(d1 + d2, output.getResult(), 1e-6);
-        assertNull(instance.getClient());
-        assertNull(instance.getSettings());
+        final LocalSampleCalculator instance2 = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class);
+        ActionListener<Output> actionListener2 = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(d1 + d2, output.getResult(), 1e-6);
+            assertNull(instance2.getClient());
+            assertNull(instance2.getSettings());
+        }, e -> { fail("Test failed: " + e.getMessage()); });
+        instance2.execute(input, actionListener2);
     }
 
     @Test
@@ -68,4 +74,11 @@ public class MLEngineClassLoaderTests {
         LocalSampleCalculator instance = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, null, Input.class);
         assertEquals(calculator, instance);
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInitInstance_ClassNotFound() {
+        // Test for case where class is not found in the maps
+        MLEngineClassLoader.initInstance("SOMETHING ELSE", null, Object.class);
+    }
+
 }

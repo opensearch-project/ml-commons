@@ -9,12 +9,14 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.client.Client;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
@@ -33,13 +35,16 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class MLCommonsClassLoaderTests {
 
@@ -168,6 +173,15 @@ public class MLCommonsClassLoaderTests {
         testClassLoader_MLInput_DlModel(FunctionName.TEXT_EMBEDDING);
         testClassLoader_MLInput_DlModel(FunctionName.SPARSE_TOKENIZE);
         testClassLoader_MLInput_DlModel(FunctionName.SPARSE_ENCODING);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testConnectorInitializationException() {
+        // Example initialization parameters for connectors
+        String initParam1 = "parameter1";
+
+        // Initialize the first connector type
+        MLCommonsClassLoader.initConnector("Connector", new Object[]{initParam1}, String.class);
     }
 
     public enum TestEnum {
