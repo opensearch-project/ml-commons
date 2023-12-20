@@ -39,10 +39,10 @@ public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToX
     public MLUndeployModelNodeResponse(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
-            this.modelUndeployStatus = in.readMap(s -> s.readString(), s-> s.readString());
+            this.modelUndeployStatus = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         if (in.readBoolean()) {
-            this.modelWorkerNodeBeforeRemoval = in.readMap(s -> s.readString(), s-> s.readOptionalStringArray());
+            this.modelWorkerNodeBeforeRemoval = in.readMap(StreamInput::readString, StreamInput::readOptionalStringArray);
         }
     }
 

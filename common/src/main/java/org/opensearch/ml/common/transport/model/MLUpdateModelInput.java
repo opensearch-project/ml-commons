@@ -17,23 +17,27 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 import java.io.IOException;
-import java.util.Map;
+import java.time.Instant;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.Connector.createConnector;
 
 @Data
 public class MLUpdateModelInput implements ToXContentObject, Writeable {
     
-    public static final String MODEL_ID_FIELD = "model_id"; // mandatory
+    public static final String MODEL_ID_FIELD = "model_id"; // passively set when passing url to rest API
     public static final String DESCRIPTION_FIELD = "description"; // optional
-    public static final String MODEL_VERSION_FIELD = "model_version"; // optional
+    public static final String MODEL_VERSION_FIELD = "model_version"; // passively set when register model to a new model group
     public static final String MODEL_NAME_FIELD = "name"; // optional
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
+    public static final String CONNECTOR_FIELD = "connector"; // optional
     public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
+    // The field CONNECTOR_UPDATE_CONTENT_FIELD need to be declared because the update of Connector class relies on the MLCreateConnectorInput class
+    public static final String CONNECTOR_UPDATE_CONTENT_FIELD = "connector_update_content";
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set when sending update request
 
     @Getter
     private String modelId;
@@ -42,29 +46,44 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String name;
     private String modelGroupId;
     private MLModelConfig modelConfig;
+    private Connector connector;
     private String connectorId;
+    private MLCreateConnectorInput connectorUpdateContent;
+    private Instant lastUpdateTime;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId, MLModelConfig modelConfig, String connectorId) {
+    public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
+                              MLModelConfig modelConfig, Connector connector, String connectorId,
+                              MLCreateConnectorInput connectorUpdateContent, Instant lastUpdateTime) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.modelConfig = modelConfig;
+        this.connector = connector;
         this.connectorId = connectorId;
+        this.connectorUpdateContent = connectorUpdateContent;
+        this.lastUpdateTime = lastUpdateTime;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
-        this.modelId = in.readString();
-        this.description = in.readOptionalString();
-        this.version = in.readOptionalString();
-        this.name = in.readOptionalString();
-        this.modelGroupId = in.readOptionalString();
+        modelId = in.readString();
+        description = in.readOptionalString();
+        version = in.readOptionalString();
+        name = in.readOptionalString();
+        modelGroupId = in.readOptionalString();
         if (in.readBoolean()) {
             modelConfig = new TextEmbeddingModelConfig(in);
         }
-        this.connectorId = in.readOptionalString();
+        if (in.readBoolean()) {
+            connector = Connector.fromStream(in);
+        }
+        connectorId = in.readOptionalString();
+        if (in.readBoolean()) {
+            connectorUpdateContent = new MLCreateConnectorInput(in);
+        }
+        lastUpdateTime = in.readOptionalInstant();
     }
 
     @Override
@@ -86,8 +105,17 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
+        if (connector != null) {
+            builder.field(CONNECTOR_FIELD, connector);
+        }
         if (connectorId != null) {
             builder.field(CONNECTOR_ID_FIELD, connectorId);
+        }
+        if (connectorUpdateContent != null) {
+            builder.field(CONNECTOR_UPDATE_CONTENT_FIELD, connectorUpdateContent);
+        }
+        if (lastUpdateTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
         builder.endObject();
         return builder;
@@ -106,7 +134,20 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        if (connector != null) {
+            out.writeBoolean(true);
+            connector.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalString(connectorId);
+        if (connectorUpdateContent != null) {
+            out.writeBoolean(true);
+            connectorUpdateContent.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalInstant(lastUpdateTime);
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -116,7 +157,10 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         String name = null;
         String modelGroupId = null;
         MLModelConfig modelConfig = null;
+        Connector connector = null;
         String connectorId = null;
+        MLCreateConnectorInput connectorUpdateContent = null;
+        Instant lastUpdateTime = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -141,8 +185,17 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
+                case CONNECTOR_FIELD:
+                    connector = Connector.createConnector(parser);
+                    break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
+                    break;
+                case CONNECTOR_UPDATE_CONTENT_FIELD:
+                    connectorUpdateContent = MLCreateConnectorInput.parse(parser, true);
+                    break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 default:
                     parser.skipChildren();
@@ -150,6 +203,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             }
         }
         // Model ID can only be set through RestRequest. Model version can only be set automatically.
-        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, modelConfig, connectorId);
+        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, modelConfig, connector, connectorId, connectorUpdateContent, lastUpdateTime);
     }
 }
