@@ -26,7 +26,7 @@ public class ConversationalIndexConstants {
     /** Version of the meta index schema */
     public final static Integer META_INDEX_SCHEMA_VERSION = 1;
     /** Name of the conversational metadata index */
-    public final static String META_INDEX_NAME = ".plugins-ml-conversation-meta";
+    public final static String META_INDEX_NAME = ".plugins-ml-memory-meta";
     /** Name of the metadata field for initial timestamp */
     public final static String META_CREATED_TIME_FIELD = "create_time";
     /** Name of the metadata field for updated timestamp */
@@ -64,7 +64,7 @@ public class ConversationalIndexConstants {
     /** Version of the interactions index schema */
     public final static Integer INTERACTIONS_INDEX_SCHEMA_VERSION = 1;
     /** Name of the conversational interactions index */
-    public final static String INTERACTIONS_INDEX_NAME = ".plugins-ml-conversation-interactions";
+    public final static String INTERACTIONS_INDEX_NAME = ".plugins-ml-memory-message";
     /** Name of the interaction field for the conversation Id */
     public final static String INTERACTIONS_CONVERSATION_ID_FIELD = "conversation_id";
     /** Name of the interaction field for the human input */
