@@ -32,13 +32,17 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.Index;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
@@ -78,6 +82,8 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
     CreateInteractionRequest request;
     CreateInteractionTransportAction action;
     ThreadContext threadContext;
+    UpdateResponse updateResponse;
+    ShardId shardId;
 
     @Before
     public void setup() throws IOException {
@@ -101,6 +107,9 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
             Collections.singletonMap("metadata", "some meta")
         );
 
+        shardId = new ShardId(new Index("indexName", "uuid"), 1);
+        updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+
         Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
@@ -114,7 +123,46 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testCreateInteraction() {
-        log.info("testing create interaction transport");
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(cmHandler).updateConversation(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(6);
+            listener.onResponse("testID");
+            return null;
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().getId().equals("testID"));
+    }
+
+    public void testCreateInteraction_WrongUpdateStatus() {
+        updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(cmHandler).updateConversation(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(6);
+            listener.onResponse("testID");
+            return null;
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().getId().equals("testID"));
+    }
+
+    public void testCreateInteraction_UpdateException() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Update Conversation Exception"));
+            return null;
+        }).when(cmHandler).updateConversation(any(), any(), any());
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(6);
             listener.onResponse("testID");
@@ -138,6 +186,11 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
             1
         );
 
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(cmHandler).updateConversation(any(), any(), any());
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(6);
             listener.onResponse("testID");

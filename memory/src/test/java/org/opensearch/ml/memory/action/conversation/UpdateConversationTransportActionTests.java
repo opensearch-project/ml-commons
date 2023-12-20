@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.conversation.ConversationalIndexConstants
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Before;
@@ -79,7 +80,9 @@ public class UpdateConversationTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         String conversationId = "test_conversation_id";
-        Map<String, Object> updateContent = Map.of(META_NAME_FIELD, "new name", META_UPDATED_TIME_FIELD, Instant.ofEpochMilli(123));
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put(META_NAME_FIELD, "new name");
+        updateContent.put(META_UPDATED_TIME_FIELD, Instant.ofEpochMilli(123));
         when(updateRequest.getConversationId()).thenReturn(conversationId);
         when(updateRequest.getUpdateContent()).thenReturn(updateContent);
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
