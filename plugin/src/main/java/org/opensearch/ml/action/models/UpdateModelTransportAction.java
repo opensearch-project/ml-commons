@@ -492,7 +492,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         String[] nodeIds = getUpdateModelCacheFailedNodesList(modelId, r);
                         log
                             .error(
-                                "Successfully update ML model index with model ID {} but update model cache was failed on following nodes {}",
+                                "Successfully update ML model index with model ID {} but update model cache was failed on following nodes {}, maybe retry?",
                                 modelId,
                                 Arrays.toString(nodeIds)
                             );
@@ -503,11 +503,12 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         + modelId
                                         + "but update model cache was failed on following nodes "
                                         + Arrays.toString(nodeIds)
+                                        + ", maybe retry?"
                                 )
                             );
                     }
                 }, e -> {
-                    log.error("Failed to update ML model cache for model: {}" + modelId, e);
+                    log.error("Failed to update ML model cache for model: " + modelId, e);
                     wrappedListener.onFailure(e);
                 }));
             } else if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
