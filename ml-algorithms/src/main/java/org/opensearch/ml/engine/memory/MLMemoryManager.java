@@ -23,6 +23,8 @@ import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
@@ -144,11 +146,17 @@ public class MLMemoryManager {
                 if (access) {
                     innerGetFinalInteractions(conversationId, lastNInteraction, actionListener);
                 } else {
-                    throw new OpenSearchSecurityException("User does not have access to conversation " + conversationId);
+                    String userstr = client
+                        .threadPool()
+                        .getThreadContext()
+                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                    String user = User.parse(userstr) == null ? "" : User.parse(userstr).getName();
+                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
             }, e -> { actionListener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
         } catch (Exception e) {
+            log.error("Failed to get final interactions for conversation " + conversationId, e);
             actionListener.onFailure(e);
         }
     }

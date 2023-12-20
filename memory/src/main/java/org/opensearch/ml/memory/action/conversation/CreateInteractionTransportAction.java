@@ -98,7 +98,6 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(iid -> {
                 cmHandler.updateConversation(cid, new HashMap<>(), getUpdateResponseListener(cid, iid, internalListener));
-                // internalListener.onResponse(new CreateInteractionResponse(iid));
             }, e -> { internalListener.onFailure(e); });
             if (parintIid == null || traceNumber == null) {
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
@@ -119,14 +118,14 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         return ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                 log
-                    .info(
+                    .debug(
                         "Successfully updated the Conversation with ID: {} after interaction {} is created",
                         conversationId,
                         interactionId
                     );
                 actionListener.onResponse(new CreateInteractionResponse(interactionId));
             } else {
-                log.info("Failed to update the Conversation with ID: {} after interaction {} is created", conversationId, interactionId);
+                log.error("Failed to update the Conversation with ID: {} after interaction {} is created", conversationId, interactionId);
                 actionListener.onResponse(new CreateInteractionResponse(interactionId));
             }
         }, exception -> {
