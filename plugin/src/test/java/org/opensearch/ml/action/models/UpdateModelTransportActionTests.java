@@ -64,7 +64,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
-import org.opensearch.ml.common.transport.updatemodelcache.MLUpdateModelCacheNodesResponse;
+import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;

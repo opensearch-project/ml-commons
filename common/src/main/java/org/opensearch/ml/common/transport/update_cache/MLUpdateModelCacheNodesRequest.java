@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.updatemodelcache;
+package org.opensearch.ml.common.transport.update_cache;
 
 import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
