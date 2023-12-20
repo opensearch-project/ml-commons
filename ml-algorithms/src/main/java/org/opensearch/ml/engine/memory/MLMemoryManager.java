@@ -5,13 +5,31 @@
 
 package org.opensearch.ml.engine.memory;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.TRACE_NUMBER_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
+
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchSecurityException;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.client.Requests;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
@@ -19,15 +37,17 @@ import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionAction;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionRequest;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
-import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
-import org.opensearch.ml.memory.action.conversation.GetInteractionsRequest;
-import org.opensearch.ml.memory.action.conversation.GetInteractionsResponse;
 import org.opensearch.ml.memory.action.conversation.GetTracesAction;
 import org.opensearch.ml.memory.action.conversation.GetTracesRequest;
 import org.opensearch.ml.memory.action.conversation.GetTracesResponse;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionRequest;
+import org.opensearch.ml.memory.index.ConversationMetaIndex;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.sort.SortOrder;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import lombok.AllArgsConstructor;
@@ -41,6 +61,8 @@ import lombok.extern.log4j.Log4j2;
 public class MLMemoryManager {
 
     private Client client;
+    private ClusterService clusterService;
+    private ConversationMetaIndex conversationMetaIndex;
 
     /**
      * Create a new Conversation
@@ -106,24 +128,74 @@ public class MLMemoryManager {
     }
 
     /**
-     * Get the interactions associate with this conversation that are not traces, sorted by recency
+     * Get the latest interactions associated with this conversation that are not traces, from oldest to newest
      * @param conversationId the conversation whose interactions to get
      * @param lastNInteraction Return how many interactions
      * @param actionListener get all the final interactions that are not traces
      */
     public void getFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> actionListener) {
-        Preconditions.checkNotNull(conversationId);
         Preconditions.checkArgument(lastNInteraction > 0, "lastN must be at least 1.");
         log.debug("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
 
-        ActionListener<GetInteractionsResponse> al = ActionListener.wrap(getInteractionsResponse -> {
-            actionListener.onResponse(getInteractionsResponse.getInteractions());
-        }, e -> { actionListener.onFailure(e); });
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
+            if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
+                actionListener.onResponse(List.of());
+                return;
+            }
+            ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
+                if (access) {
+                    innerGetFinalInteractions(conversationId, lastNInteraction, actionListener);
+                } else {
+                    String userstr = client
+                        .threadPool()
+                        .getThreadContext()
+                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                    String user = User.parse(userstr) == null ? "" : User.parse(userstr).getName();
+                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                }
+            }, e -> { actionListener.onFailure(e); });
+            conversationMetaIndex.checkAccess(conversationId, accessListener);
+        } catch (Exception e) {
+            log.error("Failed to get final interactions for conversation " + conversationId, e);
+            actionListener.onFailure(e);
+        }
+    }
 
-        try {
-            client.execute(GetInteractionsAction.INSTANCE, new GetInteractionsRequest(conversationId, lastNInteraction), al);
-        } catch (Exception exception) {
-            actionListener.onFailure(exception);
+    @VisibleForTesting
+    void innerGetFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> listener) {
+        SearchRequest searchRequest = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
+
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+
+        // Add the ExistsQueryBuilder for checking null values
+        ExistsQueryBuilder existsQueryBuilder = QueryBuilders.existsQuery(TRACE_NUMBER_FIELD);
+        boolQueryBuilder.mustNot(existsQueryBuilder);
+
+        // Add the TermQueryBuilder for another field
+        TermQueryBuilder termQueryBuilder = QueryBuilders.termQuery(INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+        boolQueryBuilder.must(termQueryBuilder);
+
+        // Set the query to the search source
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(boolQueryBuilder);
+        searchRequest.source(searchSourceBuilder);
+
+        searchRequest.source().size(lastNInteraction);
+        searchRequest.source().sort(INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
+
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
+                List<Interaction> result = new LinkedList<Interaction>();
+                for (SearchHit hit : response.getHits()) {
+                    result.add(0, Interaction.fromSearchHit(hit));
+                }
+                internalListener.onResponse(result);
+            }, e -> { internalListener.onFailure(e); });
+            client.search(searchRequest, al);
+        } catch (Exception e) {
+            listener.onFailure(e);
         }
     }
 

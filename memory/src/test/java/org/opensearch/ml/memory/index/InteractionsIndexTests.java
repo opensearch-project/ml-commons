@@ -731,9 +731,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals(
-                "no such index [.plugins-ml-conversation-interactions] and cannot get interaction since the interactions index does not exist"
-            ));
+            .equals("no such index [.plugins-ml-memory-message] and cannot get interaction since the interactions index does not exist"));
     }
 
     public void testGetSg_InteractionNotExist_ThenFail() {
