@@ -83,4 +83,18 @@ public class StringUtils {
         }
         return parameters;
     }
+
+    public static String toJson(Object value) {
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
+                if (value instanceof String) {
+                    return (String) value;
+                } else {
+                    return gson.toJson(value);
+                }
+            });
+        } catch (PrivilegedActionException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

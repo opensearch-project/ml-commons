@@ -17,9 +17,9 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.io.FileUtils;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -52,7 +52,7 @@ public abstract class DLModelExecute implements MLExecutable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
-    public abstract Output execute(Input input) throws ExecuteException;
+    public abstract void execute(Input input, ActionListener<Output> listener);
 
     protected Predictor<float[][], ai.djl.modality.Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();

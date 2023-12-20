@@ -10,6 +10,7 @@ import java.util.List;
 
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -36,7 +37,7 @@ public class LocalSampleCalculator implements Executable {
     }
 
     @Override
-    public Output execute(Input input) {
+    public void execute(Input input, ActionListener<Output> listener) {
         if (input == null || !(input instanceof LocalSampleCalculatorInput)) {
             throw new IllegalArgumentException("wrong input");
         }
@@ -46,13 +47,16 @@ public class LocalSampleCalculator implements Executable {
         switch (operation) {
             case "sum":
                 double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum();
-                return new LocalSampleCalculatorOutput(sum);
+                listener.onResponse(new LocalSampleCalculatorOutput(sum));
+                return;
             case "max":
                 double max = inputData.stream().max(Comparator.naturalOrder()).get();
-                return new LocalSampleCalculatorOutput(max);
+                listener.onResponse(new LocalSampleCalculatorOutput(max));
+                return;
             case "min":
                 double min = inputData.stream().min(Comparator.naturalOrder()).get();
-                return new LocalSampleCalculatorOutput(min);
+                listener.onResponse(new LocalSampleCalculatorOutput(min));
+                return;
             default:
                 throw new IllegalArgumentException("can't support this operation");
         }
