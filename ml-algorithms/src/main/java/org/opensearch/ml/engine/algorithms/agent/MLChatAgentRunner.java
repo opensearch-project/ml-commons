@@ -265,9 +265,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 ModelTensors
                     .builder()
                     .mlModelTensors(
-                        Collections.singletonList(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build())
+                        Collections.singletonList(
+                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build()
+                        )
                     )
                     .build()
+            );
+
+        cotModelTensors
+            .add(
+                ModelTensors
+                        .builder()
+                        .mlModelTensors(
+                                Collections.singletonList(
+                                        ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
+                                )
+                        )
+                        .build()
             );
 
         StringBuilder scratchpadBuilder = new StringBuilder();
