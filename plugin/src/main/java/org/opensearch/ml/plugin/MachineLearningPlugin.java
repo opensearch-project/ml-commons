@@ -71,6 +71,7 @@ import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelsAction;
+import org.opensearch.ml.action.update_cache.UpdateModelCacheTransportAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
@@ -122,6 +123,7 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
+import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.engine.MLEngine;
@@ -316,6 +318,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLUpdateModelAction.INSTANCE, UpdateModelTransportAction.class),
+                new ActionHandler<>(MLUpdateModelCacheAction.INSTANCE, UpdateModelCacheTransportAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
                 new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),

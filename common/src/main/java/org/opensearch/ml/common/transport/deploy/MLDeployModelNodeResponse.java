@@ -36,7 +36,7 @@ public class MLDeployModelNodeResponse extends BaseNodeResponse implements ToXCo
     public MLDeployModelNodeResponse(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
-            this.modelDeployStatus = in.readMap(s -> s.readString(), s-> s.readString());
+            this.modelDeployStatus = in.readMap(StreamInput::readString, StreamInput::readString);
         }
 
     }
@@ -58,7 +58,7 @@ public class MLDeployModelNodeResponse extends BaseNodeResponse implements ToXCo
 
         if (modelDeployStatus != null && modelDeployStatus.size() > 0) {
             out.writeBoolean(true);
-            out.writeMap(modelDeployStatus, (stream, v) -> stream.writeString(v), (stream, stats) -> stream.writeString(stats));
+            out.writeMap(modelDeployStatus, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
         }
