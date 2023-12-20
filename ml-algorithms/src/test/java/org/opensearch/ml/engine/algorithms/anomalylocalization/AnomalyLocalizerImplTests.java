@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.anomalylocalization;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +30,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -449,10 +450,8 @@ public class AnomalyLocalizerImplTests {
         anomalyLocalizer.execute(input, actionListener);
     }
 
-    // TODO: fix this
-    @Ignore
     @SuppressWarnings("unchecked")
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testExecuteFail() {
         doAnswer(invocation -> {
             Object[] args = invocation.getArguments();
@@ -460,15 +459,17 @@ public class AnomalyLocalizerImplTests {
             listener.onFailure(new RuntimeException());
             return null;
         }).when(client).multiSearch(any(), any());
-        anomalyLocalizer.execute(input, mock(ActionListener.class));
+        ActionListener actionListener = mock(ActionListener.class);
+        anomalyLocalizer.execute(input, actionListener);
+        ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        assertTrue(exceptionArgumentCaptor.getValue() instanceof RuntimeException);
     }
 
-    // TODO: fix this
-    @Ignore
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testExecuteInterrupted() {
         ActionListener<Output> actionListener = ActionListener.wrap(o -> { Thread.currentThread().interrupt(); }, e -> {
-            fail("Test failed: " + e.getMessage());
+            assertTrue(e.getMessage().contains("Failed to find index"));
         });
         anomalyLocalizer.execute(input, actionListener);
     }

@@ -177,16 +177,6 @@ public class MLAgentExecutor implements Executable {
                 memoryFactoryMap
             );
             flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
-        } else if ("cot".equals(mlAgent.getType())) {
-            MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(
-                client,
-                settings,
-                clusterService,
-                xContentRegistry,
-                toolFactories,
-                memoryFactoryMap
-            );
-            reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
         } else if ("conversational".equals(mlAgent.getType())) {
             MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(
                 client,
