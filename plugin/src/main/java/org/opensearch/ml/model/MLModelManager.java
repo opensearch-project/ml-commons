@@ -8,7 +8,6 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
@@ -66,7 +65,6 @@ import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -78,7 +76,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -90,6 +87,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
@@ -120,6 +118,7 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
@@ -291,7 +290,6 @@ public class MLModelManager {
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
 
                 if (mlRegisterModelMetaInput.getIsHidden()) {
                     indexRequest.id(modelName);
@@ -665,7 +663,6 @@ public class MLModelManager {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
                 });
-
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, listener));
             }, e -> {
                 log.error("Failed to init model index", e);
@@ -910,6 +907,47 @@ public class MLModelManager {
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
+    public synchronized void updateModelCache(String modelId, boolean isPredictorUpdate, ActionListener<String> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            getModel(modelId, ActionListener.wrap(mlModel -> {
+                if (isPredictorUpdate) {
+                    assert FunctionName.REMOTE == mlModel.getAlgorithm()
+                        : "In-place update is only supported on REMOTE models at this time.";
+                    Map<String, Object> params = ImmutableMap
+                        .of(
+                            ML_ENGINE,
+                            mlEngine,
+                            SCRIPT_SERVICE,
+                            scriptService,
+                            CLIENT,
+                            client,
+                            XCONTENT_REGISTRY,
+                            xContentRegistry,
+                            CLUSTER_SERVICE,
+                            clusterService
+                        );
+                    if (mlModel.getConnector() != null) {
+                        Predictable predictable = mlEngine.deploy(mlModel, params);
+                        modelCacheHelper.setPredictor(modelId, predictable);
+                        wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                        log.info("Completed in-place update internal connector for the model {}", modelId);
+                    } else {
+                        getConnector(client, mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                            mlModel.setConnector(connector);
+                            Predictable predictable = mlEngine.deploy(mlModel, params);
+                            modelCacheHelper.setPredictor(modelId, predictable);
+                            wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                            log.info("Completed in-place update stand-alone connector for the model {}", modelId);
+                        }, wrappedListener::onFailure));
+                    }
+                    wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                    log.info("Completed in-place update for the model {}", modelId);
+                }
+            }, wrappedListener::onFailure));
+        }
+    }
+
     /**
      * Read model chunks from model index. Concat chunks into a whole model file, then load
      * into memory.
@@ -948,7 +986,7 @@ public class MLModelManager {
         }
         modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
@@ -974,28 +1012,12 @@ public class MLModelManager {
                         return;
                     }
                     log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
-                    GetRequest getConnectorRequest = new GetRequest();
-                    FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
-                    getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
-                    // get connector and deploy remote model with standalone connector
-                    client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
-                        if (getResponse != null && getResponse.isExists()) {
-                            try (
-                                XContentParser parser = createXContentParserFromRegistry(
-                                    xContentRegistry,
-                                    getResponse.getSourceAsBytesRef()
-                                )
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                Connector connector = Connector.createConnector(parser);
-                                mlModel.setConnector(connector);
-                                setupPredictable(modelId, mlModel, params);
-                                wrappedListener.onResponse("successful");
-                                log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
-                            }
-                        }
-                    }, e -> { wrappedListener.onFailure(e); }));
-
+                    getConnector(client, mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                        mlModel.setConnector(connector);
+                        setupPredictable(modelId, mlModel, params);
+                        wrappedListener.onResponse("successful");
+                        log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
+                    }, wrappedListener::onFailure));
                     return;
                 }
                 // check circuit breaker before deploying custom model chunks
@@ -1102,8 +1124,7 @@ public class MLModelManager {
             if (r != null && r.isExists()) {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    GetResponse getResponse = r;
-                    String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
+                    String algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
 
                     MLModel mlModel = MLModel.parse(parser, algorithmName);
                     mlModel.setModelId(modelId);
@@ -1115,7 +1136,31 @@ public class MLModelManager {
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
             }
-        }, e -> { listener.onFailure(e); }));
+        }, listener::onFailure));
+    }
+
+    private void getConnector(Client client, String connectorId, ActionListener<Connector> listener) {
+        GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
+        client.get(getRequest, ActionListener.wrap(r -> {
+            if (r != null && r.isExists()) {
+                try (
+                    XContentParser parser = MLNodeUtils
+                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Connector connector = Connector.createConnector(parser);
+                    listener.onResponse(connector);
+                } catch (Exception e) {
+                    log.error("Failed to parse connector:" + connectorId);
+                    listener.onFailure(e);
+                }
+            } else {
+                listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+            }
+        }, e -> {
+            log.error("Failed to get connector", e);
+            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
+        }));
     }
 
     private void retrieveModelChunks(MLModel mlModelMeta, ActionListener<File> listener) throws InterruptedException {
@@ -1326,6 +1371,10 @@ public class MLModelManager {
         return eligibleNodeIds;
     }
 
+    public int getWorkerNodesSize(String modelId, FunctionName functionName, boolean onlyEligibleNode) {
+        return getWorkerNodes(modelId, functionName, onlyEligibleNode).length;
+    }
+
     /**
      * Get worker node of specific model without filtering eligible node.
      *
@@ -1335,6 +1384,10 @@ public class MLModelManager {
      */
     public String[] getWorkerNodes(String modelId, FunctionName functionName) {
         return getWorkerNodes(modelId, functionName, false);
+    }
+
+    public int getWorkerNodesSize(String modelId, FunctionName functionName) {
+        return getWorkerNodes(modelId, functionName, false).length;
     }
 
     /**
