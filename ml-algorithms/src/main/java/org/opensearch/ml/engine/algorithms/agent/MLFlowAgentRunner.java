@@ -46,7 +46,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @Data
 @NoArgsConstructor
-public class MLFlowAgentRunner {
+public class MLFlowAgentRunner implements MLAgentRunner {
 
     private Client client;
     private Settings settings;
