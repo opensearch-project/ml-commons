@@ -46,7 +46,7 @@ public class VectorDBTool extends AbstractRetrieverTool {
         Integer docSize,
         String modelId
     ) {
-        super(client, xContentRegistry, index, sourceFields, docSize);
+        super(TYPE, DEFAULT_DESCRIPTION, client, xContentRegistry, index, sourceFields, docSize);
         this.modelId = modelId;
         this.embeddingField = embeddingField;
         this.k = k == null ? DEFAULT_K : k;
@@ -69,21 +69,6 @@ public class VectorDBTool extends AbstractRetrieverTool {
             + k
             + "}}}"
             + " }";
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     public static class Factory extends AbstractRetrieverTool.Factory<VectorDBTool> {

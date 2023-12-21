@@ -529,8 +529,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
-        toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
         toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
+        toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);

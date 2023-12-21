@@ -60,7 +60,15 @@ public class AbstractRetrieverToolTests {
                 AbstractRetrieverTool.class,
                 Mockito
                     .withSettings()
-                    .useConstructor(null, TEST_XCONTENT_REGISTRY_FOR_QUERY, TEST_INDEX, TEST_SOURCE_FIELDS, TEST_DOC_SIZE)
+                    .useConstructor(
+                        "type",
+                        "description",
+                        null,
+                        TEST_XCONTENT_REGISTRY_FOR_QUERY,
+                        TEST_INDEX,
+                        TEST_SOURCE_FIELDS,
+                        TEST_DOC_SIZE
+                    )
                     .defaultAnswer(Mockito.CALLS_REAL_METHODS)
             );
         when(mockedImpl.getQueryBody(any(String.class))).thenReturn(TEST_QUERY);

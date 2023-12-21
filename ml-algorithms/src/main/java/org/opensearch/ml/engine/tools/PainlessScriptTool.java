@@ -13,47 +13,31 @@ import java.util.Map;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.Parser;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.engine.utils.ScriptUtils;
 import org.opensearch.script.ScriptService;
 
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ToolAnnotation(PainlessScriptTool.TYPE)
-public class PainlessScriptTool implements Tool {
+public class PainlessScriptTool extends AbstractTool {
     public static final String TYPE = "PainlessScriptTool";
-
-    @Setter
-    @Getter
-    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
     private Client client;
-    private String modelId;
-    @Setter
-    private Parser inputParser;
-    @Setter
-    private Parser outputParser;
     private ScriptService scriptService;
 
     public PainlessScriptTool(Client client, ScriptService scriptService) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.scriptService = scriptService;
 
-        outputParser = new Parser() {
-            @Override
-            public Object parse(Object o) {
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
+        this.setOutputParser(o -> {
+            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
+        });
     }
 
     @Override
@@ -62,26 +46,6 @@ public class PainlessScriptTool implements Tool {
         Map<String, Object> params = gson.fromJson(parameters.get("script_params"), Map.class);
         String s = ScriptUtils.executeScript(scriptService, painlessScript, params) + "";
         listener.onResponse((T) s);
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

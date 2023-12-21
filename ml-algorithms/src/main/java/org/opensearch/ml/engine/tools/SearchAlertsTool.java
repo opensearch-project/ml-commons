@@ -19,6 +19,7 @@ import org.opensearch.commons.alerting.model.Alert;
 import org.opensearch.commons.alerting.model.Table;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -27,39 +28,26 @@ import lombok.Getter;
 import lombok.Setter;
 
 @ToolAnnotation(SearchAlertsTool.TYPE)
-public class SearchAlertsTool implements Tool {
+public class SearchAlertsTool extends AbstractTool {
     public static final String TYPE = "SearchAlertsTool";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to search alerts.";
 
     @Setter
     @Getter
     private String name = TYPE;
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
-    @Getter
-    private String type;
-    @Getter
-    private String version;
 
     private Client client;
-    @Setter
-    private Parser<?, ?> inputParser;
-    @Setter
-    private Parser<?, ?> outputParser;
 
     public SearchAlertsTool(Client client) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
 
         // probably keep this overridden output parser. need to ensure the output matches what's expected
-        outputParser = new Parser<>() {
-            @Override
-            public Object parse(Object o) {
-                @SuppressWarnings("unchecked")
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
+        this.setOutputParser((Parser<Object, Object>) o -> {
+            @SuppressWarnings("unchecked")
+            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
+        });
     }
 
     @Override
@@ -119,11 +107,6 @@ public class SearchAlertsTool implements Tool {
     @Override
     public boolean validate(Map<String, String> parameters) {
         return true;
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
     }
 
     /**

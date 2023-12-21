@@ -43,47 +43,30 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
-import lombok.Getter;
-import lombok.Setter;
-
 @ToolAnnotation(CatIndexTool.TYPE)
-public class CatIndexTool implements Tool {
+public class CatIndexTool extends AbstractTool {
     public static final String TYPE = "CatIndexTool";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
 
-    @Setter
-    @Getter
-    private String name = CatIndexTool.TYPE;
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
-    @Getter
-    private String version;
-
     private Client client;
-    @Setter
-    private Parser<?, ?> inputParser;
-    @Setter
-    private Parser<?, ?> outputParser;
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
     public CatIndexTool(Client client, ClusterService clusterService) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.clusterService = clusterService;
 
-        outputParser = new Parser<>() {
-            @Override
-            public Object parse(Object o) {
-                @SuppressWarnings("unchecked")
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
+        this.setOutputParser((Parser<Object, Object>) parser -> {
+            @SuppressWarnings("unchecked")
+            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) parser;
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
+        });
     }
 
     @Override
@@ -293,16 +276,6 @@ public class CatIndexTool implements Tool {
                 listener.onFailure(e);
             }
         }, size);
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override
