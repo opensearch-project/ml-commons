@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.controller;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_CONTROLLER_INDEX;
@@ -37,8 +42,8 @@ import org.opensearch.ml.common.transport.controller.MLCreateModelControllerRequ
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesRequest;
-import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;

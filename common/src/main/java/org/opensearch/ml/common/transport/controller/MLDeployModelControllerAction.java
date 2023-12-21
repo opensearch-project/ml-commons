@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLDeployModelControllerAction extends ActionType<MLDeployModelControllerNodesResponse> {
     public static final MLDeployModelControllerAction INSTANCE = new MLDeployModelControllerAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/models/deploy";
+    public static final String NAME = "cluster:admin/opensearch/ml/deploy_model_controllers";
 
     private MLDeployModelControllerAction() { super(NAME, MLDeployModelControllerNodesResponse::new);}
 }
