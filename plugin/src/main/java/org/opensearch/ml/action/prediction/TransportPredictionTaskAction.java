@@ -120,8 +120,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                         RestStatus.TOO_MANY_REQUESTS
                                                     )
                                                 );
-                                        } else if (userInfo != null
-                                            && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
+                                        } else if (modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
                                             && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
                                             wrappedListener
                                                 .onFailure(

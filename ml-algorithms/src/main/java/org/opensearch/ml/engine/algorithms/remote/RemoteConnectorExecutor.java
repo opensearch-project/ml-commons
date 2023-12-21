@@ -132,10 +132,18 @@ public interface RemoteConnectorExecutor {
                 RestStatus.TOO_MANY_REQUESTS
             );
         } else {
-            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+            // invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+            invokeRemoteModelInManagedService(mlInput, parameters, payload, tensorOutputs);
         }
     }
 
     void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);
+
+    void invokeRemoteModelInManagedService(
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        List<ModelTensors> tensorOutputs
+    );
 
 }

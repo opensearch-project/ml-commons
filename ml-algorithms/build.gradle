@@ -66,6 +66,9 @@ dependencies {
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
     implementation 'com.jayway.jsonpath:json-path:2.8.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
+    implementation "com.amazonaws:aws-java-sdk-core:1.12.48"
+    implementation "com.amazonaws:aws-java-sdk-sts:1.12.48"
+    implementation "com.amazonaws:aws-java-sdk-secretsmanager:1.12.48"
 }
 
 lombok {
