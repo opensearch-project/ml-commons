@@ -163,7 +163,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     ) {
         return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
-                log.info("Failed to update the connector with ID: {}", connectorId);
+                log.error("Failed to update the connector with ID: {}", connectorId);
                 actionListener.onResponse(updateResponse);
                 return;
             }
