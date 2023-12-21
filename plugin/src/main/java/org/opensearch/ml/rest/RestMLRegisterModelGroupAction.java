@@ -60,7 +60,7 @@ public class RestMLRegisterModelGroupAction extends BaseRestHandler {
     MLRegisterModelGroupRequest getRequest(RestRequest request) throws IOException {
         boolean hasContent = request.hasContent();
         if (!hasContent) {
-            throw new OpenSearchParseException("Model update request has empty body");
+            throw new OpenSearchParseException("Model group request has empty body");
         }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

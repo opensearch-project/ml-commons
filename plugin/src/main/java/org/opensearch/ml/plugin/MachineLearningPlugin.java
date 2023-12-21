@@ -45,8 +45,11 @@ import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.action.connector.TransportCreateConnectorAction;
 import org.opensearch.ml.action.connector.UpdateConnectorTransportAction;
 import org.opensearch.ml.action.controller.CreateModelControllerTransportAction;
+import org.opensearch.ml.action.controller.DeleteModelControllerTransportAction;
 import org.opensearch.ml.action.controller.DeployModelControllerTransportAction;
 import org.opensearch.ml.action.controller.GetModelControllerTransportAction;
+import org.opensearch.ml.action.controller.UndeployModelControllerTransportAction;
+import org.opensearch.ml.action.controller.UpdateModelControllerTransportAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
@@ -75,6 +78,8 @@ import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelsAction;
+import org.opensearch.ml.action.update_cache.UpdateModelCacheTransportAction;
+import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.update_cache.UpdateModelCacheTransportAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
@@ -106,7 +111,10 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerAction;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
+import org.opensearch.ml.common.transport.controller.MLModelControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLModelControllerGetAction;
+import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerAction;
+import org.opensearch.ml.common.transport.controller.MLUpdateModelControllerAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -114,7 +122,6 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
-import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
@@ -178,6 +185,7 @@ import org.opensearch.ml.rest.RestMLCreateModelControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
+import org.opensearch.ml.rest.RestMLDeleteModelControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
@@ -203,6 +211,7 @@ import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
 import org.opensearch.ml.rest.RestMLUpdateModelAction;
+import org.opensearch.ml.rest.RestMLUpdateModelControllerAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
@@ -351,7 +360,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class),
                 new ActionHandler<>(MLCreateModelControllerAction.INSTANCE, CreateModelControllerTransportAction.class),
                 new ActionHandler<>(MLModelControllerGetAction.INSTANCE, GetModelControllerTransportAction.class),
-                new ActionHandler<>(MLDeployModelControllerAction.INSTANCE, DeployModelControllerTransportAction.class)
+                new ActionHandler<>(MLDeployModelControllerAction.INSTANCE, DeployModelControllerTransportAction.class),
+                new ActionHandler<>(MLUpdateModelControllerAction.INSTANCE, UpdateModelControllerTransportAction.class),
+                new ActionHandler<>(MLModelControllerDeleteAction.INSTANCE, DeleteModelControllerTransportAction.class),
+                new ActionHandler<>(MLUndeployModelControllerAction.INSTANCE, UndeployModelControllerTransportAction.class),
+                new ActionHandler<>(MLDeployModelControllerAction.INSTANCE, DeployModelControllerTransportAction.class),
                 new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class),
                 new ActionHandler<>(MLAgentGetAction.INSTANCE, GetAgentTransportAction.class),
                 new ActionHandler<>(MLAgentDeleteAction.INSTANCE, DeleteAgentTransportAction.class),
@@ -620,6 +633,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
         RestMLCreateModelControllerAction restMLCreateModelControllerAction = new RestMLCreateModelControllerAction();
         RestMLGetModelControllerAction restMLGetModelControllerAction = new RestMLGetModelControllerAction();
+        RestMLUpdateModelControllerAction restMLUpdateModelControllerAction = new RestMLUpdateModelControllerAction();
+        RestMLDeleteModelControllerAction restMLDeleteModelControllerAction = new RestMLDeleteModelControllerAction();
         RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction();
         RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction();
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
@@ -665,7 +680,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restGetConversationAction,
                 restGetInteractionAction,
                 restMLCreateModelControllerAction,
-                restMLGetModelControllerAction
+                restMLGetModelControllerAction,
+                restMLUpdateModelControllerAction,
+                restMLDeleteModelControllerAction,
+                restMLGetModelControllerAction,
                 restGetInteractionAction,
                 restMLGetAgentAction,
                 restMLDeleteAgentAction,

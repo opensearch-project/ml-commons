@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.update;
+ package org.opensearch.ml.common.transport.controller;
 
 import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
@@ -12,22 +12,22 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import java.io.IOException;
 
-public class MLUpdateModelCacheNodesRequest extends BaseNodesRequest<MLUpdateModelCacheNodesRequest> {
+public class MLUndeployModelControllerNodesRequest extends BaseNodesRequest<MLUndeployModelControllerNodesRequest> {
 
     @Getter
     private String modelId;
 
-    public MLUpdateModelCacheNodesRequest(StreamInput in) throws IOException {
+    public MLUndeployModelControllerNodesRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
     }
 
-    public MLUpdateModelCacheNodesRequest(String[] nodeIds, String modelId) {
+    public MLUndeployModelControllerNodesRequest(String[] nodeIds, String modelId) {
         super(nodeIds);
         this.modelId = modelId;
     }
 
-    public MLUpdateModelCacheNodesRequest(DiscoveryNode[] nodeIds, String modelId) {
+    public MLUndeployModelControllerNodesRequest(DiscoveryNode[] nodeIds, String modelId) {
         super(nodeIds);
         this.modelId = modelId;
     }

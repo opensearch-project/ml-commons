@@ -35,7 +35,7 @@ public class MLUpdateModelGroupRequestTest {
     }
 
     @Test
-    public void writeTo_Success() throws IOException {
+    public void writeToSuccess() throws IOException {
 
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
                 .updateModelGroupInput(mlUpdateModelGroupInput)
@@ -52,7 +52,7 @@ public class MLUpdateModelGroupRequestTest {
     }
 
     @Test
-    public void validate_Success() {
+    public void validateSuccess() {
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
                 .updateModelGroupInput(mlUpdateModelGroupInput)
                 .build();
@@ -61,7 +61,7 @@ public class MLUpdateModelGroupRequestTest {
     }
 
     @Test
-    public void validate_Exception_NullMLRegisterModelGroupInput() {
+    public void validateWithNullMLUpdateModelGroupInputException() {
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
                 .build();
         ActionRequestValidationException exception = request.validate();
@@ -69,8 +69,8 @@ public class MLUpdateModelGroupRequestTest {
     }
 
     @Test
-    // MLRegisterModelGroupInput check its parameters when created, so exception is not thrown here
-    public void validate_Exception_NullMLModelName() {
+    // MLUpdateModelGroupInput check its parameters when created, so exception is not thrown here
+    public void validateWithNullMLModelNameException() {
         mlUpdateModelGroupInput.setName(null);
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
                 .updateModelGroupInput(mlUpdateModelGroupInput)
@@ -82,7 +82,7 @@ public class MLUpdateModelGroupRequestTest {
 
 
     @Test
-    public void fromActionRequest_Success_WithMLUpdateModelRequest() {
+    public void fromActionRequestWithMLUpdateModelGroupRequestSuccess() {
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
                 .updateModelGroupInput(mlUpdateModelGroupInput)
                 .build();
@@ -90,7 +90,7 @@ public class MLUpdateModelGroupRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success_WithNonMLUpdateModelRequest() {
+    public void fromActionRequestWithNonMLUpdateModelGroupRequestSuccess() {
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
                 .updateModelGroupInput(mlUpdateModelGroupInput)
                 .build();
@@ -111,7 +111,7 @@ public class MLUpdateModelGroupRequestTest {
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionRequest_IOException() {
+    public void fromActionRequestIOException() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

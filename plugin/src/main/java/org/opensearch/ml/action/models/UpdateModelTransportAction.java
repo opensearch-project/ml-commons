@@ -205,7 +205,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
         boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
-        // This flag is used to decide if we need to re-deploy the predictor(model) when performing the in-place update
+        // This flag is used to decide if we need to re-deploy the predictor(model) when updating the model cache
         boolean isPredictorUpdate = (updateModelInput.getConnectorUpdateContent() != null)
             || (newConnectorId != null)
             || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled());
@@ -218,7 +218,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 updateModelInput.setModelRateLimiterConfig(modelRateLimiterConfig);
             }
         }
-        // This flag is used to decide if we need to perform an in-place update
+        // This flag is used to decide if we need to update the model cache
         boolean isUpdateModelCache = isPredictorUpdate && isModelDeployed;
         if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
             if (newConnectorId == null && updateModelInput.getConnectorUpdateContent() == null) {
@@ -418,7 +418,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             newModelGroupResponse.getPrimaryTerm(),
             Integer.parseInt(updatedVersion)
         );
-        updateModelGroupRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         try {
             updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);

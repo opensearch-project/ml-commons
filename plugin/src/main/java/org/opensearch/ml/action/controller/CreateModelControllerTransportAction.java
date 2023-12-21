@@ -11,6 +11,7 @@ import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -29,14 +30,16 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.controller.MLModelController;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerAction;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerRequest;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesRequest;
-import org.opensearch.ml.common.transport.controller.MLModelController;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
@@ -53,6 +56,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
     Client client;
     MLModelManager mlModelManager;
     ClusterService clusterService;
+    MLModelCacheHelper mlModelCacheHelper;
     ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
@@ -63,6 +67,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
         Client client,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
+        MLModelCacheHelper mlModelCacheHelper,
         MLModelManager mlModelManager
     ) {
         super(MLCreateModelControllerAction.NAME, transportService, actionFilters, MLCreateModelControllerRequest::new);
@@ -70,14 +75,15 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
         this.client = client;
         this.mlModelManager = mlModelManager;
         this.clusterService = clusterService;
+        this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateModelControllerResponse> actionListener) {
-        MLCreateModelControllerRequest createModelControllerRequest = MLCreateModelControllerRequest.FromActionRequest(request);
-        MLModelController mlModelController = createModelControllerRequest.getModelControllerInput();
-        String modelId = mlModelController.getModelId();
+        MLCreateModelControllerRequest createModelControllerRequest = MLCreateModelControllerRequest.fromActionRequest(request);
+        MLModelController modelController = createModelControllerRequest.getModelControllerInput();
+        String modelId = modelController.getModelId();
         User user = RestActionUtils.getUserContext(client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
@@ -89,15 +95,30 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                     modelAccessControlHelper
                         .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                             if (hasPermission) {
-                                String[] targetNodeIds = getAllNodes();
-                                MLDeployModelControllerNodesRequest deployModelControllerNodesRequest =
-                                    new MLDeployModelControllerNodesRequest(targetNodeIds, mlModelController.getModelId());
-                                indexAndCreateModelController(mlModelController, deployModelControllerNodesRequest, wrappedListener);
+                                if (mlModel.getModelState() != MLModelState.DEPLOYING) {
+                                    indexAndCreateModelController(mlModel, modelController, wrappedListener);
+                                } else {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, "
+                                                    + "please either create the model controller after it is deployed or before deploying it. Model ID "
+                                                    + modelId,
+                                                RestStatus.CONFLICT
+                                            )
+                                        );
+                                    log
+                                        .error(
+                                            "Failed to create a model controller during its corresponding model in DEPLOYING state. Model ID "
+                                                + modelId
+                                        );
+                                }
                             } else {
                                 wrappedListener
                                     .onFailure(
                                         new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
+                                            "User doesn't have privilege to perform this operation on this model controller, model ID "
+                                                + modelId,
                                             RestStatus.FORBIDDEN
                                         )
                                     );
@@ -138,14 +159,14 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
     }
 
     private void indexAndCreateModelController(
-        MLModelController mlModelController,
-        MLDeployModelControllerNodesRequest deployModelControllerNodesRequest,
+        MLModel mlModel,
+        MLModelController modelController,
         ActionListener<MLCreateModelControllerResponse> actionListener
     ) {
-        log.info("Indexing the ML model controller into system index");
+        log.info("Indexing the model controller into system index");
         mlIndicesHandler.initMLModelControllerIndex(ActionListener.wrap(indexCreated -> {
             if (!indexCreated) {
-                actionListener.onFailure(new RuntimeException("No response to create ML model controller index"));
+                actionListener.onFailure(new RuntimeException("No response to create model controller index"));
                 return;
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -156,32 +177,44 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                         indexResponse.getResult().name()
                     );
                     log.info("Model controller for model id {} saved into index, result:{}", modelId, indexResponse.getResult());
-                    mlModelManager.updateModel(modelId, Map.of(MLModel.IS_MODEL_CONTROLLER_ENABLED_FIELD, true));
-                    client
-                        .execute(
-                            MLDeployModelControllerAction.INSTANCE,
-                            deployModelControllerNodesRequest,
-                            ActionListener.wrap(strResponse -> {
-                                log.info("Successfully deploy model controller for model {}", modelId);
-                                actionListener.onResponse(response);
-                            }, e -> {
-                                log.error("Failed to deploy model controller for model: {}" + modelId, e);
-                                actionListener.onFailure(e);
-                            })
+                    if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+                        mlModelManager.updateModel(modelId, Map.of(MLModel.IS_MODEL_CONTROLLER_ENABLED_FIELD, true));
+                    }
+                    if (mlModelCacheHelper.isModelDeployed(modelId)) {
+                        log.info("Model {} is deployed. Start to deploy the model controller into cache.", modelId);
+                        String[] targetNodeIds = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
+                        MLDeployModelControllerNodesRequest deployModelControllerNodesRequest = new MLDeployModelControllerNodesRequest(
+                            targetNodeIds,
+                            modelController.getModelId()
                         );
+                        client
+                            .execute(
+                                MLDeployModelControllerAction.INSTANCE,
+                                deployModelControllerNodesRequest,
+                                ActionListener.wrap(strResponse -> {
+                                    log.info("Successfully deploy model controller for model {}", modelId);
+                                    actionListener.onResponse(response);
+                                }, e -> {
+                                    log.error("Failed to deploy model controller for model: {}" + modelId, e);
+                                    actionListener.onFailure(e);
+                                })
+                            );
+                    } else {
+                        actionListener.onResponse(response);
+                    }
                 }, actionListener::onFailure);
 
-                IndexRequest indexRequest = new IndexRequest(ML_MODEL_CONTROLLER_INDEX).id(mlModelController.getModelId());
+                IndexRequest indexRequest = new IndexRequest(ML_MODEL_CONTROLLER_INDEX).id(modelController.getModelId());
                 indexRequest
-                    .source(mlModelController.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+                    .source(modelController.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.runBefore(indexResponseListener, context::restore));
             } catch (Exception e) {
-                log.error("Failed to save ML model controller", e);
+                log.error("Failed to save model controller", e);
                 actionListener.onFailure(e);
             }
         }, e -> {
-            log.error("Failed to init ML model controller index", e);
+            log.error("Failed to init model controller index", e);
             actionListener.onFailure(e);
         }));
     }

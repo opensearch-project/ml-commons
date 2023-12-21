@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.update;
+package org.opensearch.ml.common.transport.model;
 
 import org.opensearch.action.ActionType;
 import org.opensearch.action.update.UpdateResponse;

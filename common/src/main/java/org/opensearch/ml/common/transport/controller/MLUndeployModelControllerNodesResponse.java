@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.update;
+package org.opensearch.ml.common.transport.controller;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.nodes.BaseNodesResponse;
@@ -18,13 +18,13 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import java.io.IOException;
 import java.util.List;
 
-public class MLUpdateModelCacheNodesResponse extends BaseNodesResponse<MLUpdateModelCacheNodeResponse> implements ToXContentObject {
+public class MLUndeployModelControllerNodesResponse extends BaseNodesResponse<MLUndeployModelControllerNodeResponse> implements ToXContentObject {
 
-    public MLUpdateModelCacheNodesResponse(StreamInput in) throws IOException {
-        super(new ClusterName(in), in.readList(MLUpdateModelCacheNodeResponse::readStats), in.readList(FailedNodeException::new));
+    public MLUndeployModelControllerNodesResponse(StreamInput in) throws IOException {
+        super(new ClusterName(in), in.readList(MLUndeployModelControllerNodeResponse::readStats), in.readList(FailedNodeException::new));
     }
 
-    public MLUpdateModelCacheNodesResponse(ClusterName clusterName, List<MLUpdateModelCacheNodeResponse> nodes, List<FailedNodeException> failures) {
+    public MLUndeployModelControllerNodesResponse(ClusterName clusterName, List<MLUndeployModelControllerNodeResponse> nodes, List<FailedNodeException> failures) {
         super(clusterName, nodes, failures);
     }
 
@@ -34,13 +34,13 @@ public class MLUpdateModelCacheNodesResponse extends BaseNodesResponse<MLUpdateM
     }
 
     @Override
-    public void writeNodesTo(StreamOutput out, List<MLUpdateModelCacheNodeResponse> nodes) throws IOException {
+    public void writeNodesTo(StreamOutput out, List<MLUndeployModelControllerNodeResponse> nodes) throws IOException {
         out.writeList(nodes);
     }
 
     @Override
-    public List<MLUpdateModelCacheNodeResponse> readNodesFrom(StreamInput in) throws IOException {
-        return in.readList(MLUpdateModelCacheNodeResponse::readStats);
+    public List<MLUndeployModelControllerNodeResponse> readNodesFrom(StreamInput in) throws IOException {
+        return in.readList(MLUndeployModelControllerNodeResponse::readStats);
     }
 
     @Override
@@ -48,12 +48,12 @@ public class MLUpdateModelCacheNodesResponse extends BaseNodesResponse<MLUpdateM
         String nodeId;
         DiscoveryNode node;
         builder.startObject();
-        for (MLUpdateModelCacheNodeResponse updateStats : getNodes()) {
-            if (!updateStats.isModelUpdateStatusEmpty()) {
-                node = updateStats.getNode();
+        for (MLUndeployModelControllerNodeResponse deployStats : getNodes()) {
+            if (!deployStats.isModelControllerUndeployStatusEmpty()) {
+                node = deployStats.getNode();
                 nodeId = node.getId();
                 builder.startObject(nodeId);
-                updateStats.toXContent(builder, params);
+                deployStats.toXContent(builder, params);
                 builder.endObject();
             }
         }

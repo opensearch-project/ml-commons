@@ -6,14 +6,15 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.junit.Before;
@@ -33,6 +34,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.search.SearchModule;
@@ -42,33 +44,44 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 public class MLUpdateModelInputTest {
 
     private MLUpdateModelInput updateModelInput;
-    private final String expectedInputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":\"2\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+    private final String expectedInputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
+            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+            "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
             "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
             "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
             "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\"}}";
-    private final String expectedInputStrWithNullField = "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":\"2\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1}";
+
+    private final String expectedInputStrWithNullField = "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":" +
+            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+            "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
-    private final String expectedOutputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":\"2\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+
+    private final String expectedOutputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
+            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+            "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
             "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
             "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
             "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}}}";
-    private final String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":\"2\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}},\"last_updated_time\":1}";
+
+    private final String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
+            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+            "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
             "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
             "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
             "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\"},\"illegal_field\":\"This field need to be skipped.\"}";
+            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -110,16 +123,24 @@ public class MLUpdateModelInputTest {
                 .description("updated description")
                 .build();
 
+        MLRateLimiter rateLimiter = MLRateLimiter.builder()
+                .rateLimitNumber("1")
+                .rateLimitUnit(TimeUnit.MILLISECONDS)
+                .build();
+
         updateModelInput = MLUpdateModelInput.builder()
                 .modelId("test-model_id")
                 .modelGroupId("modelGroupId")
                 .version("2")
                 .name("name")
                 .description("description")
+                .isEnabled(false)
+                .modelRateLimiterConfig(rateLimiter)
                 .modelConfig(config)
                 .connector(connector)
                 .connectorId("test-connector_id")
                 .connectorUpdateContent(updateContent)
+                .lastUpdateTime(Instant.ofEpochMilli(1))
                 .build();
             }
 
@@ -149,14 +170,8 @@ public class MLUpdateModelInputTest {
     public void testToXContentIncomplete() throws Exception {
         String expectedIncompleteInputStr =
                 "{\"model_id\":\"test-model_id\"}";
-        updateModelInput.setDescription(null);
-        updateModelInput.setVersion(null);
-        updateModelInput.setName(null);
-        updateModelInput.setModelGroupId(null);
-        updateModelInput.setModelConfig(null);
-        updateModelInput.setConnector(null);
-        updateModelInput.setConnectorId(null);
-        updateModelInput.setConnectorUpdateContent(null);
+        updateModelInput = MLUpdateModelInput.builder()
+                .modelId("test-model_id").build();
         String jsonStr = serializationWithToXContent(updateModelInput);
         assertEquals(expectedIncompleteInputStr, jsonStr);
     }

@@ -7,7 +7,7 @@ package org.opensearch.ml.common;
 
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
-import org.opensearch.ml.common.transport.controller.MLModelController;
+import org.opensearch.ml.common.controller.MLModelController;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;

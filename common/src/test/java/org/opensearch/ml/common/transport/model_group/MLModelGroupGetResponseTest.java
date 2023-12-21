@@ -40,7 +40,7 @@ public class MLModelGroupGetResponseTest {
     }
 
     @Test
-    public void writeTo_Success() throws IOException {
+    public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         MLModelGroupGetResponse response = MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build();
         response.writeTo(bytesStreamOutput);
@@ -66,7 +66,7 @@ public class MLModelGroupGetResponseTest {
     }
 
     @Test
-    public void fromActionResponseWithMLModelGroupGetResponse_Success() {
+    public void fromActionResponseWithMLModelGroupGetResponseSuccess() {
         MLModelGroupGetResponse mlModelGroupGetResponse = MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build();
         MLModelGroupGetResponse mlModelGroupGetResponseFromActionResponse = MLModelGroupGetResponse.fromActionResponse(mlModelGroupGetResponse);
         assertSame(mlModelGroupGetResponse, mlModelGroupGetResponseFromActionResponse);
@@ -74,7 +74,7 @@ public class MLModelGroupGetResponseTest {
     }
 
     @Test
-    public void fromActionResponse_Success() {
+    public void fromActionResponseSuccess() {
         MLModelGroupGetResponse mlModelGroupGetResponse = MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build();
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -88,7 +88,7 @@ public class MLModelGroupGetResponseTest {
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionResponse_IOException() {
+    public void fromActionResponseIOException() {
         ActionResponse actionResponse = new ActionResponse() {
             @Override
             public void writeTo(StreamOutput out) throws IOException {

@@ -15,6 +15,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.controller.MLModelController;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -54,7 +55,7 @@ public class MLCreateModelControllerRequest extends ActionRequest {
         return exception;
     }
 
-    public static MLCreateModelControllerRequest FromActionRequest(ActionRequest actionRequest) {
+    public static MLCreateModelControllerRequest fromActionRequest(ActionRequest actionRequest) {
         if (actionRequest instanceof MLCreateModelControllerRequest) {
             return (MLCreateModelControllerRequest) actionRequest;
         }

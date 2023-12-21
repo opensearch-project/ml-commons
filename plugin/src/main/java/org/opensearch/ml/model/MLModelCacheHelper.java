@@ -16,9 +16,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -139,6 +141,7 @@ public class MLModelCacheHelper {
 
     /**
      * Update the user rate limiter map with the user rate limiter map.
+     * If the user rate limiter map doesn't exist for the model, consider calling setUserRateLimiterMap instead.
      *
      * @param modelId model id
      * @param updateUserRateLimiterMap a map with user's name and its corresponding rate limiter
@@ -149,14 +152,16 @@ public class MLModelCacheHelper {
         if (userRateLimiterMap != null) {
             userRateLimiterMap.putAll(updateUserRateLimiterMap);
         } else {
-            throw new IllegalCallerException(
-                "User rate limiter map already existed for the model. Consider calling setUserRateLimiterMap instead. Model ID: " + modelId
+            throw new OpenSearchStatusException(
+                "Model controller doesn't exist for the model. Consider calling create model controller api instead. Model ID: " + modelId,
+                RestStatus.CONFLICT
             );
         }
     }
 
     /**
      * Update the user rate limiter map for a single user.
+     * If the user rate limiter map doesn't exist for the model, consider calling setUserRateLimiterMap instead.
      *
      * @param modelId model id
      * @param user user
@@ -168,8 +173,9 @@ public class MLModelCacheHelper {
         if (userRateLimiterMap != null) {
             userRateLimiterMap.put(user, rateLimiter);
         } else {
-            throw new IllegalCallerException(
-                "User rate limiter map already existed for the model. Consider calling setUserRateLimiterMap instead. Model ID: " + modelId
+            throw new OpenSearchStatusException(
+                "Model controller doesn't exist for the model. Consider calling create model controller api instead. Model ID: " + modelId,
+                RestStatus.CONFLICT
             );
         }
     }

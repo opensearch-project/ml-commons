@@ -26,7 +26,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.transport.controller.MLModelController;
+import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.transport.controller.MLModelControllerGetAction;
 import org.opensearch.ml.common.transport.controller.MLModelControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLModelControllerGetResponse;
@@ -89,12 +89,12 @@ public class GetModelControllerTransportAction extends HandledTransportAction<Ac
                                 .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                                     if (hasPermission) {
                                         wrappedListener
-                                            .onResponse(MLModelControllerGetResponse.builder().mlModelController(modelController).build());
+                                            .onResponse(MLModelControllerGetResponse.builder().modelController(modelController).build());
                                     } else {
                                         wrappedListener
                                             .onFailure(
                                                 new OpenSearchStatusException(
-                                                    "User doesn't have privilege to perform this operation on this model, model ID: "
+                                                    "User doesn't have privilege to perform this operation on this model controller, model ID: "
                                                         + modelId,
                                                     RestStatus.FORBIDDEN
                                                 )
@@ -121,29 +121,29 @@ public class GetModelControllerTransportAction extends HandledTransportAction<Ac
                         ));
 
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model controller with model ID: " + r.getId(), e);
+                        log.error("Failed to parse model controller with model ID: " + r.getId(), e);
                         wrappedListener.onFailure(e);
                     }
                 } else {
                     wrappedListener
                         .onFailure(
                             new OpenSearchStatusException(
-                                "Failed to find ml model controller with the provided model ID: " + modelId,
+                                "Failed to find model controller with the provided model ID: " + modelId,
                                 RestStatus.NOT_FOUND
                             )
                         );
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    log.error("Failed to get ml model controller index", e);
-                    wrappedListener.onFailure(new OpenSearchStatusException("Failed to find ml model controller", RestStatus.NOT_FOUND));
+                    log.error("Failed to get model controller index", e);
+                    wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
                 } else {
-                    log.error("Failed to get ml model controller " + modelId, e);
+                    log.error("Failed to get model controller " + modelId, e);
                     wrappedListener.onFailure(e);
                 }
             }));
         } catch (Exception e) {
-            log.error("Failed to get ml model controller " + modelId, e);
+            log.error("Failed to get model controller " + modelId, e);
             actionListener.onFailure(e);
         }
     }

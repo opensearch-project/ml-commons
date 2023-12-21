@@ -47,9 +47,9 @@ public class RestMLGetModelControllerAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLModelControllerGetRequest mlModelControllerGetRequest = getRequest(request);
+        MLModelControllerGetRequest modelControllerGetRequest = getRequest(request);
         return channel -> client
-            .execute(MLModelControllerGetAction.INSTANCE, mlModelControllerGetRequest, new RestToXContentListener<>(channel));
+            .execute(MLModelControllerGetAction.INSTANCE, modelControllerGetRequest, new RestToXContentListener<>(channel));
     }
 
     /**

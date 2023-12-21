@@ -99,13 +99,13 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.transport.controller.MLModelController;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -913,68 +913,6 @@ public class MLModelManager {
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
-    public synchronized void updateModelCache(String modelId, ActionListener<String> listener) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
-            getModel(modelId, ActionListener.wrap(mlModel -> {
-                int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
-                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
-                if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
-                    if (mlModel.getConnector() != null) {
-                        setupParamsAndPredictable(modelId, mlModel);
-                        wrappedListener.onResponse("Successfully performed in-place update for the model " + modelId);
-                        log.info("Completed in-place update internal connector for the model {}", modelId);
-                    } else {
-                        getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
-                            mlModel.setConnector(connector);
-                            setupParamsAndPredictable(modelId, mlModel);
-                            wrappedListener.onResponse("Successfully performed in-place update for the model " + modelId);
-                            log.info("Completed in-place update stand-alone connector for the model {}", modelId);
-                        }, wrappedListener::onFailure));
-                    }
-                }
-                wrappedListener.onResponse("Successfully performed in-place update for the model " + modelId);
-                log.info("Completed in-place update for the model {}", modelId);
-            }, wrappedListener::onFailure));
-        } catch (Exception e) {
-            log.error("Failed to perform in-place update for the model " + modelId, e);
-            listener.onFailure(e);
-        }
-    }
-
-    public synchronized void deployModelController(String modelId, ActionListener<String> listener) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
-            getModel(modelId, ActionListener.wrap(mlModel -> {
-                getModelController(modelId, ActionListener.wrap(modelController -> {
-                    int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
-                    setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
-                    if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
-                        if (mlModel.getConnector() != null) {
-                            setupParamsAndPredictable(modelId, mlModel);
-                            wrappedListener.onResponse("Successfully deployed model controller for the model " + modelId);
-                            log.info("Deployed model controller for the remote model {}", modelId);
-                        } else {
-                            getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
-                                mlModel.setConnector(connector);
-                                setupParamsAndPredictable(modelId, mlModel);
-                                wrappedListener.onResponse("Successfully deployed model controller for the model " + modelId);
-                                log.info("Deployed model controller for the remote model {}", modelId);
-                            }, wrappedListener::onFailure));
-                        }
-                        return;
-                    }
-                    wrappedListener.onResponse("Successfully deployed model controller for the model " + modelId);
-                    log.info("Deployed model controller for the model {}", modelId);
-                }, wrappedListener::onFailure));
-            }, wrappedListener::onFailure));
-        } catch (Exception e) {
-            log.error("Failed to deploy model controller for the model " + modelId, e);
-            listener.onFailure(e);
-        }
-    }
-
     /**
      * Read model chunks from model index. Concat chunks into a whole model file, then load
      * into memory.
@@ -1017,30 +955,36 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
+                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
-                    modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                    setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
-                    if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-                        setupParamsAndPredictable(modelId, mlModel);
-                        mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                        wrappedListener.onResponse("successful");
+                    if (mlModel.getIsModelControllerEnabled() != null && mlModel.getIsModelControllerEnabled()) {
+                        getModelController(modelId, ActionListener.wrap(modelController -> {
+                            setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
+                            log.info("Successfully redeployed model controller for model " + modelId);
+                            log.info("Trying to deploy remote model with model controller configured.");
+                            deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
+                        }, e -> {
+                            log
+                                .error(
+                                    "Trying to deploy remote model with exceptions in re-deploying its model controller. Model ID: "
+                                        + modelId,
+                                    e
+                                );
+                            deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
+                        }));
                         return;
+                    } else {
+                        log.info("Trying to deploy remote or built-in model without model controller configured.");
+                        deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
                     }
-                    log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
-                    getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
-                        mlModel.setConnector(connector);
-                        setupParamsAndPredictable(modelId, mlModel);
-                        mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                        wrappedListener.onResponse("successful");
-                        log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
-                    }, wrappedListener::onFailure));
                     return;
                 }
+
+                setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
+                deployModelControllerWithDeployingModel(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1052,8 +996,6 @@ public class MLModelManager {
                         return;
                     }
                     log.debug("Model content matches original hash value, continue deploying");
-                    modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                    setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
                     Map<String, Object> params = Map.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
                     if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
@@ -1100,6 +1042,65 @@ public class MLModelManager {
         }
     }
 
+    private void deployRemoteOrBuiltInModel(MLModel mlModel, Integer eligibleNodeCount, ActionListener<String> wrappedListener) {
+        String modelId = mlModel.getModelId();
+        setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
+        if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
+            setupParamsAndPredictable(modelId, mlModel);
+            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+            wrappedListener.onResponse("successful");
+            return;
+        }
+        log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
+        getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+            mlModel.setConnector(connector);
+            setupParamsAndPredictable(modelId, mlModel);
+            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+            wrappedListener.onResponse("successful");
+            log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
+        }, wrappedListener::onFailure));
+    }
+
+    private void setupParamsAndPredictable(String modelId, MLModel mlModel) {
+        Map<String, Object> params = setUpParameterMap(modelId);
+        Predictable predictable = mlEngine.deploy(mlModel, params);
+        modelCacheHelper.setPredictor(modelId, predictable);
+    }
+
+    private Map<String, Object> setUpParameterMap(String modelId) {
+        TokenBucket modelRateLimiter = getModelRateLimiter(modelId);
+        Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
+
+        Map<String, Object> params = new HashMap<>() {
+            {
+                put(ML_ENGINE, mlEngine);
+                put(SCRIPT_SERVICE, scriptService);
+                put(CLIENT, client);
+                put(XCONTENT_REGISTRY, xContentRegistry);
+                put(CLUSTER_SERVICE, clusterService);
+            }
+        };
+        if (modelRateLimiter == null && userRateLimiterMap == null) {
+            log.info("Setting up basic ML predictor parameters.");
+            return Collections.unmodifiableMap(params);
+        } else if (modelRateLimiter != null && userRateLimiterMap == null) {
+            params.put(MODEL_RATE_LIMITER, modelRateLimiter);
+            log.info("Setting up basic ML predictor parameters with model level throttling.");
+            return Collections.unmodifiableMap(params);
+        } else if (modelRateLimiter == null) {
+            params.put(USER_RATE_LIMITER_MAP, userRateLimiterMap);
+            log.info("Setting up basic ML predictor parameters with user level throttling.");
+            return Collections.unmodifiableMap(params);
+        } else {
+            params.put(MODEL_RATE_LIMITER, modelRateLimiter);
+            params.put(USER_RATE_LIMITER_MAP, userRateLimiterMap);
+            log.info("Setting up basic ML predictor parameters with both model and user level throttling.");
+            return Collections.unmodifiableMap(params);
+        }
+    }
+
     private void handleDeployModelException(String modelId, FunctionName functionName, ActionListener<String> listener, Exception e) {
 
         if (!(e instanceof MLLimitExceededException)
@@ -1112,37 +1113,204 @@ public class MLModelManager {
         listener.onFailure(e);
     }
 
-    private void setupParamsAndPredictable(String modelId, MLModel mlModel) {
-        Map<String, Object> params = setUpParameterMap(modelId);
-        Predictable predictable = mlEngine.deploy(mlModel, params);
-        modelCacheHelper.setPredictor(modelId, predictable);
+    public synchronized void updateModelCache(String modelId, ActionListener<String> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            getModel(modelId, ActionListener.wrap(mlModel -> {
+                int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
+                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
+                setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
+                if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+                    if (mlModel.getConnector() != null) {
+                        setupParamsAndPredictable(modelId, mlModel);
+                        wrappedListener.onResponse("Successfully updated model cache for the remote model " + modelId);
+                        log.info("Completed the model cache update for the remote model {}", modelId);
+                    } else {
+                        getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                            mlModel.setConnector(connector);
+                            setupParamsAndPredictable(modelId, mlModel);
+                            wrappedListener.onResponse("Successfully updated model cache for the remote model " + modelId);
+                            log.info("Completed the model cache update for the remote model {}", modelId);
+                        }, wrappedListener::onFailure));
+                    }
+                }
+                wrappedListener.onResponse("Successfully updated model cache for the model " + modelId);
+                log.info("Completed the model cache update for the model {}", modelId);
+            }, wrappedListener::onFailure));
+        } catch (Exception e) {
+            log.error("Failed to updated model cache for the model " + modelId, e);
+            listener.onFailure(e);
+        }
     }
 
-    private Map<String, Object> setUpParameterMap(String modelId) {
-        TokenBucket modelRateLimiter = getModelRateLimiter(modelId);
-        Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
-        Map<String, Object> params = new HashMap<>() {
-            {
-                put(ML_ENGINE, mlEngine);
-                put(SCRIPT_SERVICE, scriptService);
-                put(CLIENT, client);
-                put(XCONTENT_REGISTRY, xContentRegistry);
-                put(CLUSTER_SERVICE, clusterService);
+    /**
+     * Deploy the model controller with a model id. This method should be called AFTER a model is deployed.
+     * If you want to implement similar behavior during model deploy, deployModelControllerWithDeployingModel is the one supposed be called.
+     *
+     * @param modelId ml model ID
+     * @param listener action listener
+     */
+    public synchronized void deployModelControllerWithDeployedModel(String modelId, ActionListener<String> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (!modelCacheHelper.isModelDeployed(modelId)) {
+                throw new OpenSearchStatusException(
+                    "The model of this model controller has not deployed yet, please deploy the model first.",
+                    RestStatus.CONFLICT
+                );
             }
-        };
-        if (modelRateLimiter == null && userRateLimiterMap == null) {
-            return Collections.unmodifiableMap(params);
-        } else if (modelRateLimiter != null && userRateLimiterMap == null) {
-            params.put(MODEL_RATE_LIMITER, getModelRateLimiter(modelId));
-            return Collections.unmodifiableMap(params);
-        } else if (modelRateLimiter == null) {
-            params.put(USER_RATE_LIMITER_MAP, getUserRateLimiterMap(modelId));
-            return Collections.unmodifiableMap(params);
-        } else {
-            params.put(MODEL_RATE_LIMITER, getModelRateLimiter(modelId));
-            params.put(USER_RATE_LIMITER_MAP, getUserRateLimiterMap(modelId));
-            return Collections.unmodifiableMap(params);
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            getModel(modelId, ActionListener.wrap(mlModel -> {
+                getModelController(modelId, ActionListener.wrap(modelController -> {
+                    int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
+                    setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
+                    if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+                        if (mlModel.getConnector() != null) {
+                            setupParamsAndPredictable(modelId, mlModel);
+                            wrappedListener.onResponse("Successfully deployed model controller for the remote model " + modelId);
+                            log.info("Deployed model controller for the remote model {}", modelId);
+                        } else {
+                            getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                                mlModel.setConnector(connector);
+                                setupParamsAndPredictable(modelId, mlModel);
+                                wrappedListener.onResponse("Successfully deployed model controller for the remote model " + modelId);
+                                log.info("Deployed model controller for the remote model {}", modelId);
+                            }, wrappedListener::onFailure));
+                        }
+                        return;
+                    }
+                    wrappedListener.onResponse("Successfully deployed model controller for the model " + modelId);
+                    log.info("Deployed model controller for the model {}", modelId);
+                }, wrappedListener::onFailure));
+            }, wrappedListener::onFailure));
+        } catch (Exception e) {
+            log.error("Failed to deploy model controller for the model " + modelId, e);
+            listener.onFailure(e);
         }
+    }
+
+    /**
+     * Undploy the model controller for a model.
+     * Usually this method is called during deleting the model controller.
+     *
+     * @param modelId ml model ID
+     * @param listener action listener
+     */
+    public synchronized void undeployModelController(String modelId, ActionListener<String> listener) {
+        if (modelCacheHelper.isModelDeployed(modelId)) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+                getModel(modelId, ActionListener.wrap(mlModel -> {
+                    removeUserRateLimiterMap(modelId);
+                    if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+                        if (mlModel.getConnector() != null) {
+                            setupParamsAndPredictable(modelId, mlModel);
+                            wrappedListener.onResponse("Successfully undeployed model controller for the remote model " + modelId);
+                            log.info("Undeployed model controller for the remote model {}", modelId);
+                        } else {
+                            getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                                mlModel.setConnector(connector);
+                                setupParamsAndPredictable(modelId, mlModel);
+                                wrappedListener.onResponse("Successfully undeployed model controller for the remote model " + modelId);
+                                log.info("Undeployed model controller for the remote model {}", modelId);
+                            }, wrappedListener::onFailure));
+                        }
+                        return;
+                    }
+                    wrappedListener.onResponse("Successfully undeployed model controller for the model " + modelId);
+                    log.info("Undeployed model controller for the model {}", modelId);
+                }, wrappedListener::onFailure));
+            } catch (Exception e) {
+                log.error("Failed to undeploy model controller for the model " + modelId, e);
+                listener.onFailure(e);
+            }
+        } else if (isModelRunningOnNode(modelId)) {
+            log
+                .error(
+                    "Failed to undeploy model controller due to model is in ML cache but with a state other than deployed. Please check model: "
+                        + modelId,
+                    new RuntimeException()
+                );
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Failed to undeploy model controller due to model is in ML cache but with a state other than deployed. Please check model: "
+                            + modelId
+                    )
+                );
+        } else {
+            log.info("Successfully deployed model controller from cache due to model not exist in cache. Model ID: " + modelId);
+            listener.onResponse("Successfully deployed model controller from cache due to model not exist in cache. Model ID: " + modelId);
+        }
+    }
+
+    /**
+     * Deploy the model controller for a model during model is deploying.
+     *
+     * @param mlModel ml model
+     * @param listener action listener
+     */
+    private synchronized void deployModelControllerWithDeployingModel(
+        MLModel mlModel,
+        Integer eligibleNodeCount,
+        ActionListener<String> listener
+    ) {
+        String modelId = mlModel.getModelId();
+        FetchSourceContext fetchContext = new FetchSourceContext(true);
+        GetRequest getRequest = new GetRequest(ML_MODEL_CONTROLLER_INDEX).id(modelId).fetchSourceContext(fetchContext);
+        client.get(getRequest, ActionListener.wrap(r -> {
+            if (r != null && r.isExists()) {
+                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    MLModelController modelController = MLModelController.parse(parser);
+                    setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
+                    log.info("Successfully redeployed model controller for model " + modelId);
+                    listener.onResponse("Successfully redeployed model controller for model " + modelId);
+                } catch (Exception e) {
+                    log.error("Failed to parse ml task" + r.getId(), e);
+                    listener.onFailure(e);
+                }
+            } else if (mlModel.getIsModelControllerEnabled() == null || !mlModel.getIsModelControllerEnabled()) {
+                // Not going to respond the failure here due to the model deploy can still work well
+                listener
+                    .onResponse(
+                        "The model "
+                            + modelId
+                            + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                    );
+                log
+                    .warn(
+                        "The model "
+                            + modelId
+                            + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                    );
+            } else {
+                listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
+            }
+        }, listener::onFailure));
+    }
+
+    /**
+     * Deploy the model controller for a model during model is deploying with build-in listener.
+     * Usually this method is called when re-deploying a previous un-deployed model with the model controller.
+     *
+     * @param mlModel ml model
+     */
+    public void deployModelControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
+        if (mlModel.getModelState() != MLModelState.DEPLOYING) {
+            throw new OpenSearchStatusException(
+                "This method should only be called when model is in DEPLOYING state, but the model is in state: " + mlModel.getModelState(),
+                RestStatus.CONFLICT
+            );
+        }
+        deployModelControllerWithDeployingModel(mlModel, eligibleNodeCount, ActionListener.wrap(response -> {
+            if (response.startsWith("Successfully")) {
+                log.debug(response, mlModel.getModelId());
+            } else if (response.startsWith("Failed")) {
+                log.error(response);
+            } else {
+                log.info(response);
+            }
+        }, e -> log.error("Failed to re-deploy the model controller for model: " + mlModel.getModelId(), e)));
     }
 
     private void setupModelRateLimiter(String modelId, Integer eligibleNodeCount, MLRateLimiter modelRateLimiter) {
@@ -1154,11 +1322,14 @@ public class MLModelManager {
     private void setupUserRateLimiterMap(String modelId, Integer eligibleNodeCount, Map<String, MLRateLimiter> userRateLimiterConfig) {
         if (userRateLimiterConfig != null && !userRateLimiterConfig.isEmpty()) {
             Map<String, TokenBucket> userRateLimiterMap = new HashMap<>();
-            userRateLimiterConfig.forEach((user, rateLimiter) -> {
-                userRateLimiterMap.put(user, rateLimiterConstructor(eligibleNodeCount, rateLimiter));
-            });
+            userRateLimiterConfig
+                .forEach((user, rateLimiter) -> userRateLimiterMap.put(user, rateLimiterConstructor(eligibleNodeCount, rateLimiter)));
             modelCacheHelper.setUserRateLimiterMap(modelId, userRateLimiterMap);
         }
+    }
+
+    private void removeUserRateLimiterMap(String modelId) {
+        modelCacheHelper.removeUserRateLimiterMap(modelId);
     }
 
     /**
@@ -1173,8 +1344,10 @@ public class MLModelManager {
             double rateLimitNumber = Double.parseDouble(modelRateLimiter.getRateLimitNumber());
             TimeUnit rateLimitUnit = modelRateLimiter.getRateLimitUnit();
             log
-                .debug(
-                    "Initializing the rate limiter with TPS limit {}, evenly distributed on {} nodes",
+                .info(
+                    "Initializing the rate limiter with setting {} per {} (TPS limit {}), evenly distributed on {} nodes",
+                    rateLimitNumber,
+                    rateLimitUnit,
                     rateLimitNumber / rateLimitUnit.toSeconds(1),
                     eligibleNodeCount
                 );
@@ -1250,7 +1423,7 @@ public class MLModelManager {
      * @param modelId model id
      * @param listener action listener
      */
-    private void getModelController(String modelId, ActionListener<MLModelController> listener) {
+    public void getModelController(String modelId, ActionListener<MLModelController> listener) {
         FetchSourceContext fetchContext = new FetchSourceContext(true);
         GetRequest getRequest = new GetRequest(ML_MODEL_CONTROLLER_INDEX).id(modelId).fetchSourceContext(fetchContext);
         client.get(getRequest, ActionListener.wrap(r -> {
@@ -1263,33 +1436,6 @@ public class MLModelManager {
                     log.error("Failed to parse ml task" + r.getId(), e);
                     listener.onFailure(e);
                 }
-            } else {
-                listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
-            }
-        }, listener::onFailure));
-    }
-
-    /**
-     * Get model controller from model.
-     *
-     * @param model ml model
-     * @param listener action listener
-     */
-    private void getModelController(MLModel model, ActionListener<MLModelController> listener) {
-        FetchSourceContext fetchContext = new FetchSourceContext(true);
-        GetRequest getRequest = new GetRequest(ML_MODEL_CONTROLLER_INDEX).id(model.getModelId()).fetchSourceContext(fetchContext);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLModelController modelController = MLModelController.parse(parser);
-                    listener.onResponse(modelController);
-                } catch (Exception e) {
-                    log.error("Failed to parse ml task" + r.getId(), e);
-                    listener.onFailure(e);
-                }
-            } else if (model.getIsModelControllerEnabled() == null || !model.getIsModelControllerEnabled()) {
-                listener.onResponse(null);
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
             }

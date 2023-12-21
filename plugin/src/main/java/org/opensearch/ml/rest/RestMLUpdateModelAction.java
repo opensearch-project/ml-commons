@@ -57,7 +57,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
      */
     private MLUpdateModelRequest getRequest(RestRequest request) throws IOException {
         if (!request.hasContent()) {
-            throw new OpenSearchParseException("Model update request has empty body");
+            throw new OpenSearchParseException("Update model request has empty body");
         }
 
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);

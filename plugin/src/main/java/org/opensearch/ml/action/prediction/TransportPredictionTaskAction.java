@@ -115,14 +115,20 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             && !modelCacheHelper.getModelRateLimiter(modelId).request()) {
                                             wrappedListener
                                                 .onFailure(
-                                                    new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)
+                                                    new OpenSearchStatusException(
+                                                        "Request is throttled at model level.",
+                                                        RestStatus.TOO_MANY_REQUESTS
+                                                    )
                                                 );
                                         } else if (userInfo != null
                                             && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
                                             && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
                                             wrappedListener
                                                 .onFailure(
-                                                    new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)
+                                                    new OpenSearchStatusException(
+                                                        "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                                                        RestStatus.TOO_MANY_REQUESTS
+                                                    )
                                                 );
                                         } else {
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);

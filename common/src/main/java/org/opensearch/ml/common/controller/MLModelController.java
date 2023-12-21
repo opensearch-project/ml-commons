@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.controller;
+package org.opensearch.ml.common.controller;
 
 import lombok.Builder;
 import lombok.Data;
@@ -18,11 +18,11 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.controller.MLRateLimiter;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -90,7 +90,7 @@ public class MLModelController implements ToXContentObject, Writeable {
         out.writeString(modelId);
         if (userRateLimiterConfig != null) {
             out.writeBoolean(true);
-            out.writeMap(userRateLimiterConfig, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            out.writeMap(userRateLimiterConfig, StreamOutput::writeString, (streamOutput, rateLimiter) -> rateLimiter.writeTo(streamOutput));
         } else {
             out.writeBoolean(false);
         }
@@ -107,7 +107,16 @@ public class MLModelController implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static MLModelController fromStream(StreamInput in) throws IOException {
-        return new MLModelController(in);
+    public void update(MLModelController updateContent) {
+        Map<String, MLRateLimiter> updateUserRateLimiterConfig = updateContent.getUserRateLimiterConfig();
+        if (updateUserRateLimiterConfig != null && !updateUserRateLimiterConfig.isEmpty()) {
+            updateUserRateLimiterConfig.forEach((user, rateLimiter) -> {
+                if (this.userRateLimiterConfig.get(user) != null) {
+                    this.userRateLimiterConfig.get(user).update(rateLimiter);
+                } else {
+                    this.userRateLimiterConfig.put(user, rateLimiter);
+                }
+            });
+        }
     }
 }

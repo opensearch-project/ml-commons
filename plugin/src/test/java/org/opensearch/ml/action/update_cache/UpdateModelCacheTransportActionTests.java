@@ -105,18 +105,17 @@ public class UpdateModelCacheTransportActionTests {
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("Local Cluster"));
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(1);
             listener.onResponse("successful");
             return null;
-        }).when(mlModelManager).updateModelCache(any(), any(Boolean.class), any());
+        }).when(mlModelManager).updateModelCache(any(), any());
     }
 
     @Test
     public void testNewResponses() {
         final MLUpdateModelCacheNodesRequest nodesRequest = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
-            "testModelId",
-            true
+            "testModelId"
         );
         Map<String, String> modelUpdateModelCacheStatusMap = new HashMap<>();
         modelUpdateModelCacheStatusMap.put("modelName:version", "response");
@@ -131,8 +130,7 @@ public class UpdateModelCacheTransportActionTests {
     public void testNewNodeRequest() {
         final MLUpdateModelCacheNodesRequest request = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
-            "testModelId",
-            true
+            "testModelId"
         );
         final MLUpdateModelCacheNodeRequest updateModelCacheNodeRequest = action.newNodeRequest(request);
         assertNotNull(updateModelCacheNodeRequest);
@@ -153,8 +151,7 @@ public class UpdateModelCacheTransportActionTests {
     public void testNodeOperation() {
         final MLUpdateModelCacheNodesRequest request = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
-            "testModelId",
-            true
+            "testModelId"
         );
         final MLUpdateModelCacheNodeResponse response = action.nodeOperation(new MLUpdateModelCacheNodeRequest(request));
         assertNotNull(response);
@@ -163,14 +160,13 @@ public class UpdateModelCacheTransportActionTests {
     @Test
     public void testNodeOperationException() {
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("Test exception"));
             return null;
-        }).when(mlModelManager).updateModelCache(any(), any(Boolean.class), any());
+        }).when(mlModelManager).updateModelCache(any(), any());
         final MLUpdateModelCacheNodesRequest request = new MLUpdateModelCacheNodesRequest(
             new String[] { "nodeId1", "nodeId2" },
-            "testModelId",
-            true
+            "testModelId"
         );
         final MLUpdateModelCacheNodeResponse response = action.nodeOperation(new MLUpdateModelCacheNodeRequest(request));
         assertNotNull(response);

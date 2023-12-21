@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
@@ -12,9 +17,9 @@ import java.util.Locale;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerAction;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerRequest;
-import org.opensearch.ml.common.transport.controller.MLModelController;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -59,7 +64,7 @@ public class RestMLCreateModelControllerAction extends BaseRestHandler {
      */
     private MLCreateModelControllerRequest getRequest(RestRequest request) throws IOException {
         if (!request.hasContent()) {
-            throw new OpenSearchParseException("Model update request has empty body");
+            throw new OpenSearchParseException("Create model controller request has empty body");
         }
         // Model ID can only be set here.
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);

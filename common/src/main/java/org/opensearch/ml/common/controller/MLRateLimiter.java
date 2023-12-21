@@ -102,9 +102,9 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
     }
 
     public static boolean canUpdate(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
-        if (updateContent == null) {
+        if (updateContent == null || (updateContent.getRateLimitUnit() == null && updateContent.getRateLimitNumber() == null)) {
             return false;
-        } else if (rateLimiter == null) {
+        } else if (rateLimiter == null || (rateLimiter.getRateLimitUnit() == null && rateLimiter.getRateLimitNumber() == null)) {
             return true;
         } else
         return !Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.rateLimitNumber) || !Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.rateLimitUnit);
@@ -112,5 +112,9 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
 
     public static boolean isRateLimiterConstructable(MLRateLimiter rateLimiter) {
         return (rateLimiter.getRateLimitUnit() != null && rateLimiter.getRateLimitNumber() != null);
+    }
+
+    public static boolean isRateLimiterRemovable(MLRateLimiter rateLimiter) {
+        return (rateLimiter.getRateLimitUnit() == null && rateLimiter.getRateLimitNumber() == null);
     }
 }

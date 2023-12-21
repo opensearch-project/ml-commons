@@ -115,7 +115,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelRequestWithEmptyContent() throws Exception {
         exceptionRule.expect(OpenSearchParseException.class);
-        exceptionRule.expectMessage("Model update request has empty body");
+        exceptionRule.expectMessage("Update model request has empty body");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLUpdateModelAction.handleRequest(request, channel, client);
     }

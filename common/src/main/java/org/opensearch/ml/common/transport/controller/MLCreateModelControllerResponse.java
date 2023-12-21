@@ -25,6 +25,7 @@ public class MLCreateModelControllerResponse extends ActionResponse implements T
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String STATUS_FIELD = "status";
 
+    @Getter
     String modelId;
     String status;
 
@@ -55,7 +56,7 @@ public class MLCreateModelControllerResponse extends ActionResponse implements T
         return builder;
     }
 
-    public static MLCreateModelControllerResponse FromActionResponse(ActionResponse actionResponse) {
+    public static MLCreateModelControllerResponse fromActionResponse(ActionResponse actionResponse) {
         if (actionResponse instanceof MLCreateModelControllerResponse) {
             return (MLCreateModelControllerResponse) actionResponse;
         }
@@ -66,7 +67,7 @@ public class MLCreateModelControllerResponse extends ActionResponse implements T
                 return new MLCreateModelControllerResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionResponse into MLCreateModelControllerResponse", e);
+            throw new UncheckedIOException("Failed to parse ActionResponse into MLCreateModelControllerResponse", e);
         }
     }
 }
