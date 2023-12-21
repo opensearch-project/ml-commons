@@ -9,10 +9,10 @@ import java.io.IOException;
 import lombok.Getter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.transport.TransportRequest;
+import org.opensearch.action.support.nodes.BaseNodeRequest;
 
 
-public class MLUndeployModelControllerNodeRequest extends TransportRequest {
+public class MLUndeployModelControllerNodeRequest extends BaseNodeRequest {
     @Getter
     private MLUndeployModelControllerNodesRequest undeployModelControllerNodesRequest;
 

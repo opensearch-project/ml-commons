@@ -8,11 +8,11 @@ package org.opensearch.ml.common.transport.sync;
 import lombok.Getter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.transport.TransportRequest;
+import org.opensearch.action.support.nodes.BaseNodeRequest;
 
 import java.io.IOException;
 
-public class MLSyncUpNodeRequest extends TransportRequest {
+public class MLSyncUpNodeRequest extends BaseNodeRequest {
     @Getter
     private MLSyncUpNodesRequest syncUpNodesRequest;
 

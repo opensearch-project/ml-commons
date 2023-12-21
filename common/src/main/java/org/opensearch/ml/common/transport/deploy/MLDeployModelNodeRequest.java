@@ -9,11 +9,11 @@ import lombok.Getter;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.transport.TransportRequest;
+import org.opensearch.action.support.nodes.BaseNodeRequest;
 
 import java.io.IOException;
 
-public class MLDeployModelNodeRequest extends TransportRequest {
+public class MLDeployModelNodeRequest extends BaseNodeRequest {
     @Getter
     private MLDeployModelNodesRequest MLDeployModelNodesRequest;
 
