@@ -103,8 +103,6 @@ public class RestMLCreateModelControllerActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLCreateModelControllerAction.INSTANCE), argumentCaptor.capture(), any());
         MLModelController createModelControllerInput = argumentCaptor.getValue().getModelControllerInput();
         assertEquals("testModelId", createModelControllerInput.getModelId());
-        assertNull(createModelControllerInput.getUserRateLimiterConfig().get("testUser").getRateLimitUnit());
-        assertNull(createModelControllerInput.getUserRateLimiterConfig().get("testUser").getRateLimitNumber());
     }
 
     @Test

@@ -63,7 +63,9 @@ public class MLModelController implements ToXContentObject, Writeable {
                             XContentParser rateLimiterParser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rateLimiterString);
                             rateLimiterParser.nextToken();
                             MLRateLimiter rateLimiter = MLRateLimiter.parse(rateLimiterParser);
-                            userRateLimiterConfig.put(user, rateLimiter);
+                            if (!MLRateLimiter.isRateLimiterEmpty(rateLimiter)) {
+                                userRateLimiterConfig.put(user, rateLimiter);
+                            }
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
@@ -111,10 +113,18 @@ public class MLModelController implements ToXContentObject, Writeable {
         Map<String, MLRateLimiter> updateUserRateLimiterConfig = updateContent.getUserRateLimiterConfig();
         if (updateUserRateLimiterConfig != null && !updateUserRateLimiterConfig.isEmpty()) {
             updateUserRateLimiterConfig.forEach((user, rateLimiter) -> {
+                // rateLimiter can't be null due to parsing exception
+                // an empty rateLimiter indicates a user deletion
                 if (this.userRateLimiterConfig.get(user) != null) {
-                    this.userRateLimiterConfig.get(user).update(rateLimiter);
+                    if (!MLRateLimiter.isRateLimiterEmpty(rateLimiter)) {
+                        this.userRateLimiterConfig.get(user).update(rateLimiter);
+                    } else {
+                        this.userRateLimiterConfig.remove(user);
+                    }
                 } else {
-                    this.userRateLimiterConfig.put(user, rateLimiter);
+                    if (!MLRateLimiter.isRateLimiterEmpty(rateLimiter)) {
+                        this.userRateLimiterConfig.put(user, rateLimiter);
+                    }
                 }
             });
         }

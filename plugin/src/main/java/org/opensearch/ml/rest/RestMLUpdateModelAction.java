@@ -66,7 +66,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         try {
             MLUpdateModelInput input = MLUpdateModelInput.parse(parser);
-            if (input.getConnectorId() != null && input.getConnectorUpdateContent() != null) {
+            if (input.getConnectorId() != null && input.getConnector() != null) {
                 throw new OpenSearchStatusException(
                     "Model cannot have both stand-alone connector and internal connector. Please check your update input body.",
                     RestStatus.BAD_REQUEST
@@ -75,7 +75,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
             // Model ID can only be set here. Model version as well as connector field can only be set automatically.
             input.setModelId(modelId);
             input.setVersion(null);
-            input.setConnector(null);
+            input.setUpdatedConnector(null);
             return new MLUpdateModelRequest(input);
         } catch (IllegalStateException e) {
             throw new OpenSearchParseException(e.getMessage());

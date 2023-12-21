@@ -36,10 +36,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String IS_ENABLED_FIELD = "is_enabled"; // optional
     public static final String MODEL_RATE_LIMITER_CONFIG_FIELD = "model_rate_limiter_config"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
-    public static final String CONNECTOR_FIELD = "connector"; // optional
+    public static final String UPDATED_CONNECTOR_FIELD = "updated_connector"; // passively set when updating the internal connector
     public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
-    // The field CONNECTOR_UPDATE_CONTENT_FIELD need to be declared because the update of Connector class relies on the MLCreateConnectorInput class
-    public static final String CONNECTOR_UPDATE_CONTENT_FIELD = "connector_update_content";
+    public static final String CONNECTOR_FIELD = "connector"; // optional
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set when sending update request
 
     @Getter
@@ -51,15 +50,15 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private Boolean isEnabled;
     private MLRateLimiter modelRateLimiterConfig;
     private MLModelConfig modelConfig;
-    private Connector connector;
+    private Connector updatedConnector;
     private String connectorId;
-    private MLCreateConnectorInput connectorUpdateContent;
+    private MLCreateConnectorInput connector;
     private Instant lastUpdateTime;
 
     @Builder(toBuilder = true)
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
                               Boolean isEnabled, MLRateLimiter modelRateLimiterConfig, MLModelConfig modelConfig,
-                              Connector connector, String connectorId, MLCreateConnectorInput connectorUpdateContent, Instant lastUpdateTime) {
+                              Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
@@ -68,9 +67,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.isEnabled = isEnabled;
         this.modelRateLimiterConfig = modelRateLimiterConfig;
         this.modelConfig = modelConfig;
-        this.connector = connector;
+        this.updatedConnector = updatedConnector;
         this.connectorId = connectorId;
-        this.connectorUpdateContent = connectorUpdateContent;
+        this.connector = connector;
         this.lastUpdateTime = lastUpdateTime;
     }
 
@@ -88,11 +87,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             modelConfig = new TextEmbeddingModelConfig(in);
         }
         if (in.readBoolean()) {
-            connector = Connector.fromStream(in);
+            updatedConnector = Connector.fromStream(in);
         }
         connectorId = in.readOptionalString();
         if (in.readBoolean()) {
-            connectorUpdateContent = new MLCreateConnectorInput(in);
+            connector = new MLCreateConnectorInput(in);
         }
         lastUpdateTime = in.readOptionalInstant();
     }
@@ -122,14 +121,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
-        if (connector != null) {
-            builder.field(CONNECTOR_FIELD, connector);
+        if (updatedConnector != null) {
+            builder.field(UPDATED_CONNECTOR_FIELD, updatedConnector);
         }
         if (connectorId != null) {
             builder.field(CONNECTOR_ID_FIELD, connectorId);
         }
-        if (connectorUpdateContent != null) {
-            builder.field(CONNECTOR_UPDATE_CONTENT_FIELD, connectorUpdateContent);
+        if (connector != null) {
+            builder.field(CONNECTOR_FIELD, connector);
         }
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
@@ -158,16 +157,16 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (connector != null) {
+        if (updatedConnector != null) {
             out.writeBoolean(true);
-            connector.writeTo(out);
+            updatedConnector.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
         out.writeOptionalString(connectorId);
-        if (connectorUpdateContent != null) {
+        if (connector != null) {
             out.writeBoolean(true);
-            connectorUpdateContent.writeTo(out);
+            connector.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -183,9 +182,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Boolean isEnabled = null;
         MLRateLimiter modelRateLimiterConfig = null;
         MLModelConfig modelConfig = null;
-        Connector connector = null;
+        Connector updatedConnector = null;
         String connectorId = null;
-        MLCreateConnectorInput connectorUpdateContent = null;
+        MLCreateConnectorInput connector = null;
         Instant lastUpdateTime = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -217,14 +216,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
-                case CONNECTOR_FIELD:
-                    connector = Connector.createConnector(parser);
+                case UPDATED_CONNECTOR_FIELD:
+                    updatedConnector = Connector.createConnector(parser);
                     break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
                     break;
-                case CONNECTOR_UPDATE_CONTENT_FIELD:
-                    connectorUpdateContent = MLCreateConnectorInput.parse(parser, true);
+                case CONNECTOR_FIELD:
+                    connector = MLCreateConnectorInput.parse(parser, true);
                     break;
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
@@ -235,6 +234,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             }
         }
         // Model ID can only be set through RestRequest. Model version can only be set automatically.
-        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, modelRateLimiterConfig, modelConfig, connector, connectorId, connectorUpdateContent, lastUpdateTime);
+        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, modelRateLimiterConfig, modelConfig, updatedConnector, connectorId, connector, lastUpdateTime);
     }
 }

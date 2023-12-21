@@ -10,8 +10,10 @@ import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -35,7 +37,9 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
+import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodeResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesRequest;
+import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesResponse;
 import org.opensearch.ml.common.transport.controller.MLUpdateModelControllerAction;
 import org.opensearch.ml.common.transport.controller.MLUpdateModelControllerRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -160,38 +164,67 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             String modelId = mlModel.getModelId();
             ActionListener<UpdateResponse> updateResponseListener = ActionListener.wrap(updateResponse -> {
-                if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                     log
                         .info(
-                            "Model controller for model {} got a result status other than update, result status: {}",
+                            "Model controller for model {} successfully updated to index, result: {}",
+                            modelId,
+                            updateResponse.getResult()
+                        );
+                    if (mlModelCacheHelper.isModelDeployed(modelId)) {
+                        log.info("Model {} is deployed. Start to deploy the model controller into cache.", modelId);
+                        String[] targetNodeIds = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
+                        MLDeployModelControllerNodesRequest deployModelControllerNodesRequest = new MLDeployModelControllerNodesRequest(
+                            targetNodeIds,
+                            modelId
+                        );
+                        client
+                            .execute(
+                                MLDeployModelControllerAction.INSTANCE,
+                                deployModelControllerNodesRequest,
+                                ActionListener.wrap(strResponse -> {
+                                    if (isDeployModelControllerSuccessOnAllNodes(modelId, strResponse)) {
+                                        log.info("Successfully update model controller and deploy it into cache with model ID {}", modelId);
+                                        actionListener.onResponse(updateResponse);
+                                    } else {
+                                        String[] nodeIds = getDeployModelControllerFailedNodesList(modelId, strResponse);
+                                        log
+                                            .error(
+                                                "Successfully update model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
+                                                modelId,
+                                                Arrays.toString(nodeIds)
+                                            );
+                                        actionListener
+                                            .onFailure(
+                                                new RuntimeException(
+                                                    "Successfully update model controller index with model ID "
+                                                        + modelId
+                                                        + " but deploy model controller to cache was failed on following nodes "
+                                                        + Arrays.toString(nodeIds)
+                                                        + ", please retry."
+                                                )
+                                            );
+                                    }
+                                }, e -> {
+                                    log.error("Failed to deploy model controller for model: {}" + modelId, e);
+                                    actionListener.onFailure(e);
+                                })
+                            );
+                    } else {
+                        actionListener.onResponse(updateResponse);
+                    }
+                } else if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                    // The update response returned an unexpected status may indicate a failed update
+                    log
+                        .warn(
+                            "Update model controller for model {} got a result status other than update, result status: {}",
                             modelId,
                             updateResponse.getResult()
                         );
                     actionListener.onResponse(updateResponse);
-                    return;
-                }
-                log.info("Model controller for model {} successfully updated to index, result: {}", modelId, updateResponse.getResult());
-                if (mlModelCacheHelper.isModelDeployed(modelId)) {
-                    log.info("Model {} is deployed. Start to deploy the model controller into cache.", modelId);
-                    String[] targetNodeIds = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
-                    MLDeployModelControllerNodesRequest deployModelControllerNodesRequest = new MLDeployModelControllerNodesRequest(
-                        targetNodeIds,
-                        modelId
-                    );
-                    client
-                        .execute(
-                            MLDeployModelControllerAction.INSTANCE,
-                            deployModelControllerNodesRequest,
-                            ActionListener.wrap(strResponse -> {
-                                log.info("Successfully update model controller and deploy it into cache with model ID {}", modelId);
-                                actionListener.onResponse(updateResponse);
-                            }, e -> {
-                                log.error("Failed to deploy model controller for model: {}" + modelId, e);
-                                actionListener.onFailure(e);
-                            })
-                        );
                 } else {
-                    actionListener.onResponse(updateResponse);
+                    log.error("Failed to update model controller: " + modelId);
+                    actionListener.onFailure(new RuntimeException("Failed to update model controller: " + modelId));
                 }
             }, actionListener::onFailure);
             UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_CONTROLLER_INDEX, modelId);
@@ -201,6 +234,41 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
         } catch (Exception e) {
             log.error("Failed to update model controller", e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private boolean isDeployModelControllerSuccessOnAllNodes(
+        String modelId,
+        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
+    ) {
+        if (deployModelControllerNodesResponse == null) {
+            return false;
+        } else {
+            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
+                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
+                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private String[] getDeployModelControllerFailedNodesList(
+        String modelId,
+        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
+    ) {
+        if (deployModelControllerNodesResponse == null) {
+            return getAllNodes();
+        } else {
+            List<String> nodeIds = new ArrayList<>();
+            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
+                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
+                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
+                    nodeIds.add(mlDeployModelControllerNodeResponse.getNode().getId());
+                }
+            }
+            return nodeIds.toArray(new String[0]);
         }
     }
 

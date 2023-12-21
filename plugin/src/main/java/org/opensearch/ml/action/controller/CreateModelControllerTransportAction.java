@@ -10,9 +10,11 @@ import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -41,7 +43,9 @@ import org.opensearch.ml.common.transport.controller.MLCreateModelControllerActi
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerRequest;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
+import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodeResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesRequest;
+import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
@@ -197,8 +201,28 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                                 MLDeployModelControllerAction.INSTANCE,
                                 deployModelControllerNodesRequest,
                                 ActionListener.wrap(strResponse -> {
-                                    log.info("Successfully deploy model controller for model {}", modelId);
-                                    actionListener.onResponse(response);
+                                    if (isDeployModelControllerSuccessOnAllNodes(modelId, strResponse)) {
+                                        log.info("Successfully create model controller and deploy it into cache with model ID {}", modelId);
+                                        actionListener.onResponse(response);
+                                    } else {
+                                        String[] nodeIds = getDeployModelControllerFailedNodesList(modelId, strResponse);
+                                        log
+                                            .error(
+                                                "Successfully create model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
+                                                modelId,
+                                                Arrays.toString(nodeIds)
+                                            );
+                                        actionListener
+                                            .onFailure(
+                                                new RuntimeException(
+                                                    "Successfully update model controller index with model ID "
+                                                        + modelId
+                                                        + " but deploy model controller to cache was failed on following nodes "
+                                                        + Arrays.toString(nodeIds)
+                                                        + ", please retry."
+                                                )
+                                            );
+                                    }
                                 }, e -> {
                                     log.error("Failed to deploy model controller for model: {}" + modelId, e);
                                     actionListener.onFailure(e);
@@ -222,6 +246,41 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
             log.error("Failed to init model controller index", e);
             actionListener.onFailure(e);
         }));
+    }
+
+    private boolean isDeployModelControllerSuccessOnAllNodes(
+        String modelId,
+        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
+    ) {
+        if (deployModelControllerNodesResponse == null) {
+            return false;
+        } else {
+            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
+                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
+                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private String[] getDeployModelControllerFailedNodesList(
+        String modelId,
+        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
+    ) {
+        if (deployModelControllerNodesResponse == null) {
+            return getAllNodes();
+        } else {
+            List<String> nodeIds = new ArrayList<>();
+            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
+                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
+                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
+                    nodeIds.add(mlDeployModelControllerNodeResponse.getNode().getId());
+                }
+            }
+            return nodeIds.toArray(new String[0]);
+        }
     }
 
     private String[] getAllNodes() {

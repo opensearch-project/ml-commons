@@ -1316,6 +1316,8 @@ public class MLModelManager {
     private void setupModelRateLimiter(String modelId, Integer eligibleNodeCount, MLRateLimiter modelRateLimiter) {
         if (modelRateLimiter != null) {
             modelCacheHelper.setModelRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, modelRateLimiter));
+        } else {
+            modelCacheHelper.removeModelRateLimiter(modelId);
         }
     }
 
@@ -1325,6 +1327,8 @@ public class MLModelManager {
             userRateLimiterConfig
                 .forEach((user, rateLimiter) -> userRateLimiterMap.put(user, rateLimiterConstructor(eligibleNodeCount, rateLimiter)));
             modelCacheHelper.setUserRateLimiterMap(modelId, userRateLimiterMap);
+        } else {
+            modelCacheHelper.removeUserRateLimiterMap(modelId);
         }
     }
 

@@ -8,9 +8,11 @@ package org.opensearch.ml.action.controller;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_CONTROLLER_INDEX;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -31,7 +33,9 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.transport.controller.MLModelControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLModelControllerDeleteRequest;
 import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerAction;
+import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNodeResponse;
 import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNodesRequest;
+import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNodesResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -152,12 +156,32 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                         MLUndeployModelControllerAction.INSTANCE,
                         undeployModelControllerNodesRequest,
                         ActionListener.runBefore(ActionListener.wrap(strResponse -> {
-                            log
-                                .info(
-                                    "Successfully undeploy model controller from cache. Start to delete the model controller for model {}",
-                                    modelId
-                                );
-                            deleteModelController(modelId, actionListener);
+                            if (isUndeployModelControllerSuccessOnAllNodes(modelId, strResponse)) {
+                                log
+                                    .info(
+                                        "Successfully undeploy model controller from cache. Start to delete the model controller for model {}",
+                                        modelId
+                                    );
+                                deleteModelController(modelId, actionListener);
+                            } else {
+                                String[] nodeIds = getUndeployModelControllerFailedNodesList(modelId, strResponse);
+                                log
+                                    .error(
+                                        "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+                                        modelId,
+                                        Arrays.toString(nodeIds)
+                                    );
+                                actionListener
+                                    .onFailure(
+                                        new RuntimeException(
+                                            "Failed to undeploy model controller with model ID "
+                                                + modelId
+                                                + " on following nodes "
+                                                + Arrays.toString(nodeIds)
+                                                + ", deletion is aborted. Please retry or undeploy the model manually and then perform the deletion."
+                                        )
+                                    );
+                            }
                         }, e -> {
                             log
                                 .error(
@@ -193,6 +217,41 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                 actionListener.onFailure(e);
             }
         });
+    }
+
+    private boolean isUndeployModelControllerSuccessOnAllNodes(
+        String modelId,
+        MLUndeployModelControllerNodesResponse undeployModelController
+    ) {
+        if (undeployModelController == null) {
+            return false;
+        } else {
+            for (MLUndeployModelControllerNodeResponse mlUndeployModelControllerNodeResponse : undeployModelController.getNodes()) {
+                if (mlUndeployModelControllerNodeResponse.isModelControllerUndeployStatusEmpty()
+                    || !Objects.equals(mlUndeployModelControllerNodeResponse.getModelControllerUndeployStatus().get(modelId), "success")) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private String[] getUndeployModelControllerFailedNodesList(
+        String modelId,
+        MLUndeployModelControllerNodesResponse undeployModelController
+    ) {
+        if (undeployModelController == null) {
+            return getAllNodes();
+        } else {
+            List<String> nodeIds = new ArrayList<>();
+            for (MLUndeployModelControllerNodeResponse mlUndeployModelControllerNodeResponse : undeployModelController.getNodes()) {
+                if (mlUndeployModelControllerNodeResponse.isModelControllerUndeployStatusEmpty()
+                    || !Objects.equals(mlUndeployModelControllerNodeResponse.getModelControllerUndeployStatus().get(modelId), "success")) {
+                    nodeIds.add(mlUndeployModelControllerNodeResponse.getNode().getId());
+                }
+            }
+            return nodeIds.toArray(new String[0]);
+        }
     }
 
     private String[] getAllNodes() {

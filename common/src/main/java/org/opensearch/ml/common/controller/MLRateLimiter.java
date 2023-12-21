@@ -93,6 +93,13 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
     }
 
     public void update(MLRateLimiter updateContent) {
+        // Passing an empty MLRateLimiter can remove the current MLRateLimiter,
+        // but passing a null will cause parse exception when sending the request.
+        if (updateContent.getRateLimitNumber() == null && updateContent.getRateLimitUnit() == null) {
+            this.rateLimitNumber = null;
+            this.rateLimitUnit = null;
+            return;
+        }
         if (updateContent.getRateLimitNumber() != null) {
             this.rateLimitNumber = updateContent.getRateLimitNumber();
         }
@@ -101,20 +108,28 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
         }
     }
 
+    public static MLRateLimiter update(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
+        if (rateLimiter == null) {
+            return updateContent;
+        } else {
+            rateLimiter.update(updateContent);
+            return rateLimiter;
+        }
+    }
+
     public static boolean canUpdate(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
-        if (updateContent == null || (updateContent.getRateLimitUnit() == null && updateContent.getRateLimitNumber() == null)) {
+        if (updateContent == null) {
             return false;
-        } else if (rateLimiter == null || (rateLimiter.getRateLimitUnit() == null && rateLimiter.getRateLimitNumber() == null)) {
-            return true;
-        } else
-        return !Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.rateLimitNumber) || !Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.rateLimitUnit);
+        } else if (rateLimiter == null) {
+            return updateContent.getRateLimitUnit() != null || updateContent.getRateLimitNumber() != null;
+        } else return !Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.rateLimitNumber) || !Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.rateLimitUnit);
     }
 
     public static boolean isRateLimiterConstructable(MLRateLimiter rateLimiter) {
         return (rateLimiter.getRateLimitUnit() != null && rateLimiter.getRateLimitNumber() != null);
     }
 
-    public static boolean isRateLimiterRemovable(MLRateLimiter rateLimiter) {
+    public static boolean isRateLimiterEmpty(MLRateLimiter rateLimiter) {
         return (rateLimiter.getRateLimitUnit() == null && rateLimiter.getRateLimitNumber() == null);
     }
 }

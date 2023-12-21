@@ -48,12 +48,12 @@ public class MLUpdateModelInputTest {
             "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
             "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
-            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
+            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":" +
             "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
             "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
             "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1}";
+            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1}";
 
     private final String expectedInputStrWithNullField = "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":" +
             "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
@@ -65,23 +65,23 @@ public class MLUpdateModelInputTest {
             "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
             "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
-            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
+            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":" +
             "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
             "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
             "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}},\"last_updated_time\":1}";
+            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}},\"last_updated_time\":1}";
 
     private final String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
             "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
             "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
-            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
+            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":" +
             "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
             "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
             "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector_update_content\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
+            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -94,7 +94,7 @@ public class MLUpdateModelInputTest {
                 .embeddingDimension(100)
                 .build();
 
-        Connector connector = HttpConnector
+        Connector updatedConnector = HttpConnector
                 .builder()
                 .name("test")
                 .protocol("http")
@@ -137,9 +137,9 @@ public class MLUpdateModelInputTest {
                 .isEnabled(false)
                 .modelRateLimiterConfig(rateLimiter)
                 .modelConfig(config)
-                .connector(connector)
+                .updatedConnector(updatedConnector)
                 .connectorId("test-connector_id")
-                .connectorUpdateContent(updateContent)
+                .connector(updateContent)
                 .lastUpdateTime(Instant.ofEpochMilli(1))
                 .build();
             }

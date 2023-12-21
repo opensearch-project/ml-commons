@@ -36,9 +36,9 @@ public class MLRateLimiterTest {
 
     private MLRateLimiter rateLimiter;
 
-    private MLRateLimiter rateLimiterNullUnit;
+    private MLRateLimiter rateLimiterWithNumber;
 
-    private MLRateLimiter rateLimiterNullNumber;
+    private MLRateLimiter rateLimiterWithUnit;
 
     private MLRateLimiter rateLimiterNull;
 
@@ -53,11 +53,11 @@ public class MLRateLimiterTest {
                 .rateLimitNumber("1")
                 .rateLimitUnit(TimeUnit.MILLISECONDS)
                 .build();
-        rateLimiterNullUnit = MLRateLimiter.builder()
+        rateLimiterWithNumber = MLRateLimiter.builder()
                 .rateLimitNumber("1")
                 .build();
 
-        rateLimiterNullNumber = MLRateLimiter.builder()
+        rateLimiterWithUnit = MLRateLimiter.builder()
                 .rateLimitUnit(TimeUnit.MILLISECONDS)
                 .build();
 
@@ -75,7 +75,7 @@ public class MLRateLimiterTest {
 
     @Test
     public void readInputStreamSuccessWithNullFields() throws IOException {
-        readInputStream(rateLimiterNullUnit, parsedInput -> {
+        readInputStream(rateLimiterWithNumber, parsedInput -> {
             assertNull(parsedInput.getRateLimitUnit());
         });
     }
@@ -133,38 +133,62 @@ public class MLRateLimiterTest {
     @Test
     public void testIsRateLimiterConstructable() {
         assertTrue(MLRateLimiter.isRateLimiterConstructable(rateLimiter));
-        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterNullUnit));
-        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterNullNumber));
+        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterWithNumber));
+        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterWithUnit));
         assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterNull));
     }
 
     @Test
     public void testIsRateLimiterRemovable() {
-        assertFalse(MLRateLimiter.isRateLimiterRemovable(rateLimiter));
-        assertFalse(MLRateLimiter.isRateLimiterRemovable(rateLimiterNullUnit));
-        assertFalse(MLRateLimiter.isRateLimiterRemovable(rateLimiterNullNumber));
-        assertTrue(MLRateLimiter.isRateLimiterRemovable(rateLimiterNull));
+        assertFalse(MLRateLimiter.isRateLimiterEmpty(rateLimiter));
+        assertFalse(MLRateLimiter.isRateLimiterEmpty(rateLimiterWithNumber));
+        assertFalse(MLRateLimiter.isRateLimiterEmpty(rateLimiterWithUnit));
+        assertTrue(MLRateLimiter.isRateLimiterEmpty(rateLimiterNull));
     }
 
     @Test
     public void testRateLimiterUpdate() {
-        rateLimiter.update(rateLimiterNull);
-        assertEquals(TimeUnit.MILLISECONDS, rateLimiter.getRateLimitUnit());
-        assertEquals("1", rateLimiter.getRateLimitNumber());
-        rateLimiterNull.update(rateLimiter);
+        MLRateLimiter updatedRateLimiter = MLRateLimiter.update(rateLimiterNull, rateLimiter);
+        assertEquals("1", updatedRateLimiter.getRateLimitNumber());
+        assertEquals(TimeUnit.MILLISECONDS, updatedRateLimiter.getRateLimitUnit());
+    }
+
+    @Test
+    public void testRateLimiterPartiallyUpdate() {
+        rateLimiterNull.update(rateLimiterWithNumber);
+        assertEquals("1", rateLimiterNull.getRateLimitNumber());
+        assertNull(rateLimiterNull.getRateLimitUnit());
+        rateLimiterNull.update(rateLimiterWithUnit);
         assertEquals("1", rateLimiterNull.getRateLimitNumber());
         assertEquals(TimeUnit.MILLISECONDS, rateLimiterNull.getRateLimitUnit());
     }
 
     @Test
+    public void testRateLimiterRemove() {
+        MLRateLimiter updatedRateLimiter = MLRateLimiter.update(rateLimiter, rateLimiterNull);
+        assertNull(updatedRateLimiter.getRateLimitUnit());
+        assertNull(updatedRateLimiter.getRateLimitNumber());
+    }
+
+    @Test
+    public void testRateLimiterUpdateNull() {
+        MLRateLimiter updatedRateLimiter = MLRateLimiter.update(null, rateLimiter);
+        assertEquals("1", updatedRateLimiter.getRateLimitNumber());
+        assertEquals(TimeUnit.MILLISECONDS, updatedRateLimiter.getRateLimitUnit());
+    }
+
+    @Test
     public void testRateLimiterCanUpdate() {
         assertTrue(MLRateLimiter.canUpdate(null, rateLimiter));
+        assertTrue(MLRateLimiter.canUpdate(null, rateLimiterWithUnit));
+        assertTrue(MLRateLimiter.canUpdate(null, rateLimiterWithNumber));
+        assertFalse(MLRateLimiter.canUpdate(null, rateLimiterNull));
         assertTrue(MLRateLimiter.canUpdate(rateLimiterNull, rateLimiter));
         assertFalse(MLRateLimiter.canUpdate(rateLimiter, null));
-        assertFalse(MLRateLimiter.canUpdate(rateLimiter, rateLimiterNull));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterNullNumber, rateLimiterNullUnit));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterNullNumber, rateLimiter));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterNullUnit, rateLimiter));
+        assertTrue(MLRateLimiter.canUpdate(rateLimiter, rateLimiterNull));
+        assertTrue(MLRateLimiter.canUpdate(rateLimiterWithUnit, rateLimiterWithNumber));
+        assertTrue(MLRateLimiter.canUpdate(rateLimiterWithUnit, rateLimiter));
+        assertTrue(MLRateLimiter.canUpdate(rateLimiterWithNumber, rateLimiter));
         assertFalse(MLRateLimiter.canUpdate(rateLimiter, rateLimiter));
     }
 
