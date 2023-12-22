@@ -850,7 +850,7 @@ public class MLModelManager {
     }
 
     @VisibleForTesting
-    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+    void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);

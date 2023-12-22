@@ -5,12 +5,13 @@
 
 package org.opensearch.ml.common.transport.controller;
 
-import org.opensearch.action.support.nodes.BaseNodeRequest;
 import java.io.IOException;
 import lombok.Getter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-public class MLDeployModelControllerNodeRequest extends BaseNodeRequest {
+import org.opensearch.transport.TransportRequest;
+
+public class MLDeployModelControllerNodeRequest extends TransportRequest {
     @Getter
     private MLDeployModelControllerNodesRequest deployModelControllerNodesRequest;
 

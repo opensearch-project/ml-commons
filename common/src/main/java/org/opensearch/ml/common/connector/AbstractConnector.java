@@ -31,8 +31,6 @@ public abstract class AbstractConnector implements Connector {
     public static final String ACCESS_KEY_FIELD = "access_key";
     public static final String SECRET_KEY_FIELD = "secret_key";
     public static final String SESSION_TOKEN_FIELD = "session_token";
-    public static final String ROLE_ARN_FIELD = "roleArn";
-    public static final String SECRET_ARN_FIELD = "secretArn";
     public static final String NAME_FIELD = "name";
     public static final String VERSION_FIELD = "version";
     public static final String DESCRIPTION_FIELD = "description";
@@ -52,7 +50,6 @@ public abstract class AbstractConnector implements Connector {
     protected String protocol;
 
     protected Map<String, String> parameters;
-    @Getter
     protected Map<String, String> credential;
     protected Map<String, String> decryptedHeaders;
     @Setter

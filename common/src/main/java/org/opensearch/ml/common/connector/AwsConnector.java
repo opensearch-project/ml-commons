@@ -33,21 +33,18 @@ public class AwsConnector extends HttpConnector {
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
                          List<String> backendRoles, AccessMode accessMode, User owner) {
         super(name, description, version, protocol, parameters, credential, actions, backendRoles, accessMode, owner);
-        //validate();
-        validateAwsConnectorInManagedService();
+        validate();
     }
 
     public AwsConnector(String protocol, XContentParser parser) throws IOException {
         super(protocol, parser);
-        //validate();
-        validateAwsConnectorInManagedService();
+        validate();
     }
 
 
     public AwsConnector(StreamInput input) throws IOException {
         super(input);
-        //validate();
-        validateAwsConnectorInManagedService();
+        validate();
     }
 
     private void validate() {
@@ -56,19 +53,6 @@ public class AwsConnector extends HttpConnector {
         }
         if ((credential == null || !credential.containsKey(SERVICE_NAME_FIELD)) && (parameters == null || !parameters.containsKey(SERVICE_NAME_FIELD))) {
             throw new IllegalArgumentException("Missing service name");
-        }
-        if ((credential == null || !credential.containsKey(REGION_FIELD)) && (parameters == null || !parameters.containsKey(REGION_FIELD))) {
-            throw new IllegalArgumentException("Missing region");
-        }
-    }
-
-    private void validateAwsConnectorInManagedService() {
-        // Users who are using AWS protocol must give a roleArn in credentials
-        if (credential == null || !credential.containsKey("roleArn")) {
-            throw new IllegalArgumentException("please supply a valid roleArn in credentials if utilizing an AWS service");
-        }
-        if ((credential == null || !credential.containsKey(SERVICE_NAME_FIELD)) && (parameters == null || !parameters.containsKey(SERVICE_NAME_FIELD))) {
-            throw new IllegalArgumentException("Missing or invalid service name");
         }
         if ((credential == null || !credential.containsKey(REGION_FIELD)) && (parameters == null || !parameters.containsKey(REGION_FIELD))) {
             throw new IllegalArgumentException("Missing region");
@@ -88,10 +72,6 @@ public class AwsConnector extends HttpConnector {
 
     public String getAccessKey() {
         return decryptedCredential.get(ACCESS_KEY_FIELD);
-    }
-
-    public String getRoleArn() {
-        return decryptedCredential.get(ROLE_ARN_FIELD);
     }
 
     public String getSecretKey() {
