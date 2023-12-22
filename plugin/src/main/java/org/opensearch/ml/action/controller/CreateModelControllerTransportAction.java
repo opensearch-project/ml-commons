@@ -110,14 +110,14 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                                         .onFailure(
                                             new OpenSearchStatusException(
                                                 "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, "
-                                                    + "please either create the model controller after it is deployed or before deploying it. Model ID "
+                                                    + "please either create the model controller after it is deployed or before deploying it. Model ID: "
                                                     + modelId,
                                                 RestStatus.CONFLICT
                                             )
                                         );
                                     log
                                         .error(
-                                            "Failed to create a model controller during its corresponding model in DEPLOYING state. Model ID "
+                                            "Failed to create a model controller during its corresponding model in DEPLOYING state. Model ID: "
                                                 + modelId
                                         );
                                 }
@@ -125,7 +125,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                                 wrappedListener
                                     .onFailure(
                                         new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model controller, model ID "
+                                            "User doesn't have privilege to perform this operation on this model controller, model ID: "
                                                 + modelId,
                                             RestStatus.FORBIDDEN
                                         )
@@ -155,7 +155,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                 e -> wrappedListener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "Failed to find model to create the corresponding model controller with the provided model id: " + modelId,
+                            "Failed to find model to create the corresponding model controller with the provided model ID: " + modelId,
                             RestStatus.NOT_FOUND
                         )
                     )
@@ -174,7 +174,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
         log.info("Indexing the model controller into system index");
         mlIndicesHandler.initMLModelControllerIndex(ActionListener.wrap(indexCreated -> {
             if (!indexCreated) {
-                actionListener.onFailure(new RuntimeException("No response to create model controller index"));
+                actionListener.onFailure(new RuntimeException("Failed to create model controller index."));
                 return;
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
