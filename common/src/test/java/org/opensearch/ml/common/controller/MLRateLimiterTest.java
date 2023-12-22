@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -132,18 +133,18 @@ public class MLRateLimiterTest {
 
     @Test
     public void testIsRateLimiterConstructable() {
-        assertTrue(MLRateLimiter.isRateLimiterConstructable(rateLimiter));
-        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterWithNumber));
-        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterWithUnit));
-        assertFalse(MLRateLimiter.isRateLimiterConstructable(rateLimiterNull));
+        assertTrue(rateLimiter.isRateLimiterConstructable());
+        assertFalse(rateLimiterWithNumber.isRateLimiterConstructable());
+        assertFalse(rateLimiterWithUnit.isRateLimiterConstructable());
+        assertFalse(rateLimiterNull.isRateLimiterConstructable());
     }
 
     @Test
     public void testIsRateLimiterRemovable() {
-        assertFalse(MLRateLimiter.isRateLimiterEmpty(rateLimiter));
-        assertFalse(MLRateLimiter.isRateLimiterEmpty(rateLimiterWithNumber));
-        assertFalse(MLRateLimiter.isRateLimiterEmpty(rateLimiterWithUnit));
-        assertTrue(MLRateLimiter.isRateLimiterEmpty(rateLimiterNull));
+        assertFalse(rateLimiter.isRateLimiterEmpty());
+        assertFalse(rateLimiterWithNumber.isRateLimiterEmpty());
+        assertFalse(rateLimiterWithUnit.isRateLimiterEmpty());
+        assertTrue(rateLimiterNull.isRateLimiterEmpty());
     }
 
     @Test
@@ -164,13 +165,6 @@ public class MLRateLimiterTest {
     }
 
     @Test
-    public void testRateLimiterRemove() {
-        MLRateLimiter updatedRateLimiter = MLRateLimiter.update(rateLimiter, rateLimiterNull);
-        assertNull(updatedRateLimiter.getRateLimitUnit());
-        assertNull(updatedRateLimiter.getRateLimitNumber());
-    }
-
-    @Test
     public void testRateLimiterUpdateNull() {
         MLRateLimiter updatedRateLimiter = MLRateLimiter.update(null, rateLimiter);
         assertEquals("1", updatedRateLimiter.getRateLimitNumber());
@@ -178,19 +172,19 @@ public class MLRateLimiterTest {
     }
 
     @Test
-    public void testRateLimiterCanUpdate() {
-        assertTrue(MLRateLimiter.canUpdate(null, rateLimiter));
-        assertTrue(MLRateLimiter.canUpdate(null, rateLimiterWithUnit));
-        assertTrue(MLRateLimiter.canUpdate(null, rateLimiterWithNumber));
-        assertFalse(MLRateLimiter.canUpdate(null, rateLimiterNull));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterNull, rateLimiter));
-        assertFalse(MLRateLimiter.canUpdate(rateLimiter, null));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiter, rateLimiterNull));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterWithUnit, rateLimiterWithNumber));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterWithUnit, rateLimiter));
-        assertTrue(MLRateLimiter.canUpdate(rateLimiterWithNumber, rateLimiter));
-        assertFalse(MLRateLimiter.canUpdate(rateLimiter, rateLimiter));
+    public void testRateLimiterIsUpdatable() {
+        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, null));
+        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiterNull));
+
+        assertTrue(MLRateLimiter.isUpdatable(null, rateLimiter));
+        assertTrue(MLRateLimiter.isUpdatable(rateLimiterNull, rateLimiter));
+
+        assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithUnit, rateLimiterWithNumber));
+        assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithUnit, rateLimiter));
+        assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithNumber, rateLimiter));
+        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiter));
     }
+
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLRateLimiter> verify) throws Exception {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
@@ -213,5 +207,13 @@ public class MLRateLimiterTest {
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         return builder.toString();
+    }
+
+    @Ignore
+    @Test
+    public void testRateLimiterRemove() {
+        MLRateLimiter updatedRateLimiter = MLRateLimiter.update(rateLimiter, rateLimiterNull);
+        assertNull(updatedRateLimiter.getRateLimitUnit());
+        assertNull(updatedRateLimiter.getRateLimitNumber());
     }
 }

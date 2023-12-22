@@ -251,6 +251,7 @@ public class RestActionUtils {
         }
         return isAdmin;
     }
+
     public static void connectorValidationInManagedServiceWithCreateConnectorInput(MLCreateConnectorInput mlCreateConnectorInput) {
         String protocol = mlCreateConnectorInput.getProtocol();
         Map<String, String> credentials = mlCreateConnectorInput.getCredential();
@@ -268,10 +269,10 @@ public class RestActionUtils {
     }
 
     public static void connectorValidationInManagedServiceTest(
-            String protocol,
-            Map<String, String> credentials,
-            Map<String, String> parameters,
-            List<ConnectorAction> actions
+        String protocol,
+        Map<String, String> credentials,
+        Map<String, String> parameters,
+        List<ConnectorAction> actions
     ) {
 
         if (protocol.equals(ConnectorProtocols.AWS_SIGV4)) {
@@ -290,18 +291,18 @@ public class RestActionUtils {
                             usingSecretManager = true;
                         } else if (entry.getValue().contains("${credential.") || entry.getValue().contains("${parameters.")) {
                             throw new IllegalArgumentException(
-                                    "Headers should only be using credential.secretArn. as the prefix for dynamic input"
+                                "Headers should only be using credential.secretArn. as the prefix for dynamic input"
                             );
                         }
                     }
                 }
             }
             if (usingSecretManager
-                    && (credentials.get("roleArn") == null
+                && (credentials.get("roleArn") == null
                     || credentials.get("secretArn") == null
                     || !Util.isValidSecretManagerArn(credentials.get("secretArn")))) {
                 throw new IllegalArgumentException(
-                        "Make sure to supply both roleArn and secretArn in credentials if utilizing an AWS service"
+                    "Make sure to supply both roleArn and secretArn in credentials if utilizing an AWS service"
                 );
             }
         }

@@ -69,7 +69,6 @@ import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -1345,7 +1344,7 @@ public class MLModelManager {
      * @return a TokenBucket object to enable throttling
      */
     private TokenBucket rateLimiterConstructor(Integer eligibleNodeCount, MLRateLimiter modelRateLimiter) {
-        if (MLRateLimiter.isRateLimiterConstructable(modelRateLimiter)) {
+        if (modelRateLimiter.isRateLimiterConstructable()) {
             double rateLimitNumber = Double.parseDouble(modelRateLimiter.getRateLimitNumber());
             TimeUnit rateLimitUnit = modelRateLimiter.getRateLimitUnit();
             log

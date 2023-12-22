@@ -16,6 +16,7 @@ import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -156,7 +157,7 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                         MLUndeployModelControllerAction.INSTANCE,
                         undeployModelControllerNodesRequest,
                         ActionListener.runBefore(ActionListener.wrap(strResponse -> {
-                            if (isUndeployModelControllerSuccessOnAllNodes(modelId, strResponse)) {
+                            if (isUndeployModelControllerSuccessOnAllNodes(strResponse)) {
                                 log
                                     .info(
                                         "Successfully undeploy model controller from cache. Start to delete the model controller for model {}",
@@ -167,9 +168,10 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                                 String[] nodeIds = getUndeployModelControllerFailedNodesList(modelId, strResponse);
                                 log
                                     .error(
-                                        "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+                                        "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion. Failure detail: {}",
                                         modelId,
-                                        Arrays.toString(nodeIds)
+                                        Arrays.toString(nodeIds),
+                                        strResponse.failures().toArray(new FailedNodeException[0])
                                     );
                                 actionListener
                                     .onFailure(
@@ -220,20 +222,12 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
     }
 
     private boolean isUndeployModelControllerSuccessOnAllNodes(
-        String modelId,
-        MLUndeployModelControllerNodesResponse undeployModelController
+        MLUndeployModelControllerNodesResponse undeployModelControllerNodesResponse
     ) {
-        if (undeployModelController == null) {
+        if (undeployModelControllerNodesResponse == null) {
             return false;
-        } else {
-            for (MLUndeployModelControllerNodeResponse mlUndeployModelControllerNodeResponse : undeployModelController.getNodes()) {
-                if (mlUndeployModelControllerNodeResponse.isModelControllerUndeployStatusEmpty()
-                    || !Objects.equals(mlUndeployModelControllerNodeResponse.getModelControllerUndeployStatus().get(modelId), "success")) {
-                    return false;
-                }
-            }
-            return true;
-        }
+        } else
+            return undeployModelControllerNodesResponse.failures() == null || undeployModelControllerNodesResponse.failures().isEmpty();
     }
 
     private String[] getUndeployModelControllerFailedNodesList(

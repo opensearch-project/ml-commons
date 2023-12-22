@@ -21,6 +21,7 @@ import org.opensearch.core.xcontent.XContentParser;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
@@ -63,7 +64,7 @@ public class MLModelController implements ToXContentObject, Writeable {
                             XContentParser rateLimiterParser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rateLimiterString);
                             rateLimiterParser.nextToken();
                             MLRateLimiter rateLimiter = MLRateLimiter.parse(rateLimiterParser);
-                            if (!MLRateLimiter.isRateLimiterEmpty(rateLimiter)) {
+                            if (!rateLimiter.isRateLimiterEmpty()) {
                                 userRateLimiterConfig.put(user, rateLimiter);
                             }
                         } catch (IOException e) {
@@ -114,19 +115,43 @@ public class MLModelController implements ToXContentObject, Writeable {
         if (updateUserRateLimiterConfig != null && !updateUserRateLimiterConfig.isEmpty()) {
             updateUserRateLimiterConfig.forEach((user, rateLimiter) -> {
                 // rateLimiter can't be null due to parsing exception
-                // an empty rateLimiter indicates a user deletion
-                if (this.userRateLimiterConfig.get(user) != null) {
-                    if (!MLRateLimiter.isRateLimiterEmpty(rateLimiter)) {
+                    if (this.userRateLimiterConfig.containsKey(user)) {
                         this.userRateLimiterConfig.get(user).update(rateLimiter);
                     } else {
-                        this.userRateLimiterConfig.remove(user);
-                    }
-                } else {
-                    if (!MLRateLimiter.isRateLimiterEmpty(rateLimiter)) {
                         this.userRateLimiterConfig.put(user, rateLimiter);
                     }
-                }
             });
         }
+    }
+
+    public boolean isUpdatable(MLModelController updateContent) {
+        if (updateContent == null || updateContent.getUserRateLimiterConfig() == null || updateContent.getUserRateLimiterConfig().isEmpty()) {
+            return false;
+        } else {
+            for (Map.Entry<String, MLRateLimiter> entry : updateContent.getUserRateLimiterConfig().entrySet()) {
+                String user = entry.getKey();
+                MLRateLimiter rateLimiter = entry.getValue();
+                if (this.userRateLimiterConfig.containsKey(user) && MLRateLimiter.isUpdatable(this.userRateLimiterConfig.get(user), rateLimiter)) {
+                    return true;
+                } else if (!this.userRateLimiterConfig.containsKey(user)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean isUserRateLimiterConfigConstructable() {
+        if (this.userRateLimiterConfig == null || this.userRateLimiterConfig.isEmpty()) {
+            return false;
+        } else {
+            for (Map.Entry<String, MLRateLimiter> entry : this.userRateLimiterConfig.entrySet()) {
+                MLRateLimiter rateLimiter = entry.getValue();
+                if (rateLimiter.isRateLimiterConstructable()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

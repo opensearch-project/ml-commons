@@ -114,12 +114,8 @@ public class DeployModelControllerTransportAction extends
         String localNodeId = clusterService.localNode().getId();
 
         mlModelManager.deployModelControllerWithDeployedModel(modelId, ActionListener.wrap(r -> {
-            modelControllerDeployStatus.replace(modelId, "success");
             log.info("Successfully deployed model controller for model {} on node {}", modelId, localNodeId);
-        }, e -> {
-            modelControllerDeployStatus.replace(modelId, "failed");
-            log.error("Failed to deploy model controller for model {} on node {}", modelId, localNodeId, e);
-        }));
+        }, e -> { log.error("Failed to deploy model controller for model {} on node {}", modelId, localNodeId, e); }));
         return new MLDeployModelControllerNodeResponse(clusterService.localNode(), modelControllerDeployStatus);
     }
 }

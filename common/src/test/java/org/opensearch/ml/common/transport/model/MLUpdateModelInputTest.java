@@ -167,6 +167,13 @@ public class MLUpdateModelInputTest {
     }
 
     @Test
+    public void testToXContent2() throws Exception {
+        updateModelInput.setModelRateLimiterConfig(MLRateLimiter.builder().build());
+        String jsonStr = serializationWithToXContent(updateModelInput);
+        assertEquals(expectedInputStr, jsonStr);
+    }
+
+    @Test
     public void testToXContentIncomplete() throws Exception {
         String expectedIncompleteInputStr =
                 "{\"model_id\":\"test-model_id\"}";

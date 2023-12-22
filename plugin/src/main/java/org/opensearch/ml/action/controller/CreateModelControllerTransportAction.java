@@ -19,6 +19,7 @@ import java.util.Objects;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -201,16 +202,17 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                                 MLDeployModelControllerAction.INSTANCE,
                                 deployModelControllerNodesRequest,
                                 ActionListener.wrap(strResponse -> {
-                                    if (isDeployModelControllerSuccessOnAllNodes(modelId, strResponse)) {
+                                    if (isDeployModelControllerSuccessOnAllNodes(strResponse)) {
                                         log.info("Successfully create model controller and deploy it into cache with model ID {}", modelId);
                                         actionListener.onResponse(response);
                                     } else {
                                         String[] nodeIds = getDeployModelControllerFailedNodesList(modelId, strResponse);
                                         log
                                             .error(
-                                                "Successfully create model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
+                                                "Successfully create model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry. Failure detail: {}",
                                                 modelId,
-                                                Arrays.toString(nodeIds)
+                                                Arrays.toString(nodeIds),
+                                                strResponse.failures().toArray(new FailedNodeException[0])
                                             );
                                         actionListener
                                             .onFailure(
@@ -248,21 +250,11 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
         }));
     }
 
-    private boolean isDeployModelControllerSuccessOnAllNodes(
-        String modelId,
-        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
-    ) {
+    private boolean isDeployModelControllerSuccessOnAllNodes(MLDeployModelControllerNodesResponse deployModelControllerNodesResponse) {
         if (deployModelControllerNodesResponse == null) {
             return false;
-        } else {
-            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
-                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
-                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
-                    return false;
-                }
-            }
-            return true;
-        }
+        } else
+            return deployModelControllerNodesResponse.failures() == null || deployModelControllerNodesResponse.failures().isEmpty();
     }
 
     private String[] getDeployModelControllerFailedNodesList(
