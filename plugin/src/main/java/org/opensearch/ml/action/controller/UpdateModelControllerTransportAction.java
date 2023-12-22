@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -38,7 +37,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
-import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodeResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesRequest;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesResponse;
 import org.opensearch.ml.common.transport.controller.MLUpdateModelControllerAction;
@@ -98,8 +96,10 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                         .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                             if (hasPermission) {
                                 mlModelManager.getModelController(modelId, ActionListener.wrap(modelController -> {
+                                    boolean isDeployRequiredAfterUpdate = MLModelController
+                                        .isDeployRequiredAfterUpdate(modelController, updateModelControllerInput);
                                     modelController.update(updateModelControllerInput);
-                                    updateModelController(mlModel, modelController, wrappedListener);
+                                    updateModelController(mlModel, modelController, isDeployRequiredAfterUpdate, wrappedListener);
                                 }, e -> {
                                     if (mlModel.getIsModelControllerEnabled() == null || !mlModel.getIsModelControllerEnabled()) {
                                         wrappedListener
@@ -161,7 +161,12 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
         }
     }
 
-    private void updateModelController(MLModel mlModel, MLModelController modelController, ActionListener<UpdateResponse> actionListener) {
+    private void updateModelController(
+        MLModel mlModel,
+        MLModelController modelController,
+        boolean isDeployRequiredAfterUpdate,
+        ActionListener<UpdateResponse> actionListener
+    ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             String modelId = mlModel.getModelId();
             ActionListener<UpdateResponse> updateResponseListener = ActionListener.wrap(updateResponse -> {
@@ -172,7 +177,7 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                             modelId,
                             updateResponse.getResult()
                         );
-                    if (mlModelCacheHelper.isModelDeployed(modelId) && modelController.isUserRateLimiterConfigConstructable()) {
+                    if (mlModelCacheHelper.isModelDeployed(modelId) && isDeployRequiredAfterUpdate) {
                         log
                             .info(
                                 "Model {} is deployed and the user rate limiter config is constructable. Start to deploy the model controller into cache.",
@@ -187,18 +192,17 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                             .execute(
                                 MLDeployModelControllerAction.INSTANCE,
                                 deployModelControllerNodesRequest,
-                                ActionListener.wrap(strResponse -> {
-                                    if (isDeployModelControllerSuccessOnAllNodes(strResponse)) {
+                                ActionListener.wrap(nodesResponse -> {
+                                    if (nodesResponse != null && isDeployModelControllerSuccessOnAllNodes(nodesResponse)) {
                                         log.info("Successfully update model controller and deploy it into cache with model ID {}", modelId);
                                         actionListener.onResponse(updateResponse);
                                     } else {
-                                        String[] nodeIds = getDeployModelControllerFailedNodesList(modelId, strResponse);
+                                        String[] nodeIds = getDeployModelControllerFailedNodesList(nodesResponse);
                                         log
                                             .error(
-                                                "Successfully update model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry. Failure detail: {}",
+                                                "Successfully update model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
                                                 modelId,
-                                                Arrays.toString(nodeIds),
-                                                strResponse.failures().toArray(new FailedNodeException[0])
+                                                Arrays.toString(nodeIds)
                                             );
                                         actionListener
                                             .onFailure(
@@ -244,25 +248,16 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
     }
 
     private boolean isDeployModelControllerSuccessOnAllNodes(MLDeployModelControllerNodesResponse deployModelControllerNodesResponse) {
-        if (deployModelControllerNodesResponse == null) {
-            return false;
-        } else
-            return deployModelControllerNodesResponse.failures() == null || deployModelControllerNodesResponse.failures().isEmpty();
+        return deployModelControllerNodesResponse.failures() == null || deployModelControllerNodesResponse.failures().isEmpty();
     }
 
-    private String[] getDeployModelControllerFailedNodesList(
-        String modelId,
-        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
-    ) {
+    private String[] getDeployModelControllerFailedNodesList(MLDeployModelControllerNodesResponse deployModelControllerNodesResponse) {
         if (deployModelControllerNodesResponse == null) {
             return getAllNodes();
         } else {
             List<String> nodeIds = new ArrayList<>();
-            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
-                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
-                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
-                    nodeIds.add(mlDeployModelControllerNodeResponse.getNode().getId());
-                }
+            for (FailedNodeException failedNodeException : deployModelControllerNodesResponse.failures()) {
+                nodeIds.add(failedNodeException.nodeId());
             }
             return nodeIds.toArray(new String[0]);
         }

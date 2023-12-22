@@ -117,7 +117,18 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
             return true;
         } else if (updateContent.isRateLimiterEmpty()) {
             return false;
-        } else return !Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.getRateLimitNumber()) || !Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.getRateLimitUnit());
+        } else return (!Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.getRateLimitNumber()) && updateContent.getRateLimitNumber() != null)
+                || (!Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.getRateLimitUnit()) &&  updateContent.getRateLimitUnit() != null);
+    }
+
+    public static boolean isDeployRequiredAfterUpdate(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
+        if (!isUpdatable(rateLimiter, updateContent)) {
+            return false;
+        } else {
+            return rateLimiter.isRateLimiterConstructable() || updateContent.isRateLimiterConstructable()
+                    || (rateLimiter.getRateLimitUnit() != null && updateContent.getRateLimitNumber() != null)
+                    || (rateLimiter.getRateLimitNumber() != null && updateContent.getRateLimitUnit() != null);
+        }
     }
 
     public boolean isRateLimiterConstructable() {

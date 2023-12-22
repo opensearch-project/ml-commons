@@ -110,6 +110,28 @@ public class MLModelController implements ToXContentObject, Writeable {
         return builder;
     }
 
+    public static boolean isDeployRequiredAfterUpdate(MLModelController modelController, MLModelController updateContent) {
+        if (updateContent != null && updateContent.getUserRateLimiterConfig() != null && !updateContent.getUserRateLimiterConfig().isEmpty()) {
+            Map<String, MLRateLimiter> updateUserRateLimiterConfig = updateContent.getUserRateLimiterConfig();
+            for (Map.Entry<String, MLRateLimiter> entry : updateUserRateLimiterConfig.entrySet()) {
+                String user = entry.getKey();
+                MLRateLimiter rateLimiter = entry.getValue();
+                if (modelController.userRateLimiterConfig.containsKey(user)) {
+                    if (MLRateLimiter.isDeployRequiredAfterUpdate(modelController.userRateLimiterConfig.get(user), rateLimiter)) {
+                        return true;
+                    }
+                } else {
+                    if (rateLimiter.isRateLimiterConstructable()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } else {
+            return false;
+        }
+    }
+
     public void update(MLModelController updateContent) {
         Map<String, MLRateLimiter> updateUserRateLimiterConfig = updateContent.getUserRateLimiterConfig();
         if (updateUserRateLimiterConfig != null && !updateUserRateLimiterConfig.isEmpty()) {
@@ -122,36 +144,5 @@ public class MLModelController implements ToXContentObject, Writeable {
                     }
             });
         }
-    }
-
-    public boolean isUpdatable(MLModelController updateContent) {
-        if (updateContent == null || updateContent.getUserRateLimiterConfig() == null || updateContent.getUserRateLimiterConfig().isEmpty()) {
-            return false;
-        } else {
-            for (Map.Entry<String, MLRateLimiter> entry : updateContent.getUserRateLimiterConfig().entrySet()) {
-                String user = entry.getKey();
-                MLRateLimiter rateLimiter = entry.getValue();
-                if (this.userRateLimiterConfig.containsKey(user) && MLRateLimiter.isUpdatable(this.userRateLimiterConfig.get(user), rateLimiter)) {
-                    return true;
-                } else if (!this.userRateLimiterConfig.containsKey(user)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public boolean isUserRateLimiterConfigConstructable() {
-        if (this.userRateLimiterConfig == null || this.userRateLimiterConfig.isEmpty()) {
-            return false;
-        } else {
-            for (Map.Entry<String, MLRateLimiter> entry : this.userRateLimiterConfig.entrySet()) {
-                MLRateLimiter rateLimiter = entry.getValue();
-                if (rateLimiter.isRateLimiterConstructable()) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 }

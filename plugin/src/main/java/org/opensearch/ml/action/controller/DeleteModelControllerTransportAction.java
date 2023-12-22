@@ -12,7 +12,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -34,7 +33,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.transport.controller.MLModelControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLModelControllerDeleteRequest;
 import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerAction;
-import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNodeResponse;
 import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNodesRequest;
 import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNodesResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -106,7 +104,7 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                             wrappedListener
                                 .onFailure(
                                     new OpenSearchStatusException(
-                                        "User doesn't have privilege to perform this operation on this model controller controller, model ID "
+                                        "User doesn't have privilege to perform this operation on this model controller, model ID: "
                                             + modelId,
                                         RestStatus.FORBIDDEN
                                     )
@@ -156,8 +154,8 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                     .execute(
                         MLUndeployModelControllerAction.INSTANCE,
                         undeployModelControllerNodesRequest,
-                        ActionListener.runBefore(ActionListener.wrap(strResponse -> {
-                            if (isUndeployModelControllerSuccessOnAllNodes(strResponse)) {
+                        ActionListener.runBefore(ActionListener.wrap(nodesResponse -> {
+                            if (nodesResponse != null && isUndeployModelControllerSuccessOnAllNodes(nodesResponse)) {
                                 log
                                     .info(
                                         "Successfully undeploy model controller from cache. Start to delete the model controller for model {}",
@@ -165,13 +163,12 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
                                     );
                                 deleteModelController(modelId, actionListener);
                             } else {
-                                String[] nodeIds = getUndeployModelControllerFailedNodesList(modelId, strResponse);
+                                String[] nodeIds = getUndeployModelControllerFailedNodesList(nodesResponse);
                                 log
                                     .error(
-                                        "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion. Failure detail: {}",
+                                        "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
                                         modelId,
-                                        Arrays.toString(nodeIds),
-                                        strResponse.failures().toArray(new FailedNodeException[0])
+                                        Arrays.toString(nodeIds)
                                     );
                                 actionListener
                                     .onFailure(
@@ -224,25 +221,18 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
     private boolean isUndeployModelControllerSuccessOnAllNodes(
         MLUndeployModelControllerNodesResponse undeployModelControllerNodesResponse
     ) {
-        if (undeployModelControllerNodesResponse == null) {
-            return false;
-        } else
-            return undeployModelControllerNodesResponse.failures() == null || undeployModelControllerNodesResponse.failures().isEmpty();
+        return undeployModelControllerNodesResponse.failures() == null || undeployModelControllerNodesResponse.failures().isEmpty();
     }
 
     private String[] getUndeployModelControllerFailedNodesList(
-        String modelId,
-        MLUndeployModelControllerNodesResponse undeployModelController
+        MLUndeployModelControllerNodesResponse undeployModelControllerNodesResponse
     ) {
-        if (undeployModelController == null) {
+        if (undeployModelControllerNodesResponse == null) {
             return getAllNodes();
         } else {
             List<String> nodeIds = new ArrayList<>();
-            for (MLUndeployModelControllerNodeResponse mlUndeployModelControllerNodeResponse : undeployModelController.getNodes()) {
-                if (mlUndeployModelControllerNodeResponse.isModelControllerUndeployStatusEmpty()
-                    || !Objects.equals(mlUndeployModelControllerNodeResponse.getModelControllerUndeployStatus().get(modelId), "success")) {
-                    nodeIds.add(mlUndeployModelControllerNodeResponse.getNode().getId());
-                }
+            for (FailedNodeException failedNodeException : undeployModelControllerNodesResponse.failures()) {
+                nodeIds.add(failedNodeException.nodeId());
             }
             return nodeIds.toArray(new String[0]);
         }

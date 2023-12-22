@@ -35,6 +35,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
 public class MLModelControllerTest {
+    private  MLRateLimiter rateLimiter;
 
     private MLModelController modelController;
 
@@ -48,7 +49,7 @@ public class MLModelControllerTest {
 
     @Before
     public void setUp() throws Exception {
-        MLRateLimiter rateLimiter = MLRateLimiter.builder()
+        rateLimiter = MLRateLimiter.builder()
                 .rateLimitNumber("1")
                 .rateLimitUnit(TimeUnit.MILLISECONDS)
                 .build();
@@ -56,12 +57,7 @@ public class MLModelControllerTest {
         modelControllerNull = MLModelController.builder()
                 .modelId("testModelId").build();
 
-        modelController = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>() {{
-                    put("testUser", rateLimiter);
-                }})
-                .build();
+        modelController = MLModelControllerGenerator("testUser", rateLimiter);
 
     }
 
@@ -225,21 +221,9 @@ public class MLModelControllerTest {
     public void testUserRateLimiterConfigUpdate() {
         MLRateLimiter rateLimiterWithNumber = MLRateLimiter.builder().rateLimitNumber("1").build();
 
-        MLModelController modelControllerWithEmptyUserRateLimiterConfig = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>())
-                .build();
-
-        MLModelController modelControllerWithTestUserAndRateLimiterWithNumber = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>(){{put("testUser", rateLimiterWithNumber);}})
-                .build();
-
-        MLModelController modelControllerWithNewUserAndEmptyRateLimiter = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>(){{put("newUser", MLRateLimiter.builder().build());}})
-                .build();
-
+        MLModelController modelControllerWithEmptyUserRateLimiterConfig = MLModelControllerGenerator();
+        MLModelController modelControllerWithTestUserAndRateLimiterWithNumber = MLModelControllerGenerator("testUser", rateLimiterWithNumber);
+        MLModelController modelControllerWithNewUserAndEmptyRateLimiter = MLModelControllerGenerator("newUser");
 
         modelControllerWithEmptyUserRateLimiterConfig.update(modelControllerNull);
         assertTrue(modelControllerWithEmptyUserRateLimiterConfig.getUserRateLimiterConfig().isEmpty());
@@ -263,32 +247,24 @@ public class MLModelControllerTest {
     public void testUserRateLimiterConfigIsUpdatable() {
         MLRateLimiter rateLimiterWithNumber = MLRateLimiter.builder().rateLimitNumber("1").build();
 
-        MLModelController modelControllerWithEmptyUserRateLimiterConfig = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>())
-                .build();
+        MLModelController modelControllerWithEmptyUserRateLimiterConfig = MLModelControllerGenerator();
+        MLModelController modelControllerWithTestUserAndRateLimiterWithNumber = MLModelControllerGenerator("testUser", rateLimiterWithNumber);
+        MLModelController modelControllerWithNewUserAndRateLimiterWithNumber = MLModelControllerGenerator("newUser", rateLimiterWithNumber);
+        MLModelController modelControllerWithNewUserAndEmptyRateLimiter = MLModelControllerGenerator("newUser");
+        MLModelController modelControllerWithNewUserAndRateLimiter = MLModelControllerGenerator("newUser", rateLimiter);
 
-        MLModelController modelControllerWithTestUserAndRateLimiterWithNumber = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>(){{put("testUser", rateLimiterWithNumber);}})
-                .build();
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, null));
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerNull));
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerWithEmptyUserRateLimiterConfig));
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerWithNewUserAndEmptyRateLimiter));
 
-        MLModelController modelControllerWithNewUserAndEmptyRateLimiter = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>(){{put("newUser", MLRateLimiter.builder().build());}})
-                .build();
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerWithTestUserAndRateLimiterWithNumber));
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelControllerWithTestUserAndRateLimiterWithNumber));
+        assertTrue(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelController));
+        assertTrue(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelController));
 
-        MLModelController modelControllerWithNewUserAndRateLimiterWithNumber = MLModelController.builder()
-                .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>(){{put("newUser", rateLimiterWithNumber);}})
-                .build();
-
-        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isUpdatable(null));
-        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isUpdatable(modelControllerNull));
-        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isUpdatable(modelControllerWithEmptyUserRateLimiterConfig));
-        assertTrue(modelControllerWithEmptyUserRateLimiterConfig.isUpdatable(modelControllerWithNewUserAndEmptyRateLimiter));
-        assertTrue(modelControllerWithEmptyUserRateLimiterConfig.isUpdatable(modelControllerWithTestUserAndRateLimiterWithNumber));
-        assertTrue(modelControllerWithEmptyUserRateLimiterConfig.isUpdatable(modelControllerWithNewUserAndRateLimiterWithNumber));
+        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelControllerWithNewUserAndRateLimiterWithNumber));
+        assertTrue(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelControllerWithNewUserAndRateLimiter));
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLModelController> verify) throws Exception {
@@ -312,6 +288,30 @@ public class MLModelControllerTest {
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         return builder.toString();
+    }
+
+    private MLModelController MLModelControllerGenerator(String user, MLRateLimiter rateLimiter) {
+        return MLModelController.builder()
+                .modelId("testModelId")
+                .userRateLimiterConfig(new HashMap<>(){{put(user, rateLimiter);}})
+                .build();
+
+    }
+
+    private MLModelController MLModelControllerGenerator(String user) {
+        return MLModelController.builder()
+                .modelId("testModelId")
+                .userRateLimiterConfig(new HashMap<>(){{put(user, MLRateLimiter.builder().build());}})
+                .build();
+
+    }
+
+    private MLModelController MLModelControllerGenerator() {
+        return MLModelController.builder()
+                .modelId("testModelId")
+                .userRateLimiterConfig(new HashMap<>())
+                .build();
+
     }
 
     @Ignore

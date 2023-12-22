@@ -52,7 +52,6 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
-import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodeResponse;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
@@ -470,17 +469,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         return ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                 client.execute(MLUpdateModelCacheAction.INSTANCE, mlUpdateModelCacheNodesRequest, ActionListener.wrap(r -> {
-                    if (isUpdateModelCacheSuccessOnAllNodes(r)) {
+                    if (r != null && isUpdateModelCacheSuccessOnAllNodes(r)) {
                         log.info("Successfully updated ML model cache with model ID {}", modelId);
                         wrappedListener.onResponse(updateResponse);
                     } else {
-                        String[] nodeIds = getUpdateModelCacheFailedNodesList(modelId, r);
+                        String[] nodeIds = getUpdateModelCacheFailedNodesList(r);
                         log
                             .error(
-                                "Successfully update ML model index with model ID {} but update model cache was failed on following nodes {}, please retry or redeploy model manually. Failure detail: {}",
+                                "Successfully update ML model index with model ID {} but update model cache was failed on following nodes {}, please retry or redeploy model manually.",
                                 modelId,
-                                Arrays.toString(nodeIds),
-                                r.failures().toArray(new FailedNodeException[0])
+                                Arrays.toString(nodeIds)
                             );
                         wrappedListener
                             .onFailure(
@@ -586,22 +584,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private boolean isUpdateModelCacheSuccessOnAllNodes(MLUpdateModelCacheNodesResponse updateModelCacheNodesResponse) {
-        if (updateModelCacheNodesResponse == null) {
-            return false;
-        } else
-            return updateModelCacheNodesResponse.failures() == null || updateModelCacheNodesResponse.failures().isEmpty();
+        return updateModelCacheNodesResponse.failures() == null || updateModelCacheNodesResponse.failures().isEmpty();
     }
 
-    private String[] getUpdateModelCacheFailedNodesList(String modelId, MLUpdateModelCacheNodesResponse updateModelCacheNodesResponse) {
+    private String[] getUpdateModelCacheFailedNodesList(MLUpdateModelCacheNodesResponse updateModelCacheNodesResponse) {
         if (updateModelCacheNodesResponse == null) {
             return getAllNodes();
         } else {
             List<String> nodeIds = new ArrayList<>();
-            for (MLUpdateModelCacheNodeResponse mlUpdateModelCacheNodeResponse : updateModelCacheNodesResponse.getNodes()) {
-                if (mlUpdateModelCacheNodeResponse.isModelUpdateStatusEmpty()
-                    || !Objects.equals(mlUpdateModelCacheNodeResponse.getModelUpdateStatus().get(modelId), "success")) {
-                    nodeIds.add(mlUpdateModelCacheNodeResponse.getNode().getId());
-                }
+            for (FailedNodeException failedNodeException : updateModelCacheNodesResponse.failures()) {
+                nodeIds.add(failedNodeException.nodeId());
             }
             return nodeIds.toArray(new String[0]);
         }

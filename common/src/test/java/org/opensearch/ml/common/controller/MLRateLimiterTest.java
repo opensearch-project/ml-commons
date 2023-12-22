@@ -183,8 +183,30 @@ public class MLRateLimiterTest {
         assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithUnit, rateLimiter));
         assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithNumber, rateLimiter));
         assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiter));
+
+        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiterWithUnit));
+        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiterWithNumber));
     }
 
+    @Test
+    public void testRateLimiterIsDeployRequiredAfterUpdate() {
+        MLRateLimiter rateLimiterWithNumber2 = MLRateLimiter.builder()
+                .rateLimitNumber("2")
+                .build();
+
+        MLRateLimiter rateLimiterWithUnit2 = MLRateLimiter.builder()
+                .rateLimitUnit(TimeUnit.NANOSECONDS)
+                .build();
+
+        assertTrue(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiter, rateLimiterWithNumber2));
+
+        assertTrue(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiterNull, rateLimiter));
+
+        assertTrue(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiterWithUnit, rateLimiterWithNumber));
+        assertTrue(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiterWithNumber, rateLimiterWithUnit));
+        assertFalse(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiterWithUnit, rateLimiterWithUnit2));
+        assertFalse(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiterWithNumber, rateLimiterWithNumber2));
+    }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLRateLimiter> verify) throws Exception {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,

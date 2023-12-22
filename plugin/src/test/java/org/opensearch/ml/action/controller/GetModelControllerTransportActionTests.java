@@ -81,17 +81,6 @@ public class GetModelControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLModel mlModel;
 
-    @Mock
-    GetResponse mockGetResponse;
-
-    @Mock
-    GetResult mockGetResult;
-
-    @Mock
-    MLModelController mockModelController;
-
-    private Settings settings;
-
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -103,7 +92,7 @@ public class GetModelControllerTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        settings = Settings.builder().build();
+        Settings settings = Settings.builder().build();
         getModelControllerTransportAction = spy(
             new GetModelControllerTransportAction(
                 transportService,
@@ -168,20 +157,14 @@ public class GetModelControllerTransportActionTests extends OpenSearchTestCase {
     public void testGetModelControllerWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener
-                .onFailure(
-                    new RuntimeException("Any other connector access control Exception occurred. Please check log for more details.")
-                );
+            listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         getModelControllerTransportAction.doExecute(null, mlModelControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Any other connector access control Exception occurred. Please check log for more details.",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -205,10 +188,7 @@ public class GetModelControllerTransportActionTests extends OpenSearchTestCase {
     public void testGetModelControllerWithGetModelOtherException() {
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener
-                .onFailure(
-                    new RuntimeException("Any other connector access control Exception occurred. Please check log for more details.")
-                );
+            listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
 
@@ -225,20 +205,14 @@ public class GetModelControllerTransportActionTests extends OpenSearchTestCase {
     public void testGetModelControllerOtherException() {
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException("Any other connector access control Exception occurred. Please check log for more details.")
-                );
+            listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(client).get(any(), any());
 
         getModelControllerTransportAction.doExecute(null, mlModelControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Any other connector access control Exception occurred. Please check log for more details.",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
     }
 
     @Test

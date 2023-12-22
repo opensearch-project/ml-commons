@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -44,7 +43,6 @@ import org.opensearch.ml.common.transport.controller.MLCreateModelControllerActi
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerRequest;
 import org.opensearch.ml.common.transport.controller.MLCreateModelControllerResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerAction;
-import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodeResponse;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesRequest;
 import org.opensearch.ml.common.transport.controller.MLDeployModelControllerNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -201,18 +199,17 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                             .execute(
                                 MLDeployModelControllerAction.INSTANCE,
                                 deployModelControllerNodesRequest,
-                                ActionListener.wrap(strResponse -> {
-                                    if (isDeployModelControllerSuccessOnAllNodes(strResponse)) {
+                                ActionListener.wrap(nodesResponse -> {
+                                    if (nodesResponse != null && isDeployModelControllerSuccessOnAllNodes(nodesResponse)) {
                                         log.info("Successfully create model controller and deploy it into cache with model ID {}", modelId);
                                         actionListener.onResponse(response);
                                     } else {
-                                        String[] nodeIds = getDeployModelControllerFailedNodesList(modelId, strResponse);
+                                        String[] nodeIds = getDeployModelControllerFailedNodesList(nodesResponse);
                                         log
                                             .error(
-                                                "Successfully create model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry. Failure detail: {}",
+                                                "Successfully create model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
                                                 modelId,
-                                                Arrays.toString(nodeIds),
-                                                strResponse.failures().toArray(new FailedNodeException[0])
+                                                Arrays.toString(nodeIds)
                                             );
                                         actionListener
                                             .onFailure(
@@ -251,25 +248,16 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
     }
 
     private boolean isDeployModelControllerSuccessOnAllNodes(MLDeployModelControllerNodesResponse deployModelControllerNodesResponse) {
-        if (deployModelControllerNodesResponse == null) {
-            return false;
-        } else
-            return deployModelControllerNodesResponse.failures() == null || deployModelControllerNodesResponse.failures().isEmpty();
+        return deployModelControllerNodesResponse.failures() == null || deployModelControllerNodesResponse.failures().isEmpty();
     }
 
-    private String[] getDeployModelControllerFailedNodesList(
-        String modelId,
-        MLDeployModelControllerNodesResponse deployModelControllerNodesResponse
-    ) {
+    private String[] getDeployModelControllerFailedNodesList(MLDeployModelControllerNodesResponse deployModelControllerNodesResponse) {
         if (deployModelControllerNodesResponse == null) {
             return getAllNodes();
         } else {
             List<String> nodeIds = new ArrayList<>();
-            for (MLDeployModelControllerNodeResponse mlDeployModelControllerNodeResponse : deployModelControllerNodesResponse.getNodes()) {
-                if (mlDeployModelControllerNodeResponse.isModelControllerDeployStatusEmpty()
-                    || !Objects.equals(mlDeployModelControllerNodeResponse.getModelControllerDeployStatus().get(modelId), "success")) {
-                    nodeIds.add(mlDeployModelControllerNodeResponse.getNode().getId());
-                }
+            for (FailedNodeException failedNodeException : deployModelControllerNodesResponse.failures()) {
+                nodeIds.add(failedNodeException.nodeId());
             }
             return nodeIds.toArray(new String[0]);
         }
