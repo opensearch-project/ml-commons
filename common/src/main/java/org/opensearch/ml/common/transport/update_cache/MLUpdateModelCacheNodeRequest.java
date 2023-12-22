@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.common.transport.update_cache;
 
-import org.opensearch.action.support.nodes.BaseNodeRequest;
+import org.opensearch.transport.TransportRequest;
 import java.io.IOException;
 import lombok.Getter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
-public class MLUpdateModelCacheNodeRequest extends BaseNodeRequest {
+public class MLUpdateModelCacheNodeRequest extends TransportRequest {
     @Getter
     private MLUpdateModelCacheNodesRequest updateModelCacheNodesRequest;
 

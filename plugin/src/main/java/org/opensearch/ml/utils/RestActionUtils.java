@@ -14,7 +14,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -33,11 +32,6 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.ml.common.connector.ConnectorAction;
-import org.opensearch.ml.common.connector.ConnectorProtocols;
-import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
-import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-import org.opensearch.ml.engine.credentialscommunication.Util;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -252,59 +246,4 @@ public class RestActionUtils {
         return isAdmin;
     }
 
-    public static void connectorValidationInManagedServiceWithCreateConnectorInput(MLCreateConnectorInput mlCreateConnectorInput) {
-        String protocol = mlCreateConnectorInput.getProtocol();
-        Map<String, String> credentials = mlCreateConnectorInput.getCredential();
-        Map<String, String> parameters = mlCreateConnectorInput.getParameters();
-        List<ConnectorAction> actions = mlCreateConnectorInput.getActions();
-        connectorValidationInManagedServiceTest(protocol, credentials, parameters, actions);
-    }
-
-    public static void connectorValidationInManagedServiceWithRegisterModelInput(MLRegisterModelInput registerModelInput) {
-        String protocol = registerModelInput.getConnector().getProtocol();
-        Map<String, String> credentials = registerModelInput.getConnector().getCredential();
-        Map<String, String> parameters = registerModelInput.getConnector().getParameters();
-        List<ConnectorAction> actions = registerModelInput.getConnector().getActions();
-        connectorValidationInManagedServiceTest(protocol, credentials, parameters, actions);
-    }
-
-    public static void connectorValidationInManagedServiceTest(
-        String protocol,
-        Map<String, String> credentials,
-        Map<String, String> parameters,
-        List<ConnectorAction> actions
-    ) {
-
-        if (protocol.equals(ConnectorProtocols.AWS_SIGV4)) {
-            // Users who are using AWS protocol have give a roleArn in credentials
-            if (credentials.get("roleArn") == null || !Util.isValidIAMArn(credentials.get("roleArn"))) {
-                throw new IllegalArgumentException("please supply a valid roleArn in credentials if utilizing an AWS service");
-            } else if (parameters.get("service_name") == null || !Util.isValidAWSService(parameters.get("service_name"))) {
-                throw new IllegalArgumentException("please supply a valid service_name in parameters if utilizing an AWS service");
-            }
-        } else if (protocol.equals(ConnectorProtocols.HTTP)) {
-            boolean usingSecretManager = false;
-            for (ConnectorAction action : actions) {
-                if (action.getHeaders() != null) {
-                    for (Map.Entry<String, String> entry : action.getHeaders().entrySet()) {
-                        if (entry.getValue().contains("${credential.secretArn.")) {
-                            usingSecretManager = true;
-                        } else if (entry.getValue().contains("${credential.") || entry.getValue().contains("${parameters.")) {
-                            throw new IllegalArgumentException(
-                                "Headers should only be using credential.secretArn. as the prefix for dynamic input"
-                            );
-                        }
-                    }
-                }
-            }
-            if (usingSecretManager
-                && (credentials.get("roleArn") == null
-                    || credentials.get("secretArn") == null
-                    || !Util.isValidSecretManagerArn(credentials.get("secretArn")))) {
-                throw new IllegalArgumentException(
-                    "Make sure to supply both roleArn and secretArn in credentials if utilizing an AWS service"
-                );
-            }
-        }
-    }
 }
