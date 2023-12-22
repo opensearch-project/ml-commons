@@ -508,29 +508,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         toolFactories = new HashMap<>();
 
-        // MLModelTool.Factory.getInstance().init(client);
-        // MathTool.Factory.getInstance().init(scriptService);
-        // VectorDBTool.Factory.getInstance().init(client, xContentRegistry);
-        // NeuralSparseTool.Factory.getInstance().init(client, xContentRegistry);
-        // AgentTool.Factory.getInstance().init(client);
         CatIndexTool.Factory.getInstance().init(client, clusterService);
-        // PainlessScriptTool.Factory.getInstance().init(client, scriptService);
-        // VisualizationsTool.Factory.getInstance().init(client);
-        // RAGTool.Factory.getInstance().init(client, xContentRegistry);
-        // SearchAlertsTool.Factory.getInstance().init(client);
-        // IndexMappingTool.Factory.getInstance().init(client);
 
-        // toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
-        // toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
-        // toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
-        // toolFactories.put(NeuralSparseTool.TYPE, NeuralSparseTool.Factory.getInstance());
-        // toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
-        // toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
-        // toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
-        // toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
-        // toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
-        // toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);

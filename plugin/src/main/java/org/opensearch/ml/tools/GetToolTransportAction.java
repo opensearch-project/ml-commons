@@ -32,47 +32,42 @@ public class GetToolTransportAction extends HandledTransportAction<ActionRequest
         super(MLGetToolAction.NAME, transportService, actionFilters, MLToolGetRequest::new);
     }
 
-    /**
-     * @param task
-     * @param request
-     * @param listener
-     */
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLToolGetResponse> listener) {
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.fromActionRequest(request);
         String toolName = mlToolGetRequest.getToolName();
-        List<ToolMetadata> externalTools = mlToolGetRequest.getExternalTools();
-        List<ToolMetadata> toolsList = new ArrayList<>(
-            Arrays
-                .asList(
-                    ToolMetadata.builder().name("LanguageModelTool").description("Useful for answering any general questions.").build(),
-                    ToolMetadata.builder().name("MathTool").description("Use this tool to calculate any math problem.").build(),
-                    ToolMetadata
-                        .builder()
-                        .name("SearchIndexTool")
-                        .description(
-                            "Useful for when you don't know answer for some question or need to search my private data in OpenSearch index."
-                        )
-                        .build(),
-                    ToolMetadata
-                        .builder()
-                        .name("SearchWikipediaTool")
-                        .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
-                        .build()
-                )
-        );
-        toolsList.addAll(externalTools);
-        ToolMetadata theTool = toolsList
-            .stream()
-            .filter(tool -> tool.getName().equals(toolName))
-            .findFirst()
-            .orElseThrow(NoSuchElementException::new);
         try {
+            List<ToolMetadata> externalTools = mlToolGetRequest.getExternalTools();
+            List<ToolMetadata> toolsList = new ArrayList<>(
+                Arrays
+                    .asList(
+                        ToolMetadata.builder().name("LanguageModelTool").description("Useful for answering any general questions.").build(),
+                        ToolMetadata.builder().name("MathTool").description("Use this tool to calculate any math problem.").build(),
+                        ToolMetadata
+                            .builder()
+                            .name("SearchIndexTool")
+                            .description(
+                                "Useful for when you don't know answer for some question or need to search my private data in OpenSearch index."
+                            )
+                            .build(),
+                        ToolMetadata
+                            .builder()
+                            .name("SearchWikipediaTool")
+                            .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
+                            .build()
+                    )
+            );
+            toolsList.addAll(externalTools);
+            ToolMetadata theTool = toolsList
+                .stream()
+                .filter(tool -> tool.getName().equals(toolName))
+                .findFirst()
+                .orElseThrow(NoSuchElementException::new);
+
             listener.onResponse(MLToolGetResponse.builder().toolMetadata(theTool).build());
         } catch (Exception e) {
             log.error("Failed to get tools list", e);
             listener.onFailure(e);
         }
-
     }
 }

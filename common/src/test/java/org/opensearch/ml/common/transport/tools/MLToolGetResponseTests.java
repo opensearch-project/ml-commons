@@ -36,13 +36,4 @@ public class MLToolGetResponseTests {
         assertEquals(response.toolMetadata.getName(), parsedResponse.getToolMetadata().getName());
     }
 
-//    @Test
-//    public void toXContentTest() throws IOException {
-//        MLToolGetResponse mlToolGetResponse = MLToolGetResponse.builder().toolMetadata(toolMetadata).build();
-//        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-//        mlToolGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
-//        assertNotNull(builder);
-//        String jsonStr = Strings.toString(builder);
-//        assertEquals(jsonStr, "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\"}");
-//    }
 }
