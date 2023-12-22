@@ -38,6 +38,7 @@ import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
+import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
@@ -95,6 +96,7 @@ import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -181,6 +183,7 @@ import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
+import org.opensearch.ml.rest.RestMLRegisterAgentAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
 import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
 import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
@@ -336,6 +339,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(GetInteractionsAction.INSTANCE, GetInteractionsTransportAction.class),
                 new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class),
                 new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
+                new ActionHandler<>(MLRegisterAgentAction.INSTANCE, TransportRegisterAgentAction.class),
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
                 new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
                 new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
@@ -578,6 +582,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             settings,
             mlFeatureEnabledSetting
         );
+        RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction();
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
@@ -623,6 +628,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLSearchTaskAction,
                 restMLProfileAction,
                 restMLRegisterModelAction,
+                restMLRegisterAgentAction,
                 restMLDeployModelAction,
                 restMLUndeployModelAction,
                 restMLRegisterModelMetaAction,
