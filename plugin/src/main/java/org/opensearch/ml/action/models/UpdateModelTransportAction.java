@@ -216,7 +216,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 .update(mlModel.getModelRateLimiterConfig(), updateModelInput.getModelRateLimiterConfig());
             updateModelInput.setModelRateLimiterConfig(updatedRateLimiterConfig);
             // An un-constructable updatedRateLimiterConfig does not require predictor to be re-deployed.
-            isPredictorUpdate = isPredictorUpdate || (updatedRateLimiterConfig.isRateLimiterConstructable());
+            isPredictorUpdate = isPredictorUpdate || (updatedRateLimiterConfig.isValid());
         }
         // This flag is used to decide if we need to update the model cache
         boolean isUpdateModelCache = isPredictorUpdate && isModelDeployed;

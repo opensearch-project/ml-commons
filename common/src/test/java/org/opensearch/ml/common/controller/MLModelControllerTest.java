@@ -240,7 +240,7 @@ public class MLModelControllerTest {
         assertEquals(TimeUnit.MILLISECONDS, modelControllerWithEmptyUserRateLimiterConfig.getUserRateLimiterConfig().get("testUser").getRateLimitUnit());
 
         modelControllerWithEmptyUserRateLimiterConfig.update(modelControllerWithNewUserAndEmptyRateLimiter);
-        assertTrue(modelControllerWithEmptyUserRateLimiterConfig.getUserRateLimiterConfig().get("newUser").isRateLimiterEmpty());
+        assertTrue(modelControllerWithEmptyUserRateLimiterConfig.getUserRateLimiterConfig().get("newUser").isEmpty());
     }
 
     @Test
@@ -253,18 +253,18 @@ public class MLModelControllerTest {
         MLModelController modelControllerWithNewUserAndEmptyRateLimiter = MLModelControllerGenerator("newUser");
         MLModelController modelControllerWithNewUserAndRateLimiter = MLModelControllerGenerator("newUser", rateLimiter);
 
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, null));
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerNull));
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerWithEmptyUserRateLimiterConfig));
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerWithNewUserAndEmptyRateLimiter));
+        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isDeployRequiredAfterUpdate(null));
+        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isDeployRequiredAfterUpdate(modelControllerNull));
+        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig));
+        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isDeployRequiredAfterUpdate(modelControllerWithNewUserAndEmptyRateLimiter));
 
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelControllerWithTestUserAndRateLimiterWithNumber));
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelControllerWithTestUserAndRateLimiterWithNumber));
-        assertTrue(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithEmptyUserRateLimiterConfig, modelController));
-        assertTrue(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelController));
+        assertFalse(modelControllerWithEmptyUserRateLimiterConfig.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber));
+        assertFalse(modelControllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber));
+        assertTrue(modelControllerWithEmptyUserRateLimiterConfig.isDeployRequiredAfterUpdate(modelController));
+        assertTrue(modelControllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(modelController));
 
-        assertFalse(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelControllerWithNewUserAndRateLimiterWithNumber));
-        assertTrue(MLModelController.isDeployRequiredAfterUpdate(modelControllerWithTestUserAndRateLimiterWithNumber, modelControllerWithNewUserAndRateLimiter));
+        assertFalse(modelControllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(modelControllerWithNewUserAndRateLimiterWithNumber));
+        assertTrue(modelControllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(modelControllerWithNewUserAndRateLimiter));
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLModelController> verify) throws Exception {

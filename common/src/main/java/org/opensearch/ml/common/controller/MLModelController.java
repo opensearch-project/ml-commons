@@ -36,6 +36,7 @@ public class MLModelController implements ToXContentObject, Writeable {
 
     @Getter
     private String modelId;
+    // The String is the username field where the MLRateLimiter is its corresponding rate limiter config.
     private Map<String, MLRateLimiter> userRateLimiterConfig;
 
     @Builder(toBuilder = true)
@@ -64,7 +65,7 @@ public class MLModelController implements ToXContentObject, Writeable {
                             XContentParser rateLimiterParser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rateLimiterString);
                             rateLimiterParser.nextToken();
                             MLRateLimiter rateLimiter = MLRateLimiter.parse(rateLimiterParser);
-                            if (!rateLimiter.isRateLimiterEmpty()) {
+                            if (!rateLimiter.isEmpty()) {
                                 userRateLimiterConfig.put(user, rateLimiter);
                             }
                         } catch (IOException e) {
@@ -110,26 +111,32 @@ public class MLModelController implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static boolean isDeployRequiredAfterUpdate(MLModelController modelController, MLModelController updateContent) {
+
+    /**
+     * Checks if a deployment is required after updating the MLModelController.
+     *
+     * @param updateContent The updated MLModelController object.
+     * @return True if a deployment is required, false otherwise.
+     */
+    public boolean isDeployRequiredAfterUpdate(MLModelController updateContent) {
         if (updateContent != null && updateContent.getUserRateLimiterConfig() != null && !updateContent.getUserRateLimiterConfig().isEmpty()) {
             Map<String, MLRateLimiter> updateUserRateLimiterConfig = updateContent.getUserRateLimiterConfig();
             for (Map.Entry<String, MLRateLimiter> entry : updateUserRateLimiterConfig.entrySet()) {
-                String user = entry.getKey();
-                MLRateLimiter rateLimiter = entry.getValue();
-                if (modelController.userRateLimiterConfig.containsKey(user)) {
-                    if (MLRateLimiter.isDeployRequiredAfterUpdate(modelController.userRateLimiterConfig.get(user), rateLimiter)) {
+                String newUser = entry.getKey();
+                MLRateLimiter newRateLimiter = entry.getValue();
+                if (this.userRateLimiterConfig.containsKey(newUser)) {
+                    MLRateLimiter oldRateLimiter = this.userRateLimiterConfig.get(newUser);
+                    if (oldRateLimiter.isDeployRequiredAfterUpdate(newRateLimiter)) {
                         return true;
                     }
                 } else {
-                    if (rateLimiter.isRateLimiterConstructable()) {
+                    if (newRateLimiter.isValid()) {
                         return true;
                     }
                 }
             }
-            return false;
-        } else {
-            return false;
         }
+        return false;
     }
 
     public void update(MLModelController updateContent) {

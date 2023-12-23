@@ -192,17 +192,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case MODEL_ID_FIELD:
-                    modelId = parser.text();
-                    break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
                 case MODEL_NAME_FIELD:
                     name = parser.text();
-                    break;
-                case MODEL_VERSION_FIELD:
-                    version = parser.text();
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
@@ -216,17 +210,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
-                case UPDATED_CONNECTOR_FIELD:
-                    updatedConnector = Connector.createConnector(parser);
-                    break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
                     break;
                 case CONNECTOR_FIELD:
                     connector = MLCreateConnectorInput.parse(parser, true);
-                    break;
-                case LAST_UPDATED_TIME_FIELD:
-                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 default:
                     parser.skipChildren();

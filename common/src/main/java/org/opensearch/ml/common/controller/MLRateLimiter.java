@@ -110,12 +110,12 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
         }
     }
 
-    public static boolean isUpdatable(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
+    public static boolean updateValidityPreCheck(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
         if (updateContent == null) {
             return false;
         } else if (rateLimiter == null) {
             return true;
-        } else if (updateContent.isRateLimiterEmpty()) {
+        } else if (updateContent.isEmpty()) {
             return false;
         } else return (!Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.getRateLimitNumber()) && updateContent.getRateLimitNumber() != null)
                 || (!Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.getRateLimitUnit()) &&  updateContent.getRateLimitUnit() != null);
@@ -125,17 +125,17 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
         if (!isUpdatable(rateLimiter, updateContent)) {
             return false;
         } else {
-            return rateLimiter.isRateLimiterConstructable() || updateContent.isRateLimiterConstructable()
+            return rateLimiter.isValid() || updateContent.isValid()
                     || (rateLimiter.getRateLimitUnit() != null && updateContent.getRateLimitNumber() != null)
                     || (rateLimiter.getRateLimitNumber() != null && updateContent.getRateLimitUnit() != null);
         }
     }
 
-    public boolean isRateLimiterConstructable() {
+    public boolean isValid() {
         return (this.rateLimitUnit != null && this.rateLimitNumber != null);
     }
 
-    public boolean isRateLimiterEmpty() {
+    public boolean isEmpty() {
         return (this.rateLimitUnit == null && this.rateLimitNumber == null);
     }
 }

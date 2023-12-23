@@ -9,7 +9,7 @@ import org.opensearch.action.update.UpdateResponse;
 
 public class MLUpdateModelControllerAction extends ActionType<UpdateResponse> {
     public static final MLUpdateModelControllerAction INSTANCE = new MLUpdateModelControllerAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/model_controllers/update";
+    public static final String NAME = "cluster:admin/opensearch/ml/controllers/update";
 
     private MLUpdateModelControllerAction() {
         super(NAME, UpdateResponse::new);

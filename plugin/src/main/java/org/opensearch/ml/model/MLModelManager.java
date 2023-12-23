@@ -65,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
@@ -960,7 +961,7 @@ public class MLModelManager {
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
-                    if (mlModel.getIsModelControllerEnabled() != null && mlModel.getIsModelControllerEnabled()) {
+                    if (BooleanUtils.isTrue(mlModel.getIsModelControllerEnabled())) {
                         getModelController(modelId, ActionListener.wrap(modelController -> {
                             setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
                             log.info("Successfully redeployed model controller for model " + modelId);
@@ -1073,15 +1074,13 @@ public class MLModelManager {
         TokenBucket modelRateLimiter = getModelRateLimiter(modelId);
         Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
 
-        Map<String, Object> params = new HashMap<>() {
-            {
-                put(ML_ENGINE, mlEngine);
-                put(SCRIPT_SERVICE, scriptService);
-                put(CLIENT, client);
-                put(XCONTENT_REGISTRY, xContentRegistry);
-                put(CLUSTER_SERVICE, clusterService);
-            }
-        };
+        Map<String, Object> params = new HashMap<>()
+        params.put(ML_ENGINE, mlEngine);
+        params.put(SCRIPT_SERVICE, scriptService);
+        params.put(CLIENT, client);
+        params.put(XCONTENT_REGISTRY, xContentRegistry);
+        params.put(CLUSTER_SERVICE, clusterService);
+
         if (modelRateLimiter == null && userRateLimiterMap == null) {
             log.info("Setting up basic ML predictor parameters.");
             return Collections.unmodifiableMap(params);
@@ -1344,7 +1343,7 @@ public class MLModelManager {
      * @return a TokenBucket object to enable throttling
      */
     private TokenBucket rateLimiterConstructor(Integer eligibleNodeCount, MLRateLimiter modelRateLimiter) {
-        if (modelRateLimiter.isRateLimiterConstructable()) {
+        if (modelRateLimiter.isValid()) {
             double rateLimitNumber = Double.parseDouble(modelRateLimiter.getRateLimitNumber());
             TimeUnit rateLimitUnit = modelRateLimiter.getRateLimitUnit();
             log

@@ -141,6 +141,7 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
         }
     }
 
+    // This method is used to handle the condition if we need to undeploy the model controller before deleting it from the index or not.
     private void deleteModelControllerWithDeployedModel(String modelId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (mlModelCacheHelper.isModelDeployed(modelId)) {

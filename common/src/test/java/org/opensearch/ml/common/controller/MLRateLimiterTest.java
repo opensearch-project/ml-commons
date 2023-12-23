@@ -132,19 +132,19 @@ public class MLRateLimiterTest {
     }
 
     @Test
-    public void testIsRateLimiterConstructable() {
-        assertTrue(rateLimiter.isRateLimiterConstructable());
-        assertFalse(rateLimiterWithNumber.isRateLimiterConstructable());
-        assertFalse(rateLimiterWithUnit.isRateLimiterConstructable());
-        assertFalse(rateLimiterNull.isRateLimiterConstructable());
+    public void testisValid() {
+        assertTrue(rateLimiter.isValid());
+        assertFalse(rateLimiterWithNumber.isValid());
+        assertFalse(rateLimiterWithUnit.isValid());
+        assertFalse(rateLimiterNull.isValid());
     }
 
     @Test
     public void testIsRateLimiterRemovable() {
-        assertFalse(rateLimiter.isRateLimiterEmpty());
-        assertFalse(rateLimiterWithNumber.isRateLimiterEmpty());
-        assertFalse(rateLimiterWithUnit.isRateLimiterEmpty());
-        assertTrue(rateLimiterNull.isRateLimiterEmpty());
+        assertFalse(rateLimiter.isEmpty());
+        assertFalse(rateLimiterWithNumber.isEmpty());
+        assertFalse(rateLimiterWithUnit.isEmpty());
+        assertTrue(rateLimiterNull.isEmpty());
     }
 
     @Test
