@@ -120,7 +120,7 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                                 wrappedListener
                                     .onFailure(
                                         new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model controller, model ID "
+                                            "User doesn't have privilege to perform this operation on this model controller, model ID: "
                                                 + modelId,
                                             RestStatus.FORBIDDEN
                                         )
@@ -150,7 +150,7 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                 e -> wrappedListener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "Failed to find model to create the corresponding model controller with the provided model id: " + modelId,
+                            "Failed to find model to create the corresponding model controller with the provided model ID: " + modelId,
                             RestStatus.NOT_FOUND
                         )
                     )
@@ -233,8 +233,8 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                         );
                     actionListener.onResponse(updateResponse);
                 } else {
-                    log.error("Failed to update model controller: " + modelId);
-                    actionListener.onFailure(new RuntimeException("Failed to update model controller: " + modelId));
+                    log.error("Failed to update model controller with model ID: " + modelId);
+                    actionListener.onFailure(new RuntimeException("Failed to update model controller with model ID: " + modelId));
                 }
             }, actionListener::onFailure);
             UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_CONTROLLER_INDEX, modelId);
@@ -242,7 +242,7 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             client.update(updateRequest, ActionListener.runBefore(updateResponseListener, context::restore));
         } catch (Exception e) {
-            log.error("Failed to update model controller", e);
+            log.error("Failed to update model controller.", e);
             actionListener.onFailure(e);
         }
     }

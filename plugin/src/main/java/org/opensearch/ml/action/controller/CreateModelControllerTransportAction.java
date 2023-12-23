@@ -214,7 +214,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                                         actionListener
                                             .onFailure(
                                                 new RuntimeException(
-                                                    "Successfully update model controller index with model ID "
+                                                    "Successfully create model controller index with model ID "
                                                         + modelId
                                                         + " but deploy model controller to cache was failed on following nodes "
                                                         + Arrays.toString(nodeIds)

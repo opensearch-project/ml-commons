@@ -20,9 +20,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
@@ -42,11 +43,10 @@ import org.opensearch.ml.common.transport.controller.MLUndeployModelControllerNo
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStats;
-import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 
-@Ignore
-public class UndeployModelControllerTransportActionTests extends OpenSearchTestCase {
+@RunWith(MockitoJUnitRunner.class)
+public class UndeployModelControllerTransportActionTests {
 
     @Mock
     private TransportService transportService;

@@ -15,10 +15,8 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -80,9 +78,6 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
     ActionListener<MLCreateModelControllerResponse> actionListener;
 
     @Mock
-    MLCreateModelControllerResponse createModelControllerResponse;
-
-    @Mock
     IndexResponse indexResponse;
 
     @Mock
@@ -142,7 +137,7 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         );
 
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
-        String[] targetNodeIds = new String[]{node1.getId(), node2.getId()};
+        String[] targetNodeIds = new String[] { node1.getId(), node2.getId() };
 
         createModelControllerTransportAction = spy(
             new CreateModelControllerTransportAction(
@@ -261,8 +256,8 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Failed to find model to create the corresponding model controller with the provided model ID: testModelId",
-                argumentCaptor.getValue().getMessage()
+            "Failed to find model to create the corresponding model controller with the provided model ID: testModelId",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
@@ -337,7 +332,7 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testDeleteModelControllerWithUndeploySuccessEmptyFailures() {
+    public void testCreateModelControllerWithUndeploySuccessEmptyFailures() {
         when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
 
         doAnswer(invocation -> {
@@ -352,9 +347,9 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testDeleteModelControllerWithUndeploySuccessPartiallyFailures() {
+    public void testCreateModelControllerWithUndeploySuccessPartiallyFailures() {
         List<FailedNodeException> failures = List
-                .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
+            .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
         when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
 
         doAnswer(invocation -> {
@@ -368,14 +363,14 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Successfully update model controller index with model ID testModelId " +
-                        "but deploy model controller to cache was failed on following nodes [foo1], please retry.",
-                argumentCaptor.getValue().getMessage()
+            "Successfully create model controller index with model ID testModelId "
+                + "but deploy model controller to cache was failed on following nodes [foo1], please retry.",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
     @Test
-    public void testDeleteModelControllerWithUndeployNullResponse() {
+    public void testCreateModelControllerWithUndeployNullResponse() {
         when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
 
         doAnswer(invocation -> {
@@ -388,14 +383,14 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Successfully update model controller index with model ID testModelId " +
+                "Successfully create model controller index with model ID testModelId " +
                         "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
                 argumentCaptor.getValue().getMessage()
         );
     }
 
     @Test
-    public void testDeleteModelControllerWithUndeployOtherException() {
+    public void testCreateModelControllerWithUndeployOtherException() {
         when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
 
         doAnswer(invocation -> {
