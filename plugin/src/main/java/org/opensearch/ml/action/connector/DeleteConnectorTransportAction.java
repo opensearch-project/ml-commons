@@ -92,7 +92,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                                     new OpenSearchStatusException(
                                         searchHits.length
                                             + " models are still using this connector, please delete or update the models first: "
-                                            + Arrays.toString(modelIds.toArray(new String[0]), RestStatus.CONFLICT)
+                                            + Arrays.toString(modelIds.toArray(new String[0])), RestStatus.CONFLICT
                                     )
                                 );
                         }
