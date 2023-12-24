@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
@@ -23,6 +24,7 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
@@ -35,7 +37,6 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -87,10 +88,10 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                             }
                             actionListener
                                 .onFailure(
-                                    new MLValidationException(
+                                    new OpenSearchStatusException(
                                         searchHits.length
                                             + " models are still using this connector, please delete or update the models first: "
-                                            + Arrays.toString(modelIds.toArray(new String[0]))
+                                            + Arrays.toString(modelIds.toArray(new String[0])), RestStatus.CONFLICT
                                     )
                                 );
                         }
