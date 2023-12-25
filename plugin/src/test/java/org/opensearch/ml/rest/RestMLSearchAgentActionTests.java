@@ -141,8 +141,8 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             searchRequest.source().toString()
         );
-        RestResponse restResponse = responseCaptor.getValue();
-        assertEquals(RestStatus.OK, restResponse.status());
+        RestResponse agentResponse = responseCaptor.getValue();
+        assertEquals(RestStatus.OK, agentResponse.status());
     }
 
     public void testPrepareRequest_timeout() throws Exception {
@@ -187,7 +187,7 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             searchRequest.source().toString()
         );
-        RestResponse restResponse = responseCaptor.getValue();
-        assertEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
+        RestResponse agentResponse = responseCaptor.getValue();
+        assertEquals(RestStatus.REQUEST_TIMEOUT, agentResponse.status());
     }
 }
