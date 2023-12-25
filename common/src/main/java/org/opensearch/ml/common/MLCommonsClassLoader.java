@@ -265,7 +265,7 @@ public class MLCommonsClassLoader {
     }
 
     private static <T, S> S init(Map<T, Class<?>> map, T type,
-                                 Object[] initArgs, Class<?>... constructorParameterTypes) throws Throwable {
+                                 Object[] initArgs, Class<?>... constructorParameterTypes) {
         Class<?> clazz = map.get(type);
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
@@ -275,8 +275,10 @@ public class MLCommonsClassLoader {
             return (S) constructor.newInstance(initArgs);
         } catch (Exception e) {
             Throwable cause = e.getCause();
-            if (cause instanceof MLException || cause instanceof IllegalArgumentException) {
-                throw cause;
+            if (cause instanceof MLException) {
+                throw (MLException) cause;
+            } else if (cause instanceof IllegalArgumentException) {
+                throw (IllegalArgumentException) cause;
             } else {
                 log.error("Failed to init instance for type " + type, e);
                 return null;
