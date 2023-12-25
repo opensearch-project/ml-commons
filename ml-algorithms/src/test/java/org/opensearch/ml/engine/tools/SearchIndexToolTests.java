@@ -51,7 +51,7 @@ public class SearchIndexToolTests {
                 Mockito.withSettings().useConstructor(client, TEST_XCONTENT_REGISTRY_FOR_QUERY).defaultAnswer(Mockito.CALLS_REAL_METHODS)
             );
 
-        try (InputStream searchResponseIns = AbstractRetrieverTool.class.getResourceAsStream("retrieval_tool_search_response.json")) {
+        try (InputStream searchResponseIns = SearchIndexTool.class.getResourceAsStream("retrieval_tool_search_response.json")) {
             if (searchResponseIns != null) {
                 mockedSearchResponseString = new String(searchResponseIns.readAllBytes());
             }
