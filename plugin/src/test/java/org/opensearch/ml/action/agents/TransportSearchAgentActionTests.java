@@ -7,11 +7,11 @@ package org.opensearch.ml.action.agents;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.*;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.search.SearchRequest;
@@ -43,6 +43,9 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
     TransportSearchAgentAction transportSearchAgentAction;
 
+    @Mock
+    SearchResponse mockedSearchResponse;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -53,8 +56,26 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void test_DoExecute() {
+    public void test_DoExecute_OnResponse() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
         transportSearchAgentAction.doExecute(null, searchRequest, actionListener);
-        verify(client).search(eq(searchRequest), any());
+        verify(client, times(1)).search(eq(searchRequest), any());
+        verify(actionListener, times(1)).onResponse(eq(mockedSearchResponse));
+    }
+
+    @Test
+    public void test_DoExecute_OnFailure() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("runtime exception"));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        transportSearchAgentAction.doExecute(null, searchRequest, actionListener);
+        verify(client, times(1)).search(eq(searchRequest), any());
+        verify(actionListener, times(1)).onFailure(any(RuntimeException.class));
     }
 }

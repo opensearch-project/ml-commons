@@ -48,5 +48,4 @@ public class TransportSearchAgentAction extends HandledTransportAction<SearchReq
             actionListener.onFailure(e);
         }
     }
-
 }
