@@ -26,10 +26,10 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 import lombok.Getter;
@@ -58,12 +58,6 @@ public class SearchIndexTool implements Tool {
 
     private NamedXContentRegistry xContentRegistry;
 
-    public static final Gson gson;
-
-    static {
-        gson = new Gson();
-    }
-
     public SearchIndexTool(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
@@ -91,14 +85,10 @@ public class SearchIndexTool implements Tool {
             String index = "";
             String query = "";
 
-            JsonObject jsonObject = gson.fromJson(input, JsonObject.class);
+            JsonObject jsonObject = StringUtils.gson.fromJson(input, JsonObject.class);
             index = jsonObject.get(INDEX_FIELD).getAsString();
             query = jsonObject.get(QUERY_FIELD).toString();
             query = "{\"query\": " + query + "}";
-
-            if (org.apache.commons.lang3.StringUtils.isBlank(query)) {
-                listener.onFailure(new IllegalArgumentException("[" + QUERY_FIELD + "] is null or empty, can not process it."));
-            }
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             XContentParser queryParser = XContentType.JSON
@@ -120,11 +110,11 @@ public class SearchIndexTool implements Tool {
                             docContent.put("_id", hit.getId());
                             docContent.put("_score", hit.getScore());
                             docContent.put("_source", hit.getSourceAsMap());
-                            return gson.toJson(docContent);
+                            return StringUtils.gson.toJson(docContent);
                         });
                         contextBuilder.append(doc).append("\n");
                     }
-                    listener.onResponse((T) gson.toJson(contextBuilder.toString()));
+                    listener.onResponse((T) StringUtils.gson.toJson(contextBuilder.toString()));
                 } else {
                     listener.onResponse((T) "");
                 }
