@@ -71,9 +71,9 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(2);
 
-            String modelContent = "{\"name\":\"FIT_RCF\",\"algorithm\":\"FIT_RCF\",\"version\":1,\"content\":\"xxx\"}";
-            SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
-            SearchHits hits = new SearchHits(new SearchHit[] { model }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+            String agentContent = "{\"name\":\"Test_Agent\",\"type\":\"conversational\",\"llm\":\"xxx\"}";
+            SearchHit agent = SearchHit.fromXContent(TestHelper.parser(agentContent));
+            SearchHits hits = new SearchHits(new SearchHit[] { agent }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
             SearchResponseSections searchSections = new SearchResponseSections(
                 hits,
                 InternalAggregations.EMPTY,
@@ -106,8 +106,8 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchModelAction mlSearchModelAction = new RestMLSearchModelAction();
-        assertNotNull(mlSearchModelAction);
+        RestMLSearchAgentAction mlSearchAgentAction = new RestMLSearchAgentAction();
+        assertNotNull(mlSearchAgentAction);
     }
 
     public void testGetName() {
@@ -142,7 +142,7 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
             searchRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
-        assertNotEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
+        assertEquals(RestStatus.OK, restResponse.status());
     }
 
     public void testPrepareRequest_timeout() throws Exception {
