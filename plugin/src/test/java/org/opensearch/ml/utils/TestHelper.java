@@ -11,6 +11,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 import java.io.BufferedReader;
@@ -306,6 +307,22 @@ public class TestHelper {
         return new FakeRestRequest.Builder(getXContentRegistry())
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+    }
+
+    public static RestRequest getExecuteAgentRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
+            + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
+            + "\"tools\":[{\"type\":\"CatIndexTool\",\"name\":\"CatIndexTool\","
+            + "\"description\":\"Use this tool to get OpenSearch index information: "
+            + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
+            + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
             .build();
     }
 

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
 
@@ -104,6 +105,15 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
         assertEquals(FunctionName.METRICS_CORRELATION, input.getFunctionName());
+    }
+
+    public void testGetRequestAgent() throws IOException {
+        RestRequest request = getExecuteAgentRestRequest();
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
     }
 
     public void testPrepareRequest() throws Exception {

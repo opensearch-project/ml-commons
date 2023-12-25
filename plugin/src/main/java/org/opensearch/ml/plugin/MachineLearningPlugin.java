@@ -94,6 +94,10 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.spi.MLCommonsExtension;
+import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
@@ -131,6 +135,7 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
@@ -138,6 +143,9 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.*;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -165,9 +173,11 @@ import org.opensearch.ml.memory.action.conversation.UpdateConversationAction;
 import org.opensearch.ml.memory.action.conversation.UpdateConversationTransportAction;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionTransportAction;
+import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
@@ -229,6 +239,7 @@ import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -248,11 +259,11 @@ import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin {
+public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin, ExtensiblePlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -296,6 +307,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     private ConversationalMemoryHandler cmHandler;
 
     private volatile boolean ragSearchPipelineEnabled;
+
+    @VisibleForTesting
+    Map<String, Tool.Factory> externalToolFactories;
+    private Map<String, Tool.Factory> toolFactories;
+    private ScriptService scriptService;
+    private Encryptor encryptor;
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
@@ -372,10 +389,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
+        this.scriptService = scriptService;
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client);
+        encryptor = new EncryptorImpl(clusterService, client);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -485,7 +503,37 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         // Register thread-safe ML objects here.
         LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
+
+        toolFactories = new HashMap<>();
+
+        MLModelTool.Factory.getInstance().init(client);
+        AgentTool.Factory.getInstance().init(client);
+        CatIndexTool.Factory.getInstance().init(client, clusterService);
+
+        toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
+        toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
+
+        if (externalToolFactories != null) {
+            toolFactories.putAll(externalToolFactories);
+        }
+
+        MLMemoryManager memoryManager = new MLMemoryManager(client, clusterService, new ConversationMetaIndex(client, clusterService));
+        Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
+        ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
+        conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
+        memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
+
+        MLAgentExecutor agentExecutor = new MLAgentExecutor(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            toolFactories,
+            memoryFactoryMap
+        );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
+        MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
 
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
@@ -813,5 +861,23 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             );
 
         return responseProcessors;
+    }
+
+    @Override
+    public void loadExtensions(ExtensionLoader loader) {
+        externalToolFactories = new HashMap<>();
+        for (MLCommonsExtension extension : loader.loadExtensions(MLCommonsExtension.class)) {
+            List<Tool.Factory<? extends Tool>> toolFactories = extension.getToolFactories();
+            for (Tool.Factory<? extends Tool> toolFactory : toolFactories) {
+                ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
+                if (toolAnnotation == null) {
+                    throw new IllegalArgumentException(
+                        "Missing ToolAnnotation for Tool " + toolFactory.getClass().getDeclaringClass().getSimpleName()
+                    );
+                }
+                String annotationValue = toolAnnotation.value();
+                externalToolFactories.put(annotationValue, toolFactory);
+            }
+        }
     }
 }
