@@ -124,7 +124,7 @@ public class SearchIndexTool implements Tool {
                 client.search(searchRequest, actionListener);
             }
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error("Failed to search index", e);
             listener.onFailure(e);
         }
     }
