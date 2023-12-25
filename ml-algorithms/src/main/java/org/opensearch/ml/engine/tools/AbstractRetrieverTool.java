@@ -22,6 +22,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -36,7 +37,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @Getter
 @Setter
-public abstract class AbstractRetrieverTool implements Tool {
+public abstract class AbstractRetrieverTool extends AbstractTool {
     public static final String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";
@@ -52,12 +53,15 @@ public abstract class AbstractRetrieverTool implements Tool {
     protected Integer docSize;
 
     protected AbstractRetrieverTool(
+        String type,
+        String description,
         Client client,
         NamedXContentRegistry xContentRegistry,
         String index,
         String[] sourceFields,
         Integer docSize
     ) {
+        super(type, description);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.index = index;

@@ -12,31 +12,24 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.ScriptService;
 
-import lombok.Getter;
 import lombok.Setter;
 
 @ToolAnnotation(MathTool.TYPE)
-public class MathTool implements Tool {
+public class MathTool extends AbstractTool {
     public static final String TYPE = "MathTool";
-
-    @Setter
-    @Getter
-    private String name = TYPE;
-
     @Setter
     private ScriptService scriptService;
 
     private static String DEFAULT_DESCRIPTION = "Use this tool to calculate any math problem.";
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
 
     public MathTool(ScriptService scriptService) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.scriptService = scriptService;
     }
 
@@ -57,26 +50,6 @@ public class MathTool implements Tool {
         }
         String result = executeScript(scriptService, input + "+ \"\"", ImmutableMap.of());
         listener.onResponse((T) result);
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

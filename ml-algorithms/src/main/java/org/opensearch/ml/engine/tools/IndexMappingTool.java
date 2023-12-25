@@ -23,45 +23,27 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
-import lombok.Getter;
-import lombok.Setter;
-
-@ToolAnnotation(IndexMappingTool.NAME)
-public class IndexMappingTool implements Tool {
-    public static final String NAME = "IndexMappingTool";
+@ToolAnnotation(IndexMappingTool.TYPE)
+public class IndexMappingTool extends AbstractTool {
+    public static final String TYPE = "IndexMappingTool";
 
     private static final String DEFAULT_DESCRIPTION = "Use this tool to get index mapping information.";
-    @Setter
-    @Getter
-    private String name = IndexMappingTool.NAME;
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
-    @Getter
-    private String type;
-    @Getter
-    private String version;
     private Client client;
-    @Setter
-    private Parser<?, ?> inputParser;
-    @Setter
-    private Parser<?, ?> outputParser;
 
     public IndexMappingTool(Client client) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
 
-        outputParser = new Parser<>() {
-            @Override
-            public Object parse(Object o) {
-                @SuppressWarnings("unchecked")
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
+        this.setOutputParser((Parser<Object, Object>) o -> {
+            @SuppressWarnings("unchecked")
+            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
+        });
     }
 
     @Override

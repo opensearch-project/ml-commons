@@ -18,6 +18,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
@@ -31,7 +32,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ToolAnnotation(VisualizationsTool.TYPE)
-public class VisualizationsTool implements Tool {
+public class VisualizationsTool extends AbstractTool {
     public static final String NAME = "Find Visualizations";
     public static final String TYPE = "VisualizationTool";
     public static final String VERSION = "v1.0";
@@ -39,15 +40,14 @@ public class VisualizationsTool implements Tool {
     public static final String SAVED_OBJECT_TYPE = "visualization";
     private static final String DEFAULT_DESCRIPTION =
         "Use this tool to find user created visualizations. This tool takes the visualization name as input and returns the first 3 matching visualizations";
-    private String description = DEFAULT_DESCRIPTION;
 
-    private String name = NAME;
     private final Client client;
     @Getter
     private final String index;
 
     @Builder
     public VisualizationsTool(Client client, String index) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.index = index;
     }
@@ -101,36 +101,6 @@ public class VisualizationsTool implements Tool {
             return id.substring(prefix.length());
         }
         return id;
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return VERSION;
-    }
-
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String getDescription() {
-        return description;
-    }
-
-    @Override
-    public void setDescription(String description) {
-        this.description = description;
     }
 
     @Override

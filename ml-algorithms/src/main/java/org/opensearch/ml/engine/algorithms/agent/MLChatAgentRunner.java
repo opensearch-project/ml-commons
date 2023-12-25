@@ -64,7 +64,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @Data
 @NoArgsConstructor
-public class MLChatAgentRunner {
+public class MLChatAgentRunner implements MLAgentRunner {
 
     public static final String SESSION_ID = "session_id";
     public static final String PROMPT_PREFIX = "prompt_prefix";
@@ -282,7 +282,13 @@ public class MLChatAgentRunner {
             .add(
                 ModelTensors
                     .builder()
-                    .mlModelTensors(Arrays.asList(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build()))
+                    .mlModelTensors(
+                        Arrays
+                            .asList(
+                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
+                            )
+                    )
                     .build()
             );
 

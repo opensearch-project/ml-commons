@@ -533,6 +533,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         toolFactories.put(IndexMappingTool.NAME, IndexMappingTool.Factory.getInstance());
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
         toolFactories.put(RAGTool.TYPE, RAGTool.Factory.getInstance());
+        toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
