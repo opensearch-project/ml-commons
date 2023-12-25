@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -82,12 +81,9 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            String index = "";
-            String query = "";
-
             JsonObject jsonObject = StringUtils.gson.fromJson(input, JsonObject.class);
-            index = jsonObject.get(INDEX_FIELD).getAsString();
-            query = jsonObject.get(QUERY_FIELD).toString();
+            String index = jsonObject.get(INDEX_FIELD).getAsString();
+            String query = jsonObject.get(QUERY_FIELD).toString();
             query = "{\"query\": " + query + "}";
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -97,19 +93,14 @@ public class SearchIndexTool implements Tool {
             searchSourceBuilder.parseXContent(queryParser);
             SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(index);
 
-            ActionListener actionListener = ActionListener.<SearchResponse>wrap(r -> {
+            ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
 
                 if (hits != null && hits.length > 0) {
                     StringBuilder contextBuilder = new StringBuilder();
-                    for (int i = 0; i < hits.length; i++) {
-                        SearchHit hit = hits[i];
+                    for (SearchHit hit : hits) {
                         String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                            Map<String, Object> docContent = new HashMap<>();
-                            docContent.put("_index", hit.getIndex());
-                            docContent.put("_id", hit.getId());
-                            docContent.put("_score", hit.getScore());
-                            docContent.put("_source", hit.getSourceAsMap());
+                            Map<String, Object> docContent = AbstractRetrieverTool.processResponse(hit);
                             return StringUtils.gson.toJson(docContent);
                         });
                         contextBuilder.append(doc).append("\n");
@@ -133,6 +124,7 @@ public class SearchIndexTool implements Tool {
                 client.search(searchRequest, actionListener);
             }
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             listener.onFailure(e);
         }
     }

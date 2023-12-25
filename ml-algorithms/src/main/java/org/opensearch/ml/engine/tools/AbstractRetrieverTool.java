@@ -71,6 +71,15 @@ public abstract class AbstractRetrieverTool extends AbstractTool {
 
     protected abstract String getQueryBody(String queryText);
 
+    public static Map<String, Object> processResponse(SearchHit hit) {
+        Map<String, Object> docContent = new HashMap<>();
+        docContent.put("_index", hit.getIndex());
+        docContent.put("_id", hit.getId());
+        docContent.put("_score", hit.getScore());
+        docContent.put("_source", hit.getSourceAsMap());
+        return docContent;
+    }
+
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
@@ -93,19 +102,14 @@ public abstract class AbstractRetrieverTool extends AbstractTool {
             searchSourceBuilder.fetchSource(sourceFields, null);
             searchSourceBuilder.size(docSize);
             SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(index);
-            ActionListener actionListener = ActionListener.<SearchResponse>wrap(r -> {
+            ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
 
                 if (hits != null && hits.length > 0) {
                     StringBuilder contextBuilder = new StringBuilder();
-                    for (int i = 0; i < hits.length; i++) {
-                        SearchHit hit = hits[i];
+                    for (SearchHit hit : hits) {
                         String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                            Map<String, Object> docContent = new HashMap<>();
-                            docContent.put("_index", hit.getIndex());
-                            docContent.put("_id", hit.getId());
-                            docContent.put("_score", hit.getScore());
-                            docContent.put("_source", hit.getSourceAsMap());
+                            Map<String, Object> docContent = processResponse(hit);
                             return gson.toJson(docContent);
                         });
                         contextBuilder.append(doc).append("\n");
