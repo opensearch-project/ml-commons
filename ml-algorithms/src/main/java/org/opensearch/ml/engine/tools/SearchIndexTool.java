@@ -26,6 +26,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -90,17 +91,14 @@ public class SearchIndexTool implements Tool {
             String input = parameters.get(INPUT_FIELD);
             String index = "";
             String query = "";
-            try {
-                // need this try catch block, because index, query field may not exist
-                JsonObject jsonObject = gson.fromJson(input, JsonObject.class);
-                index = jsonObject.get(INDEX_FIELD).getAsString();
-                query = jsonObject.get(QUERY_FIELD).toString();
-                query = "{\"query\": " + query + "}";
-            } catch (Exception e) {
-                // throw new IllegalArgumentException("wrong input");
-            }
+
+            JsonObject jsonObject = gson.fromJson(input, JsonObject.class);
+            index = jsonObject.get(INDEX_FIELD).getAsString();
+            query = jsonObject.get(QUERY_FIELD).toString();
+            query = "{\"query\": " + query + "}";
+
             if (org.apache.commons.lang3.StringUtils.isBlank(query)) {
-                throw new IllegalArgumentException("[" + QUERY_FIELD + "] is null or empty, can not process it.");
+                listener.onFailure(new IllegalArgumentException("[" + QUERY_FIELD + "] is null or empty, can not process it."));
             }
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
