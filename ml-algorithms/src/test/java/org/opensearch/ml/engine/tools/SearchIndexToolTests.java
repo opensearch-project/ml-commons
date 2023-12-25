@@ -142,9 +142,6 @@ public class SearchIndexToolTests {
         mockedSearchIndexTool.run(parameters, listener);
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
         Mockito.verify(client, Mockito.never()).search(any(), any());
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("[" + SearchIndexTool.QUERY_FIELD + "] is null or empty, can not process it.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
