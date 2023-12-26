@@ -25,11 +25,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -68,11 +66,6 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
         restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> actionListener = invocation.getArgument(2);
-            return null;
-        }).when(client).execute(eq(MLUpdateConnectorAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -103,6 +96,11 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testUpdateConnectorRequest() throws Exception {
+        doAnswer(invocation -> {
+            invocation.getArgument(2);
+            return null;
+        }).when(client).execute(eq(MLUpdateConnectorAction.INSTANCE), any(), any());
+
         RestRequest request = getRestRequest();
         restMLUpdateConnectorAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLUpdateConnectorRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateConnectorRequest.class);

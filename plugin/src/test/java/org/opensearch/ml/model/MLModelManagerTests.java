@@ -548,6 +548,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_FailedToGetModel() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
@@ -569,6 +590,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_NullGetModelResponse() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
@@ -589,6 +631,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_GetModelResponse_NotExist() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
@@ -609,6 +672,28 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_GetModelResponse_wrong_hash_value() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        modelChunk0 = model.toBuilder().content(Base64.getEncoder().encodeToString("test chunk1".getBytes(StandardCharsets.UTF_8))).build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
@@ -638,6 +723,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_GetModelResponse_FailedToDeploy() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
@@ -685,6 +791,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_ThreadPoolException() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
@@ -817,6 +944,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     private void testDeployModel_FailedToRetrieveModelChunks(boolean lastChunk) {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        model = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .name(modelName)
+            .version(version)
+            .totalChunks(2)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .modelContentHash(modelContentHashValue)
+            .modelContentSizeInBytes(modelContentSize)
+            .build();
+        String[] nodes = new String[] { "node1", "node2" };
+        mlTask.setWorkerNodes(List.of(nodes));
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         when(threadPool.executor(DEPLOY_THREAD_POOL)).thenReturn(taskExecutorService);

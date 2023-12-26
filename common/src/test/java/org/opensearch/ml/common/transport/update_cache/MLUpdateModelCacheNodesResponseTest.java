@@ -19,12 +19,13 @@ import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodeResponse;
+import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,7 +39,6 @@ public class MLUpdateModelCacheNodesResponseTest {
     private ClusterName clusterName;
     private DiscoveryNode node1;
     private DiscoveryNode node2;
-    private Map<String, Integer> modelWorkerNodeCounts;
 
     @Before
     public void setUp() throws Exception {
@@ -59,8 +59,6 @@ public class MLUpdateModelCacheNodesResponseTest {
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
                 Version.CURRENT
         );
-        modelWorkerNodeCounts = new HashMap<>();
-        modelWorkerNodeCounts.put("modelId1", 1);
     }
 
     @Test
@@ -78,16 +76,10 @@ public class MLUpdateModelCacheNodesResponseTest {
     public void testToXContent() throws IOException {
         List<MLUpdateModelCacheNodeResponse> nodes = new ArrayList<>();
 
-        Map<String, String> updateModelCacheStatus1 = new HashMap<>();
-        updateModelCacheStatus1.put("modelId1", "response");
-        Map<String, String[]> modelWorkerNodeCounts1 = new HashMap<>();
-        modelWorkerNodeCounts1.put("modelId1", new String[]{"mockNode1"});
+        Map<String, String> updateModelCacheStatus1 = Map.of("modelId1", "response");
         nodes.add(new MLUpdateModelCacheNodeResponse(node1, updateModelCacheStatus1));
 
-        Map<String, String> updateModelCacheStatus2 = new HashMap<>();
-        updateModelCacheStatus2.put("modelId2", "response");
-        Map<String, String[]> modelWorkerNodeCounts2 = new HashMap<>();
-        modelWorkerNodeCounts2.put("modelId2", new String[]{"mockNode2"});
+        Map<String, String> updateModelCacheStatus2 = Map.of("modelId2", "response");
         nodes.add(new MLUpdateModelCacheNodeResponse(node2, updateModelCacheStatus2));
 
         List<FailedNodeException> failures = new ArrayList<>();
@@ -104,8 +96,6 @@ public class MLUpdateModelCacheNodesResponseTest {
     @Test
     public void testNullUpdateModelCacheStatusToXContent() throws IOException {
         List<MLUpdateModelCacheNodeResponse> nodes = new ArrayList<>();
-        Map<String, String[]> modelWorkerNodeCounts1 = new HashMap<>();
-        modelWorkerNodeCounts1.put("modelId1", new String[]{"mockNode1"});
         nodes.add(new MLUpdateModelCacheNodeResponse(node1, null));
         List<FailedNodeException> failures = new ArrayList<>();
         MLUpdateModelCacheNodesResponse response = new MLUpdateModelCacheNodesResponse(clusterName, nodes, failures);

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +21,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -104,7 +104,7 @@ public class RestMLRegisterModelGroupActionTests extends OpenSearchTestCase {
     }
 
     public void testRegisterModelGroupRequestWithEmptyContent() throws Exception {
-        exceptionRule.expect(IOException.class);
+        exceptionRule.expect(OpenSearchParseException.class);
         exceptionRule.expectMessage("Model group request has empty body");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLRegisterModelGroupAction.handleRequest(request, channel, client);

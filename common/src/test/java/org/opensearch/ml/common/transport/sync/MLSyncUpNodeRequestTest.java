@@ -25,8 +25,13 @@ import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE
 @RunWith(MockitoJUnitRunner.class)
 public class MLSyncUpNodeRequestTest {
 
+    @Mock
     private DiscoveryNode localNode1;
+
+    @Mock
     private DiscoveryNode localNode2;
+
+    @Mock
     private DiscoveryNode localNode3;
 
     @Mock
@@ -34,31 +39,6 @@ public class MLSyncUpNodeRequestTest {
 
     @Before
     public void setUp() throws Exception {
-        localNode1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
-        localNode2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
-        localNode3 = new DiscoveryNode(
-                "foo3",
-                "foo3",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
-
         Map<String, String[]> addedWorkerNodes = new HashMap<>();
         Map<String, String[]> removedWorkerNodes = new HashMap<>();
         Map<String, Set<String>> modelRoutingTable = new HashMap<>();

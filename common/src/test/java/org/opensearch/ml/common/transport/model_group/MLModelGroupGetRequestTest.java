@@ -34,8 +34,8 @@ public class MLModelGroupGetRequestTest {
                 .modelGroupId(modelGroupId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlModelGroupGetRequest.writeTo(bytesStreamOutput);
-        MLModelGroupGetRequest parsedModel = new MLModelGroupGetRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals(parsedModel.getModelGroupId(), modelGroupId);
+        MLModelGroupGetRequest parsedRequest = new MLModelGroupGetRequest(bytesStreamOutput.bytes().streamInput());
+        assertEquals(parsedRequest.getModelGroupId(), modelGroupId);
     }
 
     @Test

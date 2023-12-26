@@ -198,6 +198,7 @@ import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
+import org.opensearch.ml.rest.RestMLCreateModelControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
