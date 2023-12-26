@@ -28,6 +28,9 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.client.Client;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -41,6 +44,7 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -49,13 +53,23 @@ public class HttpJsonConnectorExecutorTest {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Mock
+    ThreadPool threadPool;
+
+    @Mock
     ScriptService scriptService;
 
     @Mock
     CloseableHttpClient httpClient;
 
     @Mock
+    Client client;
+
+    @Mock
     CloseableHttpResponse response;
+
+    Settings settings;
+
+    ThreadContext threadContext;
 
     @Before
     public void setUp() {
@@ -101,6 +115,11 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(httpClient.execute(any())).thenReturn(response);
         HttpEntity entity = new StringEntity("{\"response\": \"test result\"}");
         when(response.getEntity()).thenReturn(entity);
@@ -142,6 +161,11 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor
@@ -180,6 +204,11 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -210,6 +239,11 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor.setScriptService(scriptService);
         when(httpClient.execute(any())).thenReturn(response);
         String modelResponse = "{\n"
@@ -291,6 +325,11 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor.setScriptService(scriptService);
         when(httpClient.execute(any())).thenReturn(response);
         // model takes 2 input docs, but only output 1 embedding
@@ -361,6 +400,11 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
         executor.setScriptService(scriptService);
         when(httpClient.execute(any())).thenReturn(response);
         // model takes 2 input docs, but only output 1 embedding

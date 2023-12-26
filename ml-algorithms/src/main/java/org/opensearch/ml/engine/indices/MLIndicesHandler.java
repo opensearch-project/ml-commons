@@ -74,6 +74,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.CONFIG, listener);
     }
 
+    public void initMLModelControllerIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MODEL_CONTROLLER, listener);
+    }
+
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }

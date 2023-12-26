@@ -12,8 +12,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.TokenBucket;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -77,11 +82,21 @@ public interface RemoteConnectorExecutor {
 
     Connector getConnector();
 
+    TokenBucket getModelRateLimiter();
+
+    Map<String, TokenBucket> getUserRateLimiterMap();
+
+    Client getClient();
+
     default void setClient(Client client) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 
     default void setClusterService(ClusterService clusterService) {}
+
+    default void setModelRateLimiter(TokenBucket modelRateLimiter) {}
+
+    default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
@@ -101,7 +116,24 @@ public interface RemoteConnectorExecutor {
         }
         String payload = connector.createPredictPayload(parameters);
         connector.validatePayload(payload);
-        invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+        String userStr = getClient()
+            .threadPool()
+            .getThreadContext()
+            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        User user = User.parse(userStr);
+        if (getModelRateLimiter() != null && !getModelRateLimiter().request()) {
+            throw new OpenSearchStatusException("Request is throttled at model level.", RestStatus.TOO_MANY_REQUESTS);
+        } else if (user != null
+            && getUserRateLimiterMap() != null
+            && getUserRateLimiterMap().get(user.getName()) != null
+            && !getUserRateLimiterMap().get(user.getName()).request()) {
+            throw new OpenSearchStatusException(
+                "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                RestStatus.TOO_MANY_REQUESTS
+            );
+        } else {
+            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+        }
     }
 
     void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);

@@ -7,12 +7,14 @@ package org.opensearch.ml.model;
 
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.DoubleStream;
 
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -33,6 +35,9 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLExecutable executor;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) TokenBucket modelRateLimiter;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Map<String, TokenBucket> userRateLimiterMap;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isModelEnabled;
     private final Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
     private MLModel modelInfo;
@@ -157,6 +162,9 @@ public class MLModelCache {
         if (executor != null) {
             executor.close();
         }
+        isModelEnabled = null;
+        modelRateLimiter = null;
+        userRateLimiterMap = null;
     }
 
     public void addModelInferenceDuration(double duration, long maxRequestCount) {

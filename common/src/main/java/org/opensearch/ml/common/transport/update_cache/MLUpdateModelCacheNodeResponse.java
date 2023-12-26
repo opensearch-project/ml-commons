@@ -63,6 +63,6 @@ public class MLUpdateModelCacheNodeResponse extends BaseNodeResponse implements 
     }
 
     public boolean isModelUpdateStatusEmpty() {
-        return modelUpdateStatus == null || modelUpdateStatus.size() == 0;
+        return modelUpdateStatus == null || modelUpdateStatus.isEmpty();
     }
 }

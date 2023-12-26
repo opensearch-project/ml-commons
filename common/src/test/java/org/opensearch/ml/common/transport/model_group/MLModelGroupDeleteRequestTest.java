@@ -12,38 +12,51 @@ import java.io.UncheckedIOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 public class MLModelGroupDeleteRequestTest {
 
     private String modelGroupId;
 
+    private MLModelGroupDeleteRequest request;
+
     @Before
     public void setUp() {
-        modelGroupId = "test_group_id";
-    }
+        modelGroupId = "testGroupId";
 
-    @Test
-    public void writeTo_Success() throws IOException {
-        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = MLModelGroupDeleteRequest.builder()
+        request = MLModelGroupDeleteRequest.builder()
                 .modelGroupId(modelGroupId).build();
-        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-        mlModelGroupDeleteRequest.writeTo(bytesStreamOutput);
-        MLModelGroupDeleteRequest parsedModel = new MLModelGroupDeleteRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals(parsedModel.getModelGroupId(), modelGroupId);
     }
 
     @Test
-    public void validate_Exception_NullModelId() {
-        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = MLModelGroupDeleteRequest.builder().build();
+    public void writeToSuccess() throws IOException {
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        request.writeTo(bytesStreamOutput);
+        MLModelGroupDeleteRequest parsedRequest = new MLModelGroupDeleteRequest(bytesStreamOutput.bytes().streamInput());
+        assertEquals(parsedRequest.getModelGroupId(), modelGroupId);
+    }
 
-        ActionRequestValidationException exception = mlModelGroupDeleteRequest.validate();
+    @Test
+    public void validateSuccess() {
+        assertNull(request.validate());
+    }
+
+    @Test
+    public void validateWithNullModelIdException() {
+        MLModelGroupDeleteRequest request = MLModelGroupDeleteRequest.builder().build();
+
+        ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: ML model group id can't be null;", exception.getMessage());
     }
 
     @Test
-    public void fromActionRequest_Success() {
-        MLModelGroupDeleteRequest mlModelDeleteRequest = MLModelGroupDeleteRequest.builder()
-                .modelGroupId(modelGroupId).build();
+    public void fromActionRequestWithMLUpdateModelControllerRequestSuccess() {
+        assertSame(MLModelGroupDeleteRequest.fromActionRequest(request), request);
+    }
+
+    @Test
+    public void fromActionRequestSuccess() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -52,16 +65,16 @@ public class MLModelGroupDeleteRequestTest {
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-                mlModelDeleteRequest.writeTo(out);
+                request.writeTo(out);
             }
         };
         MLModelGroupDeleteRequest result = MLModelGroupDeleteRequest.fromActionRequest(actionRequest);
-        assertNotSame(result, mlModelDeleteRequest);
-        assertEquals(result.getModelGroupId(), mlModelDeleteRequest.getModelGroupId());
+        assertNotSame(result, request);
+        assertEquals(result.getModelGroupId(), request.getModelGroupId());
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionRequest_IOException() {
+    public void fromActionRequestIOException() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
