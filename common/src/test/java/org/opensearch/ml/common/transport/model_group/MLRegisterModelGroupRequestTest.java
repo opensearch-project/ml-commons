@@ -1,13 +1,5 @@
 package org.opensearch.ml.common.transport.model_group;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Arrays;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -16,27 +8,39 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.AccessMode;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
 public class MLRegisterModelGroupRequestTest {
 
     private MLRegisterModelGroupInput mlRegisterModelGroupInput;
 
+    private MLRegisterModelGroupRequest request;
+
     @Before
     public void setUp(){
 
-        mlRegisterModelGroupInput = mlRegisterModelGroupInput.builder()
+        mlRegisterModelGroupInput = MLRegisterModelGroupInput.builder()
                 .name("name")
                 .description("description")
-                .backendRoles(Arrays.asList("IT"))
+                .backendRoles(List.of("IT"))
                 .modelAccessMode(AccessMode.RESTRICTED)
                 .isAddAllBackendRoles(true)
+                .build();
+
+        request = MLRegisterModelGroupRequest.builder()
+                .registerModelGroupInput(mlRegisterModelGroupInput)
                 .build();
     }
 
     @Test
-    public void writeTo_Success() throws IOException {
-        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
-                .registerModelGroupInput(mlRegisterModelGroupInput)
-                .build();
+    public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
         MLRegisterModelGroupRequest parsedRequest = new MLRegisterModelGroupRequest(bytesStreamOutput.bytes().streamInput());
@@ -48,25 +52,20 @@ public class MLRegisterModelGroupRequestTest {
     }
 
     @Test
-    public void validate_Success() {
-        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
-                .registerModelGroupInput(mlRegisterModelGroupInput)
-                .build();
-
+    public void validateSuccess() {
         assertNull(request.validate());
     }
 
     @Test
-    public void validate_Exception_NullMLRegisterModelGroupInput() {
-        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
-                .build();
+    public void validateNullMLRegisterModelGroupInputException() {
+        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder().build();
         ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: Model meta input can't be null;", exception.getMessage());
     }
 
     @Test
     // MLRegisterModelGroupInput check its parameters when created, so exception is not thrown here
-    public void validate_Exception_NullMLModelName() {
+    public void validateNullMLModelNameException() {
         mlRegisterModelGroupInput.setName(null);
         MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
                 .registerModelGroupInput(mlRegisterModelGroupInput)
@@ -77,18 +76,12 @@ public class MLRegisterModelGroupRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success_WithMLRegisterModelRequest() {
-        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
-                .registerModelGroupInput(mlRegisterModelGroupInput)
-                .build();
+    public void fromActionRequestWithMLRegisterModelGroupRequestSuccess() {
         assertSame(MLRegisterModelGroupRequest.fromActionRequest(request), request);
     }
 
     @Test
-    public void fromActionRequest_Success_WithNonMLRegisterModelRequest() {
-        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
-                .registerModelGroupInput(mlRegisterModelGroupInput)
-                .build();
+    public void fromActionRequestWithNonMLRegisterModelGroupRequestSuccess() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -106,7 +99,7 @@ public class MLRegisterModelGroupRequestTest {
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionRequest_IOException() {
+    public void fromActionRequestIOException() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

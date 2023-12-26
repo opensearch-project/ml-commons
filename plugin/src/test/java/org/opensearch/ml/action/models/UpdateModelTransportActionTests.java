@@ -752,7 +752,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is deploying, please wait for it complete. model ID test_model_id", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Model is deploying. Please wait for the model to complete deployment. model ID test_model_id",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -1163,7 +1166,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                     .name("updated_test_name")
                     .description("updated_test_description")
                     .modelGroupId("updated_test_model_group_id")
-                    .connectorUpdateContent(updateContent)
+                    .connector(updateContent)
                     .build();
                 return MLUpdateModelRequest.builder().updateModelInput(updateRemoteModelInput).build();
             default:

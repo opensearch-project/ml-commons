@@ -7,6 +7,7 @@ package org.opensearch.ml.common;
 
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.controller.MLModelController;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -54,12 +55,14 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
-    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 8;
+    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 9;
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
     public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 2;
     public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
     public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
+    public static final String ML_MODEL_CONTROLLER_INDEX = ".plugins-ml-controller";
+    public static final Integer ML_MODEL_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
     public static final String ML_MAP_RESPONSE_KEY = "response";
     public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
     public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
@@ -222,6 +225,15 @@ public class CommonValue {
             + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
             + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
             + "      \""
+            + MLModel.IS_ENABLED_FIELD
+            + "\" : {\"type\": \"boolean\"},\n"
+            + "      \""
+            + MLModel.IS_MODEL_CONTROLLER_ENABLED_FIELD
+            + "\" : {\"type\": \"boolean\"},\n"
+            + "      \""
+            + MLModel.MODEL_RATE_LIMITER_CONFIG_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
             + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
@@ -347,6 +359,17 @@ public class CommonValue {
             + "      \""
             + CREATE_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
+    public static final String ML_MODEL_CONTROLLER_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_MODEL_CONTROLLER_INDEX_SCHEMA_VERSION
+            + "},\n"
+            + "    \"properties\": {\n"
+            + "      \""
+            + MLModelController.USER_RATE_LIMITER_CONFIG
+            + "\" : {\"type\": \"flat_object\"}\n"
             + "    }\n"
             + "}";
 

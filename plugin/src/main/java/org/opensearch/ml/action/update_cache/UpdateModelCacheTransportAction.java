@@ -106,20 +106,15 @@ public class UpdateModelCacheTransportAction extends
         MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest
     ) {
         String modelId = mlUpdateModelCacheNodesRequest.getModelId();
-        boolean isPredictorUpdate = mlUpdateModelCacheNodesRequest.isPredictorUpdate();
 
         Map<String, String> modelUpdateStatus = new HashMap<>();
         modelUpdateStatus.put(modelId, "received");
 
         String localNodeId = clusterService.localNode().getId();
 
-        mlModelManager.updateModelCache(modelId, isPredictorUpdate, ActionListener.wrap(r -> {
-            modelUpdateStatus.replace(modelId, "success");
+        mlModelManager.updateModelCache(modelId, ActionListener.wrap(r -> {
             log.info("Successfully performing in-place update model {} on node {}", modelId, localNodeId);
-        }, e -> {
-            modelUpdateStatus.replace(modelId, "failed");
-            log.error("Failed to perform in-place update model for model {} on node {}", modelId, localNodeId);
-        }));
+        }, e -> { log.error("Failed to perform in-place update model for model {} on node {}", modelId, localNodeId); }));
         return new MLUpdateModelCacheNodeResponse(clusterService.localNode(), modelUpdateStatus);
     }
 }

@@ -69,7 +69,7 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
                 return new MLRegisterModelGroupRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLCreateModelMetaRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLRegisterModelGroupRequest", e);
         }
 
     }

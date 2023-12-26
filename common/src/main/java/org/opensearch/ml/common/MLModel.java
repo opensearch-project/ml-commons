@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -50,9 +51,13 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    //SHA256 hash value of model content.
+    // SHA256 hash value of model content.
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
 
+    // Model level quota and throttling control
+    public static final String IS_ENABLED_FIELD = "is_enabled";
+    public static final String MODEL_RATE_LIMITER_CONFIG_FIELD = "model_rate_limiter_config";
+    public static final String IS_MODEL_CONTROLLER_ENABLED_FIELD = "is_model_controller_enabled";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
@@ -94,6 +99,9 @@ public class MLModel implements ToXContentObject {
     private Long modelContentSizeInBytes;
     private String modelContentHash;
     private MLModelConfig modelConfig;
+    private Boolean isEnabled;
+    private Boolean isModelControllerEnabled;
+    private MLRateLimiter modelRateLimiterConfig;
     private Instant createdTime;
     private Instant lastUpdateTime;
     private Instant lastRegisteredTime;
@@ -131,6 +139,9 @@ public class MLModel implements ToXContentObject {
                    MLModelState modelState,
                    Long modelContentSizeInBytes,
                    String modelContentHash,
+                   Boolean isEnabled,
+                   Boolean isModelControllerEnabled,
+                   MLRateLimiter modelRateLimiterConfig,
                    MLModelConfig modelConfig,
                    Instant createdTime,
                    Instant lastUpdateTime,
@@ -158,6 +169,9 @@ public class MLModel implements ToXContentObject {
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
         this.modelContentHash = modelContentHash;
+        this.isEnabled = isEnabled;
+        this.isModelControllerEnabled = isModelControllerEnabled;
+        this.modelRateLimiterConfig = modelRateLimiterConfig;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -203,6 +217,11 @@ public class MLModel implements ToXContentObject {
                 } else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
+            }
+            isEnabled = input.readOptionalBoolean();
+            isModelControllerEnabled = input.readOptionalBoolean();
+            if (input.readBoolean()) {
+                modelRateLimiterConfig = new MLRateLimiter(input);
             }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();
@@ -255,6 +274,14 @@ public class MLModel implements ToXContentObject {
         if (modelConfig != null) {
             out.writeBoolean(true);
             modelConfig.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalBoolean(isEnabled);
+        out.writeOptionalBoolean(isModelControllerEnabled);
+        if (modelRateLimiterConfig != null) {
+            out.writeBoolean(true);
+            modelRateLimiterConfig.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -320,6 +347,15 @@ public class MLModel implements ToXContentObject {
         }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
+        }
+        if (isEnabled != null) {
+            builder.field(IS_ENABLED_FIELD, isEnabled);
+        }
+        if (isModelControllerEnabled != null) {
+            builder.field(IS_MODEL_CONTROLLER_ENABLED_FIELD, isModelControllerEnabled);
+        }
+        if (modelRateLimiterConfig != null) {
+            builder.field(MODEL_RATE_LIMITER_CONFIG_FIELD, modelRateLimiterConfig);
         }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
@@ -389,6 +425,9 @@ public class MLModel implements ToXContentObject {
         Long modelContentSizeInBytes = null;
         String modelContentHash = null;
         MLModelConfig modelConfig = null;
+        Boolean isEnabled = null;
+        Boolean isModelControllerEnabled = null;
+        MLRateLimiter modelRateLimiterConfig = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
         Instant lastUploadedTime = null;
@@ -474,6 +513,15 @@ public class MLModel implements ToXContentObject {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
                     break;
+                case IS_ENABLED_FIELD:
+                    isEnabled = parser.booleanValue();
+                    break;
+                case IS_MODEL_CONTROLLER_ENABLED_FIELD:
+                    isModelControllerEnabled = parser.booleanValue();
+                    break;
+                case MODEL_RATE_LIMITER_CONFIG_FIELD:
+                    modelRateLimiterConfig = MLRateLimiter.parse(parser);
+                    break;
                 case PLANNING_WORKER_NODE_COUNT_FIELD:
                     planningWorkerNodeCount = parser.intValue();
                     break;
@@ -540,6 +588,9 @@ public class MLModel implements ToXContentObject {
                 .modelContentSizeInBytes(modelContentSizeInBytes)
                 .modelContentHash(modelContentHash)
                 .modelConfig(modelConfig)
+                .isEnabled(isEnabled)
+                .isModelControllerEnabled(isModelControllerEnabled)
+                .modelRateLimiterConfig(modelRateLimiterConfig)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
                 .lastRegisteredTime(lastRegisteredTime == null? lastUploadedTime : lastRegisteredTime)
