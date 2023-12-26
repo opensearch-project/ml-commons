@@ -20,11 +20,24 @@ package org.opensearch.ml.plugin;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.opensearch.client.Client;
+import org.opensearch.ml.common.spi.MLCommonsExtension;
+import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
@@ -35,6 +48,17 @@ import org.opensearch.searchpipelines.questionanswering.generative.ext.Generativ
 public class MachineLearningPluginTests {
 
     MachineLearningPlugin plugin = new MachineLearningPlugin();
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Mock
+    Client client;
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
 
     @Test
     public void testGetSearchExts() {
@@ -61,6 +85,56 @@ public class MachineLearningPluginTests {
         assertEquals(1, responseProcessors.size());
         assertTrue(
             responseProcessors.get(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE) instanceof GenerativeQAResponseProcessor.Factory
+        );
+    }
+
+    @Test
+    public void testLoadExtensionsWithNoExtensiblePlugin() {
+        ExtensiblePlugin.ExtensionLoader loader = mock(ExtensiblePlugin.ExtensionLoader.class);
+        when(loader.loadExtensions(MLCommonsExtension.class)).thenReturn(new ArrayList<>());
+        plugin.loadExtensions(loader);
+        assertEquals(0, plugin.externalToolFactories.size());
+    }
+
+    @Test
+    public void testLoadExtensionsWithExtensiblePluginNoToolFactory() {
+        ExtensiblePlugin.ExtensionLoader loader = mock(ExtensiblePlugin.ExtensionLoader.class);
+        MLCommonsExtension extension = mock(MLCommonsExtension.class);
+        when(extension.getToolFactories()).thenReturn(new ArrayList<>());
+        when(loader.loadExtensions(MLCommonsExtension.class)).thenReturn(Arrays.asList(extension));
+        plugin.loadExtensions(loader);
+        assertEquals(0, plugin.externalToolFactories.size());
+    }
+
+    @Test
+    public void testLoadExtensionsWithExtensiblePluginAndWrongToolFactory() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Missing ToolAnnotation for Tool DummyWrongTool");
+        ExtensiblePlugin.ExtensionLoader loader = mock(ExtensiblePlugin.ExtensionLoader.class);
+        MLCommonsExtension extension = mock(MLCommonsExtension.class);
+        DummyWrongTool.Factory.getInstance().init();
+        Tool.Factory<? extends Tool> factory = DummyWrongTool.Factory.getInstance();
+        List<Tool.Factory<? extends Tool>> toolFactories = Arrays.asList(factory);
+        when(extension.getToolFactories()).thenReturn(toolFactories);
+        when(loader.loadExtensions(MLCommonsExtension.class)).thenReturn(Arrays.asList(extension));
+        plugin.loadExtensions(loader);
+        assertEquals(0, plugin.externalToolFactories.size());
+    }
+
+    @Test
+    public void testLoadExtensionsWithExtensiblePluginAndCorrectToolFactory() {
+        ExtensiblePlugin.ExtensionLoader loader = mock(ExtensiblePlugin.ExtensionLoader.class);
+        MLCommonsExtension extension = mock(MLCommonsExtension.class);
+        MLModelTool.Factory.getInstance().init(client);
+        Tool.Factory<? extends Tool> factory = MLModelTool.Factory.getInstance();
+        List<Tool.Factory<? extends Tool>> toolFactories = Arrays.asList(factory);
+        when(extension.getToolFactories()).thenReturn(toolFactories);
+        when(loader.loadExtensions(MLCommonsExtension.class)).thenReturn(Arrays.asList(extension));
+        plugin.loadExtensions(loader);
+        assertEquals(1, plugin.externalToolFactories.size());
+        assertEquals(
+            MLModelTool.Factory.getInstance().getDefaultDescription(),
+            plugin.externalToolFactories.get("MLModelTool").getDefaultDescription()
         );
     }
 }

@@ -66,6 +66,7 @@ public class MetricsCorrelationOutput implements Output {
 
     @SneakyThrows
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
+        builder.startObject();
         if (modelOutput != null && modelOutput.size() > 0) {
             builder.startArray(INFERENCE_RESULT_FIELD);
             for (MCorrModelTensors output : modelOutput) {
@@ -73,6 +74,7 @@ public class MetricsCorrelationOutput implements Output {
             }
             builder.endArray();
         }
+        builder.endObject();
         return builder;
     }
 }

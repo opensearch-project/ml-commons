@@ -252,4 +252,17 @@ public class AgentUtilsTest {
         assertEquals(expectedPrompt, actualPrompt);
     }
 
+    @Test
+    public void testExtractModelResponseJsonWithInvalidModelOutput() {
+        String text = "invalid output";
+        assertThrows(IllegalArgumentException.class, () -> AgentUtils.extractModelResponseJson(text));
+    }
+
+    @Test
+    public void testExtractModelResponseJsonWithValidModelOutput() {
+        String text =
+            "This is the model response\n```json\n{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}```";
+        String responseJson = AgentUtils.extractModelResponseJson(text);
+        assertEquals("{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}", responseJson);
+    }
 }

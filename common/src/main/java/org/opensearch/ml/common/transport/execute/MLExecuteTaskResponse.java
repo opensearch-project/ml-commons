@@ -75,12 +75,6 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
 
     @Override
     public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
-        builder.startObject();
-        builder.field("function_name", functionName);
-        builder.startObject("output");
-        output.toXContent(builder, params);
-        builder.endObject();
-        builder.endObject();
-        return builder;
+        return output.toXContent(builder, params);
     }
 }
