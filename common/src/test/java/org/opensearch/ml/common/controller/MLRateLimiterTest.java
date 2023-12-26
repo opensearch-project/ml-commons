@@ -173,19 +173,19 @@ public class MLRateLimiterTest {
 
     @Test
     public void testRateLimiterIsUpdatable() {
-        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, null));
-        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiterNull));
+        assertFalse(MLRateLimiter.updateValidityPreCheck(rateLimiter, null));
+        assertFalse(MLRateLimiter.updateValidityPreCheck(rateLimiter, rateLimiterNull));
 
-        assertTrue(MLRateLimiter.isUpdatable(null, rateLimiter));
-        assertTrue(MLRateLimiter.isUpdatable(rateLimiterNull, rateLimiter));
+        assertTrue(MLRateLimiter.updateValidityPreCheck(null, rateLimiter));
+        assertTrue(MLRateLimiter.updateValidityPreCheck(rateLimiterNull, rateLimiter));
 
-        assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithUnit, rateLimiterWithNumber));
-        assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithUnit, rateLimiter));
-        assertTrue(MLRateLimiter.isUpdatable(rateLimiterWithNumber, rateLimiter));
-        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiter));
+        assertTrue(MLRateLimiter.updateValidityPreCheck(rateLimiterWithUnit, rateLimiterWithNumber));
+        assertTrue(MLRateLimiter.updateValidityPreCheck(rateLimiterWithUnit, rateLimiter));
+        assertTrue(MLRateLimiter.updateValidityPreCheck(rateLimiterWithNumber, rateLimiter));
+        assertFalse(MLRateLimiter.updateValidityPreCheck(rateLimiter, rateLimiter));
 
-        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiterWithUnit));
-        assertFalse(MLRateLimiter.isUpdatable(rateLimiter, rateLimiterWithNumber));
+        assertFalse(MLRateLimiter.updateValidityPreCheck(rateLimiter, rateLimiterWithUnit));
+        assertFalse(MLRateLimiter.updateValidityPreCheck(rateLimiter, rateLimiterWithNumber));
     }
 
     @Test

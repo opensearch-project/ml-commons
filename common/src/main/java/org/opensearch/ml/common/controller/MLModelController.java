@@ -126,7 +126,7 @@ public class MLModelController implements ToXContentObject, Writeable {
                 MLRateLimiter newRateLimiter = entry.getValue();
                 if (this.userRateLimiterConfig.containsKey(newUser)) {
                     MLRateLimiter oldRateLimiter = this.userRateLimiterConfig.get(newUser);
-                    if (oldRateLimiter.isDeployRequiredAfterUpdate(newRateLimiter)) {
+                    if (MLRateLimiter.isDeployRequiredAfterUpdate(oldRateLimiter, newRateLimiter)) {
                         return true;
                     }
                 } else {

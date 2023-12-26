@@ -1074,7 +1074,7 @@ public class MLModelManager {
         TokenBucket modelRateLimiter = getModelRateLimiter(modelId);
         Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
 
-        Map<String, Object> params = new HashMap<>()
+        Map<String, Object> params = new HashMap<>();
         params.put(ML_ENGINE, mlEngine);
         params.put(SCRIPT_SERVICE, scriptService);
         params.put(CLIENT, client);

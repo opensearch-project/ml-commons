@@ -55,33 +55,13 @@ public class MLUpdateModelInputTest {
             "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
             "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1}";
 
-    private final String expectedInputStrWithNullField = "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":" +
-            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+    private final String expectedOutputStr = "{\"model_id\":null,\"name\":\"name\",\"description\":\"description\",\"model_group_id\":" +
+            "\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
             "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
-            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
+            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":" +
+            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}}}";
 
-    private final String expectedOutputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
-            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
-            "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
-            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
-            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":" +
-            "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
-            "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
-            "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
-            "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}},\"last_updated_time\":1}";
-
-    private final String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
-            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
-            "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
-            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
-            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":" +
-            "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
-            "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
-            "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
-            "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
-            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -186,6 +166,11 @@ public class MLUpdateModelInputTest {
     @Test
     public void parseWithNullFieldWithoutModel() throws Exception {
         exceptionRule.expect(IllegalStateException.class);
+        String expectedInputStrWithNullField = "{\"model_id\":\"test-model_id\",\"name\":null,\"description\":\"description\",\"model_version\":" +
+                "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+                "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
+                "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
+                "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
         testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
             try {
                 assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
@@ -197,6 +182,16 @@ public class MLUpdateModelInputTest {
 
     @Test
     public void parseWithIllegalFieldWithoutModel() throws Exception {
+        String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":" +
+                "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"model_rate_limiter_config\":" +
+                "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"},\"model_config\":" +
+                "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
+                "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":" +
+                "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":" +
+                "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":" +
+                "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":" +
+                "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":" +
+                "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
                 assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));

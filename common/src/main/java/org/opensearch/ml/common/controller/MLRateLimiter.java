@@ -110,6 +110,13 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * Checks the validity of this incoming update before performing an update operation.
+     *
+     * @param rateLimiter    The existing rate limiter.
+     * @param updateContent  The update content.
+     * @return true if the update is valid, false otherwise.
+     */
     public static boolean updateValidityPreCheck(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
         if (updateContent == null) {
             return false;
@@ -122,7 +129,7 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
     }
 
     public static boolean isDeployRequiredAfterUpdate(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
-        if (!isUpdatable(rateLimiter, updateContent)) {
+        if (!updateValidityPreCheck(rateLimiter, updateContent)) {
             return false;
         } else {
             return rateLimiter.isValid() || updateContent.isValid()

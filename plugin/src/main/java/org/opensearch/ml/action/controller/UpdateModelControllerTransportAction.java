@@ -96,7 +96,8 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                         .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                             if (hasPermission) {
                                 mlModelManager.getModelController(modelId, ActionListener.wrap(modelController -> {
-                                    boolean isDeployRequiredAfterUpdate = modelController.isDeployRequiredAfterUpdate(updateModelControllerInput);
+                                    boolean isDeployRequiredAfterUpdate = modelController
+                                        .isDeployRequiredAfterUpdate(updateModelControllerInput);
                                     modelController.update(updateModelControllerInput);
                                     updateModelController(mlModel, modelController, isDeployRequiredAfterUpdate, wrappedListener);
                                 }, e -> {

@@ -211,7 +211,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         boolean isPredictorUpdate = (updateModelInput.getConnector() != null)
             || (newConnectorId != null)
             || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled());
-        if (MLRateLimiter.isUpdatable(mlModel.getModelRateLimiterConfig(), updateModelInput.getModelRateLimiterConfig())) {
+        if (MLRateLimiter.updateValidityPreCheck(mlModel.getModelRateLimiterConfig(), updateModelInput.getModelRateLimiterConfig())) {
             MLRateLimiter updatedRateLimiterConfig = MLRateLimiter
                 .update(mlModel.getModelRateLimiterConfig(), updateModelInput.getModelRateLimiterConfig());
             updateModelInput.setModelRateLimiterConfig(updatedRateLimiterConfig);
