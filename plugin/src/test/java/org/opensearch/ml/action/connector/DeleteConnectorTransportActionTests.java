@@ -20,6 +20,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteResponse;
@@ -41,7 +42,6 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.TestHelper;
@@ -178,7 +178,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), any());
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
             "1 models are still using this connector, please delete or update the models first: [model_ID]",
