@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelResponseJson;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
@@ -315,6 +316,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     MLTaskResponse llmResponse = (MLTaskResponse) output;
                     ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
                     Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+                    if (dataAsMap.size() == 1 && dataAsMap.containsKey("response")) {
+                        String response = (String) dataAsMap.get("response");
+                        String thoughtResponse = extractModelResponseJson(response);
+                        dataAsMap = gson.fromJson(thoughtResponse, Map.class);
+                    }
                     String thought = String.valueOf(dataAsMap.get("thought"));
                     String action = String.valueOf(dataAsMap.get("action"));
                     String actionInput = String.valueOf(dataAsMap.get("action_input"));

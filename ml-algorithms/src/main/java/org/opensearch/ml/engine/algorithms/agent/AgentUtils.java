@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -138,5 +140,16 @@ public class AgentUtils {
             return substitutor.replace(prompt);
         }
         return prompt;
+    }
+
+    public static String extractModelResponseJson(String text) {
+        Pattern pattern = Pattern.compile("```json\\s*([\\s\\S]+?)\\s*```");
+        Matcher matcher = pattern.matcher(text);
+
+        if (matcher.find()) {
+            return matcher.group(1);
+        } else {
+            throw new IllegalArgumentException("Model output is invalid");
+        }
     }
 }
