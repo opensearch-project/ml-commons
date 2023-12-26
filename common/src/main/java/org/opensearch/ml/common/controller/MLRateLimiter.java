@@ -112,6 +112,7 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
 
     /**
      * Checks the validity of this incoming update before performing an update operation.
+     * A valid update indicates the corresponding index will be updated with the current MLRateLimiter config and the update content
      *
      * @param rateLimiter    The existing rate limiter.
      * @param updateContent  The update content.
@@ -128,11 +129,18 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
                 || (!Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.getRateLimitUnit()) &&  updateContent.getRateLimitUnit() != null);
     }
 
+    /**
+     * Checks if we need to deploy this update into ML Cache (if model is deployed) after performing this update operation.
+     *
+     * @param rateLimiter    The existing rate limiter.
+     * @param updateContent  The update content.
+     * @return true if the update is valid, false otherwise.
+     */
     public static boolean isDeployRequiredAfterUpdate(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
         if (!updateValidityPreCheck(rateLimiter, updateContent)) {
             return false;
         } else {
-            return rateLimiter.isValid() || updateContent.isValid()
+            return updateContent.isValid()
                     || (rateLimiter.getRateLimitUnit() != null && updateContent.getRateLimitNumber() != null)
                     || (rateLimiter.getRateLimitNumber() != null && updateContent.getRateLimitUnit() != null);
         }
