@@ -59,7 +59,6 @@ import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.index.shard.ShardPath;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.engine.tools.CatIndexTool.Factory;
 
 public class CatIndexToolTests {
 
@@ -232,12 +231,11 @@ public class CatIndexToolTests {
 
     @Test
     public void testTool() {
-        Factory instance = CatIndexTool.Factory.getInstance();
+        CatIndexTool.Factory instance = CatIndexTool.Factory.getInstance();
         assertEquals(instance, CatIndexTool.Factory.getInstance());
         assertTrue(instance.getDefaultDescription().contains("tool"));
-
-        Tool tool = instance.create(Collections.emptyMap());
-        assertEquals(CatIndexTool.TYPE, tool.getType());
+        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        assertEquals(CatIndexTool.TYPE, tool.getName());
         assertTrue(tool.validate(indicesParams));
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));

@@ -14,6 +14,16 @@ import java.util.Map;
 public interface Tool {
 
     /**
+     * Run tool and return response.
+     * @param parameters input parameters
+     * @return the tool's output
+     * @param <T> The output type
+     */
+    default <T> T run(Map<String, String> parameters) {
+        return null;
+    };
+
+    /**
      * Run tool and return response asynchronously.
      * @param parameters input parameters
      * @param listener an action listener for the response

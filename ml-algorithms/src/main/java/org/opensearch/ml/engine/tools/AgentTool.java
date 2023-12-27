@@ -14,14 +14,13 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -29,22 +28,17 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(AgentTool.TYPE)
-public class AgentTool implements Tool {
+public class AgentTool extends AbstractTool {
     public static final String TYPE = "AgentTool";
     private final Client client;
 
     private String agentId;
-    @Setter
-    @Getter
-    private String name = TYPE;
 
     @VisibleForTesting
     static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
 
     public AgentTool(Client client, String agentId) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.agentId = agentId;
     }
@@ -66,26 +60,6 @@ public class AgentTool implements Tool {
             listener.onFailure(e);
         }));
 
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

@@ -39,6 +39,7 @@ dependencies {
     implementation group: 'io.protostuff', name: 'protostuff-collectionschema', version: '1.8.0'
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.3.1'
+    testImplementation group: 'org.mockito', name: 'mockito-inline', version: '4.4.0'
     implementation group: 'com.google.guava', name: 'guava', version: '32.0.1-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation platform("ai.djl:bom:0.21.0")
@@ -48,6 +49,10 @@ dependencies {
     implementation("ai.djl.onnxruntime:onnxruntime-engine:0.21.0") {
         exclude group: "com.microsoft.onnxruntime", module: "onnxruntime"
     }
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}") {
+        exclude group: "org.jetbrains", module: "annotations"
+    }
+
     def os = DefaultNativePlatform.currentOperatingSystem
     //mac doesn't support GPU
     if (os.macOsX) {
@@ -64,8 +69,11 @@ dependencies {
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
-    implementation 'com.jayway.jsonpath:json-path:2.8.0'
+    implementation('com.jayway.jsonpath:json-path:2.8.0') {
+        exclude group: 'org.ow2.asm', module: 'asm'
+    }
     implementation group: 'org.json', name: 'json', version: '20231013'
+    implementation group: 'org.jsoup', name: 'jsoup', version: '1.16.1'
 }
 
 lombok {
@@ -96,7 +104,7 @@ jacocoTestCoverageVerification {
             }
             limit {
                 counter = 'BRANCH'
-                minimum = 0.55 //TODO: increase coverage to 0.85
+                minimum = 0.65 //TODO: increase coverage to 0.85
             }
         }
     }
