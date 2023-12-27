@@ -165,8 +165,6 @@ import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.MathTool;
 import org.opensearch.ml.engine.tools.NeuralSparseTool;
 import org.opensearch.ml.engine.tools.PainlessScriptTool;
-import org.opensearch.ml.engine.tools.SearchAlertsTool;
-import org.opensearch.ml.engine.tools.VectorDBTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -549,13 +547,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
-        toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
         toolFactories.put(NeuralSparseTool.TYPE, NeuralSparseTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
         toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
-        toolFactories.put(SearchAlertsTool.TYPE, SearchAlertsTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
