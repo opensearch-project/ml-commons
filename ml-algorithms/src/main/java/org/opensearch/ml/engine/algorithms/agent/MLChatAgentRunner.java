@@ -527,8 +527,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         lastTool.set(null);
                         lastToolListener.set(null);
                         if (action != null) {
-                            ((ActionListener<Object>) nextStepListener).onResponse("no access to this tool ");
-                            lastActionResult.set("no access to this tool ");
+                            ((ActionListener<Object>) nextStepListener).onResponse("no access to this tool: " + action);
+                            lastActionResult.set("no access to this tool " + action);
                         } else {
                             String stopWhenNoToolFound = tmpParameters.get("stop_when_no_tool_found");
                             if ("true".equalsIgnoreCase(stopWhenNoToolFound)) {
