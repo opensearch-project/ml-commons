@@ -174,7 +174,7 @@ public class IndexMappingToolTests {
     @Test
     public void testTool() {
         Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
-        assertEquals(IndexMappingTool.NAME, tool.getName());
+        assertEquals(IndexMappingTool.TYPE, tool.getName());
         assertTrue(tool.validate(indexParams));
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
