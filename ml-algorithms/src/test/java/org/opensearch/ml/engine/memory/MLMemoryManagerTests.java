@@ -23,12 +23,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -44,10 +47,16 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
+import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
@@ -107,6 +116,9 @@ public class MLMemoryManagerTests {
 
     @Mock
     ActionListener<UpdateResponse> updateResponseActionListener;
+
+    @Mock
+    ActionListener<Boolean> deletionInteractionListener;
 
     String conversationName;
     String applicationType;
@@ -391,5 +403,64 @@ public class MLMemoryManagerTests {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(updateResponseActionListener).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Failure in runtime"));
+    }
+
+    @Test
+    public void testBuildTraceQuery() {
+        QueryBuilder queryBuilder = mlMemoryManager.buildDeleteInteractionQuery("interaction-id-1");
+        String query = Strings.toString(XContentType.JSON, queryBuilder);
+        Assert
+            .assertEquals(
+                "{\"bool\":{\"should\":[{\"ids\":{\"values\":[\"interaction-id-1\"],\"boost\":1.0}},{\"bool\":{\"must\":[{\"exists\":{\"field\":\"trace_number\",\"boost\":1.0}},{\"term\":{\"parent_interaction_id\":{\"value\":\"interaction-id-1\",\"boost\":1.0}}}],\"adjust_pure_negative\":true,\"boost\":1.0}}],\"adjust_pure_negative\":true,\"boost\":1.0}}",
+                query
+            );
+    }
+
+    @Test
+    public void testDeleteInteraction() {
+        Mockito.doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse bulkByScrollResponse = Mockito.mock(BulkByScrollResponse.class);
+            Mockito.when(bulkByScrollResponse.getBulkFailures()).thenReturn(List.of());
+            Mockito.when(bulkByScrollResponse.getSearchFailures()).thenReturn(List.of());
+            listener.onResponse(bulkByScrollResponse);
+            return null;
+        }).when(client).execute(Mockito.eq(DeleteByQueryAction.INSTANCE), Mockito.any(DeleteByQueryRequest.class), Mockito.any());
+
+        mlMemoryManager.deleteInteraction("test-interaction", deletionInteractionListener);
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        Mockito.verify(deletionInteractionListener, times(1)).onResponse(argumentCaptor.capture());
+        Assert.assertTrue(argumentCaptor.getValue());
+    }
+
+    @Test
+    public void testDeleteInteractionFailed() {
+        Mockito.doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse bulkByScrollResponse = Mockito.mock(BulkByScrollResponse.class);
+            Mockito.when(bulkByScrollResponse.getBulkFailures()).thenReturn(List.of(Mockito.mock(BulkItemResponse.Failure.class)));
+            Mockito.when(bulkByScrollResponse.getSearchFailures()).thenReturn(List.of());
+            listener.onResponse(bulkByScrollResponse);
+            return null;
+        }).when(client).execute(Mockito.eq(DeleteByQueryAction.INSTANCE), Mockito.any(DeleteByQueryRequest.class), Mockito.any());
+
+        mlMemoryManager.deleteInteraction("test-interaction", deletionInteractionListener);
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        Mockito.verify(deletionInteractionListener, times(1)).onResponse(argumentCaptor.capture());
+        Assert.assertFalse(argumentCaptor.getValue());
+    }
+
+    @Test
+    public void testDeleteInteractionException() {
+        Mockito.doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new IndexNotFoundException("test-index"));
+            return null;
+        }).when(client).execute(Mockito.eq(DeleteByQueryAction.INSTANCE), Mockito.any(DeleteByQueryRequest.class), Mockito.any());
+
+        mlMemoryManager.deleteInteraction("test-interaction", deletionInteractionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(deletionInteractionListener, times(1)).onFailure(argumentCaptor.capture());
+        Assert.assertTrue(argumentCaptor.getValue() instanceof IndexNotFoundException);
     }
 }

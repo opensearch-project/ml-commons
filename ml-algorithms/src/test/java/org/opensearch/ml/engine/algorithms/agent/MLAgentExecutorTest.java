@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -23,6 +27,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
@@ -40,6 +45,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -51,6 +57,8 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
+import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionResponse;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.gson.Gson;
@@ -304,6 +312,116 @@ public class MLAgentExecutorTest {
         Assert.assertEquals(1, output.getMlModelOutputs().size());
         Assert.assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
         Assert.assertEquals(modelTensor, output.getMlModelOutputs().get(0).getMlModelTensors().get(0));
+    }
+
+    @Test
+    public void test_Regenerate_Validation() {
+        Map<String, String> params = new HashMap<>();
+        params.put(REGENERATE_INTERACTION_ID, "foo");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", FunctionName.AGENT, dataset);
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof IllegalArgumentException);
+        Assert.assertEquals(exception.getMessage(), "A memory ID must be provided to regenerate.");
+    }
+
+    @Test
+    public void test_Regenerate_GetOriginalQuestion() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction_id");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseActionListener = invocation.getArgument(4);
+            responseActionListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            Mockito.when(memory.getConversationId()).thenReturn("conversation_id");
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetInteractionResponse> listener = invocation.getArgument(2);
+            GetInteractionResponse interactionResponse = Mockito.mock(GetInteractionResponse.class);
+            Interaction mockInteraction = Mockito.mock(Interaction.class);
+            Mockito.when(mockInteraction.getInput()).thenReturn("regenerate question");
+            Mockito.when(interactionResponse.getInteraction()).thenReturn(mockInteraction);
+            listener.onResponse(interactionResponse);
+            return null;
+        }).when(client).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MEMORY_ID, "foo-memory");
+        params.put(REGENERATE_INTERACTION_ID, "bar-interaction");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", FunctionName.AGENT, dataset);
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(client, times(1)).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
+        Assert.assertEquals(params.get(QUESTION), "regenerate question");
+    }
+
+    @Test
+    public void test_Regenerate_OriginalQuestion_NotExist() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        CreateInteractionResponse interaction = Mockito.mock(CreateInteractionResponse.class);
+        Mockito.when(interaction.getId()).thenReturn("interaction_id");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> responseActionListener = invocation.getArgument(4);
+            responseActionListener.onResponse(interaction);
+            return null;
+        }).when(memory).save(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            Mockito.when(memory.getConversationId()).thenReturn("conversation_id");
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetInteractionResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new ResourceNotFoundException("Interaction bar-interaction not found"));
+            return null;
+        }).when(client).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MEMORY_ID, "foo-memory");
+        params.put(REGENERATE_INTERACTION_ID, "bar-interaction");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", FunctionName.AGENT, dataset);
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(client, times(1)).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
+        Assert.assertNull(params.get(QUESTION));
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof ResourceNotFoundException);
+        Assert.assertEquals(exception.getMessage(), "Interaction bar-interaction not found");
     }
 
     @Test
