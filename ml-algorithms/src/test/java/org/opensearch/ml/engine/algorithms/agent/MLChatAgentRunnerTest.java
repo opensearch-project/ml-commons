@@ -168,6 +168,7 @@ public class MLChatAgentRunnerTest {
         // Create an MLAgent and run the MLChatAgentRunner
         MLAgent mlAgent = createMLAgentWithTools();
         Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
         params.put("verbose", "true");
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
 
@@ -180,10 +181,12 @@ public class MLChatAgentRunnerTest {
         assertTrue(capturedResponse instanceof ModelTensorOutput);
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
 
+        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
         ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
         ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(2).getMlModelTensors().get(0);
 
         // Verify that the parsed values from JSON block are correctly set
+        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
         assertEquals("Thought: parsed thought", modelTensor1.getResult());
         assertEquals("parsed final answer", modelTensor2.getResult());
     }
