@@ -330,7 +330,7 @@ public class MLAgentExecutorTest {
     }
 
     @Test
-    public void test_Regenerate_GetOriginalQuestion() {
+    public void test_Regenerate_GetOriginalInteraction() {
         ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
         ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
@@ -377,7 +377,7 @@ public class MLAgentExecutorTest {
     }
 
     @Test
-    public void test_Regenerate_OriginalQuestion_NotExist() {
+    public void test_Regenerate_OriginalInteraction_NotExist() {
         ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
         ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
