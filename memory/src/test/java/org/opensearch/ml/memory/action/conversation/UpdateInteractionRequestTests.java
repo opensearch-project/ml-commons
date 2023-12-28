@@ -9,8 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -60,7 +59,7 @@ public class UpdateInteractionRequestTests {
 
     @Test
     public void testConstructor_UpdateContentNotAllowed() throws IOException {
-        updateContent.put(INTERACTIONS_RESPONSE_FIELD, "response");
+        updateContent.put(INTERACTIONS_INPUT_FIELD, "input");
         UpdateInteractionRequest updateInteractionRequest = new UpdateInteractionRequest("interaction_id", updateContent);
         assert (updateInteractionRequest.validate() == null);
         assert (updateInteractionRequest.getInteractionId().equals("interaction_id"));
@@ -105,7 +104,7 @@ public class UpdateInteractionRequestTests {
 
     @Test
     public void testParse_UpdateContentNotAllowed() throws IOException {
-        String jsonStr = "{\"response\": \"new response!\"}";
+        String jsonStr = "{\"input\": \"input!\"}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
