@@ -30,22 +30,22 @@ import java.util.List;
 @ToString
 public class MLToolsListRequest extends ActionRequest {
 
-    List<ToolMetadata> externalTools;
+    List<ToolMetadata> toolMetadataList;
 
     @Builder
-    public MLToolsListRequest(List<ToolMetadata> externalTools) {
-        this.externalTools = externalTools;
+    public MLToolsListRequest(List<ToolMetadata> toolMetadataList) {
+        this.toolMetadataList = toolMetadataList;
     }
 
     public MLToolsListRequest(StreamInput in) throws IOException {
         super(in);
-        this.externalTools = in.readList(ToolMetadata::new);
+        this.toolMetadataList = in.readList(ToolMetadata::new);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeList(this.externalTools);
+        out.writeList(this.toolMetadataList);
     }
 
     @Override

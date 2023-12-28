@@ -61,7 +61,7 @@ public class RestMLListToolsAction extends BaseRestHandler {
         List<ToolMetadata> toolList = new ArrayList<>();
         toolFactories
             .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
-        MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().externalTools(toolList).build();
+        MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().toolMetadataList(toolList).build();
         return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsGetRequest, new RestToXContentListener<>(channel));
     }
 }

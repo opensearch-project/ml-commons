@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.input.InputHelper.convertArgumentToMLPara
 import static org.opensearch.ml.common.input.InputHelper.getAction;
 import static org.opensearch.ml.common.input.InputHelper.getFunctionName;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -26,6 +27,7 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
@@ -206,19 +208,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
                 mlRegisterModelGroupRequest,
                 getMlRegisterModelGroupResponseActionListener(listener)
             );
-    }
-
-    /**
-     * Execute an algorithm
-     *
-     * @param name     function name
-     * @param input    an algorithm input
-     * @param listener a listener to be notified of the result
-     */
-    @Override
-    public void execute(FunctionName name, Input input, ActionListener<MLExecuteTaskResponse> listener) {
-        MLExecuteTaskRequest mlExecuteTaskRequest = new MLExecuteTaskRequest(name, input);
-        client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, listener);
     }
 
     /**

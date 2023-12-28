@@ -191,15 +191,6 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void listTools(ActionListener<List<ToolMetadata>> listener) {
-                listener.onResponse(null);
-            }
-
-            @Override
-            public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
-                listener.onResponse(null);
-
-            @Override
             public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
@@ -219,6 +210,16 @@ public class MachineLearningClientTest {
             @Override
             public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void listTools(ActionListener<List<ToolMetadata>> listener) {
+                listener.onResponse(null);
+            }
+
+            @Override
+            public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
+                listener.onResponse(null);
             }
         };
     }
