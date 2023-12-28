@@ -360,7 +360,14 @@ public class MLMemoryManagerTests {
     @Test
     public void testUpdateInteraction() {
         Map<String, Object> updateContent = Map
-            .of(INTERACTIONS_ADDITIONAL_INFO_FIELD, Map.of("feedback", "thumbs up!"), INTERACTIONS_RESPONSE_FIELD, "response", INTERACTIONS_INPUT_FIELD, "input");
+            .of(
+                INTERACTIONS_ADDITIONAL_INFO_FIELD,
+                Map.of("feedback", "thumbs up!"),
+                INTERACTIONS_RESPONSE_FIELD,
+                "response",
+                INTERACTIONS_INPUT_FIELD,
+                "input"
+            );
         ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
         UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
