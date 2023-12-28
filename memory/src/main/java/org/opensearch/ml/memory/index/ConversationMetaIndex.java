@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.OpenSearchWrapperException;
@@ -73,6 +74,8 @@ public class ConversationMetaIndex {
     private Client client;
     private ClusterService clusterService;
 
+    public static final Map<String, Object> INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-1");
+
     private String getUserStrFromThreadContext() {
         return client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
     }
@@ -84,7 +87,10 @@ public class ConversationMetaIndex {
     public void initConversationMetaIndexIfAbsent(ActionListener<Boolean> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
             log.debug("No conversational meta index found. Adding it");
-            CreateIndexRequest request = Requests.createIndexRequest(META_INDEX_NAME).mapping(ConversationalIndexConstants.META_MAPPING);
+            CreateIndexRequest request = Requests
+                .createIndexRequest(META_INDEX_NAME)
+                .mapping(ConversationalIndexConstants.META_MAPPING)
+                .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                 ActionListener<CreateIndexResponse> al = ActionListener.wrap(createIndexResponse -> {
