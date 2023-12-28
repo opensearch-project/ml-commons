@@ -99,11 +99,11 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         validateMLInput(mlInput, true);
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
-                .builder()
-                .mlInput(mlInput)
-                .modelId(modelId)
-                .dispatchTask(true)
-                .build();
+            .builder()
+            .mlInput(mlInput)
+            .modelId(modelId)
+            .dispatchTask(true)
+            .build();
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, getMlPredictionTaskResponseActionListener(listener));
     }
 
@@ -119,11 +119,11 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
         MLTrainingTaskRequest trainingTaskRequest = MLTrainingTaskRequest
-                .builder()
-                .mlInput(mlInput)
-                .async(asyncTask)
-                .dispatchTask(true)
-                .build();
+            .builder()
+            .mlInput(mlInput)
+            .async(asyncTask)
+            .dispatchTask(true)
+            .build();
 
         client.execute(MLTrainingTaskAction.INSTANCE, trainingTaskRequest, getMlPredictionTaskResponseActionListener(listener));
     }
@@ -187,25 +187,25 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         client
-                .execute(
-                        MLModelSearchAction.INSTANCE,
-                        searchRequest,
-                        ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
-                );
+            .execute(
+                MLModelSearchAction.INSTANCE,
+                searchRequest,
+                ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
+            );
     }
 
     @Override
     public void registerModelGroup(
-            MLRegisterModelGroupInput mlRegisterModelGroupInput,
-            ActionListener<MLRegisterModelGroupResponse> listener
+        MLRegisterModelGroupInput mlRegisterModelGroupInput,
+        ActionListener<MLRegisterModelGroupResponse> listener
     ) {
         MLRegisterModelGroupRequest mlRegisterModelGroupRequest = new MLRegisterModelGroupRequest(mlRegisterModelGroupInput);
         client
-                .execute(
-                        MLRegisterModelGroupAction.INSTANCE,
-                        mlRegisterModelGroupRequest,
-                        getMlRegisterModelGroupResponseActionListener(listener)
-                );
+            .execute(
+                MLRegisterModelGroupAction.INSTANCE,
+                mlRegisterModelGroupRequest,
+                getMlRegisterModelGroupResponseActionListener(listener)
+            );
     }
 
     /**
@@ -253,11 +253,11 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         client
-                .execute(
-                        MLTaskSearchAction.INSTANCE,
-                        searchRequest,
-                        ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
-                );
+            .execute(
+                MLTaskSearchAction.INSTANCE,
+                searchRequest,
+                ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
+            );
     }
 
     @Override
@@ -343,7 +343,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLRegisterAgentResponse> getMLRegisterAgentResponseActionListener(
-            ActionListener<MLRegisterAgentResponse> listener
+        ActionListener<MLRegisterAgentResponse> listener
     ) {
         ActionListener<MLRegisterAgentResponse> actionListener = wrapActionListener(listener, res -> {
             MLRegisterAgentResponse mlRegisterAgentResponse = MLRegisterAgentResponse.fromActionResponse(res);
@@ -354,7 +354,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {
         ActionListener<MLTaskGetResponse> internalListener = ActionListener
-                .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
+            .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
         ActionListener<MLTaskGetResponse> actionListener = wrapActionListener(internalListener, response -> {
             MLTaskGetResponse getResponse = MLTaskGetResponse.fromActionResponse(response);
             return getResponse;
@@ -371,7 +371,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLUndeployModelsResponse> getMlUndeployModelsResponseActionListener(
-            ActionListener<MLUndeployModelsResponse> listener
+        ActionListener<MLUndeployModelsResponse> listener
     ) {
         ActionListener<MLUndeployModelsResponse> actionListener = wrapActionListener(listener, response -> {
             MLUndeployModelsResponse deployModelResponse = MLUndeployModelsResponse.fromActionResponse(response);
@@ -381,7 +381,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLCreateConnectorResponse> getMlCreateConnectorResponseActionListener(
-            ActionListener<MLCreateConnectorResponse> listener
+        ActionListener<MLCreateConnectorResponse> listener
     ) {
         ActionListener<MLCreateConnectorResponse> actionListener = wrapActionListener(listener, response -> {
             MLCreateConnectorResponse createConnectorResponse = MLCreateConnectorResponse.fromActionResponse(response);
@@ -391,7 +391,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLRegisterModelGroupResponse> getMlRegisterModelGroupResponseActionListener(
-            ActionListener<MLRegisterModelGroupResponse> listener
+        ActionListener<MLRegisterModelGroupResponse> listener
     ) {
         ActionListener<MLRegisterModelGroupResponse> actionListener = wrapActionListener(listener, response -> {
             MLRegisterModelGroupResponse registerModelGroupResponse = MLRegisterModelGroupResponse.fromActionResponse(response);
@@ -412,7 +412,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLRegisterModelResponse> getMLRegisterModelResponseActionListener(
-            ActionListener<MLRegisterModelResponse> listener
+        ActionListener<MLRegisterModelResponse> listener
     ) {
         ActionListener<MLRegisterModelResponse> actionListener = wrapActionListener(listener, res -> {
             MLRegisterModelResponse registerModelResponse = MLRegisterModelResponse.fromActionResponse(res);
@@ -422,8 +422,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private <T extends ActionResponse> ActionListener<T> wrapActionListener(
-            final ActionListener<T> listener,
-            final Function<ActionResponse, T> recreate
+        final ActionListener<T> listener,
+        final Function<ActionResponse, T> recreate
     ) {
         ActionListener<T> actionListener = ActionListener.wrap(r -> {
             listener.onResponse(recreate.apply(r));
