@@ -31,6 +31,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -100,6 +101,8 @@ public class MachineLearningClientTest {
     private String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
+    private ToolMetadata toolMetadata;
+    private List<ToolMetadata> toolsList;
 
     @Before
     public void setUp() {
@@ -190,6 +193,16 @@ public class MachineLearningClientTest {
             @Override
             public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void listTools(ActionListener<List<ToolMetadata>> listener) {
+                listener.onResponse(null);
+            }
+
+            @Override
+            public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
+                listener.onResponse(null);
             }
 
             public void registerModelGroup(

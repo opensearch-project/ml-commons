@@ -76,6 +76,8 @@ import org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction;
 import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
 import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
+import org.opensearch.ml.action.tools.GetToolTransportAction;
+import org.opensearch.ml.action.tools.ListToolsTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
@@ -140,6 +142,8 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
+import org.opensearch.ml.common.transport.tools.MLGetToolAction;
+import org.opensearch.ml.common.transport.tools.MLListToolsAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
@@ -211,6 +215,8 @@ import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelControllerAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
+import org.opensearch.ml.rest.RestMLGetToolAction;
+import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLRegisterAgentAction;
@@ -394,7 +400,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLAgentDeleteAction.INSTANCE, DeleteAgentTransportAction.class),
                 new ActionHandler<>(UpdateConversationAction.INSTANCE, UpdateConversationTransportAction.class),
                 new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
-                new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class)
+                new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class),
+                new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
+                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class)
             );
     }
 
@@ -697,6 +705,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
         RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction();
+        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
+        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -747,6 +757,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMemoryUpdateInteractionAction,
                 restMemoryGetTracesAction,
                 restMLSearchAgentAction
+                restMLListToolsAction,
+                restMLGetToolAction
             );
     }
 
