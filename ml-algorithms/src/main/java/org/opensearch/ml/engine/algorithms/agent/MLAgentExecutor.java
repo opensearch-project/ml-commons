@@ -189,6 +189,7 @@ public class MLAgentExecutor implements Executable {
     ) {
         String appType = mlAgent.getAppType();
         String question = inputDataSet.getParameters().get(QUESTION);
+        String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
         // Create root interaction ID
         ConversationIndexMessage msg = ConversationIndexMessage
             .conversationIndexMessageBuilder()
@@ -201,7 +202,18 @@ public class MLAgentExecutor implements Executable {
         memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
             log.info("Created parent interaction ID: " + interaction.getId());
             inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
-            executeAgent(inputDataSet, mlAgent, listener);
+            // only delete previous interaction when new interaction created
+            ActionListener<Object> finalListener = regenerateInteractionId == null
+                ? listener
+                : ActionListener
+                    .runBefore(
+                        listener,
+                        () -> memory.getMemoryManager().deleteInteraction(regenerateInteractionId, ActionListener.wrap(deleted -> {}, e -> {
+                            log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
+                            listener.onFailure(e);
+                        }))
+                    );
+            executeAgent(inputDataSet, mlAgent, finalListener);
         }, ex -> {
             log.error("Failed to create parent interaction", ex);
             listener.onFailure(ex);

@@ -56,6 +56,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionResponse;
@@ -93,6 +94,11 @@ public class MLAgentExecutorTest {
     private ActionListener<Output> agentActionListener;
     @Mock
     private MLAgentRunner mlAgentRunner;
+
+    @Mock
+    private ConversationIndexMemory memory;
+    @Mock
+    private MLMemoryManager memoryManager;
     private MLAgentExecutor mlAgentExecutor;
 
     @Captor
@@ -122,6 +128,7 @@ public class MLAgentExecutorTest {
         Mockito.when(clusterService.state()).thenReturn(clusterState);
         Mockito.when(clusterState.metadata()).thenReturn(metadata);
         Mockito.when(metadata.hasIndex(Mockito.anyString())).thenReturn(true);
+        Mockito.when(memory.getMemoryManager()).thenReturn(memoryManager);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
@@ -332,7 +339,6 @@ public class MLAgentExecutorTest {
     @Test
     public void test_Regenerate_GetOriginalInteraction() {
         ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
-        ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
@@ -355,6 +361,12 @@ public class MLAgentExecutorTest {
         }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         Mockito.doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(Boolean.TRUE);
+            return null;
+        }).when(memoryManager).deleteInteraction(Mockito.anyString(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
             ActionListener<GetInteractionResponse> listener = invocation.getArgument(2);
             GetInteractionResponse interactionResponse = Mockito.mock(GetInteractionResponse.class);
             Interaction mockInteraction = Mockito.mock(Interaction.class);
@@ -364,9 +376,10 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
 
+        String interactionId = "bar-interaction";
         Map<String, String> params = new HashMap<>();
         params.put(MEMORY_ID, "foo-memory");
-        params.put(REGENERATE_INTERACTION_ID, "bar-interaction");
+        params.put(REGENERATE_INTERACTION_ID, interactionId);
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", FunctionName.AGENT, dataset);
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
@@ -374,6 +387,8 @@ public class MLAgentExecutorTest {
 
         Mockito.verify(client, times(1)).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
         Assert.assertEquals(params.get(QUESTION), "regenerate question");
+        // original interaction got deleted
+        Mockito.verify(memoryManager, times(1)).deleteInteraction(Mockito.eq(interactionId), Mockito.any());
     }
 
     @Test

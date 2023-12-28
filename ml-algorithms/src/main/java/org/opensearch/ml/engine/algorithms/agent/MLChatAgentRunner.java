@@ -150,14 +150,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                 }
 
-                ActionListener<Object> finalListener = regenerateInteractionId != null ? ActionListener.runBefore(listener, () -> {
-                    memory.getMemoryManager().deleteInteraction(regenerateInteractionId, ActionListener.wrap(deleted -> {}, e -> {
-                        log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
-                        listener.onFailure(e);
-                    }));
-                }) : listener;
-
-                runAgent(mlAgent, params, finalListener, memory, memory.getConversationId());
+                runAgent(mlAgent, params, listener, memory, memory.getConversationId());
             }, e -> {
                 log.error("Failed to get chat history", e);
                 listener.onFailure(e);

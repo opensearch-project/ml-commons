@@ -10,11 +10,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
@@ -129,14 +127,6 @@ public class MLChatAgentRunnerTest {
             listener.onResponse(conversationIndexMemory);
             return null;
         }).when(memoryFactory).create(any(), any(), any(), memoryFactoryCapture.capture());
-
-        ArgumentCaptor<ActionListener<Boolean>> argumentCaptor = ArgumentCaptor.forClass(ActionListener.class);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(Boolean.TRUE);
-            return null;
-        }).when(mlMemoryManager).deleteInteraction(anyString(), argumentCaptor.capture());
 
         mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
@@ -453,8 +443,6 @@ public class MLChatAgentRunnerTest {
         // previous question and answer not included in chat history
         String chatHistory = params.get(CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-1"));
-        // original interaction get deleted
-        Mockito.verify(mlMemoryManager, times(1)).deleteInteraction(eq("interaction-1"), any());
     }
 
     // Helper methods to create MLAgent and parameters
