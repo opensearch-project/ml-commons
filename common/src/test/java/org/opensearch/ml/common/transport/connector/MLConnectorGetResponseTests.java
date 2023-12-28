@@ -33,7 +33,7 @@ public class MLConnectorGetResponseTests {
     }
 
     @Test
-    public void writeTo_Success() throws IOException {
+    public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         MLConnectorGetResponse response = MLConnectorGetResponse.builder().mlConnector(connector).build();
         response.writeTo(bytesStreamOutput);
@@ -70,7 +70,7 @@ public class MLConnectorGetResponseTests {
     }
 
     @Test
-    public void fromActionResponseWithMLConnectorGetResponse_Success() {
+    public void fromActionResponseWithMLConnectorGetResponseSuccess() {
         MLConnectorGetResponse mlConnectorGetResponse = MLConnectorGetResponse.builder().mlConnector(connector).build();
         MLConnectorGetResponse mlConnectorGetResponseFromActionResponse = MLConnectorGetResponse.fromActionResponse(mlConnectorGetResponse);
         assertSame(mlConnectorGetResponse, mlConnectorGetResponseFromActionResponse);
@@ -78,7 +78,7 @@ public class MLConnectorGetResponseTests {
     }
 
     @Test
-    public void fromActionResponse_Success() {
+    public void fromActionResponseSuccess() {
         MLConnectorGetResponse mlConnectorGetResponse = MLConnectorGetResponse.builder().mlConnector(connector).build();
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -92,7 +92,7 @@ public class MLConnectorGetResponseTests {
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionResponse_IOException() {
+    public void fromActionResponseIOException() {
         ActionResponse actionResponse = new ActionResponse() {
             @Override
             public void writeTo(StreamOutput out) throws IOException {

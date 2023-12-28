@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
@@ -50,16 +51,16 @@ public class RestMLRegisterModelGroupAction extends BaseRestHandler {
     }
 
     /**
-     * Creates a MLUploadModelMetaRequest from a RestRequest
+     * Creates a MLRegisterModelGroupRequest from a RestRequest
      *
      * @param request RestRequest
-     * @return MLUploadModelMetaRequest
+     * @return MLRegisterModelGroupRequest
      */
     @VisibleForTesting
     MLRegisterModelGroupRequest getRequest(RestRequest request) throws IOException {
         boolean hasContent = request.hasContent();
         if (!hasContent) {
-            throw new IOException("Model group request has empty body");
+            throw new OpenSearchParseException("Model group request has empty body");
         }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

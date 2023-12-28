@@ -26,20 +26,20 @@ public class MLConnectorGetRequestTests {
 
     @Before
     public void setUp() {
-        connectorId = "test-connector-id";
+        connectorId = "testConnectorId";
     }
 
     @Test
-    public void writeTo_Success() throws IOException {
+    public void writeToSuccess() throws IOException {
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(connectorId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlConnectorGetRequest.writeTo(bytesStreamOutput);
-        MLConnectorGetRequest parsedConnector = new MLConnectorGetRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals(connectorId, parsedConnector.getConnectorId());
+        MLConnectorGetRequest parsedRequest = new MLConnectorGetRequest(bytesStreamOutput.bytes().streamInput());
+        assertEquals(connectorId, parsedRequest.getConnectorId());
     }
 
     @Test
-    public void fromActionRequest_Success() {
+    public void fromActionRequestSuccess() {
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(connectorId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -58,7 +58,7 @@ public class MLConnectorGetRequestTests {
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionRequest_IOException() {
+    public void fromActionRequestIOException() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -74,7 +74,7 @@ public class MLConnectorGetRequestTests {
     }
 
     @Test
-    public void fromActionRequestWithMLConnectorGetRequest_Success() {
+    public void fromActionRequestWithMLConnectorGetRequestSuccess() {
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(connectorId).build();
         MLConnectorGetRequest mlConnectorGetRequestFromActionRequest = MLConnectorGetRequest.fromActionRequest(mlConnectorGetRequest);
         assertSame(mlConnectorGetRequest, mlConnectorGetRequestFromActionRequest);
@@ -82,14 +82,14 @@ public class MLConnectorGetRequestTests {
     }
 
     @Test
-    public void validate_Exception_NullConnctorId() {
+    public void validateWithNullConnectorIdException() {
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.builder().build();
         ActionRequestValidationException actionRequestValidationException = mlConnectorGetRequest.validate();
         assertEquals("Validation Failed: 1: ML connector id can't be null;", actionRequestValidationException.getMessage());
     }
 
     @Test
-    public void validate_Success() {
+    public void validateSuccess() {
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(connectorId).build();
         ActionRequestValidationException actionRequestValidationException = mlConnectorGetRequest.validate();
         assertNull(actionRequestValidationException);

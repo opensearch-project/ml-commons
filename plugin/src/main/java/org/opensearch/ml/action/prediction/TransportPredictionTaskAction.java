@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -14,6 +15,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -55,8 +57,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     public TransportPredictionTaskAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLPredictTaskRunner mlPredictTaskRunner,
         MLModelCacheHelper modelCacheHelper,
+        MLPredictTaskRunner mlPredictTaskRunner,
         ClusterService clusterService,
         Client client,
         NamedXContentRegistry xContentRegistry,
@@ -104,7 +106,37 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         new MLValidationException("User Doesn't have privilege to perform this operation on this model")
                                     );
                             } else {
-                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
+                                    wrappedListener
+                                        .onFailure(new OpenSearchStatusException("Quota is depleted.", RestStatus.TOO_MANY_REQUESTS));
+                                } else {
+                                    if (FunctionName.isDLModel(functionName)) {
+                                        if (modelCacheHelper.getModelRateLimiter(modelId) != null
+                                            && !modelCacheHelper.getModelRateLimiter(modelId).request()) {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "Request is throttled at model level.",
+                                                        RestStatus.TOO_MANY_REQUESTS
+                                                    )
+                                                );
+                                        } else if (userInfo != null
+                                            && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
+                                            && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                                                        RestStatus.TOO_MANY_REQUESTS
+                                                    )
+                                                );
+                                        } else {
+                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                        }
+                                    } else {
+                                        executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                    }
+                                }
                             }
                         }, e -> {
                             log.error("Failed to Validate Access for ModelId " + modelId, e);

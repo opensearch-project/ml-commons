@@ -2,6 +2,7 @@ package org.opensearch.ml.common.transport.undeploy;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -20,7 +21,10 @@ import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE
 @RunWith(MockitoJUnitRunner.class)
 public class MLUndeployModelNodesRequestTest {
 
+    @Mock
     private DiscoveryNode localNode1;
+
+    @Mock
     private DiscoveryNode localNode2;
 
     @Test
@@ -41,23 +45,6 @@ public class MLUndeployModelNodesRequestTest {
 
     @Test
     public void testConstructorSerialization2() throws IOException {
-
-        localNode1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
-        localNode2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
 
         MLUndeployModelNodeRequest undeployModelNodeRequest = new MLUndeployModelNodeRequest(
                 new MLUndeployModelNodesRequest(localNode1,localNode2)

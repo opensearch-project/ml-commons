@@ -115,7 +115,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelRequestWithEmptyContent() throws Exception {
         exceptionRule.expect(OpenSearchParseException.class);
-        exceptionRule.expectMessage("Model update request has empty body");
+        exceptionRule.expectMessage("Update model request has empty body");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLUpdateModelAction.handleRequest(request, channel, client);
     }
@@ -166,7 +166,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         assertEquals("testModelName", updateModelInput.getName());
         assertEquals(
             "{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}}",
-            toJsonString(updateModelInput.getConnectorUpdateContent())
+            toJsonString(updateModelInput.getConnector())
         );
     }
 
@@ -242,7 +242,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
                 "This is test description",
                 "connector_id",
                 "testConnectorID",
-                "connector_update_content",
+                "connector",
                 updateContent
             );
         String requestContent = new Gson().toJson(modelContent);
@@ -282,7 +282,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
             .description("updated description")
             .build();
         final Map<String, Object> modelContent = Map
-            .of("name", "testModelName", "description", "This is test description", "connector_update_content", updateContent);
+            .of("name", "testModelName", "description", "This is test description", "connector", updateContent);
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
