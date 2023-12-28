@@ -9,6 +9,9 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
+import org.opensearch.client.Client;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 
 import lombok.SneakyThrows;
 
@@ -24,6 +27,7 @@ public class NeuralSparseToolTests {
         params.put(NeuralSparseTool.SOURCE_FIELD, gson.toJson(AbstractRetrieverToolTests.TEST_SOURCE_FIELDS));
         params.put(NeuralSparseTool.MODEL_ID_FIELD, TEST_MODEL_ID);
         params.put(NeuralSparseTool.DOC_SIZE_FIELD, AbstractRetrieverToolTests.TEST_DOC_SIZE.toString());
+        NeuralSparseTool.Factory.getInstance().init(Mockito.mock(Client.class), Mockito.mock(NamedXContentRegistry.class));
     }
 
     @Test
@@ -53,23 +57,49 @@ public class NeuralSparseToolTests {
 
     @Test
     @SneakyThrows
-    public void testGetQueryBodyWithIllegalParams() {
+    public void testInstanceCreationWithIllegalParams() {
         Map<String, Object> illegalParams1 = new HashMap<>(params);
         illegalParams1.remove(NeuralSparseTool.MODEL_ID_FIELD);
-        NeuralSparseTool tool1 = NeuralSparseTool.Factory.getInstance().create(illegalParams1);
         assertThrows(
-            "Parameter [embedding_field] and [model_id] can not be null or empty.",
+            "Parameter [model_id] can not be null.",
             IllegalArgumentException.class,
-            () -> tool1.getQueryBody(AbstractRetrieverToolTests.TEST_QUERY)
+            () -> NeuralSparseTool.Factory.getInstance().create(illegalParams1)
         );
 
         Map<String, Object> illegalParams2 = new HashMap<>(params);
-        illegalParams1.remove(NeuralSparseTool.EMBEDDING_FIELD);
-        NeuralSparseTool tool2 = NeuralSparseTool.Factory.getInstance().create(illegalParams1);
+        illegalParams2.remove(NeuralSparseTool.EMBEDDING_FIELD);
         assertThrows(
-            "Parameter [embedding_field] and [model_id] can not be null or empty.",
+            "Parameter [embedding_id] can not be null.",
             IllegalArgumentException.class,
-            () -> tool2.getQueryBody(AbstractRetrieverToolTests.TEST_QUERY)
+            () -> NeuralSparseTool.Factory.getInstance().create(illegalParams2)
+        );
+
+        Map<String, Object> illegalParams3 = new HashMap<>(params);
+        illegalParams3.remove(NeuralSparseTool.SOURCE_FIELD);
+        assertThrows(
+            "Parameter [source_field] can not be null.",
+            IllegalArgumentException.class,
+            () -> NeuralSparseTool.Factory.getInstance().create(illegalParams3)
+        );
+
+        Map<String, Object> illegalParams4 = new HashMap<>(params);
+        illegalParams4.remove(NeuralSparseTool.INDEX_FIELD);
+        assertThrows(
+            "Parameter [index_field] can not be null.",
+            IllegalArgumentException.class,
+            () -> NeuralSparseTool.Factory.getInstance().create(illegalParams4)
+        );
+    }
+
+    @Test
+    @SneakyThrows
+    public void testInstanceCreationInvalidSourceField() {
+        Map<String, Object> illegalParams = new HashMap<>(params);
+        illegalParams.put(NeuralSparseTool.SOURCE_FIELD, "invalid");
+        assertThrows(
+            "Parameter [source_field] needs to be a json array.",
+            IllegalArgumentException.class,
+            () -> NeuralSparseTool.Factory.getInstance().create(illegalParams)
         );
     }
 }

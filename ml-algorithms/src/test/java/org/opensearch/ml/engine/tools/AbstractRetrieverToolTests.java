@@ -63,7 +63,7 @@ public class AbstractRetrieverToolTests {
                     .useConstructor(
                         "type",
                         "description",
-                        null,
+                        mock(Client.class),
                         TEST_XCONTENT_REGISTRY_FOR_QUERY,
                         TEST_INDEX,
                         TEST_SOURCE_FIELDS,

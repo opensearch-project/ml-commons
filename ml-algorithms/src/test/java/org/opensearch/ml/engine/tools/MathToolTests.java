@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptService;
 import org.opensearch.script.TemplateScript;
@@ -74,9 +75,24 @@ public class MathToolTests {
     }
 
     @Test
+    public void test_NullInput_ThrowsFailure() {
+        mathTool = MathTool.Factory.getInstance().create(null);
+        mathTool.run(new HashMap<>(), listener);
+
+        Mockito.verify(listener).onFailure(Mockito.any());
+    }
+
+    @Test
     public void test_Validate_ReturnsTrueWhenNoException() {
         mathTool = MathTool.Factory.getInstance().create(null);
-        Assert.assertTrue(mathTool.validate(new HashMap<>()));
+        Assert.assertTrue(mathTool.validate(ImmutableMap.of("input", "2+2")));
+        ;
+    }
+
+    @Test
+    public void test_Validate_ReturnsFalseWhenInputMissing() {
+        mathTool = MathTool.Factory.getInstance().create(null);
+        Assert.assertFalse(mathTool.validate(new HashMap<>()));
     }
 
 }

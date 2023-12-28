@@ -64,9 +64,17 @@ public class PainlessScriptToolTests {
     }
 
     @Test
+    public void test_NullInput_ThrowsFailure() {
+        painlessScriptTool.run(new HashMap<>(), listener);
+
+        Mockito.verify(listener).onFailure(Mockito.any());
+    }
+
+    @Test
     public void test_Validate_ReturnsTrue() {
         Map<String, String> params = new HashMap<>();
         params.put("script", "2 + 2");
+        params.put("script_params", "{}");
 
         Assert.assertTrue(painlessScriptTool.validate(params));
     }

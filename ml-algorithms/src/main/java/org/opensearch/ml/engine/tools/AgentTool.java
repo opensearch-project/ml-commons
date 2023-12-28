@@ -21,6 +21,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
+import lombok.NonNull;
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -37,7 +38,7 @@ public class AgentTool extends AbstractTool {
     @VisibleForTesting
     static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
 
-    public AgentTool(Client client, String agentId) {
+    public AgentTool(@NonNull Client client, @NonNull String agentId) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.agentId = agentId;
@@ -68,6 +69,7 @@ public class AgentTool extends AbstractTool {
     }
 
     public static class Factory implements Tool.Factory<AgentTool> {
+        public static final String AGENT_ID = "agent_id";
         private Client client;
 
         private static Factory INSTANCE;
@@ -85,13 +87,16 @@ public class AgentTool extends AbstractTool {
             }
         }
 
-        public void init(Client client) {
+        public void init(@NonNull Client client) {
             this.client = client;
         }
 
         @Override
-        public AgentTool create(Map<String, Object> map) {
-            return new AgentTool(client, (String) map.get("agent_id"));
+        public AgentTool create(@NonNull Map<String, Object> params) {
+            if (!params.containsKey(AGENT_ID) || params.get(AGENT_ID) == null) {
+                throw new IllegalArgumentException("Agent ID is required");
+            }
+            return new AgentTool(client, (String) params.get(AGENT_ID));
         }
 
         @Override

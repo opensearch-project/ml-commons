@@ -48,6 +48,8 @@ import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
+import lombok.NonNull;
+
 @ToolAnnotation(CatIndexTool.TYPE)
 public class CatIndexTool extends AbstractTool {
     public static final String TYPE = "CatIndexTool";
@@ -57,7 +59,7 @@ public class CatIndexTool extends AbstractTool {
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
-    public CatIndexTool(Client client, ClusterService clusterService) {
+    public CatIndexTool(@NonNull Client client, @NonNull ClusterService clusterService) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.clusterService = clusterService;
@@ -316,7 +318,7 @@ public class CatIndexTool extends AbstractTool {
          * @param client The OpenSearch client
          * @param clusterService The OpenSearch cluster service
          */
-        public void init(Client client, ClusterService clusterService) {
+        public void init(@NonNull Client client, @NonNull ClusterService clusterService) {
             this.client = client;
             this.clusterService = clusterService;
         }

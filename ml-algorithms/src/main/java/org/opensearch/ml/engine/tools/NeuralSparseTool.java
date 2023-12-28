@@ -16,6 +16,7 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
@@ -35,14 +36,13 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
 
     @Builder
     public NeuralSparseTool(
-        Client client,
-        NamedXContentRegistry xContentRegistry,
-        String index,
-        String embeddingField,
-        String[] sourceFields,
-        Integer k,
+        @NonNull Client client,
+        @NonNull NamedXContentRegistry xContentRegistry,
+        @NonNull String index,
+        @NonNull String embeddingField,
+        @NonNull String[] sourceFields,
         Integer docSize,
-        String modelId
+        @NonNull String modelId
     ) {
         super(TYPE, DEFAULT_DESCRIPTION, client, xContentRegistry, index, sourceFields, docSize);
         this.modelId = modelId;
@@ -50,7 +50,7 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
     }
 
     @Override
-    protected String getQueryBody(String queryText) {
+    protected String getQueryBody(@NonNull String queryText) {
         if (StringUtils.isBlank(embeddingField) || StringUtils.isBlank(modelId)) {
             throw new IllegalArgumentException(
                 "Parameter [" + EMBEDDING_FIELD + "] and [" + MODEL_ID_FIELD + "] can not be null or empty."
@@ -83,7 +83,24 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
         }
 
         @Override
-        public NeuralSparseTool create(Map<String, Object> params) {
+        public NeuralSparseTool create(@NonNull Map<String, Object> params) {
+            if (!params.containsKey(INDEX_FIELD) || params.get(INDEX_FIELD) == null) {
+                throw new IllegalArgumentException("Parameter [" + INDEX_FIELD + "] can not be null.");
+            }
+
+            if (!params.containsKey(EMBEDDING_FIELD) || params.get(EMBEDDING_FIELD) == null) {
+                throw new IllegalArgumentException("Parameter [" + EMBEDDING_FIELD + "] can not be null.");
+            }
+
+            if (!params.containsKey(SOURCE_FIELD) || params.get(SOURCE_FIELD) == null) {
+                throw new IllegalArgumentException("Parameter [" + SOURCE_FIELD + "] can not be null.");
+            }
+            validateSourceField(params.get(SOURCE_FIELD));
+
+            if (!params.containsKey(MODEL_ID_FIELD) || params.get(MODEL_ID_FIELD) == null) {
+                throw new IllegalArgumentException("Parameter [" + MODEL_ID_FIELD + "] can not be null.");
+            }
+
             String index = (String) params.get(INDEX_FIELD);
             String embeddingField = (String) params.get(EMBEDDING_FIELD);
             String[] sourceFields = gson.fromJson((String) params.get(SOURCE_FIELD), String[].class);
@@ -99,6 +116,14 @@ public class NeuralSparseTool extends AbstractRetrieverTool {
                 .modelId(modelId)
                 .docSize(docSize)
                 .build();
+        }
+
+        private void validateSourceField(Object sourceField) {
+            try {
+                gson.fromJson((String) sourceField, String[].class);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Parameter [" + SOURCE_FIELD + "] needs to be a json array.");
+            }
         }
 
         @Override

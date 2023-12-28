@@ -18,24 +18,30 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.ScriptService;
 
+import lombok.NonNull;
 import lombok.Setter;
 
 @ToolAnnotation(MathTool.TYPE)
 public class MathTool extends AbstractTool {
     public static final String TYPE = "MathTool";
+    public static final String INPUT = "input";
     @Setter
     private ScriptService scriptService;
 
     private static String DEFAULT_DESCRIPTION = "Use this tool to calculate any math problem.";
 
-    public MathTool(ScriptService scriptService) {
+    public MathTool(@NonNull ScriptService scriptService) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.scriptService = scriptService;
     }
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        String input = parameters.get("input");
+        if (parameters.get(INPUT) == null) {
+            listener.onFailure(new IllegalArgumentException("Parameter input is required for MathTool tool"));
+            return;
+        }
+        String input = parameters.get(INPUT);
 
         input = input.replaceAll(",", "");
         if (input.contains("/")) {
@@ -54,6 +60,10 @@ public class MathTool extends AbstractTool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
+        if (parameters.get(INPUT) == null) {
+            return false;
+        }
+
         try {
             run(parameters);
         } catch (Exception e) {
@@ -80,7 +90,7 @@ public class MathTool extends AbstractTool {
             }
         }
 
-        public void init(ScriptService scriptService) {
+        public void init(@NonNull ScriptService scriptService) {
             this.scriptService = scriptService;
         }
 

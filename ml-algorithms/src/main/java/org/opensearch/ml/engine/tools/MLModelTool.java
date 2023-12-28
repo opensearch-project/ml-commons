@@ -23,6 +23,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 
+import lombok.NonNull;
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -37,7 +38,7 @@ public class MLModelTool extends AbstractTool {
     private Client client;
     private String modelId;
 
-    public MLModelTool(Client client, String modelId) {
+    public MLModelTool(@NonNull Client client, @NonNull String modelId) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.modelId = modelId;
@@ -74,6 +75,7 @@ public class MLModelTool extends AbstractTool {
     }
 
     public static class Factory implements Tool.Factory<MLModelTool> {
+        public static final String MODEL_ID = "model_id";
         private Client client;
 
         private static Factory INSTANCE;
@@ -91,13 +93,16 @@ public class MLModelTool extends AbstractTool {
             }
         }
 
-        public void init(Client client) {
+        public void init(@NonNull Client client) {
             this.client = client;
         }
 
         @Override
-        public MLModelTool create(Map<String, Object> map) {
-            return new MLModelTool(client, (String) map.get("model_id"));
+        public MLModelTool create(@NonNull Map<String, Object> params) {
+            if (!params.containsKey(MODEL_ID) || params.get(MODEL_ID) == null) {
+                throw new IllegalArgumentException("Model id is required.");
+            }
+            return new MLModelTool(client, (String) params.get(MODEL_ID));
         }
 
         @Override

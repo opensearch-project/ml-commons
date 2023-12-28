@@ -115,7 +115,7 @@ public class AgentToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = AgentTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = AgentTool.Factory.getInstance().create(ImmutableMap.of("agent_id", "AGENT_ID_TEST"));
         assertEquals(AgentTool.TYPE, tool.getName());
         assertEquals(AgentTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
@@ -123,5 +123,10 @@ public class AgentToolTests {
         assertTrue(tool.validate(otherParams));
         assertTrue(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_ToolCreation_MissingAgentId_ThrowsException() {
+        AgentTool.Factory.getInstance().create(Collections.emptyMap());
     }
 }

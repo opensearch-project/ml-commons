@@ -28,6 +28,8 @@ import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
+import lombok.NonNull;
+
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool extends AbstractTool {
     public static final String TYPE = "IndexMappingTool";
@@ -35,7 +37,7 @@ public class IndexMappingTool extends AbstractTool {
     private static final String DEFAULT_DESCRIPTION = "Use this tool to get index mapping information.";
     private Client client;
 
-    public IndexMappingTool(Client client) {
+    public IndexMappingTool(@NonNull Client client) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
 
@@ -155,7 +157,7 @@ public class IndexMappingTool extends AbstractTool {
          * Initialize this factory
          * @param client The OpenSearch client
          */
-        public void init(Client client) {
+        public void init(@NonNull Client client) {
             this.client = client;
         }
 

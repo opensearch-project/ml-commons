@@ -125,7 +125,7 @@ public class MLModelToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = MLModelTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = MLModelTool.Factory.getInstance().create(ImmutableMap.of("model_id", "MODEL_ID_TEST"));
         assertEquals(MLModelTool.TYPE, tool.getName());
         assertEquals(MLModelTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
@@ -133,5 +133,10 @@ public class MLModelToolTests {
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_ToolCreation_MissingModelId_ThrowsException() {
+        MLModelTool.Factory.getInstance().create(Collections.emptyMap());
     }
 }

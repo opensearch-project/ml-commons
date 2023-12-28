@@ -28,6 +28,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
@@ -53,12 +54,12 @@ public abstract class AbstractRetrieverTool extends AbstractTool {
     protected Integer docSize;
 
     protected AbstractRetrieverTool(
-        String type,
-        String description,
-        Client client,
-        NamedXContentRegistry xContentRegistry,
-        String index,
-        String[] sourceFields,
+        @NonNull String type,
+        @NonNull String description,
+        @NonNull Client client,
+        @NonNull NamedXContentRegistry xContentRegistry,
+        @NonNull String index,
+        @NonNull String[] sourceFields,
         Integer docSize
     ) {
         super(type, description);
@@ -146,7 +147,7 @@ public abstract class AbstractRetrieverTool extends AbstractTool {
         protected Client client;
         protected NamedXContentRegistry xContentRegistry;
 
-        public void init(Client client, NamedXContentRegistry xContentRegistry) {
+        public void init(@NonNull Client client, @NonNull NamedXContentRegistry xContentRegistry) {
             this.client = client;
             this.xContentRegistry = xContentRegistry;
         }
