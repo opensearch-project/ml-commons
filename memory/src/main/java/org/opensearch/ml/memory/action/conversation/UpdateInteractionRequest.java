@@ -37,7 +37,9 @@ public class UpdateInteractionRequest extends ActionRequest {
     private String interactionId;
     private Map<String, Object> updateContent;
 
-    private static final Set<String> allowedList = new HashSet<>(Arrays.asList(INTERACTIONS_ADDITIONAL_INFO_FIELD, INTERACTIONS_RESPONSE_FIELD));
+    private static final Set<String> allowedList = new HashSet<>(
+        Arrays.asList(INTERACTIONS_ADDITIONAL_INFO_FIELD, INTERACTIONS_RESPONSE_FIELD)
+    );
 
     @Builder
     public UpdateInteractionRequest(String interactionId, Map<String, Object> updateContent) {
