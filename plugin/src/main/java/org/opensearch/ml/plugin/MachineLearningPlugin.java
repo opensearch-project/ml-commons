@@ -40,6 +40,7 @@ import org.opensearch.env.NodeEnvironment;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
+import org.opensearch.ml.action.agents.TransportSearchAgentAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
@@ -108,6 +109,7 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
+import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -215,6 +217,7 @@ import org.opensearch.ml.rest.RestMLRegisterAgentAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
 import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
 import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
+import org.opensearch.ml.rest.RestMLSearchAgentAction;
 import org.opensearch.ml.rest.RestMLSearchConnectorAction;
 import org.opensearch.ml.rest.RestMLSearchModelAction;
 import org.opensearch.ml.rest.RestMLSearchModelGroupAction;
@@ -376,6 +379,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class),
                 new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
                 new ActionHandler<>(MLRegisterAgentAction.INSTANCE, TransportRegisterAgentAction.class),
+                new ActionHandler<>(MLSearchAgentAction.INSTANCE, TransportSearchAgentAction.class),
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
                 new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
                 new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
@@ -694,6 +698,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
+        RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -742,7 +747,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLDeleteAgentAction,
                 restMemoryUpdateConversationAction,
                 restMemoryUpdateInteractionAction,
-                restMemoryGetTracesAction
+                restMemoryGetTracesAction,
+                restMLSearchAgentAction
             );
     }
 
