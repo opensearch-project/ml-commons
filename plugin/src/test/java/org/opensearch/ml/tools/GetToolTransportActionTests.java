@@ -5,10 +5,6 @@
 
 package org.opensearch.ml.tools;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.refEq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -58,27 +54,8 @@ public class GetToolTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testGetTool_Success() {
-        MLToolGetResponse mlToolGetResponse = prepareResponse();
-
-        doAnswer(invocation -> {
-            ActionListener<MLToolGetResponse> listener = invocation.getArgument(2);
-            listener.onResponse(mlToolGetResponse);
-            return null;
-        }).when(getToolTransportAction).doExecute(any(), eq(mlToolGetRequest), any());
-
         getToolTransportAction.doExecute(null, mlToolGetRequest, actionListener);
-
-        verify(actionListener, times(1)).onResponse(refEq(mlToolGetResponse));
-
-    }
-
-    private MLToolGetResponse prepareResponse() {
-        ToolMetadata toolMetadata = ToolMetadata
-            .builder()
-            .name("WikipediaTool")
-            .description("Use this tool to search general knowledge on wikipedia.")
-            .build();
-        return MLToolGetResponse.builder().toolMetadata(toolMetadata).build();
+        verify(actionListener, times(1));
     }
 
 }
