@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
+import static org.opensearch.ml.memory.index.ConversationMetaIndex.INDEX_SETTINGS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,7 +38,6 @@ public class MLIndicesHandler {
 
     ClusterService clusterService;
     Client client;
-    private static final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-1");
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
 
     static {
@@ -100,7 +100,7 @@ public class MLIndicesHandler {
                     log.error("Failed to create index " + indexName, e);
                     internalListener.onFailure(e);
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping).settings(indexSettings);
+                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping).settings(INDEX_SETTINGS);
                 client.admin().indices().create(request, actionListener);
             } else {
                 log.debug("index:{} is already created", indexName);
@@ -116,7 +116,7 @@ public class MLIndicesHandler {
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
                                             UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                            updateSettingRequest.indices(indexName).settings(indexSettings);
+                                            updateSettingRequest.indices(indexName).settings(INDEX_SETTINGS);
                                             client
                                                 .admin()
                                                 .indices()
