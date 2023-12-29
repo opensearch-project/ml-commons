@@ -15,8 +15,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.*;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -361,7 +360,14 @@ public class MLMemoryManagerTests {
     @Test
     public void testUpdateInteraction() {
         Map<String, Object> updateContent = Map
-            .of(INTERACTIONS_ADDITIONAL_INFO_FIELD, Map.of("feedback", "thumbs up!"), INTERACTIONS_RESPONSE_FIELD, "response");
+            .of(
+                INTERACTIONS_ADDITIONAL_INFO_FIELD,
+                Map.of("feedback", "thumbs up!"),
+                INTERACTIONS_RESPONSE_FIELD,
+                "response",
+                INTERACTIONS_INPUT_FIELD,
+                "input"
+            );
         ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
         UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
@@ -375,7 +381,7 @@ public class MLMemoryManagerTests {
         mlMemoryManager.updateInteraction("iid", updateContent, updateResponseActionListener);
         verify(client, times(1)).execute(eq(UpdateInteractionAction.INSTANCE), captor.capture(), any());
         assertEquals("iid", captor.getValue().getInteractionId());
-        assertEquals(1, captor.getValue().getUpdateContent().keySet().size());
+        assertEquals(2, captor.getValue().getUpdateContent().keySet().size());
         assertNotEquals(updateContent, captor.getValue().getUpdateContent());
     }
 
