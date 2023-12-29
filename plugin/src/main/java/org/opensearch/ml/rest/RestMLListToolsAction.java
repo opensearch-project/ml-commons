@@ -25,7 +25,7 @@ import org.opensearch.rest.action.RestToXContentListener;
 import com.google.common.collect.ImmutableList;
 
 public class RestMLListToolsAction extends BaseRestHandler {
-    private static final String ML_GET_MODEL_ACTION = "ml_get_tools_action";
+    private static final String ML_LIST_TOOLS_ACTION = "ml_list_tools_action";
 
     private Map<String, Tool.Factory> toolFactories;
 
@@ -35,7 +35,7 @@ public class RestMLListToolsAction extends BaseRestHandler {
 
     @Override
     public String getName() {
-        return ML_GET_MODEL_ACTION;
+        return ML_LIST_TOOLS_ACTION;
     }
 
     @Override

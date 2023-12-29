@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.action.tools;
+package org.opensearch.ml.tools;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -31,9 +31,9 @@ public class GetToolTransportAction extends HandledTransportAction<ActionRequest
     }
 
     /**
-     * @param task
-     * @param request
-     * @param listener
+     * @param task the Task
+     * @param request the MLToolGetRequest request
+     * @param listener action listener
      */
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLToolGetResponse> listener) {
