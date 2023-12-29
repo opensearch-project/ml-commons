@@ -265,7 +265,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 ModelTensors
                     .builder()
                     .mlModelTensors(
-                        Collections.singletonList(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build())
+                        List
+                            .of(
+                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
+                            )
                     )
                     .build()
             );

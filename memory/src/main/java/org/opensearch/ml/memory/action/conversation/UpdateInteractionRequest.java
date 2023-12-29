@@ -7,6 +7,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -36,7 +37,9 @@ public class UpdateInteractionRequest extends ActionRequest {
     private String interactionId;
     private Map<String, Object> updateContent;
 
-    private static final Set<String> allowedList = new HashSet<>(Arrays.asList(INTERACTIONS_ADDITIONAL_INFO_FIELD));
+    private static final Set<String> allowedList = new HashSet<>(
+        Arrays.asList(INTERACTIONS_ADDITIONAL_INFO_FIELD, INTERACTIONS_RESPONSE_FIELD)
+    );
 
     @Builder
     public UpdateInteractionRequest(String interactionId, Map<String, Object> updateContent) {
