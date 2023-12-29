@@ -28,8 +28,13 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
+import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
@@ -232,5 +237,63 @@ public class MLMemoryManager {
         } catch (Exception exception) {
             actionListener.onFailure(exception);
         }
+    }
+
+    /**
+     * Delete interaction and its trace data
+     * @param interactionId interaction id
+    * @param listener callback for delete result
+    */
+    public void deleteInteractionAndTrace(String interactionId, ActionListener<Boolean> listener) {
+        DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(INTERACTIONS_INDEX_NAME);
+        deleteByQueryRequest.setQuery(buildDeleteInteractionQuery(interactionId));
+        deleteByQueryRequest.setRefresh(true);
+
+        innerDeleteInteractionAndTrace(deleteByQueryRequest, interactionId, listener);
+    }
+
+    @VisibleForTesting
+    void innerDeleteInteractionAndTrace(DeleteByQueryRequest deleteByQueryRequest, String interactionId, ActionListener<Boolean> listener) {
+        try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<BulkByScrollResponse> al = ActionListener.wrap(bulkResponse -> {
+                if (bulkResponse != null && (!bulkResponse.getBulkFailures().isEmpty() || !bulkResponse.getSearchFailures().isEmpty())) {
+                    log.info("Failed to delete the interaction with ID: {}", interactionId);
+                    listener.onResponse(false);
+                    return;
+                }
+                log.info("Successfully delete the interaction with ID: {}", interactionId);
+                listener.onResponse(true);
+            }, exception -> {
+                log.error("Failed to delete interaction with ID {}. Details: {}", interactionId, exception);
+                listener.onFailure(exception);
+            });
+            // bulk delete interaction and its trace
+            client.execute(DeleteByQueryAction.INSTANCE, deleteByQueryRequest, al);
+        } catch (Exception e) {
+            log.error("Failed to delete interaction with ID {}. Details {}:", interactionId, e);
+            listener.onFailure(e);
+        }
+    }
+
+    @VisibleForTesting
+    QueryBuilder buildDeleteInteractionQuery(String interactionId) {
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        // interaction itself
+        boolQueryBuilder.should(QueryBuilders.idsQuery().addIds(interactionId));
+
+        // Build the trace query
+        BoolQueryBuilder traceBoolBuilder = QueryBuilders.boolQuery();
+        // Add the ExistsQueryBuilder for checking null values
+        ExistsQueryBuilder existsQueryBuilder = QueryBuilders.existsQuery(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD);
+        traceBoolBuilder.must(existsQueryBuilder);
+
+        // Add the TermQueryBuilder for another field
+        TermQueryBuilder termQueryBuilder = QueryBuilders
+            .termQuery(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, interactionId);
+        traceBoolBuilder.must(termQueryBuilder);
+
+        // interaction trace
+        boolQueryBuilder.should(traceBoolBuilder);
+        return boolQueryBuilder;
     }
 }
