@@ -756,7 +756,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMemoryUpdateConversationAction,
                 restMemoryUpdateInteractionAction,
                 restMemoryGetTracesAction,
-                restMLSearchAgentAction
+                restMLSearchAgentAction,
                 restMLListToolsAction,
                 restMLGetToolAction
             );
