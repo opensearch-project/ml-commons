@@ -18,6 +18,7 @@
 package org.opensearch.ml.memory.index;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
+import static org.opensearch.ml.memory.index.ConversationMetaIndex.INDEX_SETTINGS;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -87,7 +88,8 @@ public class InteractionsIndex {
             log.debug("No interactions index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(INTERACTIONS_INDEX_NAME)
-                .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS);
+                .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS)
+                .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                 ActionListener<CreateIndexResponse> al = ActionListener.wrap(r -> {
