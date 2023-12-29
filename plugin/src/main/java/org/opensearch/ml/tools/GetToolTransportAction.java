@@ -40,7 +40,7 @@ public class GetToolTransportAction extends HandledTransportAction<ActionRequest
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.fromActionRequest(request);
         String toolName = mlToolGetRequest.getToolName();
         try {
-            List<ToolMetadata> toolsList = mlToolGetRequest.getExternalTools();
+            List<ToolMetadata> toolsList = mlToolGetRequest.getToolMetadataList();
             ToolMetadata theTool = toolsList
                 .stream()
                 .filter(tool -> tool.getName().equals(toolName))

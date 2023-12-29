@@ -35,7 +35,7 @@ public class ListToolsTransportAction extends HandledTransportAction<ActionReque
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLToolsListResponse> listener) {
         MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.fromActionRequest(request);
 
-        List<ToolMetadata> toolsList = mlToolsGetRequest.getExternalTools();
+        List<ToolMetadata> toolsList = mlToolsGetRequest.getToolMetadataList();
 
         try {
             listener.onResponse(MLToolsListResponse.builder().toolMetadata(toolsList).build());

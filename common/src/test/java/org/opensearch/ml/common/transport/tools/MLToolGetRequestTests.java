@@ -21,37 +21,37 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 
 public class MLToolGetRequestTests {
-    private List<ToolMetadata> externalTools;
+    private List<ToolMetadata> toolMetadataList;
 
     @Before
     public void setUp() {
-        externalTools = new ArrayList<>();
+        toolMetadataList = new ArrayList<>();
         ToolMetadata wikipediaTool = ToolMetadata.builder()
                 .name("WikipediaTool")
                 .description("Use this tool to search general knowledge on wikipedia.")
                 .build();
-        externalTools.add(wikipediaTool);
+        toolMetadataList.add(wikipediaTool);
     }
 
     @Test
     public void writeTo_success() throws IOException {
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder()
                 .toolName("MathTool")
-                .externalTools(externalTools)
+                .toolMetadataList(toolMetadataList)
                 .build();
 
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlToolGetRequest.writeTo(bytesStreamOutput);
         MLToolGetRequest parsedToolMetadata = new MLToolGetRequest(bytesStreamOutput.bytes().streamInput());
         assertEquals(parsedToolMetadata.getToolName(), "MathTool");
-        assertEquals(parsedToolMetadata.getExternalTools().get(0).getName(), externalTools.get(0).getName());
+        assertEquals(parsedToolMetadata.getToolMetadataList().get(0).getName(), toolMetadataList.get(0).getName());
     }
 
     @Test
     public void fromActionRequest_success() {
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder()
                 .toolName("MathTool")
-                .externalTools(externalTools)
+                .toolMetadataList(toolMetadataList)
                 .build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -67,7 +67,7 @@ public class MLToolGetRequestTests {
         MLToolGetRequest result = MLToolGetRequest.fromActionRequest(actionRequest);
         assertNotSame(result, mlToolGetRequest);
         assertEquals(result.getToolName(), "MathTool");
-        assertEquals(result.getExternalTools().get(0).getName(), mlToolGetRequest.getExternalTools().get(0).getName());
+        assertEquals(result.getToolMetadataList().get(0).getName(), mlToolGetRequest.getToolMetadataList().get(0).getName());
     }
 
     @Test(expected = UncheckedIOException.class)

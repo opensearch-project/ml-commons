@@ -32,25 +32,25 @@ public class MLToolGetRequest extends ActionRequest {
 
     String toolName;
 
-    List<ToolMetadata> externalTools;
+    List<ToolMetadata> toolMetadataList;
 
     @Builder
-    public MLToolGetRequest(String toolName, List<ToolMetadata> externalTools) {
+    public MLToolGetRequest(String toolName, List<ToolMetadata> toolMetadataList) {
         this.toolName = toolName;
-        this.externalTools = externalTools;
+        this.toolMetadataList = toolMetadataList;
     }
 
     public MLToolGetRequest(StreamInput in) throws IOException {
         super(in);
         this.toolName = in.readString();
-        this.externalTools = in.readList(ToolMetadata::new);
+        this.toolMetadataList = in.readList(ToolMetadata::new);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.toolName);
-        out.writeList(this.externalTools);
+        out.writeList(this.toolMetadataList);
     }
 
     @Override
