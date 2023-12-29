@@ -143,7 +143,7 @@ public class MLAgentExecutor implements Executable {
                                                 ActionListener.wrap(interactionRes -> {
                                                     inputDataSet
                                                         .getParameters()
-                                                        .computeIfAbsent(QUESTION, (key) -> interactionRes.getInteraction().getInput());
+                                                        .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
                                                     saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
                                                 }, e -> {
                                                     log.error("Failed to get existing interaction for regeneration", e);
@@ -203,17 +203,19 @@ public class MLAgentExecutor implements Executable {
             log.info("Created parent interaction ID: " + interaction.getId());
             inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
             // only delete previous interaction when new interaction created
-            ActionListener<Object> finalListener = regenerateInteractionId == null
-                ? listener
-                : ActionListener
-                    .runBefore(
-                        listener,
-                        () -> memory.getMemoryManager().deleteInteraction(regenerateInteractionId, ActionListener.wrap(deleted -> {}, e -> {
+            if (regenerateInteractionId != null) {
+                memory
+                    .getMemoryManager()
+                    .deleteInteractionAndTrace(
+                        regenerateInteractionId,
+                        ActionListener.wrap(deleted -> executeAgent(inputDataSet, mlAgent, listener), e -> {
                             log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
                             listener.onFailure(e);
-                        }))
+                        })
                     );
-            executeAgent(inputDataSet, mlAgent, finalListener);
+            } else {
+                executeAgent(inputDataSet, mlAgent, listener);
+            }
         }, ex -> {
             log.error("Failed to create parent interaction", ex);
             listener.onFailure(ex);

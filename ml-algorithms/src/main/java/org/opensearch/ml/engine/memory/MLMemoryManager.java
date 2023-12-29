@@ -244,16 +244,16 @@ public class MLMemoryManager {
      * @param interactionId interaction id
     * @param listener callback for delete result
     */
-    public void deleteInteraction(String interactionId, ActionListener<Boolean> listener) {
+    public void deleteInteractionAndTrace(String interactionId, ActionListener<Boolean> listener) {
         DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(INTERACTIONS_INDEX_NAME);
         deleteByQueryRequest.setQuery(buildDeleteInteractionQuery(interactionId));
         deleteByQueryRequest.setRefresh(true);
 
-        innerDeleteInteraction(deleteByQueryRequest, interactionId, listener);
+        innerDeleteInteractionAndTrace(deleteByQueryRequest, interactionId, listener);
     }
 
     @VisibleForTesting
-    void innerDeleteInteraction(DeleteByQueryRequest deleteByQueryRequest, String interactionId, ActionListener<Boolean> listener) {
+    void innerDeleteInteractionAndTrace(DeleteByQueryRequest deleteByQueryRequest, String interactionId, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<BulkByScrollResponse> al = ActionListener.wrap(bulkResponse -> {
                 if (bulkResponse != null && (!bulkResponse.getBulkFailures().isEmpty() || !bulkResponse.getSearchFailures().isEmpty())) {

@@ -15,9 +15,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
-import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -276,7 +273,7 @@ public class MLChatAgentRunnerTest {
         HashMap<String, String> params = new HashMap<>();
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
-        String chatHistory = params.get(CHAT_HISTORY);
+        String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
     }
 
@@ -330,7 +327,7 @@ public class MLChatAgentRunnerTest {
         params.put("verbose", "true");
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
-        String chatHistory = params.get(CHAT_HISTORY);
+        String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
     }
 
@@ -420,29 +417,6 @@ public class MLChatAgentRunnerTest {
         // Verify that no tool's run method was called
         verify(firstTool, never()).run(any(), any());
         verify(secondTool, never()).run(any(), any());
-    }
-
-    @Test
-    public void testRegenerate() {
-        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        final MLAgent mlAgent = MLAgent
-            .builder()
-            .name("TestAgent")
-            .memory(mlMemorySpec)
-            .llm(llmSpec)
-            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
-            .build();
-        HashMap<String, String> params = new HashMap<>();
-        params.put(REGENERATE_INTERACTION_ID, "interaction-1");
-        params.put(MEMORY_ID, "memory-id");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
-
-        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
-        // previous question and answer not included in chat history
-        String chatHistory = params.get(CHAT_HISTORY);
-        Assert.assertFalse(chatHistory.contains("input-1"));
     }
 
     // Helper methods to create MLAgent and parameters

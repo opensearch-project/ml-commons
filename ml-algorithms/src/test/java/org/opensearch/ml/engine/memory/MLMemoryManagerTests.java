@@ -427,7 +427,7 @@ public class MLMemoryManagerTests {
             return null;
         }).when(client).execute(Mockito.eq(DeleteByQueryAction.INSTANCE), Mockito.any(DeleteByQueryRequest.class), Mockito.any());
 
-        mlMemoryManager.deleteInteraction("test-interaction", deletionInteractionListener);
+        mlMemoryManager.deleteInteractionAndTrace("test-interaction", deletionInteractionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         Mockito.verify(deletionInteractionListener, times(1)).onResponse(argumentCaptor.capture());
         Assert.assertTrue(argumentCaptor.getValue());
@@ -444,7 +444,7 @@ public class MLMemoryManagerTests {
             return null;
         }).when(client).execute(Mockito.eq(DeleteByQueryAction.INSTANCE), Mockito.any(DeleteByQueryRequest.class), Mockito.any());
 
-        mlMemoryManager.deleteInteraction("test-interaction", deletionInteractionListener);
+        mlMemoryManager.deleteInteractionAndTrace("test-interaction", deletionInteractionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         Mockito.verify(deletionInteractionListener, times(1)).onResponse(argumentCaptor.capture());
         Assert.assertFalse(argumentCaptor.getValue());
@@ -458,7 +458,7 @@ public class MLMemoryManagerTests {
             return null;
         }).when(client).execute(Mockito.eq(DeleteByQueryAction.INSTANCE), Mockito.any(DeleteByQueryRequest.class), Mockito.any());
 
-        mlMemoryManager.deleteInteraction("test-interaction", deletionInteractionListener);
+        mlMemoryManager.deleteInteractionAndTrace("test-interaction", deletionInteractionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(deletionInteractionListener, times(1)).onFailure(argumentCaptor.capture());
         Assert.assertTrue(argumentCaptor.getValue() instanceof IndexNotFoundException);

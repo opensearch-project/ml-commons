@@ -364,7 +364,7 @@ public class MLAgentExecutorTest {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(Boolean.TRUE);
             return null;
-        }).when(memoryManager).deleteInteraction(Mockito.anyString(), Mockito.any());
+        }).when(memoryManager).deleteInteractionAndTrace(Mockito.anyString(), Mockito.any());
 
         Mockito.doAnswer(invocation -> {
             ActionListener<GetInteractionResponse> listener = invocation.getArgument(2);
@@ -388,7 +388,7 @@ public class MLAgentExecutorTest {
         Mockito.verify(client, times(1)).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
         Assert.assertEquals(params.get(QUESTION), "regenerate question");
         // original interaction got deleted
-        Mockito.verify(memoryManager, times(1)).deleteInteraction(Mockito.eq(interactionId), Mockito.any());
+        Mockito.verify(memoryManager, times(1)).deleteInteractionAndTrace(Mockito.eq(interactionId), Mockito.any());
     }
 
     @Test
