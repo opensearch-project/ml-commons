@@ -44,8 +44,8 @@ public abstract class AbstractRetrieverTool extends AbstractTool {
     public static final String INDEX_FIELD = "index";
     public static final String SOURCE_FIELD = "source_field";
     public static final String DOC_SIZE_FIELD = "doc_size";
+    // Default number of documents to be retrieved.
     public static final int DEFAULT_DOC_SIZE = 2;
-    public static final int DEFAULT_K = 10;
     protected String description = DEFAULT_DESCRIPTION;
     protected Client client;
     protected NamedXContentRegistry xContentRegistry;
@@ -74,13 +74,16 @@ public abstract class AbstractRetrieverTool extends AbstractTool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+        if (parameters == null || parameters.isEmpty()) {
+            throw new IllegalArgumentException("Parameters is null or empty, can not process it.");
+        }
+
+        if (parameters.containsKey(INPUT_FIELD) && StringUtils.isBlank(parameters.get(INPUT_FIELD))) {
+            throw new IllegalArgumentException("[" + INPUT_FIELD + "] is null or empty, can not process it.");
+        }
+
         try {
             String question = parameters.get(INPUT_FIELD);
-            try {
-                question = gson.fromJson(question, String.class);
-            } catch (Exception e) {
-                // throw new IllegalArgumentException("wrong input");
-            }
             String query = getQueryBody(question);
             if (StringUtils.isBlank(query)) {
                 throw new IllegalArgumentException("[" + INPUT_FIELD + "] is null or empty, can not process it.");

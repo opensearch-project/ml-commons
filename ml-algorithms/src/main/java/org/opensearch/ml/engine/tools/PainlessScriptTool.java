@@ -28,7 +28,8 @@ public class PainlessScriptTool extends AbstractTool {
     public static final String TYPE = "PainlessScriptTool";
     public static final String SCRIPT = "script";
     public static final String SCRIPT_PARAMS = "script_params";
-    private static String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
+    private static String DEFAULT_DESCRIPTION = "Use this tool to execute painless script. Input to this tool should "
+        + "contain parameters 'script' as string and 'script_params' as map field. ";
     private Client client;
     private ScriptService scriptService;
 

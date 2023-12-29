@@ -28,6 +28,7 @@ import lombok.extern.log4j.Log4j2;
 @Setter
 @ToolAnnotation(NeuralSparseTool.TYPE)
 public class NeuralSparseTool extends AbstractRetrieverTool {
+    public static final String DEFAULT_DESCRIPTION = "Use this tool to run neural sparse search on an index.";
     public static final String TYPE = "NeuralSparseTool";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String EMBEDDING_FIELD = "embedding_field";

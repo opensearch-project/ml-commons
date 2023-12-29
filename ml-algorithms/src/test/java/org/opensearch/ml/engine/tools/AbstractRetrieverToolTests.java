@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -24,6 +25,7 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchModule;
 
 import lombok.SneakyThrows;
@@ -72,6 +74,30 @@ public class AbstractRetrieverToolTests {
                     .defaultAnswer(Mockito.CALLS_REAL_METHODS)
             );
         when(mockedImpl.getQueryBody(any(String.class))).thenReturn(TEST_QUERY);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRunNullInputThrowsError() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedImpl.run(null, listener);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRunEmptyInputThrowsError() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedImpl.run(new HashMap<>(), listener);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRunMissingInputThrowsError() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedImpl.run(ImmutableMap.of("invalid", "invalid_input"), listener);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRunEmptyInputFieldThrowsError() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedImpl.run(ImmutableMap.of("input", ""), listener);
     }
 
     @Test

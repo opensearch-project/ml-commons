@@ -41,7 +41,7 @@ public class NeuralSparseToolTests {
         assertEquals(AbstractRetrieverToolTests.TEST_DOC_SIZE, tool.getDocSize());
         assertEquals("NeuralSparseTool", tool.getType());
         assertEquals("NeuralSparseTool", tool.getName());
-        assertEquals("Use this tool to search data in OpenSearch index.", NeuralSparseTool.Factory.getInstance().getDefaultDescription());
+        assertEquals(NeuralSparseTool.DEFAULT_DESCRIPTION, NeuralSparseTool.Factory.getInstance().getDefaultDescription());
     }
 
     @Test
