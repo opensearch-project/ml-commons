@@ -22,6 +22,7 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 public class RestMLListToolsAction extends BaseRestHandler {
@@ -58,10 +59,16 @@ public class RestMLListToolsAction extends BaseRestHandler {
      */
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        MLToolsListRequest mlToolsListRequest = getRequest(request);
+        return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsListRequest, new RestToXContentListener<>(channel));
+    }
+
+    @VisibleForTesting
+    MLToolsListRequest getRequest(RestRequest request) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
         toolFactories
             .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
         MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().toolMetadataList(toolList).build();
-        return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsGetRequest, new RestToXContentListener<>(channel));
+        return mlToolsGetRequest;
     }
 }
