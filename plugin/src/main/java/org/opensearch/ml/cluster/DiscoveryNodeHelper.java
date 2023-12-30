@@ -68,7 +68,7 @@ public class DiscoveryNodeHelper {
 
     public DiscoveryNode[] getEligibleNodes(FunctionName functionName) {
         ClusterState state = this.clusterService.state();
-        final List<DiscoveryNode> eligibleNodes = new ArrayList<>();
+        final Set<DiscoveryNode> eligibleNodes = new HashSet<>();
         for (DiscoveryNode node : state.nodes()) {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
@@ -88,7 +88,7 @@ public class DiscoveryNodeHelper {
         return eligibleNodes.toArray(new DiscoveryNode[0]);
     }
 
-    private void getEligibleNodes(Set<String> allowedNodeRoles, List<DiscoveryNode> eligibleNodes, DiscoveryNode node) {
+    private void getEligibleNodes(Set<String> allowedNodeRoles, Set<DiscoveryNode> eligibleNodes, DiscoveryNode node) {
         if (allowedNodeRoles.contains("data") && isEligibleDataNode(node)) {
             eligibleNodes.add(node);
         }
@@ -110,21 +110,21 @@ public class DiscoveryNodeHelper {
                 continue;
             }
             if (functionName == FunctionName.REMOTE) {// remote model
-                getEligibleNodes(remoteModelEligibleNodeRoles, eligibleNodes, node);
+                getEligibleNodeIds(remoteModelEligibleNodeRoles, eligibleNodes, node);
             } else { // local model
                 if (onlyRunOnMLNode) {
                     if (MLNodeUtils.isMLNode(node)) {
                         eligibleNodes.add(node.getId());
                     }
                 } else {
-                    getEligibleNodes(localModelEligibleNodeRoles, eligibleNodes, node);
+                    getEligibleNodeIds(localModelEligibleNodeRoles, eligibleNodes, node);
                 }
             }
         }
         return eligibleNodes.toArray(new String[0]);
     }
 
-    private void getEligibleNodes(Set<String> allowedNodeRoles, Set<String> eligibleNodes, DiscoveryNode node) {
+    private void getEligibleNodeIds(Set<String> allowedNodeRoles, Set<String> eligibleNodes, DiscoveryNode node) {
         if (allowedNodeRoles.contains("data") && isEligibleDataNode(node)) {
             eligibleNodes.add(node.getId());
         }
