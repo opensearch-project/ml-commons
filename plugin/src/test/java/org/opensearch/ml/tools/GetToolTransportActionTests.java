@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.tools;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -37,6 +39,7 @@ public class GetToolTransportActionTests extends OpenSearchTestCase {
     GetToolTransportAction getToolTransportAction;
     MLToolGetRequest mlToolGetRequest;
     private List<ToolMetadata> toolMetadataList;
+    private RuntimeException exceptionToThrow;
 
     @Before
     public void setup() throws IOException {
@@ -49,13 +52,22 @@ public class GetToolTransportActionTests extends OpenSearchTestCase {
             .build();
         toolMetadataList.add(wikipediaTool);
         mlToolGetRequest = MLToolGetRequest.builder().toolMetadataList(toolMetadataList).toolName("WikipediaTool").build();
+        exceptionToThrow = new RuntimeException("Failed to get tool");
 
         getToolTransportAction = spy(new GetToolTransportAction(transportService, actionFilters));
     }
 
     public void testGetTool_Success() {
         getToolTransportAction.doExecute(null, mlToolGetRequest, actionListener);
-        verify(actionListener, times(1));
+        verify(actionListener, times(1)).onResponse(any());
+    }
+
+    public void testListTools_Failure() {
+        doThrow(exceptionToThrow).when(actionListener).onResponse(any(MLToolGetResponse.class));
+
+        getToolTransportAction.doExecute(null, mlToolGetRequest, actionListener);
+
+        verify(actionListener, times(1)).onFailure(exceptionToThrow);
     }
 
 }

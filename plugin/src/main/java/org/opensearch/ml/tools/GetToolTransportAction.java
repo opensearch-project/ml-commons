@@ -48,7 +48,7 @@ public class GetToolTransportAction extends HandledTransportAction<ActionRequest
                 .orElseThrow(NoSuchElementException::new);
             listener.onResponse(MLToolGetResponse.builder().toolMetadata(theTool).build());
         } catch (Exception e) {
-            log.error("Failed to get tools list", e);
+            log.error("Failed to get tool", e);
             listener.onFailure(e);
         }
 
