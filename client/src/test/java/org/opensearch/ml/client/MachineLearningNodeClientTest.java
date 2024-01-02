@@ -60,6 +60,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -116,6 +117,12 @@ import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
+import org.opensearch.ml.common.transport.tools.MLGetToolAction;
+import org.opensearch.ml.common.transport.tools.MLListToolsAction;
+import org.opensearch.ml.common.transport.tools.MLToolGetRequest;
+import org.opensearch.ml.common.transport.tools.MLToolGetResponse;
+import org.opensearch.ml.common.transport.tools.MLToolsListRequest;
+import org.opensearch.ml.common.transport.tools.MLToolsListResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
@@ -191,6 +198,12 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<DeleteResponse> deleteAgentActionListener;
+
+    @Mock
+    ActionListener<List<ToolMetadata>> listToolsActionListener;
+
+    @Mock
+    ActionListener<ToolMetadata> getToolActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -885,6 +898,56 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLAgentDeleteAction.INSTANCE), isA(MLAgentDeleteRequest.class), any());
         verify(deleteAgentActionListener).onResponse(argumentCaptor.capture());
         assertEquals(agentId, (argumentCaptor.getValue()).getId());
+    }
+
+    @Test
+    public void getTool() {
+        ToolMetadata toolMetadata = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to calculate any math problem.")
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLToolGetResponse> actionListener = invocation.getArgument(2);
+            MLToolGetResponse output = MLToolGetResponse.builder().toolMetadata(toolMetadata).build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLGetToolAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<ToolMetadata> argumentCaptor = ArgumentCaptor.forClass(ToolMetadata.class);
+        machineLearningNodeClient.getTool("MathTool", getToolActionListener);
+
+        verify(client).execute(eq(MLGetToolAction.INSTANCE), isA(MLToolGetRequest.class), any());
+        verify(getToolActionListener).onResponse(argumentCaptor.capture());
+        assertEquals("MathTool", argumentCaptor.getValue().getName());
+        assertEquals("Use this tool to calculate any math problem.", argumentCaptor.getValue().getDescription());
+    }
+
+    @Test
+    public void listTools() {
+        List<ToolMetadata> toolMetadataList = new ArrayList<>();
+        ToolMetadata wikipediaTool = ToolMetadata
+            .builder()
+            .name("WikipediaTool")
+            .description("Use this tool to search general knowledge on wikipedia.")
+            .build();
+        toolMetadataList.add(wikipediaTool);
+
+        doAnswer(invocation -> {
+            ActionListener<MLToolsListResponse> actionListener = invocation.getArgument(2);
+            MLToolsListResponse output = MLToolsListResponse.builder().toolMetadata(toolMetadataList).build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLListToolsAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<List<ToolMetadata>> argumentCaptor = ArgumentCaptor.forClass(List.class);
+        machineLearningNodeClient.listTools(listToolsActionListener);
+
+        verify(client).execute(eq(MLListToolsAction.INSTANCE), isA(MLToolsListRequest.class), any());
+        verify(listToolsActionListener).onResponse(argumentCaptor.capture());
+        assertEquals("WikipediaTool", argumentCaptor.getValue().get(0).getName());
+        assertEquals("Use this tool to search general knowledge on wikipedia.", argumentCaptor.getValue().get(0).getDescription());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {

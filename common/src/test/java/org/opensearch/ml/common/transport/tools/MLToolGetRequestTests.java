@@ -85,4 +85,12 @@ public class MLToolGetRequestTests {
         };
         MLToolGetRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validate_Exception_NullToolName() {
+        MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().build();
+        ActionRequestValidationException exception = mlToolGetRequest.validate();
+        assertEquals("Validation Failed: 1: Tool name can't be null;", exception.getMessage());
+
+    }
 }

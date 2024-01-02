@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 
 public class MLToolsListRequestTests {
     private List<ToolMetadata> toolMetadataList;
@@ -76,5 +77,33 @@ public class MLToolsListRequestTests {
             }
         };
         MLToolsListRequest.fromActionRequest(actionRequest);
+    }
+
+    @Test
+    public void fromActionRequest_Success() {
+        MLToolsListRequest mlToolsListRequest = MLToolsListRequest.builder()
+                .toolMetadataList(toolMetadataList).build();
+
+        ActionRequest  actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput output) throws IOException {
+                mlToolsListRequest.writeTo(output);
+            }
+        };
+
+        MLToolsListRequest result = MLToolsListRequest.fromActionRequest(actionRequest);
+        assertNotSame(result, mlToolsListRequest);
+        assertEquals(result.getToolMetadataList().get(0).getName(), mlToolsListRequest.getToolMetadataList().get(0).getName());
+    }
+
+    @Test
+    public void testValidate() {
+        MLToolsListRequest request = MLToolsListRequest.builder().build();
+        assertNull(request.validate());
     }
 }

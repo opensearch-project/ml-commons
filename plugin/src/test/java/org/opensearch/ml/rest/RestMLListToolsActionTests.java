@@ -45,13 +45,11 @@ public class RestMLListToolsActionTests extends OpenSearchTestCase {
     public ExpectedException thrown = ExpectedException.none();
 
     @Mock
-    RestChannel channel;
+    private RestChannel channel;
 
     private RestMLListToolsAction restMLListToolsAction;
-
-    NodeClient nodeClient;
+    private NodeClient nodeClient;
     private ThreadPool threadPool;
-
     private Map<String, Tool.Factory> toolFactories = new HashMap<>();
     private Tool.Factory mockFactory = Mockito.mock(Tool.Factory.class);
 

@@ -47,11 +47,11 @@ public class RestMLGetToolActionTests extends OpenSearchTestCase {
     public ExpectedException thrown = ExpectedException.none();
 
     @Mock
-    RestChannel channel;
+    private RestChannel channel;
 
     private RestMLGetToolAction restMLGetToolAction;
 
-    NodeClient nodeClient;
+    private NodeClient nodeClient;
     private ThreadPool threadPool;
 
     private Map<String, Tool.Factory> toolFactories = new HashMap<>();

@@ -102,7 +102,7 @@ public class MachineLearningClientTest {
     private MLModel mlModel;
     private MLTask mlTask;
     private ToolMetadata toolMetadata;
-    private List<ToolMetadata> toolsList;
+    private List<ToolMetadata> toolsList = new ArrayList<>();
 
     @Before
     public void setUp() {
@@ -113,6 +113,9 @@ public class MachineLearningClientTest {
 
         String modelContent = "test content";
         mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("test").content(modelContent).build();
+
+        toolMetadata = ToolMetadata.builder().name("MathTool").description("Use this tool to calculate any math problem.").build();
+        toolsList.add(toolMetadata);
 
         machineLearningClient = new MachineLearningClient() {
             @Override
@@ -197,12 +200,12 @@ public class MachineLearningClientTest {
 
             @Override
             public void listTools(ActionListener<List<ToolMetadata>> listener) {
-                listener.onResponse(null);
+                listener.onResponse(toolsList);
             }
 
             @Override
             public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
-                listener.onResponse(null);
+                listener.onResponse(toolMetadata);
             }
 
             public void registerModelGroup(
@@ -482,5 +485,15 @@ public class MachineLearningClientTest {
     @Test
     public void deleteAgent() {
         assertEquals(deleteResponse, machineLearningClient.deleteAgent("agentId").actionGet());
+    }
+
+    @Test
+    public void getTool() {
+        assertEquals(toolMetadata, machineLearningClient.getTool("MathTool").actionGet());
+    }
+
+    @Test
+    public void listTools() {
+        assertEquals(toolMetadata, machineLearningClient.listTools().actionGet().get(0));
     }
 }
