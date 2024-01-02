@@ -13,6 +13,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
+import static org.opensearch.ml.utils.TestHelper.ALL_ROLES;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -52,6 +53,8 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     private final String mlNode1Name = "mlNodeName1";
     private final String mlNode2Id = "mlNode2";
     private final String mlNode2Name = "mlNodeName2";
+    private final String allRoleNodeId = "allRoleNode";
+    private final String allRoleNodeName = "allRoleNodeName";
     private final String clusterName = "multi-node-cluster";
 
     @Mock
@@ -65,6 +68,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     private DiscoveryNode warmDataNode1;
     private DiscoveryNode mlNode1;
     private DiscoveryNode mlNode2;
+    private DiscoveryNode allRoleNode;
     private ClusterState clusterState;
     private String nonExistingNodeName;
 
@@ -122,6 +126,14 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             ImmutableSet.of(ML_ROLE),
             Version.CURRENT
         );
+        allRoleNode = new DiscoveryNode(
+            allRoleNodeName,
+            allRoleNodeId,
+            buildNewFakeTransportAddress(),
+            emptyMap(),
+            ALL_ROLES,
+            Version.CURRENT
+        );
 
         DiscoveryNodes nodes = DiscoveryNodes
             .builder()
@@ -131,6 +143,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             .add(warmDataNode1)
             .add(mlNode1)
             .add(mlNode2)
+            .add(allRoleNode)
             .build();
         clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
 
@@ -158,23 +171,35 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
 
     public void testGetEligibleNodes_MLNode_RemoteModel() {
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.REMOTE);
-        assertEquals(4, eligibleNodes.length);
+        assertEquals(5, eligibleNodes.length);
         Set<String> nodeIds = new HashSet<>();
         nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
         assertTrue(nodeIds.contains(mlNode1.getId()));
         assertTrue(nodeIds.contains(mlNode2.getId()));
         assertTrue(nodeIds.contains(dataNode1.getId()));
         assertTrue(nodeIds.contains(dataNode2.getId()));
+        assertTrue(nodeIds.contains(allRoleNode.getId()));
         assertFalse(nodeIds.contains(warmDataNode1.getId()));
     }
 
     public void testGetEligibleNodes_MLNode_LocalModel() {
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING);
-        assertEquals(2, eligibleNodes.length);
+        assertEquals(3, eligibleNodes.length);
         Set<String> nodeIds = new HashSet<>();
         nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
         assertTrue(nodeIds.contains(mlNode1.getId()));
         assertTrue(nodeIds.contains(mlNode2.getId()));
+        assertTrue(nodeIds.contains(allRoleNode.getId()));
+    }
+
+    public void testGetEligibleNodes_MLNode_DataModel() {
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING);
+        assertEquals(3, eligibleNodes.length);
+        Set<String> nodeIds = new HashSet<>();
+        nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
+        assertTrue(nodeIds.contains(mlNode1.getId()));
+        assertTrue(nodeIds.contains(mlNode2.getId()));
+        assertTrue(nodeIds.contains(allRoleNode.getId()));
     }
 
     public void testGetEligibleNodes_DataNode() {
@@ -186,17 +211,25 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
 
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.REMOTE);
         assertEquals(2, eligibleNodes.length);
-        assertEquals(dataNode1.getName(), eligibleNodes[0].getName());
-        assertEquals(dataNode2.getName(), eligibleNodes[1].getName());
+        Set<String> nodeNames = new HashSet<>();
+        nodeNames.add("dataNodeName1");
+        nodeNames.add("dataNodeName2");
+        assertTrue(nodeNames.contains(eligibleNodes[0].getName()));
+        assertTrue(nodeNames.contains(eligibleNodes[1].getName()));
     }
 
     public void testGetEligibleNodes_MLNode_Excluded() {
         mockSettings(false, mlNode1.getName() + "," + mlNode2.getName());
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING);
-        assertEquals(2, eligibleNodes.length);
-        assertEquals(dataNode1.getName(), eligibleNodes[0].getName());
-        assertEquals(dataNode2.getName(), eligibleNodes[1].getName());
+        assertEquals(3, eligibleNodes.length);
+        Set<String> nodeNames = new HashSet<>();
+        nodeNames.add("dataNodeName1");
+        nodeNames.add("dataNodeName2");
+        nodeNames.add("allRoleNodeName");
+        assertTrue(nodeNames.contains(eligibleNodes[0].getName()));
+        assertTrue(nodeNames.contains(eligibleNodes[1].getName()));
+        assertTrue(nodeNames.contains(eligibleNodes[2].getName()));
     }
 
     public void testFilterEligibleNodes_Null() {
@@ -241,7 +274,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
 
     public void testGetAllNodeIds() {
         String[] allNodeIds = discoveryNodeHelper.getAllNodeIds();
-        assertEquals(6, allNodeIds.length);
+        assertEquals(7, allNodeIds.length);
     }
 
     public void testGetNodes() {
