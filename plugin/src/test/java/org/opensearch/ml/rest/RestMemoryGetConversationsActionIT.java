@@ -24,10 +24,12 @@ import java.util.Map;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
+import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -49,12 +51,24 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
+    @After
+    public void takeDown() throws IOException {
+        try {
+            deleteIndexWithAdminClient(ConversationalIndexConstants.META_INDEX_NAME);
+            deleteIndexWithAdminClient(ConversationalIndexConstants.INTERACTIONS_INDEX_NAME);
+        } catch (Exception e) {
+            System.out.println(e.toString());
+        }
+    }
+
     public void testNoConversations_EmptyList() throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", ActionConstants.GET_CONVERSATIONS_REST_PATH, null, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
+        System.out.println("THIS SHOULD BE WELL FORMED!");
+        System.out.println(entityString);
         Map map = gson.fromJson(entityString, Map.class);
         assert (map.containsKey("conversations"));
         assert (!map.containsKey("next_token"));
@@ -130,6 +144,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (ccmap1.containsKey("conversation_id"));
         String id1 = (String) ccmap1.get("conversation_id");
 
+        refreshAllIndices();
         Response ccresponse2 = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse2 != null);
         assert (TestHelper.restStatus(ccresponse2) == RestStatus.OK);
@@ -139,6 +154,7 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         assert (ccmap2.containsKey("conversation_id"));
         String id2 = (String) ccmap2.get("conversation_id");
 
+        refreshAllIndices();
         Response response1 = TestHelper
             .makeRequest(
                 client(),
