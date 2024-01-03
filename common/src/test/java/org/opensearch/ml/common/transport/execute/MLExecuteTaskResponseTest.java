@@ -91,10 +91,9 @@ public class MLExecuteTaskResponseTest {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"function_name\":\"METRICS_CORRELATION\"," +
-                "\"output\":{\"inference_results\":[{" +
+        assertEquals("{\"inference_results\":[{" +
                 "\"event_window\":[4.0,5.0,6.0]," +
                 "\"event_pattern\":[1.0,2.0,3.0]," +
-                "\"suspected_metrics\":[1,2]}]}}", jsonStr);
+                "\"suspected_metrics\":[1,2]}]}", jsonStr);
     }
 }

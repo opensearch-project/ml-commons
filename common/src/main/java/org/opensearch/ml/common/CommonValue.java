@@ -5,8 +5,26 @@
 
 package org.opensearch.ml.common;
 
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.controller.MLModelController;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_NAME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.USER_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD;
@@ -37,13 +55,21 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
-    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 7;
+    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 9;
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
     public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 2;
     public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
     public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
+    public static final String ML_MODEL_CONTROLLER_INDEX = ".plugins-ml-controller";
+    public static final Integer ML_MODEL_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
     public static final String ML_MAP_RESPONSE_KEY = "response";
+    public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
+    public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
+    public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
+    public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
+    public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
+    public static final Integer ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION = 1;
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
@@ -186,6 +212,9 @@ public class CommonValue {
             + MLModel.DEPLOY_TO_ALL_NODES_FIELD
             + "\": {\"type\": \"boolean\"},\n"
             + "      \""
+            + MLModel.IS_HIDDEN_FIELD
+            + "\": {\"type\": \"boolean\"},\n"
+            + "      \""
             + MLModel.MODEL_CONFIG_FIELD
             + "\" : {\"properties\":{\""
             + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
@@ -195,6 +224,15 @@ public class CommonValue {
             + NORMALIZE_RESULT_FIELD + "\":{\"type\":\"boolean\"},\""
             + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
             + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
+            + "      \""
+            + MLModel.IS_ENABLED_FIELD
+            + "\" : {\"type\": \"boolean\"},\n"
+            + "      \""
+            + MLModel.IS_MODEL_CONTROLLER_ENABLED_FIELD
+            + "\" : {\"type\": \"boolean\"},\n"
+            + "      \""
+            + MLModel.MODEL_RATE_LIMITER_CONFIG_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
             + "      \""
             + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
@@ -321,6 +359,110 @@ public class CommonValue {
             + "      \""
             + CREATE_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
+    public static final String ML_MODEL_CONTROLLER_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_MODEL_CONTROLLER_INDEX_SCHEMA_VERSION
+            + "},\n"
+            + "    \"properties\": {\n"
+            + "      \""
+            + MLModelController.USER_RATE_LIMITER_CONFIG
+            + "\" : {\"type\": \"flat_object\"}\n"
+            + "    }\n"
+            + "}";
+
+    public static final String ML_AGENT_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_AGENT_INDEX_SCHEMA_VERSION
+            + "},\n"
+            + "    \"properties\": {\n"
+            + "      \""
+            + MLAgent.AGENT_NAME_FIELD
+            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "      \""
+            + MLAgent.AGENT_TYPE_FIELD
+            + "\" : {\"type\":\"keyword\"},\n"
+            + "      \""
+            + MLAgent.DESCRIPTION_FIELD
+            + "\" : {\"type\": \"text\"},\n"
+            + "      \""
+            + MLAgent.LLM_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.TOOLS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.PARAMETERS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.MEMORY_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLAgent.LAST_UPDATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
+    public static final String ML_MEMORY_META_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\n"
+            + "        \"schema_version\": " + META_INDEX_SCHEMA_VERSION + "\n"
+            + "    },\n"
+            + "    \"properties\": {\n"
+            + "        \""
+            + META_NAME_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + META_CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \""
+            + META_UPDATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \""
+            + USER_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + APPLICATION_TYPE_FIELD
+            + "\": {\"type\": \"keyword\"}\n"
+            + "    }\n"
+            + "}";
+
+    public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\n"
+            + "        \"schema_version\": " + INTERACTIONS_INDEX_SCHEMA_VERSION + "\n"
+            + "    },\n"
+            + "    \"properties\": {\n"
+            + "        \""
+            + INTERACTIONS_CONVERSATION_ID_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + INTERACTIONS_CREATE_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \""
+            + INTERACTIONS_INPUT_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + INTERACTIONS_PROMPT_TEMPLATE_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + INTERACTIONS_RESPONSE_FIELD
+            + "\": {\"type\": \"text\"},\n"
+            + "        \""
+            + INTERACTIONS_ORIGIN_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + INTERACTIONS_ADDITIONAL_INFO_FIELD
+            + "\": {\"type\": \"flat_object\"},\n"
+            + "        \""
+            + PARENT_INTERACTIONS_ID_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "        \""
+            + INTERACTIONS_TRACE_NUMBER_FIELD
+            + "\": {\"type\": \"long\"}\n"
             + "    }\n"
             + "}";
 }

@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.anomalylocalization;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -13,6 +15,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,15 +56,15 @@ import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.aggregations.bucket.composite.CompositeAggregation;
 import org.opensearch.search.aggregations.bucket.filter.Filters;
 import org.opensearch.search.aggregations.metrics.NumericMetricsAggregation.SingleValue;
-
-import com.google.common.collect.ImmutableMap;
 
 public class AnomalyLocalizerImplTests {
 
@@ -438,13 +441,17 @@ public class AnomalyLocalizerImplTests {
         when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
                 any(IndicesOptions.class), anyString()))
                 .thenReturn(IndicesOptions);
-        AnomalyLocalizationOutput actualOutput = (AnomalyLocalizationOutput) anomalyLocalizer.execute(input);
-
-        assertEquals(expectedOutput, actualOutput);
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+            AnomalyLocalizationOutput actualOutput = (AnomalyLocalizationOutput) o;
+            assertEquals(expectedOutput, actualOutput);
+        }, e -> {
+            fail("Test failed: " + e.getMessage());
+        });
+        anomalyLocalizer.execute(input, actionListener);
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testExecuteFail() {
         doAnswer(invocation -> {
             Object[] args = invocation.getArguments();
@@ -452,13 +459,19 @@ public class AnomalyLocalizerImplTests {
             listener.onFailure(new RuntimeException());
             return null;
         }).when(client).multiSearch(any(), any());
-        anomalyLocalizer.execute(input);
+        ActionListener actionListener = mock(ActionListener.class);
+        anomalyLocalizer.execute(input, actionListener);
+        ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        assertTrue(exceptionArgumentCaptor.getValue() instanceof RuntimeException);
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testExecuteInterrupted() {
-        Thread.currentThread().interrupt();
-        anomalyLocalizer.execute(input);
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> { Thread.currentThread().interrupt(); }, e -> {
+            assertTrue(e.getMessage().contains("Failed to find index"));
+        });
+        anomalyLocalizer.execute(input, actionListener);
     }
 
     private ClusterState setupTestClusterState() {

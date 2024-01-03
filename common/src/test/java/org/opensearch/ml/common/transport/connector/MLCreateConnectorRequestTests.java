@@ -31,6 +31,8 @@ import static org.junit.Assert.assertSame;
 public class MLCreateConnectorRequestTests {
     private MLCreateConnectorInput mlCreateConnectorInput;
 
+    private MLCreateConnectorRequest mlCreateConnectorRequest;
+
     @Before
     public void setUp(){
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
@@ -55,11 +57,11 @@ public class MLCreateConnectorRequestTests {
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .addAllBackendRoles(false)
                 .build();
+        mlCreateConnectorRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(mlCreateConnectorInput).build();
     }
 
     @Test
-    public void writeTo_Success() throws IOException  {
-        MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(mlCreateConnectorInput).build();
+    public void writeToSuccess() throws IOException  {
         BytesStreamOutput output = new BytesStreamOutput();
         mlCreateConnectorRequest.writeTo(output);
         MLCreateConnectorRequest parsedRequest = new MLCreateConnectorRequest(output.bytes().streamInput());
@@ -72,16 +74,12 @@ public class MLCreateConnectorRequestTests {
     }
 
     @Test
-    public void validate_Success() {
-        MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.builder()
-                .mlCreateConnectorInput(mlCreateConnectorInput)
-                .build();
-
+    public void validateSuccess() {
         assertNull(mlCreateConnectorRequest.validate());
     }
 
     @Test
-    public void validate_Exception_NullMLRegisterModelGroupInput() {
+    public void validateWithNullMLCreateConnectorInputException() {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.builder()
                 .build();
         ActionRequestValidationException exception = mlCreateConnectorRequest.validate();
@@ -89,18 +87,12 @@ public class MLCreateConnectorRequestTests {
     }
 
     @Test
-    public void fromActionRequest_Success_WithMLRegisterModelRequest() {
-        MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.builder()
-                .mlCreateConnectorInput(mlCreateConnectorInput)
-                .build();
+    public void fromActionRequestWithMLCreateConnectorRequestSuccess() {
         assertSame(MLCreateConnectorRequest.fromActionRequest(mlCreateConnectorRequest), mlCreateConnectorRequest);
     }
 
     @Test
-    public void fromActionRequest_Success_WithNonMLRegisterModelRequest() {
-        MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.builder()
-                .mlCreateConnectorInput(mlCreateConnectorInput)
-                .build();
+    public void fromActionRequestWithNonMLCreateConnectorRequestSuccess() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -118,7 +110,7 @@ public class MLCreateConnectorRequestTests {
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionRequest_IOException() {
+    public void fromActionRequestIOException() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

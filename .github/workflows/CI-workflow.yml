@@ -23,7 +23,7 @@ jobs:
     needs: Get-CI-Image-Tag
     strategy:
       matrix:
-        java: [11, 17, 20]
+        java: [11, 17, 21]
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
@@ -88,7 +88,7 @@ jobs:
     needs: Build-ml-linux
     strategy:
       matrix:
-        java: [11, 17, 20]
+        java: [11, 17, 21]
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
@@ -173,7 +173,7 @@ jobs:
   Build-ml-windows:
     strategy:
       matrix:
-        java: [11, 17, 20]
+        java: [11, 17, 21]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     environment: ml-commons-cicd-env

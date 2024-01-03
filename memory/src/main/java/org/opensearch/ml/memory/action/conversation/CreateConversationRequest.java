@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -35,6 +37,8 @@ import lombok.Getter;
 public class CreateConversationRequest extends ActionRequest {
     @Getter
     private String name = null;
+    @Getter
+    private String applicationType = null;
 
     /**
      * Constructor
@@ -44,6 +48,7 @@ public class CreateConversationRequest extends ActionRequest {
     public CreateConversationRequest(StreamInput in) throws IOException {
         super(in);
         this.name = in.readOptionalString();
+        this.applicationType = in.readOptionalString();
     }
 
     /**
@@ -57,6 +62,16 @@ public class CreateConversationRequest extends ActionRequest {
 
     /**
      * Constructor
+     * @param name name of the conversation
+     */
+    public CreateConversationRequest(String name, String applicationType) {
+        super();
+        this.name = name;
+        this.applicationType = applicationType;
+    }
+
+    /**
+     * Constructor
      * name will be null
      */
     public CreateConversationRequest() {}
@@ -65,6 +80,7 @@ public class CreateConversationRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeOptionalString(name);
+        out.writeOptionalString(applicationType);
     }
 
     @Override
@@ -86,7 +102,10 @@ public class CreateConversationRequest extends ActionRequest {
         }
         Map<String, String> body = restRequest.contentParser().mapStrings();
         if (body.containsKey(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
-            return new CreateConversationRequest(body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD));
+            return new CreateConversationRequest(
+                body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD),
+                body.get(APPLICATION_TYPE_FIELD)
+            );
         } else {
             return new CreateConversationRequest();
         }

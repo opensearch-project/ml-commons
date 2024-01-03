@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.utils.TestHelper.toJsonString;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -32,6 +34,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
@@ -112,7 +115,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelRequestWithEmptyContent() throws Exception {
         exceptionRule.expect(OpenSearchParseException.class);
-        exceptionRule.expectMessage("Model update request has empty body");
+        exceptionRule.expectMessage("Update model request has empty body");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLUpdateModelAction.handleRequest(request, channel, client);
     }
@@ -131,6 +134,40 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         exceptionRule.expectMessage("Can't get text on a VALUE_NULL");
         RestRequest request = getRestRequestWithNullField();
         restMLUpdateModelAction.handleRequest(request, channel, client);
+    }
+
+    @Test
+    public void testUpdateModelRequestWithConnectorIDAndConnectorUpdateContent() throws Exception {
+        exceptionRule.expect(OpenSearchStatusException.class);
+        exceptionRule
+            .expectMessage("Model cannot have both stand-alone connector and internal connector. Please check your update input body.");
+        RestRequest request = getRestRequestWithConnectorIDAndConnectorUpdateContent();
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+    }
+
+    @Test
+    public void testUpdateModelRequestWithConnectorID() throws Exception {
+        RestRequest request = getRestRequestWithConnectorID();
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLUpdateModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelRequest.class);
+        verify(client, times(1)).execute(eq(MLUpdateModelAction.INSTANCE), argumentCaptor.capture(), any());
+        MLUpdateModelInput updateModelInput = argumentCaptor.getValue().getUpdateModelInput();
+        assertEquals("testModelName", updateModelInput.getName());
+        assertEquals("testConnectorID", updateModelInput.getConnectorId());
+    }
+
+    @Test
+    public void testUpdateModelRequestWithConnectorUpdateContent() throws Exception {
+        RestRequest request = getRestRequestWithConnectorUpdateContent();
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLUpdateModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelRequest.class);
+        verify(client, times(1)).execute(eq(MLUpdateModelAction.INSTANCE), argumentCaptor.capture(), any());
+        MLUpdateModelInput updateModelInput = argumentCaptor.getValue().getUpdateModelInput();
+        assertEquals("testModelName", updateModelInput.getName());
+        assertEquals(
+            "{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}}",
+            toJsonString(updateModelInput.getConnector())
+        );
     }
 
     private RestRequest getRestRequest() {
@@ -178,6 +215,75 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequestWithNullField() {
         RestRequest.Method method = RestRequest.Method.PUT;
         String requestContent = "{\"name\":\"testModelName\",\"description\":null}";
+        Map<String, String> params = new HashMap<>();
+        params.put("model_id", "test_modelId");
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithConnectorIDAndConnectorUpdateContent() {
+        RestRequest.Method method = RestRequest.Method.PUT;
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .version("1")
+            .description("updated description")
+            .build();
+        final Map<String, Object> modelContent = Map
+            .of(
+                "name",
+                "testModelName",
+                "description",
+                "This is test description",
+                "connector_id",
+                "testConnectorID",
+                "connector",
+                updateContent
+            );
+        String requestContent = new Gson().toJson(modelContent);
+        Map<String, String> params = new HashMap<>();
+        params.put("model_id", "test_modelId");
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithConnectorID() {
+        RestRequest.Method method = RestRequest.Method.PUT;
+        final Map<String, Object> modelContent = Map
+            .of("name", "testModelName", "description", "This is test description", "connector_id", "testConnectorID");
+        String requestContent = new Gson().toJson(modelContent);
+        Map<String, String> params = new HashMap<>();
+        params.put("model_id", "test_modelId");
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithConnectorUpdateContent() {
+        RestRequest.Method method = RestRequest.Method.PUT;
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .version("1")
+            .description("updated description")
+            .build();
+        final Map<String, Object> modelContent = Map
+            .of("name", "testModelName", "description", "This is test description", "connector", updateContent);
+        String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

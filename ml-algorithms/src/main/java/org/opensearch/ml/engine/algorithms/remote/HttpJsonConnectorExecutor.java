@@ -25,6 +25,8 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.client.Client;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -49,6 +51,16 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     @Getter
     private ScriptService scriptService;
 
+    @Setter
+    @Getter
+    private TokenBucket modelRateLimiter;
+    @Setter
+    @Getter
+    private Map<String, TokenBucket> userRateLimiterMap;
+    @Setter
+    @Getter
+    private Client client;
+
     public HttpJsonConnectorExecutor(Connector connector) {
         this.connector = (HttpConnector) connector;
     }
@@ -65,7 +77,8 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     try {
                         String predictEndpoint = connector.getPredictEndpoint(parameters);
                         request = new HttpPost(predictEndpoint);
-                        HttpEntity entity = new StringEntity(payload);
+                        String charset = parameters.containsKey("charset") ? parameters.get("charset") : "UTF-8";
+                        HttpEntity entity = new StringEntity(payload, charset);
                         ((HttpPost) request).setEntity(entity);
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);

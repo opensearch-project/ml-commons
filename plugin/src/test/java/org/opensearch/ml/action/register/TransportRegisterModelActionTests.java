@@ -54,9 +54,9 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -164,6 +164,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
         transportRegisterModelAction = new TransportRegisterModelAction(
             transportService,
             actionFilters,

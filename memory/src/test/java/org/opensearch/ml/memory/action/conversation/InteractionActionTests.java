@@ -17,9 +17,13 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
-public class InteractionActionTests {
+import org.opensearch.test.OpenSearchTestCase;
+
+public class InteractionActionTests extends OpenSearchTestCase {
     public void testActions() {
         assert (CreateInteractionAction.INSTANCE instanceof CreateInteractionAction);
         assert (GetInteractionsAction.INSTANCE instanceof GetInteractionsAction);
+        assert (SearchInteractionsAction.INSTANCE instanceof SearchInteractionsAction);
+        assert (GetInteractionAction.INSTANCE instanceof GetInteractionAction);
     }
 }

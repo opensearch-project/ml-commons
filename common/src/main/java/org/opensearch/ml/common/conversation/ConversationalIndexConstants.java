@@ -26,13 +26,17 @@ public class ConversationalIndexConstants {
     /** Version of the meta index schema */
     public final static Integer META_INDEX_SCHEMA_VERSION = 1;
     /** Name of the conversational metadata index */
-    public final static String META_INDEX_NAME = ".plugins-ml-conversation-meta";
+    public final static String META_INDEX_NAME = ".plugins-ml-memory-meta";
     /** Name of the metadata field for initial timestamp */
-    public final static String META_CREATED_FIELD = "create_time";
+    public final static String META_CREATED_TIME_FIELD = "create_time";
+    /** Name of the metadata field for updated timestamp */
+    public final static String META_UPDATED_TIME_FIELD = "updated_time";
     /** Name of the metadata field for name of the conversation */
     public final static String META_NAME_FIELD = "name";
     /** Name of the owning user field in all indices */
     public final static String USER_FIELD = "user";
+    /** Name of the application that created this conversation */
+    public final static String APPLICATION_TYPE_FIELD = "application_type";
     /** Mappings for the conversational metadata index */
     public final static String META_MAPPING = "{\n"
         + "    \"_meta\": {\n"
@@ -41,12 +45,18 @@ public class ConversationalIndexConstants {
         + "    \"properties\": {\n"
         + "        \""
         + META_NAME_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
+        + "\": {\"type\": \"text\"},\n"
         + "        \""
-        + META_CREATED_FIELD
+        + META_CREATED_TIME_FIELD
+        + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+        + "        \""
+        + META_UPDATED_TIME_FIELD
         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
         + "        \""
         + USER_FIELD
+        + "\": {\"type\": \"keyword\"},\n"
+        + "        \""
+        + APPLICATION_TYPE_FIELD
         + "\": {\"type\": \"keyword\"}\n"
         + "    }\n"
         + "}";
@@ -54,7 +64,7 @@ public class ConversationalIndexConstants {
     /** Version of the interactions index schema */
     public final static Integer INTERACTIONS_INDEX_SCHEMA_VERSION = 1;
     /** Name of the conversational interactions index */
-    public final static String INTERACTIONS_INDEX_NAME = ".plugins-ml-conversation-interactions";
+    public final static String INTERACTIONS_INDEX_NAME = ".plugins-ml-memory-message";
     /** Name of the interaction field for the conversation Id */
     public final static String INTERACTIONS_CONVERSATION_ID_FIELD = "conversation_id";
     /** Name of the interaction field for the human input */
@@ -69,6 +79,10 @@ public class ConversationalIndexConstants {
     public final static String INTERACTIONS_ADDITIONAL_INFO_FIELD = "additional_info";
     /** Name of the interaction field for the timestamp */
     public final static String INTERACTIONS_CREATE_TIME_FIELD = "create_time";
+    /** Name of the interaction id */
+    public final static String PARENT_INTERACTIONS_ID_FIELD = "parent_interaction_id";
+    /** The trace number of an interaction */
+    public final static String INTERACTIONS_TRACE_NUMBER_FIELD = "trace_number";
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"_meta\": {\n"
@@ -95,7 +109,13 @@ public class ConversationalIndexConstants {
         + "\": {\"type\": \"keyword\"},\n"
         + "        \""
         + INTERACTIONS_ADDITIONAL_INFO_FIELD
-        + "\": {\"type\": \"text\"}\n"
+        + "\": {\"type\": \"flat_object\"},\n"
+        + "        \""
+        + PARENT_INTERACTIONS_ID_FIELD
+        + "\": {\"type\": \"keyword\"},\n"
+        + "        \""
+        + INTERACTIONS_TRACE_NUMBER_FIELD
+        + "\": {\"type\": \"long\"}\n"
         + "    }\n"
         + "}";
 

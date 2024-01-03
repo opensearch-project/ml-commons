@@ -59,6 +59,7 @@ public class MLModelTests {
                 .modelId("model_id")
                 .chunkNumber(1)
                 .totalChunks(10)
+                .isHidden(false)
                 .build();
         function = parser -> {
             try {
@@ -71,11 +72,11 @@ public class MLModelTests {
 
     @Test
     public void toXContent() throws IOException {
-        MLModel mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("model_name").version("1.0.0").content("test_content").build();
+        MLModel mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("model_name").version("1.0.0").content("test_content").isHidden(true).build();
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\",\"model_content\":\"test_content\"}", mlModelContent);
+        assertEquals("{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\",\"model_content\":\"test_content\",\"is_hidden\":true}", mlModelContent);
     }
 
     @Test
@@ -111,5 +112,15 @@ public class MLModelTests {
         assertEquals(mlModel.getVersion(), parsedMLModel.getVersion());
         assertEquals(mlModel.getContent(), parsedMLModel.getContent());
         assertEquals(mlModel.getUser(), parsedMLModel.getUser());
+        assertEquals(mlModel.getIsHidden(), parsedMLModel.getIsHidden());
+        assertEquals(mlModel.getDescription(), parsedMLModel.getDescription());
+        assertEquals(mlModel.getModelContentHash(), parsedMLModel.getModelContentHash());
+        assertEquals(mlModel.getCreatedTime(), parsedMLModel.getCreatedTime());
+        assertEquals(mlModel.getLastRegisteredTime(), parsedMLModel.getLastRegisteredTime());
+        assertEquals(mlModel.getLastDeployedTime(), parsedMLModel.getLastDeployedTime());
+        assertEquals(mlModel.getLastUndeployedTime(), parsedMLModel.getLastUndeployedTime());
+        assertEquals(mlModel.getModelId(), parsedMLModel.getModelId());
+        assertEquals(mlModel.getChunkNumber(), parsedMLModel.getChunkNumber());
+        assertEquals(mlModel.getTotalChunks(), parsedMLModel.getTotalChunks());
     }
 }

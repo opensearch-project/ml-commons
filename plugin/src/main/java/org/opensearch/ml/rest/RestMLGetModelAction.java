@@ -60,6 +60,6 @@ public class RestMLGetModelAction extends BaseRestHandler {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         boolean returnContent = returnContent(request);
 
-        return new MLModelGetRequest(modelId, returnContent);
+        return new MLModelGetRequest(modelId, returnContent, true);
     }
 }

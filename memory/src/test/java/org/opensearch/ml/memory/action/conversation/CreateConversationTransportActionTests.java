@@ -31,6 +31,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -80,6 +81,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
 
     @Before
     public void setup() throws IOException {
+        MockitoAnnotations.openMocks(this);
         this.threadPool = Mockito.mock(ThreadPool.class);
         this.client = Mockito.mock(Client.class);
         this.clusterService = Mockito.mock(ClusterService.class);
@@ -107,10 +109,10 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
     public void testCreateConversation() {
         log.info("testing create conversation transport");
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(1);
+            ActionListener<String> listener = invocation.getArgument(2);
             listener.onResponse("testID");
             return null;
-        }).when(cmHandler).createConversation(any(), any());
+        }).when(cmHandler).createConversation(any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
@@ -133,10 +135,10 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
 
     public void testCreateConversationFails_thenFail() {
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(1);
+            ActionListener<String> listener = invocation.getArgument(2);
             listener.onFailure(new Exception("Testing Error"));
             return null;
-        }).when(cmHandler).createConversation(any(), any());
+        }).when(cmHandler).createConversation(any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
@@ -144,7 +146,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecuteFails_thenFail() {
-        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).createConversation(any(), any());
+        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).createConversation(any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());

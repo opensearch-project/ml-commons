@@ -13,7 +13,7 @@ plugins {
     id "io.freefair.lombok"
     id 'jacoco'
     id 'java-library'
-    id 'com.diffplug.spotless' version '6.18.0'
+    id 'com.diffplug.spotless' version '6.23.0'
     id 'checkstyle'
 }
 
@@ -36,7 +36,7 @@ checkstyle {
 }
 
 lombok {
-    version = "1.18.28"
+    version = "1.18.30"
 }
 
 opensearchplugin {
@@ -47,7 +47,7 @@ opensearchplugin {
 
 dependencies {
     implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
-    implementation project(':opensearch-ml-common')
+    implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     implementation project(':opensearch-ml-algorithms')
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
@@ -298,7 +298,9 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.cluster.MLSyncUpCron',
         'org.opensearch.ml.model.MLModelGroupManager',
         'org.opensearch.ml.helper.ModelAccessControlHelper',
-        'org.opensearch.ml.action.models.DeleteModelTransportAction.2'
+        'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
+        'org.opensearch.ml.model.MLModelCacheHelper',
+        'org.opensearch.ml.model.MLModelCacheHelper.1'
 ]
 
 jacocoTestCoverageVerification {

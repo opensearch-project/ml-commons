@@ -10,7 +10,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.INGEST_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.REMOTE_CLUSTER_CLIENT_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.SEARCH_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 import java.io.BufferedReader;
@@ -20,12 +24,15 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -90,6 +97,11 @@ public class TestHelper {
             return IS_ML_NODE_SETTING;
         }
     };
+
+    public static SortedSet<DiscoveryNodeRole> ALL_ROLES = Collections
+        .unmodifiableSortedSet(
+            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, SEARCH_ROLE, ML_ROLE))
+        );
 
     public static XContentParser parser(String xc) throws IOException {
         return parser(xc, true);
@@ -306,6 +318,22 @@ public class TestHelper {
         return new FakeRestRequest.Builder(getXContentRegistry())
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+    }
+
+    public static RestRequest getExecuteAgentRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
+            + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
+            + "\"tools\":[{\"type\":\"CatIndexTool\",\"name\":\"CatIndexTool\","
+            + "\"description\":\"Use this tool to get OpenSearch index information: "
+            + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
+            + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
             .build();
     }
 

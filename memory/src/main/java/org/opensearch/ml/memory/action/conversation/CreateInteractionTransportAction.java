@@ -17,9 +17,14 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.opensearch.OpenSearchException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -86,18 +91,53 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String rsp = request.getResponse();
         String ogn = request.getOrigin();
         String prompt = request.getPromptTemplate();
-        String additionalInfo = request.getAdditionalInfo();
+        Map<String, String> additionalInfo = request.getAdditionalInfo();
+        String parintIid = request.getParentIid();
+        Integer traceNumber = request.getTraceNumber();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            ActionListener<String> al = ActionListener
-                .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
-                    internalListener.onFailure(e);
-                });
-            cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
+            ActionListener<String> al = ActionListener.wrap(iid -> {
+                cmHandler.updateConversation(cid, new HashMap<>(), getUpdateResponseListener(cid, iid, internalListener));
+            }, e -> { internalListener.onFailure(e); });
+            if (parintIid == null || traceNumber == null) {
+                cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
+            } else {
+                cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al, parintIid, traceNumber);
+            }
         } catch (Exception e) {
             log.error("Failed to create interaction for conversation " + cid, e);
             actionListener.onFailure(e);
         }
     }
 
+    private ActionListener<UpdateResponse> getUpdateResponseListener(
+        String conversationId,
+        String interactionId,
+        ActionListener<CreateInteractionResponse> actionListener
+    ) {
+        return ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+                log
+                    .debug(
+                        "Successfully updated the Conversation with ID: {} after interaction {} is created",
+                        conversationId,
+                        interactionId
+                    );
+                actionListener.onResponse(new CreateInteractionResponse(interactionId));
+            } else {
+                log.error("Failed to update the Conversation with ID: {} after interaction {} is created", conversationId, interactionId);
+                actionListener.onResponse(new CreateInteractionResponse(interactionId));
+            }
+        }, exception -> {
+            log
+                .error(
+                    "Failed to update Conversation with ID {} after interaction {} is created. Details: {}",
+                    conversationId,
+                    interactionId,
+                    exception
+                );
+            actionListener.onResponse(new CreateInteractionResponse(interactionId));
+        });
+
+    }
 }

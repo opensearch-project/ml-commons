@@ -29,6 +29,9 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.client.Client;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -42,6 +45,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -56,6 +60,16 @@ public class AwsConnectorExecutorTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Mock
+    ThreadPool threadPool;
+
+    @Mock
+    Client client;
+
+    Settings settings;
+
+    ThreadContext threadContext;
 
     @Mock
     ScriptService scriptService;
@@ -129,6 +143,11 @@ public class AwsConnectorExecutorTest {
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -169,6 +188,11 @@ public class AwsConnectorExecutorTest {
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -207,6 +231,11 @@ public class AwsConnectorExecutorTest {
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         ModelTensorOutput modelTensorOutput = executor
@@ -252,6 +281,11 @@ public class AwsConnectorExecutorTest {
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         ModelTensorOutput modelTensorOutput = executor
