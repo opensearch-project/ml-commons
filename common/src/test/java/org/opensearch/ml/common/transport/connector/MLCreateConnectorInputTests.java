@@ -163,7 +163,7 @@ public class MLCreateConnectorInputTests {
         mlCreateDryRunConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"max_connection\":30,\"connection_timeout\":1000,\"read_timeout\":3000}", jsonStr);
+        assertEquals("{\"max_connection\":30,\"connection_timeout\":10000,\"read_timeout\":10000}", jsonStr);
     }
 
     @Test
