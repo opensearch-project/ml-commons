@@ -45,8 +45,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(1000);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(3000);
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(10000);
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(10000);
 
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
