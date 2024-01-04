@@ -166,7 +166,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         assertEquals("testModelName", updateModelInput.getName());
         assertEquals(
             "{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},"
-                + "\"credential\":{},\"max_connection\":30,\"connection_timeout\":1000,\"read_timeout\":3000}",
+                + "\"credential\":{},\"max_connection\":30,\"connection_timeout\":10000,\"read_timeout\":10000}",
             toJsonString(updateModelInput.getConnector())
         );
     }
