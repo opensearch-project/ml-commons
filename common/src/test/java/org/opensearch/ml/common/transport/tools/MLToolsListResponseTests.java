@@ -35,6 +35,8 @@ public class MLToolsListResponseTests {
         ToolMetadata searchWikipediaTool = ToolMetadata.builder()
                 .name("SearchWikipediaTool")
                 .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
+                .type("SearchWikipediaTool")
+                .version(null)
                 .build();
         toolMetadataList.add(searchWikipediaTool);
 

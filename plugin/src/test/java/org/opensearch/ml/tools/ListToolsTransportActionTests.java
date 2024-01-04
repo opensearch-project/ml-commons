@@ -50,6 +50,8 @@ public class ListToolsTransportActionTests extends OpenSearchTestCase {
             .builder()
             .name("WikipediaTool")
             .description("Use this tool to search general knowledge on wikipedia.")
+            .type("forTestingPurpose")
+            .version("test")
             .build();
         toolMetadataList.add(wikipediaTool);
         mlToolsListRequest = MLToolsListRequest.builder().toolMetadataList(toolMetadataList).build();

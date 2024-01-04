@@ -56,6 +56,8 @@ public class RestMLListToolsActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         Mockito.when(mockFactory.getDefaultDescription()).thenReturn("Mocked Description");
+        Mockito.when(mockFactory.getDefaultType()).thenReturn("Mocked type");
+        Mockito.when(mockFactory.getDefaultVersion()).thenReturn("Mocked version");
 
         Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
         Mockito.when(mockFactory.create(Mockito.any())).thenReturn(tool);

@@ -29,6 +29,8 @@ public class MLToolsListRequestTests {
         ToolMetadata wikipediaTool = ToolMetadata.builder()
                 .name("WikipediaTool")
                 .description("Use this tool to search general knowledge on wikipedia.")
+                .type("WikipediaTool")
+                .version(null)
                 .build();
         toolMetadataList.add(wikipediaTool);
     }

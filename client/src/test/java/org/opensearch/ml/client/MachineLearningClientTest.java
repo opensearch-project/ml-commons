@@ -114,7 +114,13 @@ public class MachineLearningClientTest {
         String modelContent = "test content";
         mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("test").content(modelContent).build();
 
-        toolMetadata = ToolMetadata.builder().name("MathTool").description("Use this tool to calculate any math problem.").build();
+        toolMetadata = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to calculate any math problem.")
+            .type("MathTool")
+            .version(null)
+            .build();
         toolsList.add(toolMetadata);
 
         machineLearningClient = new MachineLearningClient() {

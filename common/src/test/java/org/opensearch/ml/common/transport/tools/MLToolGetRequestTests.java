@@ -27,8 +27,10 @@ public class MLToolGetRequestTests {
     public void setUp() {
         toolMetadataList = new ArrayList<>();
         ToolMetadata wikipediaTool = ToolMetadata.builder()
-                .name("WikipediaTool")
+                .name("MathTool")
                 .description("Use this tool to search general knowledge on wikipedia.")
+                .type("MathTool")
+                .version("test")
                 .build();
         toolMetadataList.add(wikipediaTool);
     }

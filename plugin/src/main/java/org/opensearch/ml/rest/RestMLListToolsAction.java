@@ -67,7 +67,18 @@ public class RestMLListToolsAction extends BaseRestHandler {
     MLToolsListRequest getRequest(RestRequest request) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
         toolFactories
-            .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
+            .forEach(
+                (key, value) -> toolList
+                    .add(
+                        ToolMetadata
+                            .builder()
+                            .name(key)
+                            .description(value.getDefaultDescription())
+                            .type(value.getDefaultType())
+                            .version(value.getDefaultVersion())
+                            .build()
+                    )
+            );
         MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().toolMetadataList(toolList).build();
         return mlToolsGetRequest;
     }
