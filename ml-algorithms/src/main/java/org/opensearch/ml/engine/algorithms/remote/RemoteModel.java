@@ -94,9 +94,9 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setXContentRegistry((NamedXContentRegistry) params.get(XCONTENT_REGISTRY));
             this.connectorExecutor.setRateLimiter((TokenBucket) params.get(RATE_LIMITER));
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
-            this.connectorExecutor.setConnectionTimeoutInMillis((Integer) params.get(CONNECTION_TIMEOUT));
-            this.connectorExecutor.setReadTimeoutInMillis((Integer) params.get(READ_TIMEOUT));
-            this.connectorExecutor.setMaxConnections((Integer) params.get(MAX_CONNECTIONS));
+            // this.connectorExecutor.setConnectionTimeoutInMillis((Integer) params.get(CONNECTION_TIMEOUT));
+            // this.connectorExecutor.setReadTimeoutInMillis((Integer) params.get(READ_TIMEOUT));
+            // this.connectorExecutor.setMaxConnections((Integer) params.get(MAX_CONNECTIONS));
         } catch (RuntimeException e) {
             log.error("Failed to init remote model.", e);
             throw e;

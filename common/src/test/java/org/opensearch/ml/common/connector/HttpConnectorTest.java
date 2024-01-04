@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 public class HttpConnectorTest {
@@ -38,6 +39,18 @@ public class HttpConnectorTest {
 
     Function<String, String> encryptFunction;
     Function<String, String> decryptFunction;
+
+    String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\"," +
+            "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
+            "\"parameters\":{\"input\":\"test input value\"}," +
+            "\"credential\":{\"key\":\"test_key_value\"}," +
+            "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\"," +
+            "\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}," +
+            "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
+            "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
+            "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
+            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"max_connection\":10," +
+            "\"read_timeout\":10,\"connection_timeout\":10}";
 
     @Before
     public void setUp() {
@@ -71,33 +84,15 @@ public class HttpConnectorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals("{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
-                "\"protocol\":\"http\"," +
-                "\"parameters\":{\"input\":\"test input value\"}," +
-                "\"credential\":{\"key\":\"test_key_value\"}," +
-                "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
-                "\"headers\":{\"api_key\":\"${credential.key}\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-                "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-                "\"backend_roles\":[\"role1\",\"role2\"]," +
-                "\"access\":\"public\"}", content);
+        Assert.assertEquals(TEST_CONNECTOR_JSON_STRING, content);
     }
 
 
     @Test
     public void constructor_Parser() throws IOException {
-        String jsonStr = "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
-                "\"protocol\":\"http\"," +
-                "\"parameters\":{\"input\":\"test input value\"}," +
-                "\"credential\":{\"key\":\"test_key_value\"}," +
-                "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
-                "\"headers\":{\"api_key\":\"${credential.key}\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-                "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-                "\"backend_roles\":[\"role1\",\"role2\"]," +
-                "\"access\":\"public\"}";
+
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+                Collections.emptyList()).getNamedXContents()), null, TEST_CONNECTOR_JSON_STRING);
         parser.nextToken();
 
         HttpConnector connector = new HttpConnector("http", parser);
@@ -112,6 +107,9 @@ public class HttpConnectorTest {
         Assert.assertEquals(ConnectorAction.ActionType.PREDICT, connector.getActions().get(0).getActionType());
         Assert.assertEquals("POST", connector.getActions().get(0).getMethod());
         Assert.assertEquals("https://test.com", connector.getActions().get(0).getUrl());
+        Assert.assertEquals(10, connector.getMaxConnections().intValue());
+        Assert.assertEquals(10, connector.getReadTimeoutInMillis().intValue());
+        Assert.assertEquals(10, connector.getConnectionTimeoutInMillis().intValue());
     }
 
     @Test
@@ -309,6 +307,9 @@ public class HttpConnectorTest {
                 .actions(Arrays.asList(action))
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .accessMode(AccessMode.PUBLIC)
+                .maxConnections(10)
+                .readTimeoutInMillis(10)
+                .connectionTimeoutInMillis(10)
                 .build();
         return connector;
     }
