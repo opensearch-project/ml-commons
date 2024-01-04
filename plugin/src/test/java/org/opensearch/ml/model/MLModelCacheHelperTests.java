@@ -22,15 +22,18 @@ import java.util.Set;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
@@ -53,6 +56,13 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     private int maxMonitoringRequests;
 
     private List<String> targetWorkerNodes;
+    private Map<String, TokenBucket> userRateLimiterMap;
+
+    @Mock
+    private MLExecutable mlExecutor;
+
+    @Mock
+    private TokenBucket rateLimiter;
 
     @Before
     public void setup() {
@@ -70,6 +80,8 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         predictor = spy(new TextEmbeddingDenseModel());
         targetWorkerNodes = new ArrayList<>();
         targetWorkerNodes.add(nodeId);
+
+        userRateLimiterMap = Map.of("user1", rateLimiter);
     }
 
     public void testModelState() {
@@ -127,6 +139,42 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertNull(cacheHelper.getPredictor(modelId));
         cacheHelper.setPredictor(modelId, predictor);
         assertEquals(predictor, cacheHelper.getPredictor(modelId));
+    }
+
+    public void testExecutor() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true);
+        assertNull(cacheHelper.getMLExecutor(modelId));
+        cacheHelper.setMLExecutor(modelId, mlExecutor);
+        assertEquals(mlExecutor, cacheHelper.getMLExecutor(modelId));
+        cacheHelper.removeModel(modelId);
+        assertNull(cacheHelper.getMLExecutor(modelId));
+    }
+
+    public void testModelRateLimiter() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true);
+        assertNull(cacheHelper.getModelRateLimiter(modelId));
+        cacheHelper.setModelRateLimiter(modelId, rateLimiter);
+        assertEquals(rateLimiter, cacheHelper.getModelRateLimiter(modelId));
+        cacheHelper.removeModelRateLimiter(modelId);
+        assertNull(cacheHelper.getModelRateLimiter(modelId));
+    }
+
+    public void testModelEnabled() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true);
+        assertNull(cacheHelper.getIsModelEnabled(modelId));
+        cacheHelper.setIsModelEnabled(modelId, true);
+        assertTrue(cacheHelper.getIsModelEnabled(modelId));
+    }
+
+    public void testUserRateLimiter() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true);
+        assertNull(cacheHelper.getUserRateLimiterMap(modelId));
+        cacheHelper.setUserRateLimiterMap(modelId, userRateLimiterMap);
+        assertEquals(userRateLimiterMap, cacheHelper.getUserRateLimiterMap(modelId));
+        assertEquals(rateLimiter, cacheHelper.getUserRateLimiter(modelId, "user1"));
+        assertNull(cacheHelper.getUserRateLimiter(modelId, "user2"));
+        cacheHelper.removeUserRateLimiterMap(modelId);
+        assertNull(cacheHelper.getUserRateLimiterMap(modelId));
     }
 
     public void testGetAndRemoveModel() {
@@ -201,10 +249,21 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
     public void testRemoveModel_Deployed() {
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
-        cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+        cacheHelper.setIsModelEnabled(modelId, true);
+        cacheHelper.setModelRateLimiter(modelId, rateLimiter);
+        cacheHelper.setUserRateLimiterMap(modelId, userRateLimiterMap);
         cacheHelper.setPredictor(modelId, predictor);
+        cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
         cacheHelper.removeModel(modelId);
         verify(predictor, times(1)).close();
+        assertNull(cacheHelper.getPredictor(modelId));
+        assertNull(cacheHelper.getMemEstCPU(modelId));
+        assertNull(cacheHelper.getMemEstGPU(modelId));
+        assertNull(cacheHelper.getModelInfo(modelId));
+        assertNull(cacheHelper.getIsModelEnabled(modelId));
+        assertNull(cacheHelper.getModelRateLimiter(modelId));
+        assertNull(cacheHelper.getUserRateLimiter(modelId, "user1"));
+        assertNull(cacheHelper.getUserRateLimiterMap(modelId));
     }
 
     public void testClearWorkerNodes_NullModelState() {

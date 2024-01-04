@@ -7,7 +7,6 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -16,11 +15,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -112,23 +109,6 @@ public class MLModelCacheHelper {
     }
 
     /**
-     * Set the user rate limiter map for a single user to enable user level throttling.
-     *
-     * @param modelId model id
-     * @param user user
-     * @param rateLimiter rate limiter
-     */
-    public synchronized void setUserRateLimiterMap(String modelId, String user, TokenBucket rateLimiter) {
-        log.debug("Setting the user level rate limiter for Model {}", modelId);
-        Map<String, TokenBucket> userRateLimiterMap = new HashMap<>() {
-            {
-                put(user, rateLimiter);
-            }
-        };
-        getExistingModelCache(modelId).setUserRateLimiterMap(userRateLimiterMap);
-    }
-
-    /**
      * Set the user rate limiter map to enable user level throttling.
      *
      * @param modelId model id
@@ -137,47 +117,6 @@ public class MLModelCacheHelper {
     public synchronized void setUserRateLimiterMap(String modelId, Map<String, TokenBucket> userRateLimiterMap) {
         log.debug("Setting the user level rate limiter for Model {}", modelId);
         getExistingModelCache(modelId).setUserRateLimiterMap(userRateLimiterMap);
-    }
-
-    /**
-     * Update the user rate limiter map with the user rate limiter map.
-     * If the user rate limiter map doesn't exist for the model, consider calling setUserRateLimiterMap instead.
-     *
-     * @param modelId model id
-     * @param updateUserRateLimiterMap a map with user's name and its corresponding rate limiter
-     */
-    public synchronized void updateUserRateLimiterMap(String modelId, Map<String, TokenBucket> updateUserRateLimiterMap) {
-        log.debug("Updating the user level rate limiter for Model {}", modelId);
-        Map<String, TokenBucket> userRateLimiterMap = getExistingModelCache(modelId).getUserRateLimiterMap();
-        if (userRateLimiterMap != null) {
-            userRateLimiterMap.putAll(updateUserRateLimiterMap);
-        } else {
-            throw new OpenSearchStatusException(
-                "Model controller doesn't exist for the model. Consider calling create model controller api instead. Model ID: " + modelId,
-                RestStatus.CONFLICT
-            );
-        }
-    }
-
-    /**
-     * Update the user rate limiter map for a single user.
-     * If the user rate limiter map doesn't exist for the model, consider calling setUserRateLimiterMap instead.
-     *
-     * @param modelId model id
-     * @param user user
-     * @param rateLimiter rate limiter
-     */
-    public synchronized void updateUserRateLimiterMap(String modelId, String user, TokenBucket rateLimiter) {
-        log.debug("Updating the user level rate limiter for Model {}", modelId);
-        Map<String, TokenBucket> userRateLimiterMap = getExistingModelCache(modelId).getUserRateLimiterMap();
-        if (userRateLimiterMap != null) {
-            userRateLimiterMap.put(user, rateLimiter);
-        } else {
-            throw new OpenSearchStatusException(
-                "Model controller doesn't exist for the model. Consider calling create model controller api instead. Model ID: " + modelId,
-                RestStatus.CONFLICT
-            );
-        }
     }
 
     /**
