@@ -14,6 +14,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.http.HttpEntity;
@@ -64,19 +65,19 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private CloseableHttpClient httpClient;
 
     public HttpJsonConnectorExecutor(Connector connector) {
+        super.validate();
         this.connector = (HttpConnector) connector;
+        Integer maxConnection = Objects.requireNonNullElse(connector.getMaxConnections(), super.getMaxConnections());
+        Integer readTimeout = Objects.requireNonNullElse(connector.getReadTimeoutInMillis(), super.getReadTimeoutInMillis());
+        Integer connectionTimeout = Objects
+            .requireNonNullElse(connector.getConnectionTimeoutInMillis(), super.getConnectionTimeoutInMillis());
+
+        this.httpClient = MLHttpClientFactory.getCloseableHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     public HttpJsonConnectorExecutor(Connector connector, CloseableHttpClient httpClient) {
         this(connector);
         this.httpClient = httpClient;
-    }
-
-    @Override
-    public void initialize() {
-        super.validate();
-        this.httpClient = MLHttpClientFactory
-            .getCloseableHttpClient(super.getConnectionTimeoutInMillis(), super.getReadTimeoutInMillis(), super.getMaxConnections());
     }
 
     @Override

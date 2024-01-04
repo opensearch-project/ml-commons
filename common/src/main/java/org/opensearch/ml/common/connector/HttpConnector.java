@@ -177,6 +177,15 @@ public class HttpConnector extends AbstractConnector {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
+        if (maxConnections != null) {
+            builder.field(MAX_CONNECTION_FIELD, maxConnections);
+        }
+        if(readTimeoutInMillis != null) {
+            builder.field(READ_TIMEOUT_FIELD, readTimeoutInMillis);
+        }
+        if(connectionTimeoutInMillis != null) {
+            builder.field(CONNECTION_TIMEOUT_FIELD, connectionTimeoutInMillis);
+        }
         builder.endObject();
         return builder;
     }
@@ -215,6 +224,11 @@ public class HttpConnector extends AbstractConnector {
         if (input.readBoolean()) {
             this.owner = new User(input);
         }
+        this.createdTime = input.readOptionalInstant();
+        this.lastUpdateTime = input.readOptionalInstant();
+        this.maxConnections = input.readOptionalInt();
+        this.readTimeoutInMillis = input.readOptionalInt();
+        this.connectionTimeoutInMillis = input.readOptionalInt();
     }
 
     @Override
@@ -257,6 +271,11 @@ public class HttpConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalInstant(createdTime);
+        out.writeOptionalInstant(lastUpdateTime);
+        out.writeOptionalInt(maxConnections);
+        out.writeOptionalInt(readTimeoutInMillis);
+        out.writeOptionalInt(connectionTimeoutInMillis);
     }
 
     @Override
