@@ -36,6 +36,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -309,6 +310,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> credential = ImmutableMap
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        ConnectorHttpClientConfig httpClientConfig = new ConnectorHttpClientConfig(20, 30000, 30000);
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -317,16 +319,13 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
+            .httpClientConfig(httpClientConfig)
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
-        initializeExecutor(executor);
-    }
+        Assert.assertEquals(20, executor.getConnector().getHttpClientConfig().getMaxConnections().intValue());
+        Assert.assertEquals(30000, executor.getConnector().getHttpClientConfig().getConnectionTimeout().intValue());
+        Assert.assertEquals(30000, executor.getConnector().getHttpClientConfig().getReadTimeout().intValue());
 
-    private void initializeExecutor(RemoteConnectorExecutor executor) {
-        executor.setConnectionTimeoutInMillis(1000);
-        executor.setReadTimeoutInMillis(1000);
-        executor.setMaxConnections(30);
-        executor.initialize();
     }
 }
