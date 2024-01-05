@@ -52,8 +52,8 @@ public class HttpConnector extends AbstractConnector {
     @Builder
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
-                         List<String> backendRoles, AccessMode accessMode, User owner, Integer maxConnections,
-                         Integer connectionTimeoutInMillis, Integer readTimeoutInMillis) {
+                         List<String> backendRoles, AccessMode accessMode, User owner,
+                         ConnectorHttpClientConfig httpClientConfig) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -65,9 +65,8 @@ public class HttpConnector extends AbstractConnector {
         this.backendRoles = backendRoles;
         this.access = accessMode;
         this.owner = owner;
-        this.maxConnections = maxConnections;
-        this.connectionTimeoutInMillis = connectionTimeoutInMillis;
-        this.readTimeoutInMillis = readTimeoutInMillis;
+        this.httpClientConfig = httpClientConfig;
+
     }
 
     public HttpConnector(String protocol, XContentParser parser) throws IOException {
@@ -125,12 +124,9 @@ public class HttpConnector extends AbstractConnector {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case MAX_CONNECTION_FIELD:
-                    maxConnections = parser.intValue();
-                case CONNECTION_TIMEOUT_FIELD:
-                    connectionTimeoutInMillis = parser.intValue();
-                case READ_TIMEOUT_FIELD:
-                    readTimeoutInMillis = parser.intValue();
+                case HTTP_CLIENT_CONFIG_FIELD:
+                    httpClientConfig = ConnectorHttpClientConfig.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -177,14 +173,8 @@ public class HttpConnector extends AbstractConnector {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
-        if (maxConnections != null) {
-            builder.field(MAX_CONNECTION_FIELD, maxConnections);
-        }
-        if(readTimeoutInMillis != null) {
-            builder.field(READ_TIMEOUT_FIELD, readTimeoutInMillis);
-        }
-        if(connectionTimeoutInMillis != null) {
-            builder.field(CONNECTION_TIMEOUT_FIELD, connectionTimeoutInMillis);
+        if (httpClientConfig != null) {
+            builder.field(HTTP_CLIENT_CONFIG_FIELD, httpClientConfig);
         }
         builder.endObject();
         return builder;
@@ -226,9 +216,9 @@ public class HttpConnector extends AbstractConnector {
         }
         this.createdTime = input.readOptionalInstant();
         this.lastUpdateTime = input.readOptionalInstant();
-        this.maxConnections = input.readOptionalInt();
-        this.readTimeoutInMillis = input.readOptionalInt();
-        this.connectionTimeoutInMillis = input.readOptionalInt();
+        if (input.readBoolean()) {
+            this.httpClientConfig = new ConnectorHttpClientConfig(input);
+        }
     }
 
     @Override
@@ -273,9 +263,12 @@ public class HttpConnector extends AbstractConnector {
         }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
-        out.writeOptionalInt(maxConnections);
-        out.writeOptionalInt(readTimeoutInMillis);
-        out.writeOptionalInt(connectionTimeoutInMillis);
+        if (httpClientConfig != null) {
+            out.writeBoolean(true);
+            httpClientConfig.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -307,6 +300,9 @@ public class HttpConnector extends AbstractConnector {
         }
         if (updateContent.getAccess() != null) {
             this.access = updateContent.getAccess();
+        }
+        if (updateContent.getHttpClientConfig() != null) {
+            this.httpClientConfig = updateContent.getHttpClientConfig();
         }
     }
 

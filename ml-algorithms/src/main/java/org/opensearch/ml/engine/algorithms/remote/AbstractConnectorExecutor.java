@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -19,13 +19,13 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
 
     public void validate() {
         if (connectionTimeoutInMillis == null) {
-            connectionTimeoutInMillis = MLCreateConnectorInput.CONNECTION_TIMEOUT_DEFAULT_VALUE;
+            connectionTimeoutInMillis = ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE;
         }
         if (readTimeoutInMillis == null) {
-            readTimeoutInMillis = MLCreateConnectorInput.READ_TIMEOUT_DEFAULT_VALUE;
+            readTimeoutInMillis = ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE;
         }
         if (maxConnections == null) {
-            maxConnections = MLCreateConnectorInput.MAX_CONNECTION_DEFAULT_VALUE;
+            maxConnections = ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE;
         }
     }
 }

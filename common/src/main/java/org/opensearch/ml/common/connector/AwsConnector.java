@@ -31,10 +31,10 @@ public class AwsConnector extends HttpConnector {
     @Builder(builderMethodName = "awsConnectorBuilder")
     public AwsConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
-                         List<String> backendRoles, AccessMode accessMode, User owner, Integer maxConnections,
-                        Integer connectionTimeoutInMillis, Integer readTimeoutInMillis) {
+                         List<String> backendRoles, AccessMode accessMode, User owner,
+                         ConnectorHttpClientConfig httpClientConfig) {
         super(name, description, version, protocol, parameters, credential, actions, backendRoles, accessMode,
-                owner, maxConnections, connectionTimeoutInMillis, readTimeoutInMillis);
+                owner, httpClientConfig);
         validate();
     }
 

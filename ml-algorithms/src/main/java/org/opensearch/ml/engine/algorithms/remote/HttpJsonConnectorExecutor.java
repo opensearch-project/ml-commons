@@ -14,7 +14,6 @@ import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.http.HttpEntity;
@@ -30,6 +29,7 @@ import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
@@ -67,10 +67,16 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public HttpJsonConnectorExecutor(Connector connector) {
         super.validate();
         this.connector = (HttpConnector) connector;
-        Integer maxConnection = Objects.requireNonNullElse(connector.getMaxConnections(), super.getMaxConnections());
-        Integer readTimeout = Objects.requireNonNullElse(connector.getReadTimeoutInMillis(), super.getReadTimeoutInMillis());
-        Integer connectionTimeout = Objects
-            .requireNonNullElse(connector.getConnectionTimeoutInMillis(), super.getConnectionTimeoutInMillis());
+        ConnectorHttpClientConfig httpClientConfig = ((HttpConnector) connector).getHttpClientConfig();
+        Integer maxConnection = httpClientConfig != null
+            ? (httpClientConfig.getMaxConnections() != null ? httpClientConfig.getMaxConnections() : super.getMaxConnections())
+            : super.getMaxConnections();
+        Integer readTimeout = httpClientConfig != null
+            ? (httpClientConfig.getReadTimeout() != null ? httpClientConfig.getReadTimeout() : super.getMaxConnections())
+            : super.getMaxConnections();
+        Integer connectionTimeout = httpClientConfig != null
+            ? (httpClientConfig.getConnectionTimeout() != null ? httpClientConfig.getConnectionTimeout() : super.getMaxConnections())
+            : super.getMaxConnections();
 
         this.httpClient = MLHttpClientFactory.getCloseableHttpClient(connectionTimeout, readTimeout, maxConnection);
     }

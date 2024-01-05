@@ -43,9 +43,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
-    public static final String MAX_CONNECTION_FIELD = "max_connection";
-    public static final String CONNECTION_TIMEOUT_FIELD = "connection_timeout";
-    public static final String READ_TIMEOUT_FIELD = "read_timeout";
+    public static final String HTTP_CLIENT_CONFIG_FIELD = "http_client_config";
 
 
     protected String name;
@@ -69,9 +67,8 @@ public abstract class AbstractConnector implements Connector {
     protected AccessMode access;
     protected Instant createdTime;
     protected Instant lastUpdateTime;
-    protected Integer maxConnections;
-    protected Integer connectionTimeoutInMillis;
-    protected Integer readTimeoutInMillis;
+    @Setter
+    protected ConnectorHttpClientConfig httpClientConfig;
 
     protected Map<String, String> createPredictDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {

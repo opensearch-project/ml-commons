@@ -66,8 +66,9 @@ public class RemoteModelTests {
                 "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
                 "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
                 "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-                "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"max_connection\":10," +
-                "\"read_timeout\":10,\"connection_timeout\":10}}", mlModelContent);
+                "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
+                "\"http_client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000}}}",
+                mlModelContent);
     }
 
     @Test

@@ -111,6 +111,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("test_connectorId", updateConnectorRequest.getConnectorId());
         assertEquals("This is test description", updateConnectorRequest.getUpdateContent().getDescription());
         assertEquals("2", updateConnectorRequest.getUpdateContent().getVersion());
+
     }
 
     public void testUpdateConnectorRequestWithParsingException() throws Exception {

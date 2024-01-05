@@ -33,6 +33,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.search.SearchModule;
@@ -59,7 +60,8 @@ public class MLCreateConnectorInputTests {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
-            "\"access_mode\":\"PUBLIC\",\"max_connection\":30,\"connection_timeout\":1000,\"read_timeout\":1000}";
+            "\"access_mode\":\"PUBLIC\",\"http_client_config\":{\"max_connection\":20," +
+            "\"connection_timeout\":10000,\"read_timeout\":10000}}";
 
     @Before
     public void setUp(){
@@ -72,6 +74,7 @@ public class MLCreateConnectorInputTests {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
+        ConnectorHttpClientConfig httpClientConfig = new ConnectorHttpClientConfig(20, 10000, 10000);
 
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
@@ -84,9 +87,7 @@ public class MLCreateConnectorInputTests {
                 .access(AccessMode.PUBLIC)
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .addAllBackendRoles(false)
-                .maxConnections(30)
-                .connectionTimeout(1000)
-                .readTimeout(1000)
+                .httpClientConfig(httpClientConfig)
                 .build();
 
         mlCreateDryRunConnectorInput = MLCreateConnectorInput.builder()
@@ -163,13 +164,16 @@ public class MLCreateConnectorInputTests {
         mlCreateDryRunConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"max_connection\":30,\"connection_timeout\":10000,\"read_timeout\":10000}", jsonStr);
+        assertEquals("{}", jsonStr);
     }
 
     @Test
     public void testParse() throws Exception {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
             assertEquals("test_connector_name", parsedInput.getName());
+            assertEquals(20, parsedInput.getHttpClientConfig().getMaxConnections().intValue());
+            assertEquals(10000, parsedInput.getHttpClientConfig().getReadTimeout().intValue());
+            assertEquals(10000, parsedInput.getHttpClientConfig().getConnectionTimeout().intValue());
         });
     }
 
@@ -212,13 +216,11 @@ public class MLCreateConnectorInputTests {
                 .name("test_connector_name")
                 .version("1")
                 .protocol("http")
-                .maxConnections(30)
-
                 .build();
         readInputStream(mlCreateMinimalConnectorInput, parsedInput -> {
             assertEquals(mlCreateMinimalConnectorInput.getName(), parsedInput.getName());
             assertNull(parsedInput.getActions());
-            assertEquals(Integer.valueOf(30), parsedInput.getMaxConnections());
+            assertNull(parsedInput.getHttpClientConfig());
         });
     }
 

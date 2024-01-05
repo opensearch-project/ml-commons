@@ -1,0 +1,74 @@
+package org.opensearch.ml.common.connector;
+
+import org.junit.Assert;
+import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.search.SearchModule;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.TestHelper;
+
+import java.io.IOException;
+import java.util.Collections;
+
+public class ConnectorHttpClientConfigTest {
+
+    @Test
+    public void writeTo_ReadFromStream() throws IOException {
+        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder()
+                .maxConnections(10)
+                .connectionTimeout(5000)
+                .readTimeout(3000)
+                .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        config.writeTo(output);
+        ConnectorHttpClientConfig readConfig = new ConnectorHttpClientConfig(output.bytes().streamInput());
+
+        Assert.assertEquals(config, readConfig);
+    }
+
+    @Test
+    public void toXContent() throws IOException {
+        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder()
+                .maxConnections(10)
+                .connectionTimeout(5000)
+                .readTimeout(3000)
+                .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        config.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000}";
+        Assert.assertEquals(expectedJson, content);
+    }
+
+    @Test
+    public void parse() throws IOException {
+        String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000}";
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
+
+        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.parse(parser);
+
+        Assert.assertEquals(Integer.valueOf(10), config.getMaxConnections());
+        Assert.assertEquals(Integer.valueOf(5000), config.getConnectionTimeout());
+        Assert.assertEquals(Integer.valueOf(3000), config.getReadTimeout());
+    }
+
+    @Test
+    public void testDefaultValues() {
+        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder().build();
+
+        Assert.assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, config.getMaxConnections());
+        Assert.assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, config.getConnectionTimeout());
+        Assert.assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, config.getReadTimeout());
+    }
+}
+

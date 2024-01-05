@@ -45,10 +45,6 @@ public interface Connector extends ToXContentObject, Writeable {
     User getOwner();
     void setOwner(User user);
 
-    Integer getMaxConnections();
-    Integer getConnectionTimeoutInMillis();
-    Integer getReadTimeoutInMillis();
-
     AccessMode getAccess();
     void setAccess(AccessMode access);
     List<String> getBackendRoles();
