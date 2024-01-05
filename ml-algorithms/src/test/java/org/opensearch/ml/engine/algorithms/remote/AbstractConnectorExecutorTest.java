@@ -1,13 +1,13 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.mockito.Mockito.*;
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.connector.AwsConnector;
-import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 
 public class AbstractConnectorExecutorTest {
