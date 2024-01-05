@@ -71,12 +71,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     }
 
     public AwsConnectorExecutor(Connector connector) {
-        this(connector, new DefaultSdkHttpClientBuilder().build());
-    }
-
-    @Override
-    public void initialize() {
-        super.validate();
+        super.validate(connector);
+        this.connector = (AwsConnector) connector;
         Duration connectionTimeout = Duration.ofMillis(super.getConnectionTimeoutInMillis());
         Duration readTimeout = Duration.ofMillis(super.getReadTimeoutInMillis());
         try (
@@ -122,9 +118,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .contentStreamProvider(request.contentStreamProvider().orElse(null))
                 .build();
 
-            HttpExecuteResponse response = AccessController.doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> {
-                return httpClient.prepareRequest(executeRequest).call();
-            });
+            HttpExecuteResponse response = AccessController
+                .doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> httpClient.prepareRequest(executeRequest).call());
             int statusCode = response.httpResponse().statusCode();
 
             AbortableInputStream body = null;

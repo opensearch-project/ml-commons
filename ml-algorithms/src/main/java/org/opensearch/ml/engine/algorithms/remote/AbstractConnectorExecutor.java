@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 
 import lombok.Getter;
@@ -17,14 +18,28 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
     private Integer connectionTimeoutInMillis;
     private Integer readTimeoutInMillis;
 
-    public void validate() {
-        if (connectionTimeoutInMillis == null) {
+    public void validate(Connector connector) {
+        ConnectorHttpClientConfig httpClientConfig = connector.getHttpClientConfig();
+        if (httpClientConfig != null) {
+            if (httpClientConfig.getMaxConnections() != null) {
+                maxConnections = httpClientConfig.getMaxConnections();
+            } else {
+                maxConnections = ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE;
+            }
+            if (httpClientConfig.getConnectionTimeout() != null) {
+                connectionTimeoutInMillis = httpClientConfig.getConnectionTimeout();
+            } else {
+                connectionTimeoutInMillis = ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE;
+            }
+            if (httpClientConfig.getReadTimeout() != null) {
+                readTimeoutInMillis = httpClientConfig.getReadTimeout();
+            } else {
+                readTimeoutInMillis = ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE;
+            }
+
+        } else {
             connectionTimeoutInMillis = ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE;
-        }
-        if (readTimeoutInMillis == null) {
             readTimeoutInMillis = ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE;
-        }
-        if (maxConnections == null) {
             maxConnections = ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE;
         }
     }
