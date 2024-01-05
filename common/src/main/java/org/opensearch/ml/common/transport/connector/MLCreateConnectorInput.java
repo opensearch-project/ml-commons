@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(10000);
 
 
+
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
     private String name;
@@ -63,9 +65,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private AccessMode access;
     private boolean dryRun;
     private boolean updateConnector;
-    private Integer maxConnections;
-    private Integer connectionTimeout;
-    private Integer readTimeout;
+    private ConnectorHttpClientConfig httpClientConfig;
 
 
     @Builder(toBuilder = true)
@@ -81,9 +81,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   AccessMode access,
                                   boolean dryRun,
                                   boolean updateConnector,
-                                  Integer maxConnections,
-                                  Integer connectionTimeout,
-                                  Integer readTimeout
+                                  ConnectorHttpClientConfig httpClientConfig
 
     ) {
         if (!dryRun && !updateConnector) {
@@ -109,9 +107,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.access = access;
         this.dryRun = dryRun;
         this.updateConnector = updateConnector;
-        this.maxConnections = Objects.requireNonNullElse(maxConnections, MAX_CONNECTION_DEFAULT_VALUE);
-        this.connectionTimeout = Objects.requireNonNullElse(connectionTimeout, CONNECTION_TIMEOUT_DEFAULT_VALUE);
-        this.readTimeout = Objects.requireNonNullElse(readTimeout, READ_TIMEOUT_DEFAULT_VALUE);
+        this.httpClientConfig = httpClientConfig;
+
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -130,9 +127,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Boolean addAllBackendRoles = null;
         AccessMode access = null;
         boolean dryRun = false;
-        Integer maxConnections = null;
-        Integer connectionTimeout = null;
-        Integer readTimeout =  null;
+        ConnectorHttpClientConfig connectorHttpClientConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -181,14 +176,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case DRY_RUN_FIELD:
                     dryRun = parser.booleanValue();
                     break;
-                case AbstractConnector.MAX_CONNECTION_FIELD:
-                    maxConnections = parser.intValue();
-                    break;
-                case AbstractConnector.CONNECTION_TIMEOUT_FIELD:
-                    connectionTimeout = parser.intValue();
-                    break;
-                case AbstractConnector.READ_TIMEOUT_FIELD:
-                    readTimeout = parser.intValue();
+                case AbstractConnector.HTTP_CLIENT_CONFIG_FIELD:
+                    connectorHttpClientConfig = ConnectorHttpClientConfig.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -196,8 +185,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions,
-                backendRoles, addAllBackendRoles, access, dryRun, updateConnector,
-                maxConnections, connectionTimeout, readTimeout);
+                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorHttpClientConfig);
     }
 
     @Override
@@ -233,14 +221,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (access != null) {
             builder.field(ACCESS_MODE_FIELD, access);
         }
-        if (maxConnections != null) {
-            builder.field(AbstractConnector.MAX_CONNECTION_FIELD, maxConnections);
-        }
-        if (connectionTimeout != null) {
-            builder.field(AbstractConnector.CONNECTION_TIMEOUT_FIELD, connectionTimeout);
-        }
-        if (readTimeout != null) {
-            builder.field(AbstractConnector.READ_TIMEOUT_FIELD, readTimeout);
+        if (httpClientConfig != null) {
+            builder.field(AbstractConnector.HTTP_CLIENT_CONFIG_FIELD, httpClientConfig);
         }
         builder.endObject();
         return builder;
@@ -288,9 +270,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         output.writeBoolean(dryRun);
         output.writeBoolean(updateConnector);
-        output.writeInt(Objects.requireNonNullElse(maxConnections, MAX_CONNECTION_DEFAULT_VALUE));
-        output.writeInt(Objects.requireNonNullElse(connectionTimeout, CONNECTION_TIMEOUT_DEFAULT_VALUE));
-        output.writeInt(Objects.requireNonNullElse(readTimeout, READ_TIMEOUT_DEFAULT_VALUE));
+        if (httpClientConfig != null) {
+            output.writeBoolean(true);
+            httpClientConfig.writeTo(output);
+        } else {
+            output.writeBoolean(false);
+        }
 
     }
 
@@ -321,8 +306,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         dryRun = input.readBoolean();
         updateConnector = input.readBoolean();
-        maxConnections = input.readInt();
-        connectionTimeout = input.readInt();
-        readTimeout = input.readInt();
+        if (input.readBoolean()) {
+            this.httpClientConfig = new ConnectorHttpClientConfig(input);
+        }
     }
 }

@@ -42,15 +42,14 @@ public class HttpConnectorTest {
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\"," +
             "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
-            "\"parameters\":{\"input\":\"test input value\"}," +
-            "\"credential\":{\"key\":\"test_key_value\"}," +
-            "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\"," +
-            "\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}," +
+            "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +
+            "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
+            "\"headers\":{\"api_key\":\"${credential.key}\"}," +
             "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"max_connection\":10," +
-            "\"read_timeout\":10,\"connection_timeout\":10}";
+            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
+            "\"http_client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000}}";
 
     @Before
     public void setUp() {
@@ -107,9 +106,6 @@ public class HttpConnectorTest {
         Assert.assertEquals(ConnectorAction.ActionType.PREDICT, connector.getActions().get(0).getActionType());
         Assert.assertEquals("POST", connector.getActions().get(0).getMethod());
         Assert.assertEquals("https://test.com", connector.getActions().get(0).getUrl());
-        Assert.assertEquals(10, connector.getMaxConnections().intValue());
-        Assert.assertEquals(10, connector.getReadTimeoutInMillis().intValue());
-        Assert.assertEquals(10, connector.getConnectionTimeoutInMillis().intValue());
     }
 
     @Test
@@ -297,6 +293,8 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
+        ConnectorHttpClientConfig httpClientConfig = new ConnectorHttpClientConfig(30, 30000, 30000);
+
         HttpConnector connector = HttpConnector.builder()
                 .name("test_connector_name")
                 .description("this is a test connector")
@@ -307,9 +305,7 @@ public class HttpConnectorTest {
                 .actions(Arrays.asList(action))
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .accessMode(AccessMode.PUBLIC)
-                .maxConnections(10)
-                .readTimeoutInMillis(10)
-                .connectionTimeoutInMillis(10)
+                .httpClientConfig(httpClientConfig)
                 .build();
         return connector;
     }
