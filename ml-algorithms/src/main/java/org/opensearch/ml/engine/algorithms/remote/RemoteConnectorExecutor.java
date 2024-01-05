@@ -99,12 +99,6 @@ public interface RemoteConnectorExecutor {
 
     default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
-    default void setConnectionTimeoutInMillis(Integer connectionTimeout) {}
-
-    default void setReadTimeoutInMillis(Integer readTimeout) {}
-
-    default void setMaxConnections(Integer maxConnections) {}
-
     default void initialize() {}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {

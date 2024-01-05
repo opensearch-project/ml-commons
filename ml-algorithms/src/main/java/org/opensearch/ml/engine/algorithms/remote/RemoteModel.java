@@ -38,10 +38,6 @@ public class RemoteModel implements Predictable {
     public static final String RATE_LIMITER = "rate_limiter";
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
 
-    public static final String CONNECTION_TIMEOUT = "ConnectionTimeout";
-    public static final String READ_TIMEOUT = "ReadTimeout";
-    public static final String MAX_CONNECTIONS = "MaxConnections";
-
     private RemoteConnectorExecutor connectorExecutor;
 
     @VisibleForTesting
