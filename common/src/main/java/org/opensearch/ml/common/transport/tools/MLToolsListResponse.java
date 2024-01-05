@@ -50,7 +50,7 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
             xContentBuilder.field(ToolMetadata.TOOL_NAME_FIELD, toolMetadata.getName());
             xContentBuilder.field(ToolMetadata.TOOL_DESCRIPTION_FIELD, toolMetadata.getDescription());
             xContentBuilder.field(ToolMetadata.TOOL_TYPE_FIELD, toolMetadata.getType());
-            xContentBuilder.field(ToolMetadata.TOOL_VERSION_FIELD, toolMetadata.getVersion() != null ? toolMetadata.getVersion() : "no version found");
+            xContentBuilder.field(ToolMetadata.TOOL_VERSION_FIELD, toolMetadata.getVersion() != null ? toolMetadata.getVersion() : "undefined");
             xContentBuilder.endObject();
         }
         return xContentBuilder;

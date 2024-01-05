@@ -70,7 +70,7 @@ public class ToolMetadata implements ToXContentObject, Writeable {
         if (type != null) {
             builder.field(TOOL_TYPE_FIELD, type);
         }
-        builder.field(TOOL_VERSION_FIELD, version != null ? version : "no version found");
+        builder.field(TOOL_VERSION_FIELD, version != null ? version : "undefined");
         builder.endObject();
         return builder;
     }
