@@ -58,7 +58,7 @@ public class ToolMetadataTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         emptyToolMetadata.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String toolMetadataString = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{}", toolMetadataString);
+        assertEquals("{\"version\":\"no version found\"}", toolMetadataString);
     }
 
     @Test

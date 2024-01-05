@@ -31,10 +31,8 @@ public class ToolMetadata implements ToXContentObject, Writeable {
     private String name;
     @Getter
     private String description;
-
     @Getter
     private String type;
-
     @Getter
     private String version;
 
@@ -72,9 +70,7 @@ public class ToolMetadata implements ToXContentObject, Writeable {
         if (type != null) {
             builder.field(TOOL_TYPE_FIELD, type);
         }
-        if (version != null) {
-            builder.field(TOOL_VERSION_FIELD, version);
-        }
+        builder.field(TOOL_VERSION_FIELD, version != null ? version : "no version found");
         builder.endObject();
         return builder;
     }
