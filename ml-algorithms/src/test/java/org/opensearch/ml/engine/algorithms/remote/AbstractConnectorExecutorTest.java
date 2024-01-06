@@ -14,8 +14,7 @@ public class AbstractConnectorExecutorTest {
     @Mock
     private AwsConnector mockConnector;
 
-    @Mock
-    private ConnectorHttpClientConfig mockConfig;
+    private ConnectorHttpClientConfig httpClientConfig;
 
     private AbstractConnectorExecutor executor;
 
@@ -23,6 +22,7 @@ public class AbstractConnectorExecutorTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         executor = new AwsConnectorExecutor(mockConnector);
+        httpClientConfig = new ConnectorHttpClientConfig();
     }
 
     @Test
@@ -31,22 +31,19 @@ public class AbstractConnectorExecutorTest {
 
         executor.validate(mockConnector);
 
-        assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getMaxConnections());
-        assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getConnectionTimeoutInMillis());
-        assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getReadTimeoutInMillis());
+        assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getHttpClientConfig().getMaxConnections());
+        assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getConnectionTimeout());
+        assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getReadTimeout());
     }
 
     @Test
     public void testValidateWithNonNullConfigButNullValues() {
-        when(mockConnector.getHttpClientConfig()).thenReturn(mockConfig);
-        when(mockConfig.getMaxConnections()).thenReturn(null);
-        when(mockConfig.getConnectionTimeout()).thenReturn(null);
-        when(mockConfig.getReadTimeout()).thenReturn(null);
+        when(mockConnector.getHttpClientConfig()).thenReturn(httpClientConfig);
 
         executor.validate(mockConnector);
 
-        assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getMaxConnections());
-        assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getConnectionTimeoutInMillis());
-        assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getReadTimeoutInMillis());
+        assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getHttpClientConfig().getMaxConnections());
+        assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getConnectionTimeout());
+        assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getReadTimeout());
     }
 }
