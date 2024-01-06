@@ -54,6 +54,12 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
         this.readTimeout = input.readOptionalInt();
     }
 
+    public ConnectorHttpClientConfig() {
+        this.maxConnections = MAX_CONNECTION_DEFAULT_VALUE;
+        this.connectionTimeout = CONNECTION_TIMEOUT_DEFAULT_VALUE;
+        this.readTimeout = READ_TIMEOUT_DEFAULT_VALUE;
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
 

@@ -99,8 +99,6 @@ public interface RemoteConnectorExecutor {
 
     default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
-    default void initialize() {}
-
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
 
