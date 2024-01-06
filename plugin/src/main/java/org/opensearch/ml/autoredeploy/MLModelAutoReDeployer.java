@@ -27,6 +27,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -184,7 +185,11 @@ public class MLModelAutoReDeployer {
                 redeployAModel();
             }
         }, e -> {
-            log.error("Failed to query need auto redeploy models, no action will be performed, addedNodes are: {}", addedNodes, e);
+            if (e instanceof IndexNotFoundException) {
+                log.info("Index not found, not performing auto reloading!");
+            } else {
+                log.error("Failed to query need auto redeploy models, no action will be performed, addedNodes are: {}", addedNodes, e);
+            }
             startCronjobAndClearListener();
         });
 
