@@ -28,9 +28,7 @@ public class AbstractConnectorExecutorTest {
     @Test
     public void testValidateWithNullConfig() {
         when(mockConnector.getHttpClientConfig()).thenReturn(null);
-
         executor.validate(mockConnector);
-
         assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getHttpClientConfig().getMaxConnections());
         assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getConnectionTimeout());
         assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getReadTimeout());
@@ -39,9 +37,7 @@ public class AbstractConnectorExecutorTest {
     @Test
     public void testValidateWithNonNullConfigButNullValues() {
         when(mockConnector.getHttpClientConfig()).thenReturn(httpClientConfig);
-
         executor.validate(mockConnector);
-
         assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getHttpClientConfig().getMaxConnections());
         assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getConnectionTimeout());
         assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getReadTimeout());
