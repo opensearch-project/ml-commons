@@ -108,7 +108,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             } else {
                                 if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
                                     wrappedListener
-                                        .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.TOO_MANY_REQUESTS));
+                                        .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
                                 } else {
                                     if (FunctionName.isDLModel(functionName)) {
                                         if (modelCacheHelper.getModelRateLimiter(modelId) != null
