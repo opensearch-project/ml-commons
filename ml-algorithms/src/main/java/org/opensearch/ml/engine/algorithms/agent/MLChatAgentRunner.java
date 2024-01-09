@@ -145,7 +145,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                 runAgent(mlAgent, params, listener, memory, memory.getConversationId());
             }, e -> {
-                log.error("Failed to get chat history", e);
+                log.error("Failed to runAgent " + mlAgent.getName(), e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
@@ -167,8 +167,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     executeParams.put(key.replace(toolSpec.getType() + ".", ""), params.get(key));
                 }
             }
-            log.info("Fetching tool for type: " + toolSpec.getType());
-            Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
+            String toolType = toolSpec.getType();
+            log.info("Fetching tool for type: " + toolType);
+
+            if (toolFactories.get(toolType) == null) {
+                log.error(toolType + " can't be found, please use ListTool API to check if it's deployed.");
+            }
+            Tool tool = toolFactories.get(toolType).create(executeParams);
             if (toolSpec.getName() != null) {
                 tool.setName(toolSpec.getName());
             }

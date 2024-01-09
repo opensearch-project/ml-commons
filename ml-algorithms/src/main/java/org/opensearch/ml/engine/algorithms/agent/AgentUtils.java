@@ -149,7 +149,7 @@ public class AgentUtils {
         if (matcher.find()) {
             return matcher.group(1);
         } else {
-            throw new IllegalArgumentException("Model output is invalid");
+            throw new IllegalArgumentException("Model output is invalid:" + text);
         }
     }
 }
