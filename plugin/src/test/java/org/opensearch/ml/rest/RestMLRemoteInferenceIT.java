@@ -15,6 +15,7 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -251,6 +252,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertNotNull(responseMap);
     }
 
+    @Ignore("text-davinci-edit-001 been deprecated on 2024-01-04 and replaced by /v1/chat/completions")
     public void testOpenAIEditsModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -265,7 +267,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"endpoint\": \"api.openai.com\",\n"
             + "      \"auth\": \"API_Key\",\n"
             + "      \"content_type\": \"application/json\",\n"
-            + "      \"model\": \"gpt-3.5-turbo\"\n"
+            + "      \"model\": \"text-davinci-edit-001\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -276,7 +278,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      {\n"
             + "      \"action_type\": \"predict\",\n"
             + "          \"method\": \"POST\",\n"
-            + "          \"url\": \"https://api.openai.com/v1/chat/completions\",\n"
+            + "          \"url\": \"https://api.openai.com/v1/edit\",\n"
             + "          \"headers\": { \n"
             + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
             + "          },\n"
