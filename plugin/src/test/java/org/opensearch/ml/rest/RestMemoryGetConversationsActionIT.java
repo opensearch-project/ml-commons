@@ -35,8 +35,6 @@ import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
 
-import lombok.SneakyThrows;
-
 public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
 
     @Before
