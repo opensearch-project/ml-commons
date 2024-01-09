@@ -10,15 +10,17 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import org.apache.commons.io.IOUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
@@ -29,18 +31,21 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import software.amazon.awssdk.core.internal.http.loader.DefaultSdkHttpClientBuilder;
+import org.reactivestreams.Publisher;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.AbortableInputStream;
-import software.amazon.awssdk.http.HttpExecuteRequest;
-import software.amazon.awssdk.http.HttpExecuteResponse;
-import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpFullResponse;
+import software.amazon.awssdk.http.SdkHttpResponse;
+import software.amazon.awssdk.http.async.AsyncExecuteRequest;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.async.SdkAsyncHttpResponseHandler;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
@@ -48,7 +53,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
 
     @Getter
     private AwsConnector connector;
-    private final SdkHttpClient httpClient;
+    private final SdkAsyncHttpClient httpClient;
     @Setter
     @Getter
     private ScriptService scriptService;
@@ -62,14 +67,11 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
     @Getter
     private Client client;
 
-    public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
+    public AwsConnectorExecutor(Connector connector) {
         this.connector = (AwsConnector) connector;
-        this.httpClient = httpClient;
+        this.httpClient = MLHttpClientFactory.getAsyncHttpClient();
     }
 
-    public AwsConnectorExecutor(Connector connector) {
-        this(connector, new DefaultSdkHttpClientBuilder().build());
-    }
 
     @Override
     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
@@ -89,47 +91,62 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
                 }
             }
             SdkHttpFullRequest request = builder.build();
-            HttpExecuteRequest executeRequest = HttpExecuteRequest
+            AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
-                .contentStreamProvider(request.contentStreamProvider().orElse(null))
+                .responseHandler(new SdkAsyncHttpResponseHandler() {
+                    @Override
+                    public void onHeaders(SdkHttpResponse response) {
+                        SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
+                        processResponse(sdkResponse, parameters, tensorOutputs);
+                    }
+
+                    @Override
+                    public void onStream(Publisher<ByteBuffer> stream) {
+                        throw new IllegalStateException("Streaming is not supported");
+                    }
+
+                    @Override
+                    public void onError(Throwable error) {
+                        log.error(error.getMessage(), error);
+                    }
+                })
                 .build();
 
-            HttpExecuteResponse response = AccessController.doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> {
-                return httpClient.prepareRequest(executeRequest).call();
+            AccessController.doPrivileged((PrivilegedExceptionAction<SdkHttpFullResponse>) () -> {
+                 httpClient.execute(executeRequest);
+                 return null;
             });
-            int statusCode = response.httpResponse().statusCode();
 
-            AbortableInputStream body = null;
-            if (response.responseBody().isPresent()) {
-                body = response.responseBody().get();
-            }
 
-            StringBuilder responseBuilder = new StringBuilder();
-            if (body != null) {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        responseBuilder.append(line);
-                    }
-                }
-            } else {
-                throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
-            }
-            String modelResponse = responseBuilder.toString();
-            if (statusCode < 200 || statusCode >= 300) {
-                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
-            }
-
-            ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
-            tensors.setStatusCode(statusCode);
-            tensorOutputs.add(tensors);
         } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
             throw exception;
         } catch (Throwable e) {
             log.error("Failed to execute predict in aws connector", e);
             throw new MLException("Fail to execute predict in aws connector", e);
+        }
+    }
+
+    private void processResponse(SdkHttpFullResponse sdkHttpFullResponse, Map<String, String> parameters, List<ModelTensors> tensorOutputs){
+        int statusCode = sdkHttpFullResponse.statusCode();
+        Optional<AbortableInputStream> optionalContent = sdkHttpFullResponse.content();
+        try (AbortableInputStream body = optionalContent.orElse(null)) {
+            if (body == null) {
+                throw new OpenSearchStatusException("No response from model", RestStatus.fromCode(statusCode));
+            } else {
+                String response = IOUtils.toString(body, StandardCharsets.UTF_8);
+                if (statusCode < 200 || statusCode > 300) {
+                    throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + response, RestStatus.fromCode(statusCode));
+                } else {
+                    ModelTensors tensors = processOutput(response, connector, scriptService, parameters);
+                    tensors.setStatusCode(statusCode);
+                    tensorOutputs.add(tensors);
+                }
+            }
+        } catch (IOException e) {
+            log.error("IOException while parsing response from model", e);
+            throw new OpenSearchStatusException("Error parsing response from model", RestStatus.fromCode(statusCode));
         }
     }
 

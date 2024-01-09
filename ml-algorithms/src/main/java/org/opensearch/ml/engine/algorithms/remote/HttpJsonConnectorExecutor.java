@@ -22,7 +22,6 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
@@ -40,6 +39,7 @@ import org.opensearch.script.ScriptService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @ConnectorExecutor(HTTP)
@@ -110,7 +110,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = getHttpClient(); CloseableHttpResponse response = httpClient.execute(request)) {
+                try (SdkAsyncHttpClient httpClient = getHttpClient(); CloseableHttpResponse response = null) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
@@ -137,7 +137,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
         }
     }
 
-    public CloseableHttpClient getHttpClient() {
-        return MLHttpClientFactory.getCloseableHttpClient();
+    public SdkAsyncHttpClient getHttpClient() {
+        return MLHttpClientFactory.getAsyncHttpClient();
     }
 }
