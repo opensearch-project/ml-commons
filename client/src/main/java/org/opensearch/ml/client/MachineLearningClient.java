@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.client;
 
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.delete.DeleteResponse;
@@ -17,6 +18,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
@@ -389,5 +391,41 @@ public interface MachineLearningClient {
     }
 
     void deleteAgent(String agentId, ActionListener<DeleteResponse> listener);
+
+    /**
+     * Get a list of ToolMetadata and return ActionFuture.
+     * For more info on list tools, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#list-tools
+     * @return ActionFuture of a list of tool metadata
+     */
+    default ActionFuture<List<ToolMetadata>> listTools() {
+        PlainActionFuture<List<ToolMetadata>> actionFuture = PlainActionFuture.newFuture();
+        listTools(actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * List ToolMetadata and return a list of ToolMetadata in listener
+     * For more info on get tools, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#list-tools
+     * @param listener action listener
+     */
+    void listTools(ActionListener<List<ToolMetadata>> listener);
+
+    /**
+     * Get ToolMetadata and return ActionFuture.
+     * For more info on get tool, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-tool
+     * @return ActionFuture of tool metadata
+     */
+    default ActionFuture<ToolMetadata> getTool(String toolName) {
+        PlainActionFuture<ToolMetadata> actionFuture = PlainActionFuture.newFuture();
+        getTool(toolName, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Get ToolMetadata and return ToolMetadata in listener
+     * For more info on get tool, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-tool
+     * @param listener action listener
+     */
+    void getTool(String toolName, ActionListener<ToolMetadata> listener);
 
 }

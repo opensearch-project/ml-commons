@@ -31,6 +31,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -100,6 +101,8 @@ public class MachineLearningClientTest {
     private String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
+    private ToolMetadata toolMetadata;
+    private List<ToolMetadata> toolsList = new ArrayList<>();
 
     @Before
     public void setUp() {
@@ -110,6 +113,15 @@ public class MachineLearningClientTest {
 
         String modelContent = "test content";
         mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("test").content(modelContent).build();
+
+        toolMetadata = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to calculate any math problem.")
+            .type("MathTool")
+            .version(null)
+            .build();
+        toolsList.add(toolMetadata);
 
         machineLearningClient = new MachineLearningClient() {
             @Override
@@ -190,6 +202,16 @@ public class MachineLearningClientTest {
             @Override
             public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void listTools(ActionListener<List<ToolMetadata>> listener) {
+                listener.onResponse(toolsList);
+            }
+
+            @Override
+            public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
+                listener.onResponse(toolMetadata);
             }
 
             public void registerModelGroup(
@@ -469,5 +491,15 @@ public class MachineLearningClientTest {
     @Test
     public void deleteAgent() {
         assertEquals(deleteResponse, machineLearningClient.deleteAgent("agentId").actionGet());
+    }
+
+    @Test
+    public void getTool() {
+        assertEquals(toolMetadata, machineLearningClient.getTool("MathTool").actionGet());
+    }
+
+    @Test
+    public void listTools() {
+        assertEquals(toolMetadata, machineLearningClient.listTools().actionGet().get(0));
     }
 }
