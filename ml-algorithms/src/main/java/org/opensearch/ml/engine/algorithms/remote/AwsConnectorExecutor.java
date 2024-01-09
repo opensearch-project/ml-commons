@@ -71,7 +71,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     }
 
     public AwsConnectorExecutor(Connector connector) {
-        super.validate(connector);
+        super.initialize(connector);
         this.connector = (AwsConnector) connector;
         Duration connectionTimeout = Duration.ofMillis(super.getHttpClientConfig().getConnectionTimeout());
         Duration readTimeout = Duration.ofMillis(super.getHttpClientConfig().getReadTimeout());
@@ -91,6 +91,12 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     super.getHttpClientConfig().getMaxConnections()
                 );
             this.httpClient = new DefaultSdkHttpClientBuilder().buildWithDefaults(attributeMap);
+        } catch (RuntimeException e) {
+            log.error("Error initializing AWS connector HTTP client.", e);
+            throw e;
+        } catch (Throwable e) {
+            log.error("Error initializing AWS connector HTTP client.", e);
+            throw new MLException(e);
         }
     }
 
