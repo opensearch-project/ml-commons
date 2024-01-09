@@ -10,10 +10,10 @@ import static org.junit.Assert.assertNotNull;
 import java.net.UnknownHostException;
 
 import org.apache.http.HttpHost;
-import org.apache.http.impl.client.CloseableHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 public class MLHttpClientFactoryTests {
 
@@ -21,8 +21,8 @@ public class MLHttpClientFactoryTests {
     public ExpectedException expectedException = ExpectedException.none();
 
     @Test
-    public void test_getCloseableHttpClient_success() {
-        CloseableHttpClient client = MLHttpClientFactory.getCloseableHttpClient(1000, 1000, 30);
+    public void test_getSdkAsyncHttpClient_success() {
+        SdkAsyncHttpClient client = MLHttpClientFactory.getAsyncHttpClient();
         assertNotNull(client);
     }
 

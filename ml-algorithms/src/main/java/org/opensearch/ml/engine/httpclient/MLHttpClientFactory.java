@@ -12,54 +12,42 @@ import java.util.Arrays;
 
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.HttpHost;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.conn.UnsupportedSchemeException;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.LaxRedirectStrategy;
-import org.apache.http.impl.conn.DefaultSchemePortResolver;
-import org.apache.http.protocol.HttpContext;
 
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
 
 @Log4j2
 public class MLHttpClientFactory {
 
-    public static CloseableHttpClient getCloseableHttpClient(Integer connectionTimeout, Integer readTimeout, Integer maxConnections) {
-        return createHttpClient(connectionTimeout, readTimeout, maxConnections);
+    public static SdkAsyncHttpClient getAsyncHttpClient() {
+        return AwsCrtAsyncHttpClient.builder().build();
     }
 
-    private static CloseableHttpClient createHttpClient(Integer connectionTimeout, Integer readTimeout, Integer maxConnections) {
-        HttpClientBuilder builder = HttpClientBuilder.create();
+//    private static SdkAsyncHttpClient createHttpClient() {
 
         // Only allow HTTP and HTTPS schemes
-        builder.setSchemePortResolver(new DefaultSchemePortResolver() {
-            @Override
-            public int resolve(HttpHost host) throws UnsupportedSchemeException {
-                validateSchemaAndPort(host);
-                return super.resolve(host);
-            }
-        });
+//        builder.setSchemePortResolver(new DefaultSchemePortResolver() {
+//            @Override
+//            public int resolve(HttpHost host) throws UnsupportedSchemeException {
+//                validateSchemaAndPort(host);
+//                return super.resolve(host);
+//            }
+//        });
 
-        builder.setDnsResolver(MLHttpClientFactory::validateIp);
+//        builder.setDnsResolver(MLHttpClientFactory::validateIp);
 
-        builder.setRedirectStrategy(new LaxRedirectStrategy() {
-            @Override
-            public boolean isRedirected(HttpRequest request, HttpResponse response, HttpContext context) {
-                // Do not follow redirects
-                return false;
-            }
-        });
-        builder.setMaxConnTotal(maxConnections);
-        builder.setMaxConnPerRoute(maxConnections);
-        RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(connectionTimeout).setSocketTimeout(readTimeout).build();
-        builder.setDefaultRequestConfig(requestConfig);
-        return builder.build();
-    }
+//        builder.setRedirectStrategy(new LaxRedirectStrategy() {
+//            @Override
+//            public boolean isRedirected(HttpRequest request, HttpResponse response, HttpContext context) {
+//                // Do not follow redirects
+//                return false;
+//            }
+//        });
+//        return builder.build();
+//    }
 
     @VisibleForTesting
     protected static void validateSchemaAndPort(HttpHost host) {

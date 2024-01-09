@@ -22,7 +22,6 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
@@ -41,6 +40,7 @@ import org.opensearch.script.ScriptService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @ConnectorExecutor(HTTP)
@@ -65,22 +65,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
-    private CloseableHttpClient httpClient;
-
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
-        this.httpClient = MLHttpClientFactory
-            .getCloseableHttpClient(
-                super.getConnectorClientConfig().getConnectionTimeout(),
-                super.getConnectorClientConfig().getReadTimeout(),
-                super.getConnectorClientConfig().getMaxConnections()
-            );
-    }
-
-    public HttpJsonConnectorExecutor(Connector connector, CloseableHttpClient httpClient) {
-        this(connector);
-        this.httpClient = httpClient;
     }
 
     @SuppressWarnings("removal")
@@ -129,7 +116,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpResponse response = httpClient.execute(request)) {
+                int connectionTimeout = super.getConnectorClientConfig().getConnectionTimeout();
+                int readTimeout = super.getConnectorClientConfig().getReadTimeout();
+                int maxConnections = super.getConnectorClientConfig().getMaxConnections();
+                try (SdkAsyncHttpClient httpClient = getHttpClient(connectionTimeout, readTimeout, maxConnections); CloseableHttpResponse response = null) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
@@ -159,4 +149,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
+    public SdkAsyncHttpClient getHttpClient(int connectionTimeout, int readTimeout, int maxConnections) {
+        return MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections);
+    }
 }
