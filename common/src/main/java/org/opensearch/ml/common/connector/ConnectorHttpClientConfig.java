@@ -29,8 +29,8 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
     public static final String READ_TIMEOUT_FIELD = "read_timeout";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(20000);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(20000);
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
 
     private Integer maxConnections;
     private Integer connectionTimeout;
@@ -42,9 +42,9 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
         Integer connectionTimeout,
         Integer readTimeout
     ) {
-        this.maxConnections = Objects.requireNonNullElse(maxConnections, MAX_CONNECTION_DEFAULT_VALUE);
-        this.connectionTimeout = Objects.requireNonNullElse(connectionTimeout, CONNECTION_TIMEOUT_DEFAULT_VALUE);
-        this.readTimeout = Objects.requireNonNullElse(readTimeout, READ_TIMEOUT_DEFAULT_VALUE);
+        this.maxConnections = maxConnections;
+        this.connectionTimeout = connectionTimeout;
+        this.readTimeout = readTimeout;
 
     }
 

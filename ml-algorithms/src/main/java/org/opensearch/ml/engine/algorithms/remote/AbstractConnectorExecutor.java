@@ -16,7 +16,7 @@ import lombok.Setter;
 public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor {
     private ConnectorHttpClientConfig httpClientConfig;
 
-    public void validate(Connector connector) {
+    public void initialize(Connector connector) {
         if (connector.getHttpClientConfig() != null) {
             httpClientConfig = connector.getHttpClientConfig();
         } else {

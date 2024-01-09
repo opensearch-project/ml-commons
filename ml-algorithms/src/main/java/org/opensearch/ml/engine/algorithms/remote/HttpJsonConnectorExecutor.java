@@ -64,7 +64,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private CloseableHttpClient httpClient;
 
     public HttpJsonConnectorExecutor(Connector connector) {
-        super.validate(connector);
+        super.initialize(connector);
         this.connector = (HttpConnector) connector;
         this.httpClient = MLHttpClientFactory
             .getCloseableHttpClient(
