@@ -8,6 +8,9 @@ package org.opensearch.ml.engine.httpclient;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 
 import org.apache.commons.lang3.math.NumberUtils;
@@ -17,13 +20,18 @@ import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
-import software.amazon.awssdk.http.crt.AwsCrtAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 
 @Log4j2
 public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient() {
-        return AwsCrtAsyncHttpClient.builder().build();
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<SdkAsyncHttpClient>) () ->  NettyNioAsyncHttpClient
+                .builder().maxConcurrency(100).build());
+        } catch (PrivilegedActionException e) {
+            return null;
+        }
     }
 
 //    private static SdkAsyncHttpClient createHttpClient() {
