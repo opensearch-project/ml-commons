@@ -115,5 +115,17 @@ public interface Tool {
          * @return the default description
          */
         String getDefaultDescription();
+
+        /**
+         * Get the default type of this tool.
+         * @return the default tool type
+         */
+        String getDefaultType();
+
+        /**
+         * Get the default version of this tool
+         * @return the default tool version
+         */
+        String getDefaultVersion();
     }
 }
