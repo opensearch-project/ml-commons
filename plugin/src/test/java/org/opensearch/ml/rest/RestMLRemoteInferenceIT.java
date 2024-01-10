@@ -278,7 +278,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      {\n"
             + "      \"action_type\": \"predict\",\n"
             + "          \"method\": \"POST\",\n"
-            + "          \"url\": \"https://api.openai.com/v1/edit\",\n"
+            + "          \"url\": \"https://api.openai.com/v1/edits\",\n"
             + "          \"headers\": { \n"
             + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
             + "          },\n"
