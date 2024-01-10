@@ -67,7 +67,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private String modelGroupId;
-    private String password = "IntegTest@MLModelGroupRestIT123";
+    private String fakePw = "IntegTest@MLModelGroupRestIT123";
 
     public void disableModelAccessControl(boolean isSecurityEnabled) throws IOException {
         Response response = TestHelper
@@ -101,38 +101,38 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         }
         createSearchRole(indexSearchAccessRole, "*");
 
-        createUser(mlNoAccessUser, password, ImmutableList.of(opensearchBackendRole));
-        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, password)
+        createUser(mlNoAccessUser, fakePw, ImmutableList.of(opensearchBackendRole));
+        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(mlReadOnlyUser, password, ImmutableList.of(opensearchBackendRole));
-        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, password)
+        createUser(mlReadOnlyUser, fakePw, ImmutableList.of(opensearchBackendRole));
+        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(mlFullAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, password)
+        createUser(mlFullAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user1, password, ImmutableList.of("IT", "HR"));
-        user1Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user1, password)
+        createUser(user1, fakePw, ImmutableList.of("IT", "HR"));
+        user1Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user1, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user2, password, ImmutableList.of("IT"));
-        user2Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user2, password)
+        createUser(user2, fakePw, ImmutableList.of("IT"));
+        user2Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user2, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user3, password, ImmutableList.of("Finance"));
-        user3Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user3, password)
+        createUser(user3, fakePw, ImmutableList.of("Finance"));
+        user3Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user3, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user4, password, ImmutableList.of());
-        user4Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user4, password)
+        createUser(user4, fakePw, ImmutableList.of());
+        user4Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user4, fakePw)
             .setSocketTimeout(60000)
             .build();
 

@@ -58,7 +58,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private String modelGroupId;
-    private String password = "IntegTest@SecureMLRestIT123";
+    private String fakePw = "IntegTest@SecureMLRestIT123";
 
     @Before
     public void setup() throws IOException, ParseException {
@@ -78,26 +78,26 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         }
         createSearchRole(indexSearchAccessRole, "*");
 
-        createUser(mlNoAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, password)
+        createUser(mlNoAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(mlReadOnlyUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, password)
+        createUser(mlReadOnlyUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, fakePw)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(mlFullAccessNoIndexAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        createUser(mlFullAccessNoIndexAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
         mlFullAccessNoIndexAccessClient = new SecureRestClientBuilder(
             getClusterHosts().toArray(new HttpHost[0]),
             isHttps(),
             mlFullAccessNoIndexAccessUser,
-            password
+            fakePw
         ).setSocketTimeout(60000).build();
 
-        createUser(mlFullAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, password)
+        createUser(mlFullAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, fakePw)
             .setSocketTimeout(60000)
             .build();
 
