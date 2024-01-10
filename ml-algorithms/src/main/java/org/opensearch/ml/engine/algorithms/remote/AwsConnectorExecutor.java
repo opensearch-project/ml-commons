@@ -38,6 +38,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import org.reactivestreams.Publisher;
+import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
@@ -94,6 +95,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
+                .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(new SdkAsyncHttpResponseHandler() {
                     @Override
                     public void onHeaders(SdkHttpResponse response) {
