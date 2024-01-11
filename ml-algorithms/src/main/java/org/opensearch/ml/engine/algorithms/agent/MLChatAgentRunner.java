@@ -145,7 +145,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                 runAgent(mlAgent, params, listener, memory, memory.getConversationId());
             }, e -> {
-                log.error("Failed to runAgent " + mlAgent.getName(), e);
+                log.error("Failed to run agent " + mlAgent.getName(), e);
                 listener.onFailure(e);
             }));
         }, listener::onFailure));
