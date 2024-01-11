@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.model;
 
-import java.util.DoubleSummaryStatistics;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -202,15 +201,13 @@ public class MLModelCache {
         if (queue.size() > 0) {
             MLPredictRequestStats.MLPredictRequestStatsBuilder statsBuilder = MLPredictRequestStats.builder();
             DoubleStream doubleStream = queue.stream().mapToDouble(v -> v);
-            DoubleSummaryStatistics doubleSummaryStatistics = doubleStream.summaryStatistics();
-            statsBuilder.count(doubleSummaryStatistics.getCount());
-            statsBuilder.max(doubleSummaryStatistics.getMax());
-            statsBuilder.min(doubleSummaryStatistics.getMin());
-            statsBuilder.average(doubleSummaryStatistics.getAverage());
 
             final double[] doubles = doubleStream.toArray();
             DescriptiveStatistics stats = new DescriptiveStatistics(doubles);
-
+            statsBuilder.count(stats.getN());
+            statsBuilder.max(stats.getMax());
+            statsBuilder.min(stats.getMin());
+            statsBuilder.average(stats.getMean());
             statsBuilder.p50(stats.getPercentile(50));
             statsBuilder.p90(stats.getPercentile(90));
             statsBuilder.p99(stats.getPercentile(99));
