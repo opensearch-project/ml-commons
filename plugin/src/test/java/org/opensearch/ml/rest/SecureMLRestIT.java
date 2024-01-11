@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Random;
 
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
@@ -58,7 +59,27 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private String modelGroupId;
-    private String fakePw = "IntegTest@SecureMLRestIT123";
+
+    /**
+     * Create an unguessable password. Simple password are weak due to https://tinyurl.com/383em9zk
+     * @return a random password.
+     */
+    public static String generatePassword(String username) {
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+
+        Random rng = new Random();
+
+        char[] password = new char[15];
+        for (int i = 0; i < 15; i++) {
+            char nextChar = characters.charAt(rng.nextInt(characters.length()));
+            while (username.indexOf(nextChar) > -1) {
+                nextChar = characters.charAt(rng.nextInt(characters.length()));
+            }
+            password[i] = nextChar;
+        }
+
+        return new String(password);
+    }
 
     @Before
     public void setup() throws IOException, ParseException {
@@ -78,28 +99,41 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         }
         createSearchRole(indexSearchAccessRole, "*");
 
-        createUser(mlNoAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, fakePw)
-            .setSocketTimeout(60000)
-            .build();
+        String noAccessUserPw = generatePassword(mlNoAccessUser);
+        createUser(mlNoAccessUser, noAccessUserPw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlNoAccessClient = new SecureRestClientBuilder(
+            getClusterHosts().toArray(new HttpHost[0]),
+            isHttps(),
+            mlNoAccessUser,
+            noAccessUserPw
+        ).setSocketTimeout(60000).build();
 
-        createUser(mlReadOnlyUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, fakePw)
-            .setSocketTimeout(60000)
-            .build();
+        String readOnlyUserPw = generatePassword(mlReadOnlyUser);
+        createUser(mlReadOnlyUser, readOnlyUserPw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlReadOnlyClient = new SecureRestClientBuilder(
+            getClusterHosts().toArray(new HttpHost[0]),
+            isHttps(),
+            mlReadOnlyUser,
+            readOnlyUserPw
+        ).setSocketTimeout(60000).build();
 
-        createUser(mlFullAccessNoIndexAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        String noIndexAccessUserPw = generatePassword(mlFullAccessNoIndexAccessUser);
+        createUser(mlFullAccessNoIndexAccessUser, noIndexAccessUserPw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
         mlFullAccessNoIndexAccessClient = new SecureRestClientBuilder(
             getClusterHosts().toArray(new HttpHost[0]),
             isHttps(),
             mlFullAccessNoIndexAccessUser,
-            fakePw
+            noIndexAccessUserPw
         ).setSocketTimeout(60000).build();
 
-        createUser(mlFullAccessUser, fakePw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, fakePw)
-            .setSocketTimeout(60000)
-            .build();
+        String fullAccessUserPw = generatePassword(mlFullAccessUser);
+        createUser(mlFullAccessUser, fullAccessUserPw, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlFullAccessClient = new SecureRestClientBuilder(
+            getClusterHosts().toArray(new HttpHost[0]),
+            isHttps(),
+            mlFullAccessUser,
+            fullAccessUserPw
+        ).setSocketTimeout(60000).build();
 
         createRoleMapping("ml_read_access", new ArrayList<>(Arrays.asList(mlReadOnlyUser)));
         createRoleMapping("ml_full_access", new ArrayList<>(Arrays.asList(mlFullAccessNoIndexAccessUser, mlFullAccessUser)));
