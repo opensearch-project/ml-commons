@@ -62,13 +62,13 @@ public class ConnectorHttpClientConfigTest {
         Assert.assertEquals(Integer.valueOf(3000), config.getReadTimeout());
     }
 
-//    @Test
-//    public void testDefaultValues() {
-//        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder().build();
-//
-//        Assert.assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, config.getMaxConnections());
-//        Assert.assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, config.getConnectionTimeout());
-//        Assert.assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, config.getReadTimeout());
-//    }
+    @Test
+    public void testDefaultValues() {
+        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder().build();
+
+        Assert.assertNull(config.getMaxConnections());
+        Assert.assertNull(config.getConnectionTimeout());
+        Assert.assertNull(config.getReadTimeout());
+    }
 }
 
