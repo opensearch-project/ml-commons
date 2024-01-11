@@ -23,8 +23,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMLUpdateModelGroupAction extends BaseRestHandler {
 
     private static final String ML_UPDATE_MODEL_GROUP_ACTION = "ml_update_model_group_action";
@@ -36,7 +34,7 @@ public class RestMLUpdateModelGroupAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/model_groups/{%s}", ML_BASE_URI, PARAMETER_MODEL_GROUP_ID))
             );

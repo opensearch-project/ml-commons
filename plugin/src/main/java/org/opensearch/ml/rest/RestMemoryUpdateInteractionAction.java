@@ -21,8 +21,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-
 public class RestMemoryUpdateInteractionAction extends BaseRestHandler {
     private static final String ML_UPDATE_INTERACTION_ACTION = "ml_update_interaction_action";
 
@@ -43,7 +41,7 @@ public class RestMemoryUpdateInteractionAction extends BaseRestHandler {
             .execute(UpdateInteractionAction.INSTANCE, updateInteractionRequest, new RestToXContentListener<>(restChannel));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     private UpdateInteractionRequest getRequest(RestRequest request) throws IOException {
         if (!request.hasContent()) {
             throw new OpenSearchParseException("Failed to update interaction: Request body is empty");

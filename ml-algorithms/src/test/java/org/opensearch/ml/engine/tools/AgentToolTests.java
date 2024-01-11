@@ -33,7 +33,6 @@ import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class AgentToolTests {
 
@@ -74,7 +73,7 @@ public class AgentToolTests {
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
             .build();
 
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(Map.of("thought", "thought 1", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
 

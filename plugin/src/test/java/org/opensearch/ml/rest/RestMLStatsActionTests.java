@@ -77,9 +77,6 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-
 public class RestMLStatsActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
@@ -114,10 +111,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        Map<Enum, MLStat<?>> statMap = ImmutableMap
-            .<Enum, MLStat<?>>builder()
-            .put(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()))
-            .build();
+        Map<Enum, MLStat<?>> statMap = Map.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
         mlStats = new MLStats(statMap);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -221,13 +215,10 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLStatsNodesResponse> actionListener = invocation.getArgument(2);
             List<MLStatsNodeResponse> nodes = new ArrayList<>();
-            Map<MLNodeLevelStat, Object> nodeStats = ImmutableMap.of(MLNodeLevelStat.ML_REQUEST_COUNT, nodeTotalRequestCount);
+            Map<MLNodeLevelStat, Object> nodeStats = Map.of(MLNodeLevelStat.ML_REQUEST_COUNT, nodeTotalRequestCount);
             Map<FunctionName, MLAlgoStats> algoStats = new HashMap<>();
-            Map<ActionName, MLActionStats> actionStats = ImmutableMap
-                .of(
-                    ActionName.TRAIN,
-                    new MLActionStats(ImmutableMap.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, kmeansTrainRequestCount))
-                );
+            Map<ActionName, MLActionStats> actionStats = Map
+                .of(ActionName.TRAIN, new MLActionStats(Map.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, kmeansTrainRequestCount)));
             algoStats.put(FunctionName.KMEANS, new MLAlgoStats(actionStats));
 
             Map<String, MLModelStats> modelStats = new HashMap<>();
@@ -236,7 +227,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
 
             MLStatsNodeResponse nodeResponse = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
             nodes.add(nodeResponse);
-            MLStatsNodesResponse statsResponse = new MLStatsNodesResponse(clusterName, nodes, ImmutableList.of());
+            MLStatsNodesResponse statsResponse = new MLStatsNodesResponse(clusterName, nodes, List.of());
             actionListener.onResponse(statsResponse);
             return null;
         }).when(client).execute(eq(MLStatsNodesAction.INSTANCE), any(), any());
@@ -392,7 +383,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
     }
 
     public void testSplitCommaSeparatedParam() {
-        Map<String, String> param = ImmutableMap.<String, String>builder().put("nodeId", "111,222").build();
+        Map<String, String> param = Map.of("nodeId", "111,222");
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
             .withMethod(RestRequest.Method.GET)
             .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")

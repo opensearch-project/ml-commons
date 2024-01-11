@@ -10,11 +10,9 @@ import static org.opensearch.ml.common.conversation.ConversationalIndexConstants
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
+import org.apache.commons.lang3.Validate;
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -51,9 +49,6 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -106,9 +101,9 @@ public class MLMemoryManager {
         Integer traceNum,
         ActionListener<CreateInteractionResponse> actionListener
     ) {
-        Preconditions.checkNotNull(conversationId);
-        Preconditions.checkNotNull(input);
-        Preconditions.checkNotNull(response);
+        Objects.requireNonNull(conversationId);
+        Objects.requireNonNull(input);
+        Objects.requireNonNull(response);
         // additionalInfo cannot be null as flat object
         additionalInfo = (additionalInfo == null) ? new HashMap<>() : additionalInfo;
         try {
@@ -139,7 +134,7 @@ public class MLMemoryManager {
      * @param actionListener get all the final interactions that are not traces
      */
     public void getFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> actionListener) {
-        Preconditions.checkArgument(lastNInteraction > 0, "lastN must be at least 1.");
+        Validate.isTrue(lastNInteraction > 0, "lastN must be at least 1.");
         log.debug("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
@@ -166,7 +161,7 @@ public class MLMemoryManager {
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void innerGetFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> listener) {
         SearchRequest searchRequest = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
 
@@ -210,7 +205,7 @@ public class MLMemoryManager {
      * @param actionListener get all the trace interactions that are only traces
      */
     public void getTraces(String parentInteractionId, ActionListener<List<Interaction>> actionListener) {
-        Preconditions.checkNotNull(parentInteractionId);
+        Objects.requireNonNull(parentInteractionId);
         log.debug("Getting traces for conversationId {}", parentInteractionId);
 
         ActionListener<GetTracesResponse> al = ActionListener.wrap(getTracesResponse -> {
@@ -230,8 +225,8 @@ public class MLMemoryManager {
      * @param actionListener listener for the update response
      */
     public void updateInteraction(String interactionId, Map<String, Object> updateContent, ActionListener<UpdateResponse> actionListener) {
-        Preconditions.checkNotNull(interactionId);
-        Preconditions.checkNotNull(updateContent);
+        Objects.requireNonNull(interactionId);
+        Objects.requireNonNull(updateContent);
         try {
             client.execute(UpdateInteractionAction.INSTANCE, new UpdateInteractionRequest(interactionId, updateContent), actionListener);
         } catch (Exception exception) {
@@ -252,7 +247,7 @@ public class MLMemoryManager {
         innerDeleteInteractionAndTrace(deleteByQueryRequest, interactionId, listener);
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void innerDeleteInteractionAndTrace(DeleteByQueryRequest deleteByQueryRequest, String interactionId, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext ignored = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<BulkByScrollResponse> al = ActionListener.wrap(bulkResponse -> {
@@ -275,7 +270,7 @@ public class MLMemoryManager {
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     QueryBuilder buildDeleteInteractionQuery(String interactionId) {
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
         // interaction itself

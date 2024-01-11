@@ -23,8 +23,6 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.script.ScriptService;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -40,7 +38,7 @@ public class RemoteModel implements Predictable {
 
     private RemoteConnectorExecutor connectorExecutor;
 
-    @VisibleForTesting
+    // VisibleForTesting
     RemoteConnectorExecutor getConnectorExecutor() {
         return this.connectorExecutor;
     }

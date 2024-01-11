@@ -11,6 +11,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
@@ -46,8 +47,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -138,7 +137,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
             if (AccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
-                source.put(MLModelGroup.BACKEND_ROLES_FIELD, ImmutableList.of());
+                source.put(MLModelGroup.BACKEND_ROLES_FIELD, List.of());
             }
         } else if (updateModelGroupInput.getBackendRoles() != null
             || Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {

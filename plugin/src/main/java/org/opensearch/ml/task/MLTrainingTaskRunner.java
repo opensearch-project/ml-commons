@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.opensearch.action.ActionListenerResponseHandler;
@@ -45,8 +46,6 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -106,7 +105,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             .inputType(inputDataType)
             .functionName(request.getMlInput().getFunctionName())
             .state(MLTaskState.CREATED)
-            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .workerNodes(List.of(clusterService.localNode().getId()))
             .createTime(now)
             .lastUpdateTime(now)
             .async(request.isAsync())

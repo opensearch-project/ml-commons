@@ -70,8 +70,6 @@ import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
 import lombok.extern.log4j.Log4j2;
@@ -236,7 +234,7 @@ public class MetricsCorrelation extends DLModelExecute {
         listener.onResponse(new MetricsCorrelationOutput(tensorOutputs));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void registerModel(ActionListener<MLRegisterModelResponse> listener) throws InterruptedException {
 
         FunctionName functionName = FunctionName.METRICS_CORRELATION;
@@ -280,7 +278,7 @@ public class MetricsCorrelation extends DLModelExecute {
 
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void deployModel(final String modelId, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest loadRequest = MLDeployModelRequest.builder().modelId(modelId).async(false).dispatchTask(false).build();
         client.execute(MLDeployModelAction.INSTANCE, loadRequest, ActionListener.wrap(listener::onResponse, e -> {
@@ -289,7 +287,7 @@ public class MetricsCorrelation extends DLModelExecute {
         }));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     float[][] processedInput(List<float[]> input) {
         float[][] processInput = new float[input.size()][];
         for (int i = 0; i < input.size(); i++) {
@@ -305,7 +303,7 @@ public class MetricsCorrelation extends DLModelExecute {
         return new MetricsCorrelationTranslator();
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     SearchRequest getSearchRequest() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder

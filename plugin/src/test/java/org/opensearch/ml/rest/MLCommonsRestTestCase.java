@@ -92,8 +92,6 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 
@@ -122,7 +120,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -133,7 +131,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.allow_registering_model_via_url\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -144,7 +142,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.allow_registering_model_via_local_file\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -153,8 +151,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
             + "  }\n"
             + "}";
-        response = TestHelper
-            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
+        response = TestHelper.makeRequest(client(), "PUT", "_cluster/settings", Map.of(), TestHelper.toHttpEntity(jsonEntity), null);
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
@@ -315,10 +312,10 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 indexName,
                 null,
                 TestHelper.toHttpEntity(irisDataIndexMapping),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
 
-        Response statsResponse = TestHelper.makeRequest(client(), "GET", indexName, ImmutableMap.of(), "", null);
+        Response statsResponse = TestHelper.makeRequest(client(), "GET", indexName, Map.of(), "", null);
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
         String result = EntityUtils.toString(statsResponse.getEntity());
         assertTrue(result.contains(indexName));
@@ -330,7 +327,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "_bulk?refresh=true",
                 null,
                 TestHelper.toHttpEntity(TestData.IRIS_DATA.replaceAll("iris_data", indexName)),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
         return bulkResponse;
@@ -398,7 +395,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             endpoint += "?async=true";
         }
         Response response = TestHelper
-            .makeRequest(client(), "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
+            .makeRequest(client(), "POST", endpoint, Map.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
         TimeUnit.SECONDS.sleep(5);
         verifyResponse(consumer, response);
     }
@@ -434,7 +431,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                             + "\"tenant_permissions\": []\n"
                             + "}"
                     ),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
     }
 
@@ -468,7 +465,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                             + "\"tenant_permissions\": []\n"
                             + "}"
                     ),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
     }
 
@@ -495,7 +492,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                             + "\"attributes\": {\n"
                             + "}} "
                     ),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
     }
 
@@ -507,7 +504,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "/_opendistro/_security/api/internalusers/" + user,
                 null,
                 "",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
     }
 
@@ -526,7 +523,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                     .toHttpEntity(
                         "{\n" + "  \"backend_roles\" : [  ],\n" + "  \"hosts\" : [  ],\n" + "  \"users\" : " + usersString + "\n" + "}"
                     ),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
     }
 
@@ -540,7 +537,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     ) throws IOException {
         MLInputDataset inputData = SearchQueryInputDataset
             .builder()
-            .indices(ImmutableList.of(indexName))
+            .indices(List.of(indexName))
             .searchSourceBuilder(searchSourceBuilder)
             .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
@@ -549,7 +546,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 client,
                 "POST",
                 "/_plugins/_ml/_train_predict/" + functionName.name().toLowerCase(Locale.ROOT),
-                ImmutableMap.of(),
+                Map.of(),
                 TestHelper.toHttpEntity(kmeansInput),
                 null
             );
@@ -571,7 +568,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     ) throws IOException {
         MLInputDataset inputData = SearchQueryInputDataset
             .builder()
-            .indices(ImmutableList.of(indexName))
+            .indices(List.of(indexName))
             .searchSourceBuilder(searchSourceBuilder)
             .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
@@ -579,7 +576,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         if (async) {
             endpoint += "?async=true";
         }
-        Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
+        Response response = TestHelper.makeRequest(client, "POST", endpoint, Map.of(), TestHelper.toHttpEntity(kmeansInput), null);
         verifyResponse(function, response);
     }
 
@@ -594,12 +591,12 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     ) throws IOException {
         MLInputDataset inputData = SearchQueryInputDataset
             .builder()
-            .indices(ImmutableList.of(indexName))
+            .indices(List.of(indexName))
             .searchSourceBuilder(searchSourceBuilder)
             .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
         String endpoint = "/_plugins/_ml/_predict/" + functionName.name().toLowerCase(Locale.ROOT) + "/" + modelId;
-        Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
+        Response response = TestHelper.makeRequest(client, "POST", endpoint, Map.of(), TestHelper.toHttpEntity(kmeansInput), null);
         verifyResponse(function, response);
     }
 

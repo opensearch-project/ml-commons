@@ -40,9 +40,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -70,7 +67,7 @@ public class RestMLProfileAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/models/{model_id}"),
                 new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/models"),
@@ -165,7 +162,7 @@ public class RestMLProfileAction extends BaseRestHandler {
                     entry.getValue().getMemSizeEstimationCPU(),
                     entry.getValue().getMemSizeEstimationGPU()
                 );
-                mlProfileModelResponse.getMlModelProfileMap().putAll(ImmutableMap.of(nodeId, modelProfile));
+                mlProfileModelResponse.getMlModelProfileMap().putAll(Map.of(nodeId, modelProfile));
             }
 
             for (Map.Entry<String, MLTask> entry : taskProfileMap.entrySet()) {
@@ -175,7 +172,7 @@ public class RestMLProfileAction extends BaseRestHandler {
                     mlProfileModelResponse = new MLProfileModelResponse();
                     modelCentricMap.put(modelId, mlProfileModelResponse);
                 }
-                mlProfileModelResponse.getMlTaskMap().putAll(ImmutableMap.of(entry.getKey(), entry.getValue()));
+                mlProfileModelResponse.getMlTaskMap().putAll(Map.of(entry.getKey(), entry.getValue()));
             }
         }
         return modelCentricMap;

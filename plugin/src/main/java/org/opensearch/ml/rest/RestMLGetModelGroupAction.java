@@ -20,9 +20,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLGetModelGroupAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_GROUP_ACTION = "ml_get_model_group_action";
 
@@ -38,7 +35,7 @@ public class RestMLGetModelGroupAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/model_groups/{%s}", ML_BASE_URI, PARAMETER_MODEL_GROUP_ID))
             );
@@ -56,7 +53,7 @@ public class RestMLGetModelGroupAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLModelGroupGetRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLModelGroupGetRequest getRequest(RestRequest request) throws IOException {
         String modelGroupId = getParameterId(request, PARAMETER_MODEL_GROUP_ID);
 

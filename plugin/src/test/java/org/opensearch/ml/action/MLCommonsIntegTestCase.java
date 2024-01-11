@@ -15,6 +15,7 @@ import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -95,8 +96,6 @@ import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
 public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
@@ -185,7 +184,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLPredictionOutput trainAndPredictKmeansWithIrisData(String irisIndexName) {
-        MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
+        MLInputDataset inputDataset = new SearchQueryInputDataset(List.of(irisIndexName), irisDataQuery());
         return trainAndPredict(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), inputDataset);
     }
 
@@ -206,12 +205,12 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public String trainKmeansWithIrisData(String irisIndexName, boolean async) {
-        MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
+        MLInputDataset inputDataset = new SearchQueryInputDataset(List.of(irisIndexName), irisDataQuery());
         return trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), inputDataset, async);
     }
 
     public String trainLogisticRegressionWithIrisData(String irisIndexName, boolean async) {
-        MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQueryTrainLogisticRegression());
+        MLInputDataset inputDataset = new SearchQueryInputDataset(List.of(irisIndexName), irisDataQueryTrainLogisticRegression());
         return trainModel(
             FunctionName.LOGISTIC_REGRESSION,
             LogisticRegressionParams.builder().objectiveType(LOGMULTICLASS).target("class").build(),
@@ -324,12 +323,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLProfileResponse getModelProfile(String modelId) {
-        MLProfileInput profileInput = MLProfileInput
-            .builder()
-            .modelIds(ImmutableSet.of(modelId))
-            .returnAllModels(true)
-            .returnAllTasks(true)
-            .build();
+        MLProfileInput profileInput = MLProfileInput.builder().modelIds(Set.of(modelId)).returnAllModels(true).returnAllTasks(true).build();
         return profile(profileInput);
     }
 

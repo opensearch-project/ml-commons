@@ -21,9 +21,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLGetConnectorAction extends BaseRestHandler {
     private static final String ML_GET_CONNECTOR_ACTION = "ml_get_connector_action";
 
@@ -39,7 +36,7 @@ public class RestMLGetConnectorAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/connectors/{%s}", ML_BASE_URI, PARAMETER_CONNECTOR_ID)));
     }
 
@@ -55,7 +52,7 @@ public class RestMLGetConnectorAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLConnectorGetRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLConnectorGetRequest getRequest(RestRequest request) throws IOException {
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
         boolean returnContent = returnContent(request);

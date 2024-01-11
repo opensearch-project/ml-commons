@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -66,8 +67,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
 
 public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
@@ -178,7 +177,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(new MatchAllQueryBuilder());
-        MLInputDataset queryInputDataSet = new SearchQueryInputDataset(ImmutableList.of(indexName), searchSourceBuilder);
+        MLInputDataset queryInputDataSet = new SearchQueryInputDataset(List.of(indexName), searchSourceBuilder);
         MLInput mlInputWithQuery = MLInput
             .builder()
             .algorithm(FunctionName.BATCH_RCF)

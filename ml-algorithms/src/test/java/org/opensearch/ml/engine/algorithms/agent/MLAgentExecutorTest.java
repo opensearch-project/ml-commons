@@ -64,8 +64,6 @@ import org.opensearch.threadpool.ThreadPool;
 
 import com.google.gson.Gson;
 
-import software.amazon.awssdk.utils.ImmutableMap;
-
 public class MLAgentExecutorTest {
 
     @Mock
@@ -113,7 +111,7 @@ public class MLAgentExecutorTest {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
+        memoryMap = Map.of("memoryType", mockMemoryFactory);
         Mockito.doAnswer(invocation -> {
             MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
             MLAgent mlAgent = MLAgent.builder().name("agent").memory(mlMemorySpec).type("flow").build();
@@ -133,7 +131,7 @@ public class MLAgentExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         settings = Settings.builder().build();
-        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
+        memoryMap = Map.of("memoryType", mockMemoryFactory);
         mlAgentExecutor = Mockito.spy(new MLAgentExecutor(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap));
 
     }
@@ -166,7 +164,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_HappyCase_ReturnsResult() {
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("test_key", "test_value")).build();
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
@@ -184,8 +182,8 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_AgentRunnerReturnsListOfModelTensor_ReturnsResult() {
-        ModelTensor modelTensor1 = ModelTensor.builder().name("response1").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
-        ModelTensor modelTensor2 = ModelTensor.builder().name("response2").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor1 = ModelTensor.builder().name("response1").dataAsMap(Map.of("test_key", "test_value")).build();
+        ModelTensor modelTensor2 = ModelTensor.builder().name("response2").dataAsMap(Map.of("test_key", "test_value")).build();
         List<ModelTensor> response = Arrays.asList(modelTensor1, modelTensor2);
         Mockito.doAnswer(invocation -> {
             ActionListener<List<ModelTensor>> listener = invocation.getArgument(2);
@@ -204,9 +202,9 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_AgentRunnerReturnsListOfModelTensors_ReturnsResult() {
-        ModelTensor modelTensor1 = ModelTensor.builder().name("response1").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor1 = ModelTensor.builder().name("response1").dataAsMap(Map.of("test_key", "test_value")).build();
         ModelTensors modelTensors1 = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor1)).build();
-        ModelTensor modelTensor2 = ModelTensor.builder().name("response2").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor2 = ModelTensor.builder().name("response2").dataAsMap(Map.of("test_key", "test_value")).build();
         ModelTensors modelTensors2 = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor2)).build();
         List<ModelTensors> response = Arrays.asList(modelTensors1, modelTensors2);
         Mockito.doAnswer(invocation -> {
@@ -262,9 +260,9 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_AgentRunnerReturnsModelTensorOutput_ReturnsResult() {
-        ModelTensor modelTensor1 = ModelTensor.builder().name("response1").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor1 = ModelTensor.builder().name("response1").dataAsMap(Map.of("test_key", "test_value")).build();
         ModelTensors modelTensors1 = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor1)).build();
-        ModelTensor modelTensor2 = ModelTensor.builder().name("response2").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor2 = ModelTensor.builder().name("response2").dataAsMap(Map.of("test_key", "test_value")).build();
         ModelTensors modelTensors2 = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor2)).build();
         List<ModelTensors> modelTensorsList = Arrays.asList(modelTensors1, modelTensors2);
         ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(modelTensorsList).build();
@@ -285,7 +283,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_CreateConversation_ReturnsResult() {
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("test_key", "test_value")).build();
         ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
@@ -338,7 +336,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_Regenerate_GetOriginalInteraction() {
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("test_key", "test_value")).build();
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
@@ -393,7 +391,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_Regenerate_OriginalInteraction_NotExist() {
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("test_key", "test_value")).build();
         ConversationIndexMemory memory = Mockito.mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
@@ -533,7 +531,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_AgentRunnerFailure_ReturnsResult() {
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("test_key", "test_value")).build();
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException());

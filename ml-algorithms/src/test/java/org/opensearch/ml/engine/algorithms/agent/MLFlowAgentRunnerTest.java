@@ -53,8 +53,6 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 
-import software.amazon.awssdk.utils.ImmutableMap;
-
 public class MLFlowAgentRunnerTest {
 
     public static final String FIRST_TOOL = "firstTool";
@@ -118,8 +116,8 @@ public class MLFlowAgentRunnerTest {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
-        toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
-        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
+        toolFactories = Map.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
+        memoryMap = Map.of("memoryType", mockMemoryFactory);
         mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
         when(firstToolFactory.create(anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(anyMap())).thenReturn(secondTool);

@@ -72,9 +72,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-
 public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
 
     @Mock
@@ -138,7 +135,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             mlModelCacheHelper
         );
         runningDeployModelTasks = new HashMap<>();
-        runningDeployModelTasks.put("model1", ImmutableSet.of("node1"));
+        runningDeployModelTasks.put("model1", Set.of("node1"));
         when(mlTaskManager.getLocalRunningDeployModelTasks())
             .thenReturn(Arrays.asList(new String[] { "deploy_task_id1" }, new String[] { "model_id1" }));
     }
@@ -165,7 +162,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             "123",
             buildNewFakeTransportAddress(),
             emptyMap(),
-            ImmutableSet.of(ML_ROLE),
+            Set.of(ML_ROLE),
             Version.CURRENT
         );
         String[] deployedModelIds = new String[] { "123" };
@@ -310,9 +307,9 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             .taskType(MLTaskType.DEPLOY_MODEL)
             .lastUpdateTime(Instant.now().minusSeconds(86400));
         if (MLModelState.PARTIALLY_DEPLOYED == modelState) {
-            mlTaskBuilder.workerNodes(ImmutableList.of("node1", "node2"));
+            mlTaskBuilder.workerNodes(List.of("node1", "node2"));
         } else if (MLModelState.DEPLOYED == modelState) {
-            mlTaskBuilder.workerNodes(ImmutableList.of("node1"));
+            mlTaskBuilder.workerNodes(List.of("node1"));
         }
 
         MLTask mlTask = mlTaskBuilder.build();

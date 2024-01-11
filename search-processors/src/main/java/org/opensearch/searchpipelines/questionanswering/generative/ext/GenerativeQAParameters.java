@@ -20,6 +20,7 @@ package org.opensearch.searchpipelines.questionanswering.generative.ext;
 import java.io.IOException;
 import java.util.Objects;
 
+import org.apache.commons.lang3.Validate;
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -29,8 +30,6 @@ import org.opensearch.core.xcontent.ObjectParser;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-
-import com.google.common.base.Preconditions;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -119,7 +118,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
         // TODO: keep this requirement until we can extract the question from the query or from the request processor parameters
         // for question rewriting.
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(llmQuestion), LLM_QUESTION.getPreferredName() + " must be provided.");
+        Validate.isTrue(!Strings.isNullOrEmpty(llmQuestion), LLM_QUESTION.getPreferredName() + " must be provided.");
         this.llmQuestion = llmQuestion;
         this.contextSize = (contextSize == null) ? SIZE_NULL_VALUE : contextSize;
         this.interactionSize = (interactionSize == null) ? SIZE_NULL_VALUE : interactionSize;
@@ -151,7 +150,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         out.writeOptionalString(conversationId);
         out.writeOptionalString(llmModel);
 
-        Preconditions.checkNotNull(llmQuestion, "llm_question must not be null.");
+        Objects.requireNonNull(llmQuestion, "llm_question must not be null.");
         out.writeString(llmQuestion);
         out.writeInt(contextSize);
         out.writeInt(interactionSize);

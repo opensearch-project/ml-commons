@@ -46,8 +46,6 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.collect.ImmutableList;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -62,7 +60,7 @@ public class ModelAccessControlHelper {
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> modelAccessControlEnabled = it);
     }
 
-    private static final List<Class<?>> SUPPORTED_QUERY_TYPES = ImmutableList
+    private static final List<Class<?>> SUPPORTED_QUERY_TYPES = List
         .of(
             IdsQueryBuilder.class,
             MatchQueryBuilder.class,
@@ -105,7 +103,7 @@ public class ModelAccessControlHelper {
                                     .onResponse(
                                         Optional
                                             .ofNullable(userBackendRoles)
-                                            .orElse(ImmutableList.of())
+                                            .orElse(List.of())
                                             .stream()
                                             .anyMatch(mlModelGroup.getBackendRoles()::contains)
                                     );

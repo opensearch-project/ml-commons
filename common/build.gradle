@@ -24,15 +24,6 @@ dependencies {
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     compileOnly group: 'org.json', name: 'json', version: '20231013'
-
-    implementation('com.google.guava:guava:32.1.2-jre') {
-        exclude group: 'com.google.guava', module: 'failureaccess'
-        exclude group: 'com.google.code.findbugs', module: 'jsr305'
-        exclude group: 'org.checkerframework', module: 'checker-qual'
-        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
-        exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
-        exclude group: 'com.google.guava', module: 'listenablefuture'
-    }
 }
 
 lombok {
@@ -69,9 +60,6 @@ check.dependsOn jacocoTestCoverageVerification
 shadowJar {
     destinationDirectory = file("${project.buildDir}/distributions")
     archiveClassifier.set(null)
-    exclude 'META-INF/maven/com.google.guava/**'
-    exclude 'com/google/thirdparty/**'
-    relocate 'com.google.common', 'org.opensearch.ml.repackage.com.google.common' // dependency of cron-utils
 }
 
 jar {

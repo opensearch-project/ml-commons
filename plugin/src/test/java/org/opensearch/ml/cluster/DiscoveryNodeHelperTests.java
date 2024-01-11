@@ -39,9 +39,6 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
 public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     private final String clusterManagerNodeId = "clusterManagerNode";
     private final String dataNode1Id = "dataNode1";
@@ -98,34 +95,20 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             dataNode2Name,
             dataNode2Id,
             buildNewFakeTransportAddress(),
-            ImmutableMap.of(CommonValue.BOX_TYPE_KEY, CommonValue.HOT_BOX_TYPE),
+            Map.of(CommonValue.BOX_TYPE_KEY, CommonValue.HOT_BOX_TYPE),
             BUILT_IN_ROLES,
             Version.CURRENT
         );
         warmDataNode1 = new DiscoveryNode(
             warmDataNode1Id,
             buildNewFakeTransportAddress(),
-            ImmutableMap.of(CommonValue.BOX_TYPE_KEY, CommonValue.WARM_BOX_TYPE),
+            Map.of(CommonValue.BOX_TYPE_KEY, CommonValue.WARM_BOX_TYPE),
             BUILT_IN_ROLES,
             Version.CURRENT
         );
 
-        mlNode1 = new DiscoveryNode(
-            mlNode1Name,
-            mlNode1Id,
-            buildNewFakeTransportAddress(),
-            emptyMap(),
-            ImmutableSet.of(ML_ROLE),
-            Version.CURRENT
-        );
-        mlNode2 = new DiscoveryNode(
-            mlNode2Name,
-            mlNode2Id,
-            buildNewFakeTransportAddress(),
-            emptyMap(),
-            ImmutableSet.of(ML_ROLE),
-            Version.CURRENT
-        );
+        mlNode1 = new DiscoveryNode(mlNode1Name, mlNode1Id, buildNewFakeTransportAddress(), emptyMap(), Set.of(ML_ROLE), Version.CURRENT);
+        mlNode2 = new DiscoveryNode(mlNode2Name, mlNode2Id, buildNewFakeTransportAddress(), emptyMap(), Set.of(ML_ROLE), Version.CURRENT);
         allRoleNode = new DiscoveryNode(
             allRoleNodeName,
             allRoleNodeId,
@@ -280,7 +263,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     public void testGetNodes() {
         DiscoveryNode[] nodes = discoveryNodeHelper.getNodes(new String[] { mlNode1Id, mlNode2Id });
         assertEquals(2, nodes.length);
-        Set<String> nodeIds = ImmutableSet.of(nodes[0].getId(), nodes[1].getId());
+        Set<String> nodeIds = Set.of(nodes[0].getId(), nodes[1].getId());
         assertTrue(nodeIds.contains(mlNode1Id));
         assertTrue(nodeIds.contains(mlNode2Id));
     }

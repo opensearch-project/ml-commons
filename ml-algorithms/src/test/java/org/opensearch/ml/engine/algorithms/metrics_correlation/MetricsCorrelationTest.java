@@ -117,8 +117,6 @@ import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableMap;
-
 public class MetricsCorrelationTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -796,9 +794,8 @@ public class MetricsCorrelationTest {
         );
         Metadata metadata = new Metadata.Builder()
             .indices(
-                ImmutableMap
-                    .<String, IndexMetadata>builder()
-                    .put(
+                Map
+                    .of(
                         ML_MODEL_INDEX,
                         IndexMetadata
                             .builder("test")
@@ -809,9 +806,7 @@ public class MetricsCorrelationTest {
                                     .put("index.number_of_replicas", 1)
                                     .put("index.version.created", Version.CURRENT.id)
                             )
-                            .build()
-                    )
-                    .put(
+                            .build(),
                         ML_MODEL_GROUP_INDEX,
                         IndexMetadata
                             .builder(ML_MODEL_GROUP_INDEX)
@@ -824,7 +819,6 @@ public class MetricsCorrelationTest {
                             )
                             .build()
                     )
-                    .build()
             )
             .build();
         return new ClusterState(

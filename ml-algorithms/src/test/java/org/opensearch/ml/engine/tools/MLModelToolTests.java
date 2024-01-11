@@ -27,7 +27,6 @@ import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class MLModelToolTests {
 
@@ -54,7 +53,7 @@ public class MLModelToolTests {
 
     @Test
     public void testMLModelsWithOutputParser() {
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(Map.of("thought", "thought 1", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
         doAnswer(invocation -> {
@@ -78,7 +77,7 @@ public class MLModelToolTests {
     @Test
     public void testOutputParserLambda() {
         // Create a mock ModelTensors object
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "testResponse", "action", "action1")).build();
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(Map.of("response", "testResponse", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
 

@@ -22,9 +22,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLUploadModelChunkAction extends BaseRestHandler {
     private static final String ML_UPLOAD_MODEL_CHUNK_ACTION = "ml_upload_model_chunk_action";
     private volatile boolean isLocalFileUploadAllowed;
@@ -46,7 +43,7 @@ public class RestMLUploadModelChunkAction extends BaseRestHandler {
 
     @Override
     public List<ReplacedRoute> replacedRoutes() {
-        return ImmutableList
+        return List
             .of(
                 new ReplacedRoute(
                     RestRequest.Method.POST,
@@ -69,7 +66,7 @@ public class RestMLUploadModelChunkAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLUploadModelChunkRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLUploadModelChunkRequest getRequest(RestRequest request) throws IOException {
         final String modelId = request.param("model_id");
         String chunk_number = request.param("chunk_number");

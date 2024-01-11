@@ -23,8 +23,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -47,7 +45,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/_execute/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM)),
                 new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/agents/{%s}/_execute", ML_BASE_URI, PARAMETER_AGENT_ID))
@@ -66,7 +64,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLExecuteTaskRequest
      */
-    @VisibleForTesting
+    // Visible for testing
     MLExecuteTaskRequest getRequest(RestRequest request) throws IOException {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

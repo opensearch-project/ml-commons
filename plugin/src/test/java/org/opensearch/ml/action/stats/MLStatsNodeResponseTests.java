@@ -28,9 +28,6 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
 public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     private MLStatsNodeResponse response;
     private DiscoveryNode node;
@@ -96,8 +93,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
 
     private MLStatsNodeResponse createResponseWithDefaultAlgoAndModelStats(Map<MLNodeLevelStat, Object> nodeStats) {
         Map<FunctionName, MLAlgoStats> algoStats = new HashMap<>();
-        Map<MLActionLevelStat, Object> actionStats = ImmutableMap.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, totalRequestCount);
-        Map<ActionName, MLActionStats> stats = ImmutableMap.of(ActionName.PREDICT, new MLActionStats(actionStats));
+        Map<MLActionLevelStat, Object> actionStats = Map.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, totalRequestCount);
+        Map<ActionName, MLActionStats> stats = Map.of(ActionName.PREDICT, new MLActionStats(actionStats));
         algoStats.put(FunctionName.KMEANS, new MLAlgoStats(stats));
 
         Map<String, MLModelStats> modelStats = new HashMap<>();
@@ -133,7 +130,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        Set<String> validResult = ImmutableSet
+        Set<String> validResult = Set
             .of(
                 "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
                 "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
@@ -155,7 +152,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testIsEmpty_EmptyNodeStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(ImmutableMap.of());
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(Map.of());
         assertFalse(response.isEmpty());
     }
 
@@ -164,7 +161,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testIsEmpty_EmptyAlgoAndModelStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(ImmutableMap.of());
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(Map.of());
         assertEquals(1, response.getAlgorithmStatSize());
         assertEquals(1, response.getModelStatSize());
         response.removeAlgorithmStats(FunctionName.KMEANS);
@@ -175,7 +172,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
 
     public void testIsEmpty_NonEmptyNodeAndAlgoStats() {
         MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(
-            ImmutableMap.of(MLNodeLevelStat.ML_REQUEST_COUNT, totalRequestCount)
+            Map.of(MLNodeLevelStat.ML_REQUEST_COUNT, totalRequestCount)
         );
         assertFalse(response.isEmpty());
     }
@@ -190,7 +187,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         assertEquals(0, response.getNodeLevelStatSize());
 
-        response = new MLStatsNodeResponse(node, ImmutableMap.of());
+        response = new MLStatsNodeResponse(node, Map.of());
         assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         assertEquals(0, response.getNodeLevelStatSize());
     }
@@ -201,7 +198,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testGetAlgorithmLevelStat_EmptyAlgoStats() {
-        MLStatsNodeResponse response = new MLStatsNodeResponse(node, null, ImmutableMap.of(), ImmutableMap.of());
+        MLStatsNodeResponse response = new MLStatsNodeResponse(node, null, Map.of(), Map.of());
         assertNull(response.getAlgorithmStats(FunctionName.BATCH_RCF));
         assertEquals(0, response.getNodeLevelStatSize());
     }

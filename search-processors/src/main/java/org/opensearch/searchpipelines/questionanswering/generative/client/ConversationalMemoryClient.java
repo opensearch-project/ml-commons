@@ -20,7 +20,9 @@ package org.opensearch.searchpipelines.questionanswering.generative.client;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+import org.apache.commons.lang3.Validate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
@@ -35,8 +37,6 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsRequest;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsResponse;
-
-import com.google.common.base.Preconditions;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -70,9 +70,9 @@ public class ConversationalMemoryClient {
         String origin,
         Map<String, String> additionalInfo
     ) {
-        Preconditions.checkNotNull(conversationId);
-        Preconditions.checkNotNull(input);
-        Preconditions.checkNotNull(response);
+        Objects.requireNonNull(conversationId);
+        Objects.requireNonNull(input);
+        Objects.requireNonNull(response);
         CreateInteractionResponse res = client
             .execute(
                 CreateInteractionAction.INSTANCE,
@@ -85,7 +85,7 @@ public class ConversationalMemoryClient {
 
     public List<Interaction> getInteractions(String conversationId, int lastN) {
 
-        Preconditions.checkArgument(lastN > 0, "lastN must be at least 1.");
+        Validate.isTrue(lastN > 0, "lastN must be at least 1.");
 
         log.info("In getInteractions, conversationId {}, lastN {}", conversationId, lastN);
 

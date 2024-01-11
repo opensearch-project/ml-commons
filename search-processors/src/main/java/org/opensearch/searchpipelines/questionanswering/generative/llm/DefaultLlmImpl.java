@@ -17,11 +17,10 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
@@ -33,8 +32,6 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -57,12 +54,12 @@ public class DefaultLlmImpl implements Llm {
     private MachineLearningInternalClient mlClient;
 
     public DefaultLlmImpl(String openSearchModelId, Client client) {
-        checkNotNull(openSearchModelId);
+        Objects.requireNonNull(openSearchModelId);
         this.openSearchModelId = openSearchModelId;
         this.mlClient = new MachineLearningInternalClient(client);
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     protected void setMlClient(MachineLearningInternalClient mlClient) {
         this.mlClient = mlClient;
     }

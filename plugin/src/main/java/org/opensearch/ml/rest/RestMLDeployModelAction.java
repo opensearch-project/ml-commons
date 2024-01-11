@@ -21,9 +21,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLDeployModelAction extends BaseRestHandler {
     private static final String ML_DEPLOY_MODEL_ACTION = "ml_deploy_model_action";
 
@@ -39,7 +36,7 @@ public class RestMLDeployModelAction extends BaseRestHandler {
 
     @Override
     public List<ReplacedRoute> replacedRoutes() {
-        return ImmutableList
+        return List
             .of(
                 new ReplacedRoute(
                     RestRequest.Method.POST,
@@ -63,7 +60,7 @@ public class RestMLDeployModelAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLTrainingTaskRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLDeployModelRequest getRequest(RestRequest request) throws IOException {
         String modelId = request.param(PARAMETER_MODEL_ID);
         if (!request.hasContent()) {

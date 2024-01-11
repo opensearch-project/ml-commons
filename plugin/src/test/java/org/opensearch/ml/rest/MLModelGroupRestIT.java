@@ -10,8 +10,10 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.message.BasicHeader;
@@ -27,9 +29,6 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.utils.TestHelper;
-
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 
 public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 
@@ -77,7 +76,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.model_access_control_enabled\":" + isSecurityEnabled + "}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -92,7 +91,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.model_access_control_enabled\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -101,12 +100,12 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         }
         createSearchRole(indexSearchAccessRole, "*");
 
-        createUser(mlNoAccessUser, password, ImmutableList.of(opensearchBackendRole));
+        createUser(mlNoAccessUser, password, List.of(opensearchBackendRole));
         mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, password)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(mlReadOnlyUser, password, ImmutableList.of(opensearchBackendRole));
+        createUser(mlReadOnlyUser, password, List.of(opensearchBackendRole));
         mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, password)
             .setSocketTimeout(60000)
             .build();
@@ -116,29 +115,29 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user1, password, ImmutableList.of("IT", "HR"));
+        createUser(user1, password, List.of("IT", "HR"));
         user1Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user1, password)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user2, password, ImmutableList.of("IT"));
+        createUser(user2, password, List.of("IT"));
         user2Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user2, password)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user3, password, ImmutableList.of("Finance"));
+        createUser(user3, password, List.of("Finance"));
         user3Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user3, password)
             .setSocketTimeout(60000)
             .build();
 
-        createUser(user4, password, ImmutableList.of());
+        createUser(user4, password, List.of());
         user4Client = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user4, password)
             .setSocketTimeout(60000)
             .build();
 
-        createRoleMapping("ml_read_access", ImmutableList.of(mlReadOnlyUser));
-        createRoleMapping("ml_full_access", ImmutableList.of(mlFullAccessUser, user1, user2, user3, user4));
-        createRoleMapping(indexSearchAccessRole, ImmutableList.of(mlFullAccessUser, user1, user2, user3, user4));
+        createRoleMapping("ml_read_access", List.of(mlReadOnlyUser));
+        createRoleMapping("ml_full_access", List.of(mlFullAccessUser, user1, user2, user3, user4));
+        createRoleMapping(indexSearchAccessRole, List.of(mlFullAccessUser, user1, user2, user3, user4));
     }
 
     @After
@@ -184,7 +183,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             this.modelGroupId,
             "new_name",
             "new description",
-            ImmutableList.of(opensearchBackendRole),
+            List.of(opensearchBackendRole),
             AccessMode.RESTRICTED,
             false
         );
@@ -205,7 +204,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             this.modelGroupId,
             "new_name",
             "new description",
-            ImmutableList.of(opensearchBackendRole),
+            List.of(opensearchBackendRole),
             AccessMode.RESTRICTED,
             false
         );
@@ -272,7 +271,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have the backend roles specified."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have the backend roles specified."));
             }
             // User2 fails to update model group with access data because user2 is not the owner
             try {
@@ -287,7 +286,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // User3 fails to update model group
             try {
@@ -295,7 +294,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user3Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
             }
             // User1 fails to update model group when specifying backend roles to public access mode
             try {
@@ -311,8 +310,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains("You can specify backend roles only for a model group with the restricted access mode.")
                 );
             }
@@ -321,7 +320,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 
     public void test_RegisterModelGroupForUser1WithBackendRolesField() throws IOException {
 
-        mlRegisterModelGroupInput = createRegisterModelGroupInput("modelGroupName", ImmutableList.of("HR"), AccessMode.RESTRICTED, null);
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("modelGroupName", List.of("HR"), AccessMode.RESTRICTED, null);
         registerModelGroup(user1Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             modelGroupId = (String) registerModelGroupResult.get("model_group_id");
             assertTrue(registerModelGroupResult.containsKey("model_group_id"));
@@ -332,7 +331,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name2",
                     "description2",
-                    ImmutableList.of("IT"),
+                    List.of("IT"),
                     AccessMode.RESTRICTED,
                     null
                 );
@@ -350,7 +349,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name2",
                     "description2",
-                    ImmutableList.of("HR"),
+                    List.of("HR"),
                     AccessMode.RESTRICTED,
                     false
                 );
@@ -366,14 +365,14 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name",
                     "description",
-                    ImmutableList.of("IT"),
+                    List.of("IT"),
                     AccessMode.RESTRICTED,
                     null
                 );
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // User3 fails to update model group because user does not have HR backend role
             try {
@@ -381,7 +380,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user3Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
             }
             // User4 fails to update model group because the user does not have HR backend role
             try {
@@ -389,7 +388,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user4Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // Admin fails to update model group when trying to set add_all_backend_roles to true
             try {
@@ -404,7 +403,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(client(), modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Admin users cannot add all backend roles to a model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Admin users cannot add all backend roles to a model group."));
             }
             // User1 fails to update model group when setting add_all_backend_roles to false and not specifying any backend roles
             try {
@@ -420,8 +419,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains("You have to specify backend roles when add all backend roles is set to false.")
                 );
             }
@@ -439,8 +438,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains(
                             "You must specify one or more backend roles or add all backend roles to register a restricted model group."
                         )
@@ -452,14 +451,14 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name",
                     "description",
-                    ImmutableList.of("Finance"),
+                    List.of("Finance"),
                     AccessMode.RESTRICTED,
                     false
                 );
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have the backend roles specified."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have the backend roles specified."));
             }
         });
 
@@ -523,7 +522,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // User1 fails to update model group when specifying both backend_roles and add_all_backend_roles fields
             try {
@@ -539,9 +538,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
-                        .contains("You cannot specify backend roles and add all backend roles at the same time.")
+                    ExceptionUtils.getStackTrace(e).contains("You cannot specify backend roles and add all backend roles at the same time.")
                 );
             }
         });
@@ -579,7 +576,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
             }
             // Admin fails to update model group when trying to set add_all_backend_roles to true
             try {
@@ -594,7 +591,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(client(), modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Admin users cannot add all backend roles to a model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Admin users cannot add all backend roles to a model group."));
             }
             // User1 fails to update model group when trying to specify backend roles for public access mode
             try {
@@ -603,8 +600,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains("You can specify backend roles only for a model group with the restricted access mode.")
                 );
             }
@@ -650,8 +647,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains(
                             "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
                         )
@@ -671,8 +668,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains(
                             "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
                         )
@@ -685,8 +682,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains(
                             "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
                         )
@@ -696,12 +693,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
     }
 
     public void test_RegisterModelGroupForAdminWithRestricted() throws IOException {
-        mlRegisterModelGroupInput = createRegisterModelGroupInput(
-            "modelGroupName",
-            ImmutableList.of("Finance"),
-            AccessMode.RESTRICTED,
-            false
-        );
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("modelGroupName", List.of("Finance"), AccessMode.RESTRICTED, false);
         registerModelGroup(client(), TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             String modelGroupId = (String) registerModelGroupResult.get("model_group_id");
             assertTrue(registerModelGroupResult.containsKey("model_group_id"));
@@ -711,7 +703,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name1",
                     "description1",
-                    ImmutableList.of("IT"),
+                    List.of("IT"),
                     AccessMode.RESTRICTED,
                     null
                 );
@@ -723,7 +715,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     null,
                     null,
-                    ImmutableList.of("Finance"),
+                    List.of("Finance"),
                     AccessMode.RESTRICTED,
                     null
                 );
@@ -745,7 +737,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
             }
             // User3 fails to update model group when trying to specify access control data
             try {
@@ -760,7 +752,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user3Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // Admin fails to update model group when trying to specify add all backend roles field
             try {
@@ -775,7 +767,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(client(), modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Admin users cannot add all backend roles to a model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Admin users cannot add all backend roles to a model group."));
             }
         });
     }
@@ -803,7 +795,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name",
                     "description",
-                    ImmutableList.of("Finance"),
+                    List.of("Finance"),
                     AccessMode.RESTRICTED,
                     null
                 );
@@ -832,7 +824,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // User2 fails to update model group when trying to specify access control data
             try {
@@ -847,7 +839,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             // Admin fails to update model group when trying to specify backend roles for public access mode
             try {
@@ -863,8 +855,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains("You can specify backend roles only for a model group with the restricted access mode.")
                 );
             }
@@ -894,14 +886,14 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
             }
             try {
                 mlUpdateModelGroupInput = createUpdateModelGroupInput(modelGroupId, "name", "description", null, AccessMode.PUBLIC, null);
                 updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
         });
     }
@@ -926,7 +918,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                     modelGroupId,
                     "name",
                     "description",
-                    ImmutableList.of("Finance"),
+                    List.of("Finance"),
                     AccessMode.RESTRICTED,
                     null
                 );
@@ -954,7 +946,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user4Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have any backend roles."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have any backend roles."));
             }
             try {
                 mlUpdateModelGroupInput = createUpdateModelGroupInput(
@@ -968,7 +960,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("Only owner or admin can update access control data."));
             }
             try {
                 mlUpdateModelGroupInput = createUpdateModelGroupInput(modelGroupId, "name", "description", null, AccessMode.PRIVATE, true);
@@ -976,8 +968,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains("You can specify backend roles only for a model group with the restricted access mode.")
                 );
             }
@@ -1020,14 +1012,14 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user4Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have any backend roles."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have any backend roles."));
             }
             try {
                 mlUpdateModelGroupInput = createUpdateModelGroupInput(modelGroupId, "name", "description", null, null, null);
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
             }
             try {
 
@@ -1036,8 +1028,8 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
+                    ExceptionUtils
+                        .getStackTrace(e)
                         .contains("You can specify backend roles only for a model group with the restricted access mode.")
                 );
             }
@@ -1240,9 +1232,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
-                        .contains("User doesn't have privilege to perform this operation on this model group")
+                    ExceptionUtils.getStackTrace(e).contains("User doesn't have privilege to perform this operation on this model group")
                 );
             }
         });
@@ -1304,9 +1294,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
-                        .contains("User doesn't have privilege to perform this operation on this model group")
+                    ExceptionUtils.getStackTrace(e).contains("User doesn't have privilege to perform this operation on this model group")
                 );
             }
         });
@@ -1332,9 +1320,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
-                        .contains("User doesn't have privilege to perform this operation on this model group")
+                    ExceptionUtils.getStackTrace(e).contains("User doesn't have privilege to perform this operation on this model group")
                 );
             }
 
@@ -1344,9 +1330,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
-                    Throwables
-                        .getStackTraceAsString(e)
-                        .contains("User doesn't have privilege to perform this operation on this model group")
+                    ExceptionUtils.getStackTrace(e).contains("User doesn't have privilege to perform this operation on this model group")
                 );
             }
         });

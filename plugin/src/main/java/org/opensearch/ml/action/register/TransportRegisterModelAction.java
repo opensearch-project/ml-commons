@@ -15,6 +15,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
@@ -63,9 +64,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -309,7 +307,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .createTime(Instant.now())
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
-            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .workerNodes(List.of(clusterService.localNode().getId()))
             .build();
 
         if (!isAsync) {
@@ -325,7 +323,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
         mlTaskDispatcher.dispatch(registerModelInput.getFunctionName(), ActionListener.wrap(node -> {
             String nodeId = node.getId();
-            mlTask.setWorkerNodes(ImmutableList.of(nodeId));
+            mlTask.setWorkerNodes(List.of(nodeId));
 
             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                 String taskId = response.getId();
@@ -342,7 +340,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     mlTaskManager
                         .updateMLTask(
                             taskId,
-                            ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
+                            Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
                             TASK_SEMAPHORE_TIMEOUT,
                             true
                         );

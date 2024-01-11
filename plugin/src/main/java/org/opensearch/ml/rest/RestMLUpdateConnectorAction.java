@@ -25,9 +25,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLUpdateConnectorAction extends BaseRestHandler {
     private static final String ML_UPDATE_CONNECTOR_ACTION = "ml_update_connector_action";
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -43,7 +40,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/connectors/{%s}", ML_BASE_URI, PARAMETER_CONNECTOR_ID)));
     }
 
@@ -54,7 +51,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
             .execute(MLUpdateConnectorAction.INSTANCE, mlUpdateConnectorRequest, new RestToXContentListener<>(restChannel));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     private MLUpdateConnectorRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);

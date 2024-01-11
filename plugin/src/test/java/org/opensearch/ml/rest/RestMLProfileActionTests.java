@@ -66,9 +66,6 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-
 public class RestMLProfileActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException thrown = ExpectedException.none();
@@ -117,7 +114,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
             .inputType(MLInputDataType.DATA_FRAME)
             .progress(0.4f)
             .outputIndex("test_index")
-            .workerNodes(ImmutableList.of("test_node"))
+            .workerNodes(List.of("test_node"))
             .createTime(Instant.ofEpochMilli(123))
             .lastUpdateTime(Instant.ofEpochMilli(123))
             .error("error")
@@ -288,7 +285,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
 
     public void test_WhenViewIsModel_ReturnModelViewResult() throws Exception {
         MLProfileInput mlProfileInput = new MLProfileInput();
-        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "model"));
+        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, Map.of("view", "model"));
         profileAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());

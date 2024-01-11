@@ -39,7 +39,7 @@ Register `SampleAlgoParams.XCONTENT_REGISTRY` in `MachineLearningPlugin.getNamed
 ```
     @Override
     public List<NamedXContentRegistry.Entry> getNamedXContent() {
-        return ImmutableList
+        return List
                 .of(
                         ...
                         SampleAlgoParams.XCONTENT_REGISTRY,

@@ -34,9 +34,6 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -62,7 +59,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(
                     RestRequest.Method.POST,
@@ -117,7 +114,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLPredictionTaskRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);

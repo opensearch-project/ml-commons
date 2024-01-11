@@ -45,9 +45,6 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -62,7 +59,7 @@ public class MLTaskManager {
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
 
-    public static final ImmutableSet TASK_DONE_STATES = ImmutableSet
+    public static final Set TASK_DONE_STATES = Set
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
     /**
@@ -254,7 +251,7 @@ public class MLTaskManager {
         MLTask task = getMLTask(taskId);
         task.setState(MLTaskState.RUNNING);
         if (isAsyncTask) {
-            updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+            updateMLTask(taskId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
         }
     }
 

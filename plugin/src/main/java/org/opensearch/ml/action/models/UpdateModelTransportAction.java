@@ -63,8 +63,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -599,7 +597,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
         return RestActionUtils.isSuperAdminUser(clusterService, client);
     }

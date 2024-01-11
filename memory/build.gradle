@@ -28,7 +28,6 @@ dependencies {
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: '5.2.2'
     implementation "org.opensearch:common-utils:${common_utils_version}"
-    implementation group: 'com.google.guava', name: 'guava', version: '32.0.1-jre'
     testImplementation (group: 'junit', name: 'junit', version: '4.13.2') {
         exclude module : 'hamcrest'
         exclude module : 'hamcrest-core'

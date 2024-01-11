@@ -36,8 +36,6 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -149,7 +147,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void updateMemory(Map<String, Object> additionalInfo, MLMemorySpec memorySpec, String memoryId, String interactionId) {
         if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
             return;
@@ -167,20 +165,20 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             );
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void updateInteraction(Map<String, Object> additionalInfo, String interactionId, ConversationIndexMemory memory) {
         memory
             .getMemoryManager()
             .updateInteraction(
                 interactionId,
-                ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
+                Map.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
                 ActionListener.<UpdateResponse>wrap(updateResponse -> {
                     log.info("Updated additional info for interaction ID: " + interactionId);
                 }, e -> { log.error("Failed to update root interaction", e); })
             );
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     String parseResponse(Object output) throws IOException {
         if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
             ModelTensors tensors = (ModelTensors) ((List) output).get(0);
@@ -198,7 +196,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     Tool createTool(MLToolSpec toolSpec) {
         Map<String, String> toolParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
@@ -218,7 +216,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         return tool;
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
         Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {

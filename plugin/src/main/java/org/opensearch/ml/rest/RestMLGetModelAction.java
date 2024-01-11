@@ -21,9 +21,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLGetModelAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_ACTION = "ml_get_model_action";
 
@@ -39,8 +36,7 @@ public class RestMLGetModelAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
-            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/models/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
+        return List.of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/models/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
     }
 
     @Override
@@ -55,7 +51,7 @@ public class RestMLGetModelAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLModelGetRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLModelGetRequest getRequest(RestRequest request) throws IOException {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         boolean returnContent = returnContent(request);

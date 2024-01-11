@@ -48,7 +48,6 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 
 import lombok.Data;
@@ -275,7 +274,7 @@ public class MLAgentExecutor implements Executable {
         });
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     protected MLAgentRunner getAgentRunner(MLAgent mlAgent) {
         switch (mlAgent.getType()) {
             case "flow":

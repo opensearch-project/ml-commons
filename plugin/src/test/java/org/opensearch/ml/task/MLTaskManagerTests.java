@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
@@ -42,8 +43,6 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
-
-import com.google.common.collect.ImmutableMap;
 
 public class MLTaskManagerTests extends OpenSearchTestCase {
     MLTaskManager mlTaskManager;
@@ -126,7 +125,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         }).when(client).update(any(UpdateRequest.class), any());
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), ActionListener.wrap(r -> {
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), Map.of(MLTask.ERROR_FIELD, "test error"), ActionListener.wrap(r -> {
             ActionListener<UpdateResponse> listener = mock(ActionListener.class);
             mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, listener, 0, false);
             verify(client, times(1)).update(any(), any());
@@ -148,7 +147,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, false);
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), Map.of(MLTask.ERROR_FIELD, "test error"), listener, 0, false);
         verify(client, times(1)).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
@@ -163,7 +162,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, true);
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), Map.of(MLTask.ERROR_FIELD, "test error"), listener, 0, true);
         verify(client, times(1)).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());

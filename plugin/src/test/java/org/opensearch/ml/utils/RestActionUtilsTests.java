@@ -50,8 +50,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableMap;
-
 public class RestActionUtilsTests extends OpenSearchTestCase {
 
     @Rule
@@ -64,7 +62,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, algoName).build();
+        param = Map.of(PARAMETER_ALGORITHM, algoName);
         fakeRestRequest = createRestRequest(param);
 
     }
@@ -85,7 +83,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     public void testGetAlgorithm_EmptyValue() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Request should contain algorithm!");
-        fakeRestRequest = createRestRequest(ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, "").build());
+        fakeRestRequest = createRestRequest(Map.of(PARAMETER_ALGORITHM, ""));
         RestActionUtils.getAlgorithm(fakeRestRequest);
     }
 
@@ -136,14 +134,14 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     }
 
     public void testIsAsync() {
-        fakeRestRequest = createRestRequest(ImmutableMap.<String, String>builder().put(PARAMETER_ASYNC, "true").build());
+        fakeRestRequest = createRestRequest(Map.of(PARAMETER_ASYNC, "true"));
         boolean isAsync = RestActionUtils.isAsync(fakeRestRequest);
         assertTrue(isAsync);
     }
 
     public void testGetParameterId() {
         String modelId = "testModelId";
-        param = ImmutableMap.<String, String>builder().put(PARAMETER_MODEL_ID, modelId).build();
+        param = Map.of(PARAMETER_MODEL_ID, modelId);
         fakeRestRequest = createRestRequest(param, "_plugins/_ml/models/" + modelId, RestRequest.Method.GET);
         String paramValue = RestActionUtils.getParameterId(fakeRestRequest, PARAMETER_MODEL_ID);
         assertEquals(modelId, paramValue);
@@ -152,7 +150,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     public void testGetParameterId_EmptyValue() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Request should contain " + PARAMETER_MODEL_ID);
-        param = ImmutableMap.<String, String>builder().put(PARAMETER_MODEL_ID, "").build();
+        param = Map.of(PARAMETER_MODEL_ID, "");
         fakeRestRequest = createRestRequest(param, "_plugins/_ml/models/testModelId", RestRequest.Method.GET);
         RestActionUtils.getParameterId(fakeRestRequest, PARAMETER_MODEL_ID);
     }
@@ -212,7 +210,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .withMethod(RestRequest.Method.POST)
             .withPath(urlPath)
             .withParams(param)
-            .withHeaders(ImmutableMap.of("User-Agent", Arrays.asList("OpenSearch Dashboards")))
+            .withHeaders(Map.of("User-Agent", Arrays.asList("OpenSearch Dashboards")))
             .build();
         SearchSourceBuilder testSearchSourceBuilder = new SearchSourceBuilder();
         FetchSourceContext sourceContext = RestActionUtils.getSourceContext(request, testSearchSourceBuilder);
@@ -245,7 +243,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     }
 
     public void test_onFailure() {
-        fakeRestRequest = createRestRequest(ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, "").build());
+        fakeRestRequest = createRestRequest(Map.of(PARAMETER_ALGORITHM, ""));
         RestActionUtils.onFailure(mock(RestChannel.class), RestStatus.CREATED, "error", new IllegalArgumentException("test"));
     }
 
@@ -254,7 +252,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .withMethod(RestRequest.Method.POST)
             .withPath(urlPath)
             .withParams(param)
-            .withHeaders(ImmutableMap.of("User-Agent", Arrays.asList("OpenSearch Dashboards")))
+            .withHeaders(Map.of("User-Agent", Arrays.asList("OpenSearch Dashboards")))
             .build();
         Optional<String[]> result = RestActionUtils.splitCommaSeparatedParam(request, PARAMETER_ALGORITHM);
         assertNotNull(result);
@@ -266,7 +264,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .withMethod(RestRequest.Method.POST)
             .withPath(urlPath)
             .withParams(param)
-            .withHeaders(ImmutableMap.of("User-Agent", Arrays.asList("OpenSearch Dashboards")))
+            .withHeaders(Map.of("User-Agent", Arrays.asList("OpenSearch Dashboards")))
             .build();
         Optional<String> result = RestActionUtils.getStringParam(request, PARAMETER_ALGORITHM);
         assertNotNull(result);

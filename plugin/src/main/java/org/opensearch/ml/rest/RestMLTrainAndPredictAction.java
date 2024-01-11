@@ -24,9 +24,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLTrainAndPredictAction extends BaseRestHandler {
     private static final String ML_TRAIN_AND_PREDICT_ACTION = "ml_train_and_predict_action";
 
@@ -42,7 +39,7 @@ public class RestMLTrainAndPredictAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/_train_predict/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM)));
     }
 
@@ -59,7 +56,7 @@ public class RestMLTrainAndPredictAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLTrainingTaskRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLTrainingTaskRequest getRequest(RestRequest request) throws IOException {
         String algorithm = getAlgorithm(request);
         boolean async = isAsync(request);

@@ -21,8 +21,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableSet;
-
 public class MLAlgoStatsTests extends OpenSearchTestCase {
     private MLAlgoStats mlAlgoStats;
     private MLActionStats mlActionStats;
@@ -57,7 +55,7 @@ public class MLAlgoStatsTests extends OpenSearchTestCase {
         mlAlgoStats.toXContent(builder, EMPTY_PARAMS);
         builder.endObject();
         String content = TestHelper.xContentBuilderToString(builder);
-        Set<String> validContents = ImmutableSet
+        Set<String> validContents = Set
             .of(
                 "{\"train\":{\"ml_action_request_count\":200,\"ml_action_failure_count\":100}}",
                 "{\"train\":{\"ml_action_failure_count\":100,\"ml_action_request_count\":200}}"

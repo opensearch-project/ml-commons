@@ -24,9 +24,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLTrainingAction extends BaseRestHandler {
     private static final String ML_TRAINING_ACTION = "ml_training_action";
 
@@ -42,8 +39,7 @@ public class RestMLTrainingAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
-            .of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/_train/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM)));
+        return List.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/_train/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM)));
     }
 
     @Override
@@ -58,7 +54,7 @@ public class RestMLTrainingAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLTrainingTaskRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLTrainingTaskRequest getRequest(RestRequest request) throws IOException {
         String algorithm = getAlgorithm(request);
         boolean async = isAsync(request);

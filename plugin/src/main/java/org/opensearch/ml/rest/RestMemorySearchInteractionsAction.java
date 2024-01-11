@@ -38,14 +38,12 @@ import org.opensearch.rest.RestResponse;
 import org.opensearch.rest.action.RestResponseListener;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMemorySearchInteractionsAction extends BaseRestHandler {
     private static final String SEARCH_INTERACTIONS_NAME = "conversation_memory_search_interactions";
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(RestRequest.Method.POST, ActionConstants.SEARCH_INTERACTIONS_REST_PATH),
                 new Route(RestRequest.Method.GET, ActionConstants.SEARCH_INTERACTIONS_REST_PATH)

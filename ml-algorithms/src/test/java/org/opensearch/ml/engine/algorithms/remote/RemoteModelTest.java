@@ -29,8 +29,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
-import com.google.common.collect.ImmutableMap;
-
 public class RemoteModelTest {
 
     @Mock
@@ -70,9 +68,9 @@ public class RemoteModelTest {
     public void predict_ModelDeployed_WrongInput() {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("Wrong input type");
-        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        Connector connector = createConnector(Map.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, Map.of(), encryptor);
         remoteModel.predict(mlInput);
     }
 
@@ -83,23 +81,23 @@ public class RemoteModelTest {
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
         doThrow(new IllegalArgumentException("Tag mismatch!")).when(encryptor).decrypt(any());
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, Map.of(), encryptor);
     }
 
     @Test
     public void initModel_NullHeader() {
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, Map.of(), encryptor);
         Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
         Assert.assertNull(decryptedHeaders);
     }
 
     @Test
     public void initModel_WithHeader() {
-        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        Connector connector = createConnector(Map.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, Map.of(), encryptor);
         Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
         RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
         Assert.assertNotNull(executor);
@@ -126,7 +124,7 @@ public class RemoteModelTest {
             .name("test connector")
             .protocol(ConnectorProtocols.HTTP)
             .version("1")
-            .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key")))
+            .credential(Map.of("key", encryptor.encrypt("test_api_key")))
             .actions(Arrays.asList(predictAction))
             .build();
         return connector;

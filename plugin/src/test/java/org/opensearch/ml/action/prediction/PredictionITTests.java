@@ -37,8 +37,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import com.google.common.collect.ImmutableList;
-
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
 public class PredictionITTests extends MLCommonsIntegTestCase {
     private String irisIndexName;
@@ -71,7 +69,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     }
 
     public void testPredictionWithSearchInput_KMeans() {
-        MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
+        MLInputDataset inputDataset = new SearchQueryInputDataset(List.of(irisIndexName), irisDataQuery());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
@@ -100,10 +98,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     }
 
     public void testPredictionWithSearchInput_LogisticRegression() {
-        MLInputDataset inputDataset = new SearchQueryInputDataset(
-            ImmutableList.of(irisIndexName),
-            irisDataQueryPredictLogisticRegression()
-        );
+        MLInputDataset inputDataset = new SearchQueryInputDataset(List.of(irisIndexName), irisDataQueryPredictLogisticRegression());
         predictAndVerify(logisticRegressionModelId, inputDataset, FunctionName.LOGISTIC_REGRESSION, null, IRIS_DATA_SIZE);
     }
 

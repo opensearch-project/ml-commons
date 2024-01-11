@@ -36,8 +36,6 @@ import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableSet;
-
 public class MLModelCacheHelperTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
@@ -179,7 +177,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.removeWorkerNode(modelId, nodeId2, true);
         assertArrayEquals(new String[] { nodeId }, cacheHelper.getWorkerNodes(modelId));
 
-        cacheHelper.removeWorkerNodes(ImmutableSet.of(nodeId), true);
+        cacheHelper.removeWorkerNodes(Set.of(nodeId), true);
         assertNull(cacheHelper.getWorkerNodes(modelId));
 
         cacheHelper.addWorkerNode(modelId, nodeId);
@@ -191,7 +189,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     public void testRemoveWorkerNode_ModelState() {
         cacheHelper.addWorkerNode(modelId, nodeId);
         cacheHelper.setModelState(modelId, MLModelState.DEPLOYING);
-        cacheHelper.removeWorkerNodes(ImmutableSet.of(nodeId), false);
+        cacheHelper.removeWorkerNodes(Set.of(nodeId), false);
         assertEquals(0, cacheHelper.getWorkerNodes(modelId).length);
         assertTrue(cacheHelper.isModelRunningOnNode(modelId));
 
@@ -235,7 +233,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
         String newNodeId = "new_node_id";
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
-        modelWorkerNodes.put(modelId, ImmutableSet.of(newNodeId));
+        modelWorkerNodes.put(modelId, Set.of(newNodeId));
         cacheHelper.syncWorkerNodes(modelWorkerNodes);
         assertArrayEquals(new String[] { modelId }, cacheHelper.getAllModels());
         assertArrayEquals(new String[] { newNodeId }, cacheHelper.getWorkerNodes(modelId));
@@ -249,7 +247,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
         String newNodeId = "new_node_id";
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
-        modelWorkerNodes.put(modelId, ImmutableSet.of(newNodeId));
+        modelWorkerNodes.put(modelId, Set.of(newNodeId));
         cacheHelper.syncWorkerNodes(modelWorkerNodes);
         assertEquals(2, cacheHelper.getAllModels().length);
         assertEquals(0, cacheHelper.getWorkerNodes(modelId2).length);
@@ -263,7 +261,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         String newModelId = "new_model_id";
         String newNodeId = "new_node_id";
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
-        modelWorkerNodes.put(newModelId, ImmutableSet.of(newNodeId));
+        modelWorkerNodes.put(newModelId, Set.of(newNodeId));
         cacheHelper.syncWorkerNodes(modelWorkerNodes);
         assertArrayEquals(new String[] { newModelId }, cacheHelper.getAllModels());
         assertArrayEquals(new String[] { newNodeId }, cacheHelper.getWorkerNodes(newModelId));
@@ -323,7 +321,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     public void test_removeWorkerNodes_with_deployToAllNodesStatus_isTrue() {
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYED, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         cacheHelper.addWorkerNode(modelId, nodeId);
-        cacheHelper.removeWorkerNodes(ImmutableSet.of(nodeId), false);
+        cacheHelper.removeWorkerNodes(Set.of(nodeId), false);
         cacheHelper.removeWorkerNode(modelId, nodeId, false);
         assertEquals(0, cacheHelper.getWorkerNodes(modelId).length);
         assertNull(cacheHelper.getModelInfo(modelId));

@@ -8,8 +8,10 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.ParseException;
@@ -31,9 +33,6 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
-
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";
@@ -69,7 +68,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.model_access_control_enabled\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -315,7 +314,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
                 throw new RuntimeException("Delete model for readonly user does not fail");
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("no permissions for [cluster:admin/opensearch/ml/models/delete]"));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("no permissions for [cluster:admin/opensearch/ml/models/delete]"));
             }
         }, false);
     }
@@ -344,7 +343,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
                 throw new RuntimeException("Delete task for readonly user does not fail");
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("no permissions for [cluster:admin/opensearch/ml/tasks/delete]"));
+                assertTrue(ExceptionUtils.getStackTrace(e).contains("no permissions for [cluster:admin/opensearch/ml/tasks/delete]"));
             }
         }, true);
     }

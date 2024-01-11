@@ -9,11 +9,7 @@ package org.opensearch.ml.autoredeploy;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -45,9 +41,6 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.Builder;
 import lombok.Data;
@@ -118,7 +111,7 @@ public class MLModelAutoReDeployer {
             triggerUndeployModelsOnDataNodes(dataNodeIds);
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     Consumer<Boolean> undeployModelsOnDataNodesConsumer() {
         return x -> {
             onlyRunOnMlNode = x;
@@ -302,7 +295,7 @@ public class MLModelAutoReDeployer {
         mlModelManager
             .updateModel(
                 modelId,
-                ImmutableMap.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
+                Map.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
             );
 
         MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, nodeIds, false, true);

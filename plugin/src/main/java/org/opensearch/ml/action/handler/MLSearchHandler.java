@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -43,8 +44,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-
-import com.google.common.base.Throwables;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -203,7 +202,7 @@ public class MLSearchHandler {
     public static <T> ActionListener<T> wrapRestActionListener(ActionListener<T> actionListener, String generalErrorMessage) {
         return ActionListener.<T>wrap(r -> { actionListener.onResponse(r); }, e -> {
             log.error("Wrap exception before sending back to user", e);
-            Throwable cause = Throwables.getRootCause(e);
+            Throwable cause = ExceptionUtils.getRootCause(e);
             if (isProperExceptionToReturn(e)) {
                 actionListener.onFailure(e);
             } else if (isProperExceptionToReturn(cause)) {

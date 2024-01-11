@@ -46,8 +46,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableMap;
-
 public class HttpJsonConnectorExecutorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -126,7 +124,7 @@ public class HttpJsonConnectorExecutorTest {
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
         when(executor.getHttpClient()).thenReturn(httpClient);
-        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "test input data")).build();
         ModelTensorOutput modelTensorOutput = executor
             .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
@@ -315,7 +313,7 @@ public class HttpJsonConnectorExecutorTest {
             .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
-        Map<String, String> parameters = ImmutableMap.of("input_docs_processed_step_size", "2");
+        Map<String, String> parameters = Map.of("input_docs_processed_step_size", "2");
         HttpConnector connector = HttpConnector
             .builder()
             .name("test connector")
@@ -390,7 +388,7 @@ public class HttpJsonConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
         // step size must be positive integer, here we set it as -1, should trigger IllegalArgumentException
-        Map<String, String> parameters = ImmutableMap.of("input_docs_processed_step_size", "-1");
+        Map<String, String> parameters = Map.of("input_docs_processed_step_size", "-1");
         HttpConnector connector = HttpConnector
             .builder()
             .name("test connector")

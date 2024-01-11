@@ -26,7 +26,6 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.conversation.Interaction;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -134,7 +133,7 @@ public class PromptUtil {
         return bldr.toString();
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     static String buildMessageParameter(
         String systemPrompt,
         String userInstructions,

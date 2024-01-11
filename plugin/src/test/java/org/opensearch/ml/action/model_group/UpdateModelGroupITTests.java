@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.model_group;
 
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -18,8 +20,6 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.test.OpenSearchIntegTestCase;
-
-import com.google.common.collect.ImmutableList;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
@@ -102,7 +102,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
             modelGroupId,
             "mock_model_group_name",
             "mock_model_group_desc",
-            ImmutableList.of("role-1"),
+            List.of("role-1"),
             AccessMode.RESTRICTED,
             null
         );

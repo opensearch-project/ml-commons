@@ -54,8 +54,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -275,11 +273,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             );
 
         StringBuilder scratchpadBuilder = new StringBuilder();
-        StringSubstitutor tmpSubstitutor = new StringSubstitutor(
-            ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
-            "${parameters.",
-            "}"
-        );
+        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
 
@@ -410,7 +404,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .getMemoryManager()
                                 .updateInteraction(
                                     parentInteractionId,
-                                    ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
+                                    Map.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
                                     ActionListener.<UpdateResponse>wrap(updateResponse -> {
                                         log.info("Updated final answer into interaction id: {}", parentInteractionId);
                                         log.info("Final answer: {}", finalAnswer1);
@@ -438,9 +432,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                                 ModelTensor
                                                     .builder()
                                                     .name("response")
-                                                    .dataAsMap(
-                                                        ImmutableMap.of("response", finalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo)
-                                                    )
+                                                    .dataAsMap(Map.of("response", finalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo))
                                                     .build()
                                             )
                                     )
@@ -493,7 +485,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         lastActionResult.set("no access to this tool ");
 
                         StringSubstitutor substitutor = new StringSubstitutor(
-                            ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
                             "${parameters.",
                             "}"
                         );
@@ -512,7 +504,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
                             list.add(outputString);
                         } else {
-                            additionalInfo.put(toolOutputKey, Lists.newArrayList(outputString));
+                            additionalInfo.put(toolOutputKey, List.of(outputString));
                         }
 
                     }
@@ -525,7 +517,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         .singletonList(
                                             ModelTensor
                                                 .builder()
-                                                .dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + output))
+                                                .dataAsMap(Map.of("response", lastThought.get() + "\nObservation: " + output))
                                                 .build()
                                         )
                                 )
@@ -533,11 +525,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
 
                     String toolResponse = tmpParameters.get("prompt.tool_response");
-                    StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(
-                        ImmutableMap.of("observation", output),
-                        "${parameters.",
-                        "}"
-                    );
+                    StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(Map.of("observation", output), "${parameters.", "}");
                     toolResponse = toolResponseSubstitutor.replace(toolResponse);
                     scratchpadBuilder.append(toolResponse).append("\n\n");
                     if (conversationIndexMemory != null) {
@@ -554,7 +542,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     }
                     StringSubstitutor substitutor = new StringSubstitutor(
-                        ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                        Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
                         "${parameters.",
                         "}"
                     );
@@ -599,7 +587,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                                     ModelTensor
                                                         .builder()
                                                         .name("response")
-                                                        .dataAsMap(ImmutableMap.of("response", lastThought.get()))
+                                                        .dataAsMap(Map.of("response", lastThought.get()))
                                                         .build()
                                                 )
                                         )

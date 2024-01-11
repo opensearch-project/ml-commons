@@ -18,8 +18,6 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -41,7 +39,7 @@ public class MachineLearningInternalClient {
         return actionFuture;
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
 

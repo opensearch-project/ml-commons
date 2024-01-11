@@ -22,9 +22,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLRegisterModelGroupAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_GROUP_ACTION = "ml_register_model_group_action";
 
@@ -40,7 +37,7 @@ public class RestMLRegisterModelGroupAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/model_groups/_register", ML_BASE_URI)));
+        return List.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/model_groups/_register", ML_BASE_URI)));
     }
 
     @Override
@@ -56,7 +53,7 @@ public class RestMLRegisterModelGroupAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLRegisterModelGroupRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLRegisterModelGroupRequest getRequest(RestRequest request) throws IOException {
         boolean hasContent = request.hasContent();
         if (!hasContent) {

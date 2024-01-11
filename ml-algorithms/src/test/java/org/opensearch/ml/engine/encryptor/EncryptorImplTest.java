@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
 
 import java.time.Instant;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -31,8 +32,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.threadpool.ThreadPool;
-
-import com.google.common.collect.ImmutableMap;
 
 public class EncryptorImplTest {
     @Rule
@@ -62,8 +61,7 @@ public class EncryptorImplTest {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             GetResponse response = mock(GetResponse.class);
             when(response.isExists()).thenReturn(true);
-            when(response.getSourceAsMap())
-                .thenReturn(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+            when(response.getSourceAsMap()).thenReturn(Map.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
             listener.onResponse(response);
             return null;
         }).when(client).get(any(), any());
@@ -72,9 +70,8 @@ public class EncryptorImplTest {
 
         Metadata metadata = new Metadata.Builder()
             .indices(
-                ImmutableMap
-                    .<String, IndexMetadata>builder()
-                    .put(
+                Map
+                    .of(
                         ML_CONFIG_INDEX,
                         IndexMetadata
                             .builder(ML_CONFIG_INDEX)
@@ -87,7 +84,6 @@ public class EncryptorImplTest {
                             )
                             .build()
                     )
-                    .build()
             )
             .build();
         when(clusterState.metadata()).thenReturn(metadata);
@@ -168,7 +164,7 @@ public class EncryptorImplTest {
         exceptionRule.expect(ResourceNotFoundException.class);
         exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
 
-        Metadata metadata = new Metadata.Builder().indices(ImmutableMap.of()).build();
+        Metadata metadata = new Metadata.Builder().indices(Map.of()).build();
         when(clusterState.metadata()).thenReturn(metadata);
 
         doAnswer(invocation -> {

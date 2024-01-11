@@ -64,8 +64,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -299,7 +297,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         }));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void deployRemoteModel(
         MLModel mlModel,
         MLTask mlTask,
@@ -375,7 +373,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         });
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void updateModelDeployStatusAndTriggerOnNodesAction(
         String modelId,
         String taskId,
@@ -438,7 +436,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     }
 
     // this method is only to stub static method.
-    @VisibleForTesting
+    // VisibleForTesting
     boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
         return RestActionUtils.isSuperAdminUser(clusterService, client);
     }

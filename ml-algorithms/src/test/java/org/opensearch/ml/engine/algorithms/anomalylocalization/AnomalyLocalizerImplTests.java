@@ -58,7 +58,6 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.Aggregations;
@@ -486,9 +485,8 @@ public class AnomalyLocalizerImplTests {
         );
         Metadata metadata = new Metadata.Builder()
             .indices(
-                ImmutableMap
-                    .<String, IndexMetadata>builder()
-                    .put(
+                Map
+                    .of(
                         indexName,
                         IndexMetadata
                             .builder("test")
@@ -501,7 +499,6 @@ public class AnomalyLocalizerImplTests {
                             )
                             .build()
                     )
-                    .build()
             )
             .build();
         return new ClusterState(

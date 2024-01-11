@@ -38,8 +38,6 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
-import com.google.common.annotations.VisibleForTesting;
-
 public class RestActionUtils {
 
     private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
@@ -180,7 +178,7 @@ public class RestActionUtils {
         channel.sendResponse(bytesRestResponse);
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     public static Optional<String[]> splitCommaSeparatedParam(RestRequest request, String paramName) {
         return Optional.ofNullable(request.param(paramName)).map(s -> s.split(","));
     }

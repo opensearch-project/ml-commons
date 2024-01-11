@@ -22,9 +22,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLListToolsAction extends BaseRestHandler {
     private static final String ML_LIST_TOOLS_ACTION = "ml_list_tools_action";
 
@@ -41,7 +38,7 @@ public class RestMLListToolsAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tools", ML_BASE_URI)));
+        return List.of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tools", ML_BASE_URI)));
     }
 
     /**
@@ -63,7 +60,7 @@ public class RestMLListToolsAction extends BaseRestHandler {
         return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsListRequest, new RestToXContentListener<>(channel));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     MLToolsListRequest getRequest(RestRequest request) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
         toolFactories

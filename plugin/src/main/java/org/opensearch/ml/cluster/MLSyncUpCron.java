@@ -11,13 +11,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
@@ -46,9 +40,6 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -61,7 +52,7 @@ public class MLSyncUpCron implements Runnable {
     private MLIndicesHandler mlIndicesHandler;
     private Encryptor encryptor;
     private volatile Boolean mlConfigInited;
-    @VisibleForTesting
+    // VisibleForTesting
     Semaphore updateModelStateSemaphore;
 
     public MLSyncUpCron(
@@ -163,7 +154,7 @@ public class MLSyncUpCron implements Runnable {
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void initMLConfig() {
         if (mlConfigInited) {
             return;
@@ -175,7 +166,7 @@ public class MLSyncUpCron implements Runnable {
                     if (!getResponse.isExists()) {
                         IndexRequest indexRequest = new IndexRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
                         final String masterKey = encryptor.generateMasterKey();
-                        indexRequest.source(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+                        indexRequest.source(Map.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
                         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
                             log.info("ML configuration initialized successfully");
@@ -193,7 +184,7 @@ public class MLSyncUpCron implements Runnable {
         }, e -> { log.debug("Failed to init ML config index", e); }));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void refreshModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, Set<String>> deployingModels) {
         if (!updateModelStateSemaphore.tryAcquire()) {
             return;
@@ -357,19 +348,19 @@ public class MLSyncUpCron implements Runnable {
             for (String modelId : updatedModelIds) {
                 UpdateRequest updateRequest = new UpdateRequest();
                 Instant now = Instant.now();
-                ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
+                final Map<String, Object> map = new HashMap<>();
                 if (newModelStates.containsKey(modelId)) {
-                    builder.put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name());
+                    map.put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name());
                 }
                 if (newPlanningWorkNodes.containsKey(modelId)) {
-                    builder.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkNodes.get(modelId));
-                    builder.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkNodes.get(modelId).size());
+                    map.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkNodes.get(modelId));
+                    map.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkNodes.get(modelId).size());
                 }
-                builder.put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+                map.put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
                 Set<String> workerNodes = modelWorkerNodes.get(modelId);
                 int currentWorkNodeCount = workerNodes == null ? 0 : workerNodes.size();
-                builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
-                updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
+                map.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
+                updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(Collections.unmodifiableMap(map));
                 bulkUpdateRequest.add(updateRequest);
             }
             log.info("Refresh model state: {}", newModelStates);

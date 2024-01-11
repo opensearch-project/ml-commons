@@ -40,8 +40,6 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -159,7 +157,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
     }
 
     // this method is only to stub static method.
-    @VisibleForTesting
+    // VisibleForTesting
     boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
         return RestActionUtils.isSuperAdminUser(clusterService, client);
     }

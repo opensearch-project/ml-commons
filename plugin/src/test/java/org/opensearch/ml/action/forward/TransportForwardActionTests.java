@@ -69,9 +69,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
 public class TransportForwardActionTests extends OpenSearchTestCase {
 
     @Mock
@@ -137,8 +134,8 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             )
         );
 
-        node1 = new DiscoveryNode(nodeId1, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
-        node2 = new DiscoveryNode(nodeId2, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
+        node1 = new DiscoveryNode(nodeId1, buildNewFakeTransportAddress(), emptyMap(), Set.of(ML_ROLE), Version.CURRENT);
+        node2 = new DiscoveryNode(nodeId2, buildNewFakeTransportAddress(), emptyMap(), Set.of(ML_ROLE), Version.CURRENT);
 
         when(nodeHelper.getAllNodes()).thenReturn(new DiscoveryNode[] { node1, node2 });
     }
@@ -207,7 +204,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
         when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(new String[] { nodeId1 });
         MLTaskCache mlTaskCache = mock(MLTaskCache.class);
-        when(mlTaskCache.getErrors()).thenReturn(ImmutableMap.of());
+        when(mlTaskCache.getErrors()).thenReturn(Map.of());
         when(mlTaskCache.hasError()).thenReturn(false);
         when(mlTaskCache.getWorkerNodeSize()).thenReturn(1);
         when(mlTaskCache.errorNodesCount()).thenReturn(0);

@@ -30,9 +30,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLRegisterModelAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";
     private volatile boolean isModelUrlAllowed;
@@ -63,7 +60,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
 
     @Override
     public List<ReplacedRoute> replacedRoutes() {
-        return ImmutableList
+        return List
             .of(
                 new ReplacedRoute(
                     RestRequest.Method.POST,
@@ -94,7 +91,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLTrainingTaskRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLRegisterModelRequest getRequest(RestRequest request) throws IOException {
         boolean loadModel = request.paramAsBoolean(PARAMETER_DEPLOY_MODEL, false);
         XContentParser parser = request.contentParser();

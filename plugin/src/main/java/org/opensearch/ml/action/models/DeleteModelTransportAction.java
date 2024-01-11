@@ -49,8 +49,6 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -173,7 +171,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void deleteModelChunks(String modelId, DeleteResponse deleteResponse, ActionListener<DeleteResponse> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
         deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
@@ -279,7 +277,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     // this method is only to stub static method.
-    @VisibleForTesting
+    // VisibleForTesting
     boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
         return RestActionUtils.isSuperAdminUser(clusterService, client);
     }

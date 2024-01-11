@@ -26,8 +26,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMLUpdateModelAction extends BaseRestHandler {
 
     private static final String ML_UPDATE_MODEL_ACTION = "ml_update_model_action";
@@ -39,8 +37,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
-            .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/models/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
+        return List.of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/models/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
     }
 
     @Override

@@ -19,8 +19,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMLDeleteTaskAction extends BaseRestHandler {
     private static final String ML_DELETE_TASK_ACTION = "ml_delete_task_action";
 
@@ -33,8 +31,7 @@ public class RestMLDeleteTaskAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
-            .of(new Route(RestRequest.Method.DELETE, String.format(Locale.ROOT, "%s/tasks/{%s}", ML_BASE_URI, PARAMETER_TASK_ID)));
+        return List.of(new Route(RestRequest.Method.DELETE, String.format(Locale.ROOT, "%s/tasks/{%s}", ML_BASE_URI, PARAMETER_TASK_ID)));
     }
 
     @Override

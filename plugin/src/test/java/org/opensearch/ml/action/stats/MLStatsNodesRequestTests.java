@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -13,14 +14,12 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableSet;
-
 public class MLStatsNodesRequestTests extends OpenSearchTestCase {
 
     public void testSerializationDeserialization() throws IOException {
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { "testNodeId" }, new MLStatsInput());
 
-        mlStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
+        mlStatsNodesRequest.addNodeLevelStats(Set.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         BytesStreamOutput output = new BytesStreamOutput();
         MLStatsNodeRequest request = new MLStatsNodeRequest(mlStatsNodesRequest);
         request.writeTo(output);

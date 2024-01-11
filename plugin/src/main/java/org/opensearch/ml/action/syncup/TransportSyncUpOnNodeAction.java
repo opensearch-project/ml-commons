@@ -45,9 +45,6 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -153,7 +150,7 @@ public class TransportSyncUpOnNodeAction extends
                 mlModelManager
                     .removeModelWorkerNode(
                         entry.getKey(),
-                        Optional.ofNullable(deployToAllNodes).orElse(ImmutableMap.of()).containsKey(entry.getKey()),
+                        Optional.ofNullable(deployToAllNodes).orElse(Map.of()).containsKey(entry.getKey()),
                         entry.getValue()
                     );
             }
@@ -190,7 +187,7 @@ public class TransportSyncUpOnNodeAction extends
         );
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void cleanUpLocalCache(Map<String, Set<String>> runningDeployModelTasks) {
         String[] allTaskIds = mlTaskManager.getAllTaskIds();
         if (allTaskIds == null) {
@@ -212,8 +209,7 @@ public class TransportSyncUpOnNodeAction extends
                 mlTaskManager
                     .updateMLTask(
                         taskId,
-                        ImmutableMap
-                            .of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, "timeout after " + mlTaskTimeout + " seconds"),
+                        Map.of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, "timeout after " + mlTaskTimeout + " seconds"),
                         10_000,
                         true
                     );

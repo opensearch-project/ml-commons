@@ -12,8 +12,6 @@ import org.opensearch.common.settings.Setting;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
-import com.google.common.collect.ImmutableList;
-
 public final class MLCommonsSettings {
 
     private MLCommonsSettings() {}
@@ -123,7 +121,7 @@ public final class MLCommonsSettings {
     public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .listSetting(
             "plugins.ml_commons.trusted_connector_endpoints_regex",
-            ImmutableList
+            List
                 .of(
                     "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
@@ -154,7 +152,7 @@ public final class MLCommonsSettings {
     public static final Setting<List<String>> ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES = Setting
         .listSetting(
             "plugins.ml_commons.task_dispatcher.eligible_node_role.remote_model",
-            ImmutableList.of("data", "ml"),
+            List.of("data", "ml"),
             Function.identity(),
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
@@ -163,7 +161,7 @@ public final class MLCommonsSettings {
     public static final Setting<List<String>> ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES = Setting
         .listSetting(
             "plugins.ml_commons.task_dispatcher.eligible_node_role.local_model",
-            ImmutableList.of("data", "ml"),
+            List.of("data", "ml"),
             Function.identity(),
             Setting.Property.NodeScope,
             Setting.Property.Dynamic

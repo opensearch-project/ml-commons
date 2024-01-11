@@ -41,8 +41,6 @@ import org.opensearch.ml.stats.suppliers.SettableSupplier;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableSet;
-
 public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     private MLStatsNodesTransportAction action;
     private MLStats mlStats;
@@ -110,7 +108,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
 
-        ImmutableSet<MLNodeLevelStat> statsToBeRetrieved = ImmutableSet.of(nodeStatName1);
+        Set<MLNodeLevelStat> statsToBeRetrieved = Set.of(nodeStatName1);
         mlStatsNodesRequest.addNodeLevelStats(statsToBeRetrieved);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
@@ -123,7 +121,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
 
-        Set<MLNodeLevelStat> statsToBeRetrieved = ImmutableSet.of(ML_JVM_HEAP_USAGE);
+        Set<MLNodeLevelStat> statsToBeRetrieved = Set.of(ML_JVM_HEAP_USAGE);
 
         mlStatsNodesRequest.addNodeLevelStats(statsToBeRetrieved);
 

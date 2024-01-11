@@ -13,6 +13,7 @@ import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
@@ -21,8 +22,6 @@ import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
-
-import com.google.common.collect.ImmutableSet;
 
 public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
     @Before
@@ -45,7 +44,7 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
 
     public void testNormalCase() throws ExecutionException, InterruptedException {
         MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0], new MLStatsInput());
-        request.addNodeLevelStats(ImmutableSet.of(ML_EXECUTING_TASK_COUNT));
+        request.addNodeLevelStats(Set.of(ML_EXECUTING_TASK_COUNT));
 
         ActionFuture<MLStatsNodesResponse> future = client().execute(MLStatsNodesAction.INSTANCE, request);
         MLStatsNodesResponse response = future.get();

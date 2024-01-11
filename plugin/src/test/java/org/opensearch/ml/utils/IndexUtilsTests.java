@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.utils;
 
+import java.util.Map;
+
 import org.junit.Ignore;
 import org.opensearch.action.support.master.AcknowledgedResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.test.OpenSearchIntegTestCase;
-
-import com.google.common.collect.ImmutableMap;
 
 public class IndexUtilsTests extends OpenSearchIntegTestCase {
 
@@ -54,7 +54,7 @@ public class IndexUtilsTests extends OpenSearchIntegTestCase {
 
         long count = 20;
         for (int i = 0; i < count; i++) {
-            index(indexName, "_doc", i + "", ImmutableMap.of(randomAlphaOfLength(5), randomAlphaOfLength(5)));
+            index(indexName, "_doc", i + "", Map.of(randomAlphaOfLength(5), randomAlphaOfLength(5)));
         }
         flushAndRefresh(indexName);
         IndexUtils indexUtils = new IndexUtils(client(), clusterService());

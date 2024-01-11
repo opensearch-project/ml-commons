@@ -37,8 +37,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 
-import com.google.common.collect.ImmutableMap;
-
 public class ConnectorUtilsTest {
 
     @Mock
@@ -190,8 +188,7 @@ public class ConnectorUtilsTest {
             .parameters(parameters)
             .actions(Arrays.asList(predictAction))
             .build();
-        ModelTensors tensors = ConnectorUtils
-            .processOutput("{\"response\": \"test response\"}", connector, scriptService, ImmutableMap.of());
+        ModelTensors tensors = ConnectorUtils.processOutput("{\"response\": \"test response\"}", connector, scriptService, Map.of());
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
@@ -224,7 +221,7 @@ public class ConnectorUtilsTest {
             .build();
         String modelResponse =
             "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
-        ModelTensors tensors = ConnectorUtils.processOutput(modelResponse, connector, scriptService, ImmutableMap.of());
+        ModelTensors tensors = ConnectorUtils.processOutput(modelResponse, connector, scriptService, Map.of());
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
         Assert.assertNull(tensors.getMlModelTensors().get(0).getDataAsMap());

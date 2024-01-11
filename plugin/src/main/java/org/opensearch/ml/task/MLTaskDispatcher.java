@@ -10,6 +10,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPA
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -26,8 +27,6 @@ import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLNodeLevelStat;
-
-import com.google.common.collect.ImmutableSet;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -106,7 +105,7 @@ public class MLTaskDispatcher {
 
     private void dispatchTaskWithLeastLoad(DiscoveryNode[] nodes, ActionListener<DiscoveryNode> listener) {
         MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(nodes);
-        MLStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, MLNodeLevelStat.ML_JVM_HEAP_USAGE));
+        MLStatsNodesRequest.addNodeLevelStats(Set.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, MLNodeLevelStat.ML_JVM_HEAP_USAGE));
 
         client.execute(MLStatsNodesAction.INSTANCE, MLStatsNodesRequest, ActionListener.wrap(mlStatsResponse -> {
             // Check JVM pressure

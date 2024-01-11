@@ -18,8 +18,6 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.script.ScriptType;
 import org.opensearch.script.TemplateScript;
 
-import com.google.common.collect.ImmutableMap;
-
 public class ScriptUtils {
 
     public static Optional<String> executePreprocessFunction(
@@ -27,7 +25,7 @@ public class ScriptUtils {
         String preProcessFunction,
         List<String> inputSentences
     ) {
-        return Optional.ofNullable(executeScript(scriptService, preProcessFunction, ImmutableMap.of("text_docs", inputSentences)));
+        return Optional.ofNullable(executeScript(scriptService, preProcessFunction, Map.of("text_docs", inputSentences)));
     }
 
     public static List<ModelTensor> executeBuildInPostProcessFunction(

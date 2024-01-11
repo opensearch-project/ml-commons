@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -27,9 +28,6 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_train_predict_it";
@@ -55,7 +53,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
     }
 
     public void testTrainAndPredictKmeans_ExcludeNodes() throws IOException {
-        Response nodeResponse = TestHelper.makeRequest(client(), "GET", "/_cat/nodes", ImmutableMap.of(), (HttpEntity) null, null);
+        Response nodeResponse = TestHelper.makeRequest(client(), "GET", "/_cat/nodes", Map.of(), (HttpEntity) null, null);
         String response = TestHelper.httpEntityToString(nodeResponse.getEntity());
         String[] nodes = response.split("\n");
         StringBuilder nodeNames = new StringBuilder();
@@ -75,7 +73,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.exclude_nodes._name\":\"" + excludedNames + "\"}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, updateSettingResponse.getStatusLine().getStatusCode());
 
@@ -96,21 +94,10 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
         sourceBuilder.query(new MatchAllQueryBuilder());
         sourceBuilder.size(1000);
         sourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
-        MLInputDataset inputData = SearchQueryInputDataset
-            .builder()
-            .indices(ImmutableList.of(irisIndex))
-            .searchSourceBuilder(sourceBuilder)
-            .build();
+        MLInputDataset inputData = SearchQueryInputDataset.builder().indices(List.of(irisIndex)).searchSourceBuilder(sourceBuilder).build();
         MLInput kmeansInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(params).inputDataset(inputData).build();
         Response kmeansResponse = TestHelper
-            .makeRequest(
-                client(),
-                "POST",
-                "/_plugins/_ml/_train_predict/kmeans",
-                ImmutableMap.of(),
-                TestHelper.toHttpEntity(kmeansInput),
-                null
-            );
+            .makeRequest(client(), "POST", "/_plugins/_ml/_train_predict/kmeans", Map.of(), TestHelper.toHttpEntity(kmeansInput), null);
         return kmeansResponse;
     }
 
@@ -129,11 +116,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
         sourceBuilder.query(new MatchAllQueryBuilder());
         sourceBuilder.size(1000);
         sourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
-        MLInputDataset inputData = SearchQueryInputDataset
-            .builder()
-            .indices(ImmutableList.of(irisIndex))
-            .searchSourceBuilder(sourceBuilder)
-            .build();
+        MLInputDataset inputData = SearchQueryInputDataset.builder().indices(List.of(irisIndex)).searchSourceBuilder(sourceBuilder).build();
         trainAndPredictKmeansWithIrisData(params, inputData, function);
     }
 
@@ -141,14 +124,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
         throws IOException {
         MLInput kmeansInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(params).inputDataset(inputData).build();
         Response kmeansResponse = TestHelper
-            .makeRequest(
-                client(),
-                "POST",
-                "/_plugins/_ml/_train_predict/kmeans",
-                ImmutableMap.of(),
-                TestHelper.toHttpEntity(kmeansInput),
-                null
-            );
+            .makeRequest(client(), "POST", "/_plugins/_ml/_train_predict/kmeans", Map.of(), TestHelper.toHttpEntity(kmeansInput), null);
         HttpEntity entity = kmeansResponse.getEntity();
         assertNotNull(kmeansResponse);
         String entityString = TestHelper.httpEntityToString(entity);

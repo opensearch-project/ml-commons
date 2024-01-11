@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.DoubleStream;
 
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -21,8 +22,6 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLPredictRequestStats;
-
-import com.google.common.math.Quantiles;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -209,10 +208,12 @@ public class MLModelCache {
             statsBuilder.min(doubleSummaryStatistics.getMin());
             statsBuilder.average(doubleSummaryStatistics.getAverage());
 
-            Quantiles.Scale percentiles = Quantiles.percentiles();
-            statsBuilder.p50(percentiles.index(50).compute(queue));
-            statsBuilder.p90(percentiles.index(90).compute(queue));
-            statsBuilder.p99(percentiles.index(99).compute(queue));
+            final double[] doubles = doubleStream.toArray();
+            DescriptiveStatistics stats = new DescriptiveStatistics(doubles);
+
+            statsBuilder.p50(stats.getPercentile(50));
+            statsBuilder.p90(stats.getPercentile(90));
+            statsBuilder.p99(stats.getPercentile(99));
 
             return statsBuilder.build();
         }

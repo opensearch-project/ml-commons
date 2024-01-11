@@ -7,13 +7,12 @@ package org.opensearch.ml.action.custom_model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Ignore;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.test.OpenSearchIntegTestCase;
-
-import com.google.common.collect.ImmutableSet;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
 public class CustomModelMultiDataNodesITTests extends CustomModelITTests {
@@ -31,8 +30,8 @@ public class CustomModelMultiDataNodesITTests extends CustomModelITTests {
         assertTrue(remoteDataNodes.size() >= 2);
 
         // We can only load model on one data node on DJL under Opensearch integ test framework
-        testTextEmbeddingModel(ImmutableSet.of(remoteDataNodes.get(0)));
-        testKMeans(ImmutableSet.of(remoteDataNodes.get(1)));
+        testTextEmbeddingModel(Set.of(remoteDataNodes.get(0)));
+        testKMeans(Set.of(remoteDataNodes.get(1)));
     }
 
 }

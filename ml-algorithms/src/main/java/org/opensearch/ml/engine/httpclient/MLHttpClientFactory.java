@@ -21,8 +21,6 @@ import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -56,7 +54,7 @@ public class MLHttpClientFactory {
         return builder.build();
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     protected static void validateSchemaAndPort(HttpHost host) {
         String scheme = host.getSchemeName();
         if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {

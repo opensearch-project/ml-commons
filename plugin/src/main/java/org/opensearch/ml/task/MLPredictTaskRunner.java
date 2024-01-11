@@ -13,6 +13,7 @@ import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.opensearch.OpenSearchException;
@@ -57,8 +58,6 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -170,7 +169,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .inputType(inputDataType)
             .functionName(request.getMlInput().getFunctionName())
             .state(MLTaskState.CREATED)
-            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .workerNodes(List.of(clusterService.localNode().getId()))
             .createTime(now)
             .lastUpdateTime(now)
             .async(false)

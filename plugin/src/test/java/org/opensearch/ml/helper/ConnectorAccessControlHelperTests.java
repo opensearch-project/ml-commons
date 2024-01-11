@@ -47,8 +47,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableList;
-
 public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Mock
@@ -148,7 +146,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     public void test_hasPermission_connector_isRestricted_userHasBackendRole_return_true() {
         HttpConnector httpConnector = mock(HttpConnector.class);
         when(httpConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
-        when(httpConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-1"));
+        when(httpConnector.getBackendRoles()).thenReturn(List.of("role-1"));
         boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertTrue(hasPermission);
     }
@@ -156,7 +154,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     public void test_hasPermission_connector_isRestricted_userNotHasBackendRole_return_false() {
         HttpConnector httpConnector = mock(HttpConnector.class);
         when(httpConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
-        when(httpConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-3"));
+        when(httpConnector.getBackendRoles()).thenReturn(List.of("role-3"));
         when(httpConnector.getOwner()).thenReturn(user);
         boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertFalse(hasPermission);
@@ -175,7 +173,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     public void test_validateConnectorAccess_user_isNotAdmin_hasNoBackendRole_return_false() {
-        GetResponse getResponse = createGetResponse(ImmutableList.of("role-3"));
+        GetResponse getResponse = createGetResponse(List.of("role-3"));
         Client client = mock(Client.class);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -286,7 +284,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             .protocol(ConnectorProtocols.HTTP)
             .owner(user)
             .description("This is test connector")
-            .backendRoles(Optional.ofNullable(backendRoles).orElse(ImmutableList.of("role-1")))
+            .backendRoles(Optional.ofNullable(backendRoles).orElse(List.of("role-1")))
             .accessMode(AccessMode.RESTRICTED)
             .build();
         XContentBuilder content = null;

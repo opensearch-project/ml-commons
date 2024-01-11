@@ -47,8 +47,6 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 
-import com.google.common.collect.ImmutableList;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -92,7 +90,7 @@ public class RestMLStatsAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(RestRequest.Method.GET, ML_BASE_URI + "/{nodeId}/stats/"),
                 new Route(RestRequest.Method.GET, ML_BASE_URI + "/{nodeId}/stats/{stat}"),

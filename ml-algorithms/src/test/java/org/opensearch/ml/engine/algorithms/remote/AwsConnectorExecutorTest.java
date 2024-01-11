@@ -18,6 +18,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -46,9 +47,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.http.ExecutableHttpRequest;
@@ -129,9 +127,9 @@ public class AwsConnectorExecutorTest {
             .url("http://test.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        Map<String, String> credential = ImmutableMap
+        Map<String, String> credential = Map
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Map<String, String> parameters = Map.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -149,7 +147,7 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
     }
 
@@ -174,9 +172,9 @@ public class AwsConnectorExecutorTest {
             .url("http://test.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        Map<String, String> credential = ImmutableMap
+        Map<String, String> credential = Map
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Map<String, String> parameters = Map.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -194,7 +192,7 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
     }
 
@@ -217,9 +215,9 @@ public class AwsConnectorExecutorTest {
             .url("http://test.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        Map<String, String> credential = ImmutableMap
+        Map<String, String> credential = Map
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Map<String, String> parameters = Map.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -237,7 +235,7 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "test input data")).build();
         ModelTensorOutput modelTensorOutput = executor
             .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
@@ -267,9 +265,9 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
-        Map<String, String> credential = ImmutableMap
+        Map<String, String> credential = Map
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Map<String, String> parameters = Map.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -287,7 +285,7 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(List.of("input")).build();
         ModelTensorOutput modelTensorOutput = executor
             .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());

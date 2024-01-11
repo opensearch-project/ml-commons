@@ -24,9 +24,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLRegisterModelMetaAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_META_ACTION = "ml_register_model_meta_action";
 
@@ -51,7 +48,7 @@ public class RestMLRegisterModelMetaAction extends BaseRestHandler {
 
     @Override
     public List<ReplacedRoute> replacedRoutes() {
-        return ImmutableList
+        return List
             .of(
                 new ReplacedRoute(
                     RestRequest.Method.POST,
@@ -75,7 +72,7 @@ public class RestMLRegisterModelMetaAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLUploadModelMetaRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLRegisterModelMetaRequest getRequest(RestRequest request) throws IOException {
         boolean hasContent = request.hasContent();
         if (!isLocalFileUploadAllowed) {

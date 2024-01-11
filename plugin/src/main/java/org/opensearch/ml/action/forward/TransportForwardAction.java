@@ -12,10 +12,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLExceptionUtils.toJsonString;
 
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -47,8 +44,6 @@ import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableMap;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -138,14 +133,14 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         } else {
                             syncModelWorkerNodes(modelId, functionName);
                         }
-                        ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-                        builder.put(MLTask.STATE_FIELD, taskState);
+                        final Map<String, Object> map = new HashMap<>();
+                        map.put(MLTask.STATE_FIELD, taskState);
                         if (mlTaskCache.hasError()) {
                             currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize() - mlTaskCache.getErrors().size();
-                            builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
+                            map.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
-                        mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
+                        mlTaskManager.updateMLTask(taskId, Collections.unmodifiableMap(map), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
                         if (!mlTaskCache.allNodeFailed()) {
@@ -202,7 +197,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName);
         if (allNodes.length > 1 && workerNodes != null && workerNodes.length > 0) {
             log.debug("Sync to other nodes about worker nodes of model {}: {}", modelId, Arrays.toString(workerNodes));
-            MLSyncUpInput syncUpInput = MLSyncUpInput.builder().addedWorkerNodes(ImmutableMap.of(modelId, workerNodes)).build();
+            MLSyncUpInput syncUpInput = MLSyncUpInput.builder().addedWorkerNodes(Map.of(modelId, workerNodes)).build();
             MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
             client
                 .execute(

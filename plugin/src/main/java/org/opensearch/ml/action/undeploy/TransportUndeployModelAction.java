@@ -48,8 +48,6 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -156,7 +154,7 @@ public class TransportUndeployModelAction extends
                          */
                         Map<String, Object> updateDocument = new HashMap<>();
                         if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) { // undeploy all nodes.
-                            updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
+                            updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, List.of());
                             updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
                             updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
                             updateDocument.put(MLModel.MODEL_STATE_FIELD, MLModelState.UNDEPLOYED);

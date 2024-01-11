@@ -20,9 +20,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-
 public class RestMLGetTaskAction extends BaseRestHandler {
     private static final String ML_GET_Task_ACTION = "ml_get_task_action";
 
@@ -38,8 +35,7 @@ public class RestMLGetTaskAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
-            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tasks/{%s}", ML_BASE_URI, PARAMETER_TASK_ID)));
+        return List.of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tasks/{%s}", ML_BASE_URI, PARAMETER_TASK_ID)));
     }
 
     @Override
@@ -54,7 +50,7 @@ public class RestMLGetTaskAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLTaskGetRequest
      */
-    @VisibleForTesting
+    // VisibleForTesting
     MLTaskGetRequest getRequest(RestRequest request) throws IOException {
         String taskId = getParameterId(request, PARAMETER_TASK_ID);
 

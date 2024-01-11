@@ -49,9 +49,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-
 public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private TransportCreateConnectorAction action;
@@ -92,7 +89,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private Settings settings;
 
-    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = List
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
     @Before
@@ -137,8 +134,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
                     .build()
             );
 
-        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com");
-        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        Map<String, String> parameters = Map.of("endpoint", "api.openai.com");
+        Map<String, String> credential = Map.of("access_key", "mockKey", "secret_key", "mockSecret");
         input = MLCreateConnectorInput
             .builder()
             .name("test_name")
@@ -199,7 +196,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     public void test_execute_connectorAccessControlEnabled_success() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
         input.setAddAllBackendRoles(false);
-        input.setBackendRoles(ImmutableList.of("role1", "role2"));
+        input.setBackendRoles(List.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -339,7 +336,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
         input.setAddAllBackendRoles(true);
-        input.setBackendRoles(ImmutableList.of("role1", "role2"));
+        input.setBackendRoles(List.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -383,7 +380,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
         input.setAddAllBackendRoles(false);
-        input.setBackendRoles(ImmutableList.of("role1", "role2"));
+        input.setBackendRoles(List.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -416,7 +413,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     public void test_execute_dryRun_connector_creation() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
         input.setAddAllBackendRoles(false);
-        input.setBackendRoles(ImmutableList.of("role1", "role2"));
+        input.setBackendRoles(List.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -460,7 +457,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
 
-        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
+        Map<String, String> parameters = Map.of("endpoint", "api.openai1.com");
         mlCreateConnectorInput.setParameters(parameters);
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
             transportService,

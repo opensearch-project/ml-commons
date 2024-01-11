@@ -45,8 +45,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableSet;
-
 public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     @Mock
@@ -77,10 +75,10 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
         taskDispatcher = spy(new MLTaskDispatcher(clusterService, client, settings, nodeHelper));
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService, settings));
 
-        Set<DiscoveryNodeRole> dataRoleSet = ImmutableSet.of(DiscoveryNodeRole.DATA_ROLE);
+        Set<DiscoveryNodeRole> dataRoleSet = Set.of(DiscoveryNodeRole.DATA_ROLE);
         dataNode1 = new DiscoveryNode("node1", buildNewFakeTransportAddress(), new HashMap<>(), dataRoleSet, Version.CURRENT);
         dataNode2 = new DiscoveryNode("node2", buildNewFakeTransportAddress(), new HashMap<>(), dataRoleSet, Version.CURRENT);
-        Set<DiscoveryNodeRole> mlRoleSet = ImmutableSet.of(ML_ROLE);
+        Set<DiscoveryNodeRole> mlRoleSet = Set.of(ML_ROLE);
         mlNode = new DiscoveryNode("mlNode", buildNewFakeTransportAddress(), new HashMap<>(), mlRoleSet, Version.CURRENT);
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(dataNode1).add(dataNode2).build();
         testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);

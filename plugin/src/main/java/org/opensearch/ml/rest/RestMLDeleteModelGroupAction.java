@@ -19,8 +19,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.collect.ImmutableList;
-
 /**
  * This class consists of the REST handler to delete ML Model.
  */
@@ -36,7 +34,7 @@ public class RestMLDeleteModelGroupAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
+        return List
             .of(
                 new Route(
                     RestRequest.Method.DELETE,

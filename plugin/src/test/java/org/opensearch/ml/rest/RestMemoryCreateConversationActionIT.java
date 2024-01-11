@@ -18,6 +18,7 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.hc.core5.http.HttpEntity;
@@ -30,8 +31,6 @@ import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.TestHelper;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMemoryCreateConversationActionIT extends MLCommonsRestTestCase {
 
     @Before
@@ -43,7 +42,7 @@ public class RestMemoryCreateConversationActionIT extends MLCommonsRestTestCase 
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"" + MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey() + "\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
     }

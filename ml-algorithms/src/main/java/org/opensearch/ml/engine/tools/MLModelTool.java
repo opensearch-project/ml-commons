@@ -21,7 +21,6 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -38,7 +37,7 @@ public class MLModelTool implements Tool {
     @Setter
     @Getter
     private String name = TYPE;
-    @VisibleForTesting
+    // VisibleForTesting
     static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     @Getter
     @Setter

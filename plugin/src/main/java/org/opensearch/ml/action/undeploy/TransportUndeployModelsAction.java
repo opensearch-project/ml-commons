@@ -36,8 +36,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -153,7 +151,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
         return RestActionUtils.isSuperAdminUser(clusterService, client);
     }

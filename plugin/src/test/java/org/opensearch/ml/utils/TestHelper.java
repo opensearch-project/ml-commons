@@ -84,9 +84,6 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
-
 public class TestHelper {
 
     public static final Setting<Boolean> IS_ML_NODE_SETTING = Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
@@ -294,9 +291,7 @@ public class TestHelper {
     }
 
     public static RestRequest getStatsRestRequest(String nodeId, String stat) {
-        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
-            .withParams(ImmutableMap.of("nodeId", nodeId, "stat", stat))
-            .build();
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry()).withParams(Map.of("nodeId", nodeId, "stat", stat)).build();
         return request;
     }
 
@@ -434,9 +429,8 @@ public class TestHelper {
         );
         Metadata metadata = new Metadata.Builder()
             .indices(
-                ImmutableMap
-                    .<String, IndexMetadata>builder()
-                    .put(
+                Map
+                    .of(
                         ML_MODEL_INDEX,
                         IndexMetadata
                             .builder("test")
@@ -449,7 +443,6 @@ public class TestHelper {
                             )
                             .build()
                     )
-                    .build()
             )
             .build();
         return new ClusterState(
@@ -468,7 +461,7 @@ public class TestHelper {
 
     public static ClusterSettings clusterSetting(Settings settings, Setting<?>... setting) {
         final Set<Setting<?>> settingsSet = Stream
-            .concat(ClusterSettings.BUILT_IN_CLUSTER_SETTINGS.stream(), Sets.newHashSet(setting).stream())
+            .concat(ClusterSettings.BUILT_IN_CLUSTER_SETTINGS.stream(), Set.of(setting).stream())
             .collect(Collectors.toSet());
         ClusterSettings clusterSettings = new ClusterSettings(settings, settingsSet);
         return clusterSettings;

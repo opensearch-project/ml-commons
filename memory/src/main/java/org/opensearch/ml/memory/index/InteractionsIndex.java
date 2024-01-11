@@ -61,8 +61,6 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
@@ -275,7 +273,7 @@ public class InteractionsIndex {
         conversationMetaIndex.checkAccess(conversationId, accessListener);
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void innerGetInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
         SearchRequest request = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
 
@@ -369,7 +367,7 @@ public class InteractionsIndex {
      * @param maxResults how many interactions to get per search query
      * @param listener receives the list of all interactions in the conversation
      */
-    @VisibleForTesting
+    // VisibleForTesting
     void getAllInteractions(String conversationId, int maxResults, ActionListener<List<Interaction>> listener) {
         ActionListener<List<Interaction>> al = nextGetListener(conversationId, 0, maxResults, listener, new LinkedList<>());
         innerGetInteractions(conversationId, 0, maxResults, al);
@@ -385,7 +383,7 @@ public class InteractionsIndex {
      * @param result partially built list of interactions
      * @return an ActionListener to handle the next search query
      */
-    @VisibleForTesting
+    // VisibleForTesting
     ActionListener<List<Interaction>> nextGetListener(
         String conversationId,
         int from,

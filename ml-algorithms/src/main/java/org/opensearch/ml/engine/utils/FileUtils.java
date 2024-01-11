@@ -13,6 +13,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -20,11 +21,8 @@ import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.opensearch.ml.common.exception.MLException;
-
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
-import com.google.common.io.ByteSource;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -138,9 +136,9 @@ public class FileUtils {
      * @throws IOException
      */
     public static String calculateFileHash(File file) throws IOException {
-        ByteSource byteSource = com.google.common.io.Files.asByteSource(file);
-        HashCode hc = byteSource.hash(Hashing.sha256());
-        return hc.toString();
+        try (final InputStream inputStream = Files.newInputStream(file.toPath())) {
+            return DigestUtils.sha256Hex(inputStream);
+        }
     }
 
     /**

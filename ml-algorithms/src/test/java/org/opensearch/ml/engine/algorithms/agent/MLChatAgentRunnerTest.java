@@ -53,7 +53,6 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class MLChatAgentRunnerTest {
     public static final String FIRST_TOOL = "firstTool";
@@ -107,7 +106,7 @@ public class MLChatAgentRunnerTest {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
-        toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
+        toolFactories = Map.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
         // memory
         mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10);
@@ -144,9 +143,9 @@ public class MLChatAgentRunnerTest {
             .run(Mockito.anyMap(), nextStepListenerCaptor.capture());
 
         Mockito
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 1", "action", FIRST_TOOL)))
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 2", "action", SECOND_TOOL)))
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 3", "final_answer", "This is the final answer")))
+            .doAnswer(getLLMAnswer(Map.of("thought", "thought 1", "action", FIRST_TOOL)))
+            .doAnswer(getLLMAnswer(Map.of("thought", "thought 2", "action", SECOND_TOOL)))
+            .doAnswer(getLLMAnswer(Map.of("thought", "thought 3", "final_answer", "This is the final answer")))
             .when(client)
             .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
     }

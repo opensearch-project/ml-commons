@@ -38,8 +38,6 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.conversation.Interaction.InteractionBuilder;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -61,7 +59,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         this.interactionsIndex = new InteractionsIndex(client, clusterService, this.conversationMetaIndex);
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     OpenSearchConversationalMemoryHandler(ConversationMetaIndex conversationMetaIndex, InteractionsIndex interactionsIndex) {
         this.conversationMetaIndex = conversationMetaIndex;
         this.interactionsIndex = interactionsIndex;

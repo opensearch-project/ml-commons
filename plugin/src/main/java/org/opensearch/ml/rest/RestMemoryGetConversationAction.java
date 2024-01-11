@@ -28,14 +28,12 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMemoryGetConversationAction extends BaseRestHandler {
     private final static String GET_CONVERSATION_NAME = "conversational_get_conversation";
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.GET, ActionConstants.GET_CONVERSATION_REST_PATH));
+        return List.of(new Route(RestRequest.Method.GET, ActionConstants.GET_CONVERSATION_REST_PATH));
     }
 
     @Override

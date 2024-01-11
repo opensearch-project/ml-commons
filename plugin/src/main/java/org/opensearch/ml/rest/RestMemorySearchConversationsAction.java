@@ -17,19 +17,19 @@
  */
 package org.opensearch.ml.rest;
 
+import java.util.List;
+
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
-
-import com.google.common.collect.ImmutableList;
 
 public class RestMemorySearchConversationsAction extends AbstractMLSearchAction<ConversationMeta> {
     private static final String SEARCH_CONVERSATIONS_NAME = "conversation_memory_search_conversations";
 
     public RestMemorySearchConversationsAction() {
         super(
-            ImmutableList.of(ActionConstants.SEARCH_CONVERSATIONS_REST_PATH),
+            List.of(ActionConstants.SEARCH_CONVERSATIONS_REST_PATH),
             ConversationalIndexConstants.META_INDEX_NAME,
             ConversationMeta.class,
             SearchConversationsAction.INSTANCE

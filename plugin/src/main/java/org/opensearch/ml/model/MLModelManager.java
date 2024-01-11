@@ -47,6 +47,7 @@ import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
@@ -131,10 +132,6 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Files;
-
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -165,7 +162,7 @@ public class MLModelManager {
     private volatile Integer maxRegisterTasksPerNode;
     private volatile Integer maxDeployTasksPerNode;
 
-    public static final ImmutableSet MODEL_DONE_STATES = ImmutableSet
+    public static final Set MODEL_DONE_STATES = Set
         .of(
             MLModelState.TRAINED,
             MLModelState.REGISTERED,
@@ -560,7 +557,7 @@ public class MLModelManager {
         }
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
@@ -719,7 +716,7 @@ public class MLModelManager {
                             throw new MLException("Failed to save model chunk");
                         }
                         File file = new File(name);
-                        byte[] bytes = Files.toByteArray(file);
+                        byte[] bytes = Files.readAllBytes(file.toPath());
                         int chunkNum = Integer.parseInt(file.getName());
                         Instant now = Instant.now();
                         MLModel mlModel = MLModel
@@ -850,7 +847,7 @@ public class MLModelManager {
         }));
     }
 
-    @VisibleForTesting
+    // VisibleForTesting
     void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));

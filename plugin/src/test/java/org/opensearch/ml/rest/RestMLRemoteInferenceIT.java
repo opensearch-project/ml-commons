@@ -21,8 +21,6 @@ import org.opensearch.client.Response;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
-import com.google.common.collect.ImmutableList;
-
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
@@ -726,7 +724,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":false, \"plugins.ml_commons.sync_up_job_interval_in_seconds\":3}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
     }

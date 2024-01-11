@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 import java.util.EnumSet;
+import java.util.Set;
 
 import org.junit.Before;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -18,8 +19,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
-
-import com.google.common.collect.ImmutableSet;
 
 public class MLStatsInputTests extends OpenSearchTestCase {
 
@@ -37,9 +36,9 @@ public class MLStatsInputTests extends OpenSearchTestCase {
             .clusterLevelStats(EnumSet.allOf(MLClusterLevelStat.class))
             .nodeLevelStats(EnumSet.allOf(MLNodeLevelStat.class))
             .actionLevelStats(EnumSet.allOf(MLActionLevelStat.class))
-            .nodeIds(ImmutableSet.of(node1, node2))
+            .nodeIds(Set.of(node1, node2))
             .algorithms(EnumSet.allOf(FunctionName.class))
-            .models(ImmutableSet.of(modelId))
+            .models(Set.of(modelId))
             .actions(EnumSet.allOf(ActionName.class))
             .build();
     }

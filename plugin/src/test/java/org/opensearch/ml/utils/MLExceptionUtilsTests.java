@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.logging.log4j.Logger;
 import org.junit.Before;
@@ -20,8 +21,6 @@ import org.opensearch.core.common.io.stream.NotSerializableExceptionWrapper;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.test.OpenSearchIntegTestCase;
-
-import com.google.common.collect.ImmutableMap;
 
 public class MLExceptionUtilsTests extends OpenSearchIntegTestCase {
 
@@ -59,7 +58,7 @@ public class MLExceptionUtilsTests extends OpenSearchIntegTestCase {
     }
 
     public void testToJsonString() throws IOException {
-        String str = MLExceptionUtils.toJsonString(ImmutableMap.of("node1", "error1"));
+        String str = MLExceptionUtils.toJsonString(Map.of("node1", "error1"));
         assertEquals("{\"node1\":\"error1\"}", str);
     }
 

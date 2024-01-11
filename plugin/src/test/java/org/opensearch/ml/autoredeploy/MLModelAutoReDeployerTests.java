@@ -57,8 +57,6 @@ import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableList;
-
 public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
     @Mock
     private Client client;
@@ -84,7 +82,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         Version.CURRENT
     );
 
-    private final List<String> addedNodes = ImmutableList.of("addedMLNode");
+    private final List<String> addedNodes = List.of("addedMLNode");
 
     @Before
     public void setup() throws IOException {
