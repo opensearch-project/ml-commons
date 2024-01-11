@@ -1222,21 +1222,21 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 getModelGroup(
                     user2Client,
                     modelGroupId1,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup1"); }
                 );
 
                 // Admin successfully gets model group
                 getModelGroup(
                     client(),
                     modelGroupId1,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup1"); }
                 );
             } catch (IOException e) {
                 assertNull(e);
             }
             // User2 fails to get model group
             try {
-                getModelGroup(user3Client, modelGroupId, null);
+                getModelGroup(user3Client, modelGroupId1, null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(
@@ -1256,21 +1256,21 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 getModelGroup(
                     user1Client,
                     modelGroupId2,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup2"); }
                 );
 
                 // User3 successfully gets model group
                 getModelGroup(
                     user3Client,
                     modelGroupId2,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup2"); }
                 );
 
                 // User4 successfully gets model group
                 getModelGroup(
                     user4Client,
                     modelGroupId2,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup2"); }
                 );
             } catch (IOException e) {
                 assertNull(e);
@@ -1286,14 +1286,14 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 getModelGroup(
                     user3Client,
                     modelGroupId3,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup3"); }
                 );
 
                 // Admin successfully gets model group
                 getModelGroup(
                     client(),
                     modelGroupId3,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup3"); }
                 );
             } catch (IOException e) {
                 assertNull(e);
@@ -1320,7 +1320,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 getModelGroup(
                     client(),
                     modelGroupId4,
-                    getModelGroupResult -> { assertTrue(getModelGroupResult.containsKey("model_group_id")); }
+                    getModelGroupResult -> { assertEquals(getModelGroupResult.get("name"), "testModelGroup4"); }
                 );
             } catch (IOException e) {
                 assertNull(e);
