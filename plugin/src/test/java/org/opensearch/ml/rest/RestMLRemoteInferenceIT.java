@@ -15,7 +15,6 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -252,7 +251,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertNotNull(responseMap);
     }
 
-    @Ignore("text-davinci-edit-001 been deprecated on 2024-01-04 and replaced by /v1/chat/completions")
     public void testOpenAIEditsModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -267,7 +265,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"endpoint\": \"api.openai.com\",\n"
             + "      \"auth\": \"API_Key\",\n"
             + "      \"content_type\": \"application/json\",\n"
-            + "      \"model\": \"text-davinci-edit-001\"\n"
+            + "      \"model\": \"gpt-4\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -278,18 +276,18 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      {\n"
             + "      \"action_type\": \"predict\",\n"
             + "          \"method\": \"POST\",\n"
-            + "          \"url\": \"https://api.openai.com/v1/edits\",\n"
+            + "          \"url\": \"https://api.openai.com/v1/chat/completions\",\n"
             + "          \"headers\": { \n"
             + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
             + "          },\n"
-            + "          \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"input\\\": \\\"${parameters.input}\\\",  \\\"instruction\\\": \\\"${parameters.instruction}\\\"  }\"\n"
+            + "      \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.input}\\\"}]}\"\n"
             + "      }\n"
             + "  ]\n"
             + "}";
         Response response = createConnector(entity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("openAI-GPT-3.5 edit model", connectorId);
+        response = registerRemoteModel("openAI-GPT-4 edit model", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -300,12 +298,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = parseResponseToMap(response);
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        String predictInput = "{\n"
-            + "  \"parameters\": {\n"
-            + "      \"input\": \"What day of the wek is it?\",\n"
-            + "      \"instruction\": \"Fix the spelling mistakes\"\n"
-            + "  }\n"
-            + "}";
+        String predictInput = "{\"parameters\":{\"input\":\"What day of the wek is it?\"}}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
         List responseList = (List) responseMap.get("inference_results");
@@ -319,7 +312,9 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        responseMap = (Map) responseMap.get("message");
+
+        assertFalse(((String) responseMap.get("content")).isEmpty());
     }
 
     public void testOpenAIModerationsModel() throws IOException, InterruptedException {
