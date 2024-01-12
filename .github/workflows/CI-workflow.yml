@@ -141,16 +141,21 @@ jobs:
           else
             echo "imagePresent=false" >> $GITHUB_ENV
           fi
+      - name: Generate Password For Admin
+        id: genpass
+        run: |
+            PASSWORD=$(openssl rand -base64 20 | tr -dc 'A-Za-z0-9!@#$%^&*()_+=-')
+            echo "::set-output name=password::$PASSWORD"
       - name: Run Docker Image
         if: env.imagePresent == 'true'
         run: |
           cd ..
-          docker run -p 9200:9200 -d -p 9600:9600 -e "discovery.type=single-node" -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123! opensearch-ml:test
+          docker run -p 9200:9200 -d -p 9600:9600 -e "discovery.type=single-node" -e OPENSEARCH_INITIAL_ADMIN_PASSWORD=${{ steps.genpass.outputs.password }} opensearch-ml:test
           sleep 90
       - name: Run MLCommons Test
         if: env.imagePresent == 'true'
         run: |
-          security=`curl -XGET https://localhost:9200/_cat/plugins?v -u admin:myStrongPassword123! --insecure |grep opensearch-security|wc -l`
+          security=`curl -XGET https://localhost:9200/_cat/plugins?v -u admin:${{ steps.genpass.outputs.password }} --insecure |grep opensearch-security|wc -l`
           export OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
           export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
           echo "::add-mask::$OPENAI_KEY"
@@ -158,7 +163,7 @@ jobs:
           if [ $security -gt 0 ]
           then
             echo "Security plugin is available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=myStrongPassword123!
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }}
           else
             echo "Security plugin is NOT available"
             ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster"
