@@ -1019,7 +1019,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user1Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(ExceptionUtils.getStackTrace(e).contains("You don't have permission to update this model group."));
+                assertTrue(ExceptionsHelper.stackTrace(e).contains("You don't have permission to update this model group."));
             }
             try {
 
