@@ -198,6 +198,7 @@ public class ConversationMetaIndex {
     public void getConversations(int from, int maxResults, ActionListener<List<ConversationMeta>> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
             listener.onResponse(List.of());
+            return;
         }
         SearchRequest request = Requests.searchRequest(META_INDEX_NAME);
         String userstr = getUserStrFromThreadContext();
@@ -250,6 +251,7 @@ public class ConversationMetaIndex {
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
             listener.onResponse(true);
+            return;
         }
         DeleteRequest delRequest = Requests.deleteRequest(META_INDEX_NAME).id(conversationId);
         String userstr = getUserStrFromThreadContext();

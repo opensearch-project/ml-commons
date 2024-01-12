@@ -229,7 +229,7 @@ public class TestHelper {
             + "        \"content_type\": \"application/json\",\n"
             + "        \"max_tokens\": 7,\n"
             + "        \"temperature\": 0,\n"
-            + "        \"model\": \"text-davinci-003\"\n"
+            + "        \"model\": \"gpt-3.5-turbo-instruct\"\n"
             + "    },\n"
             + "    \"credential\": {\n"
             + "        \"openAI_key\": \"xxxxxxxx\"\n"
