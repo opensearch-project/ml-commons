@@ -24,6 +24,9 @@ dependencies {
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
+    implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}") {
+       exclude group: "org.jetbrains", module: "annotations"
+    }
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
