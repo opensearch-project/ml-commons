@@ -145,7 +145,7 @@ jobs:
         id: genpass
         run: |
             PASSWORD=$(openssl rand -base64 20 | tr -dc 'A-Za-z0-9!@#$%^&*()_+=-')
-            echo "::set-output name=password::$PASSWORD"
+            echo "password={$PASSWORD}" >> $GITHUB_OUTPUT
       - name: Run Docker Image
         if: env.imagePresent == 'true'
         run: |
