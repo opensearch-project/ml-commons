@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -470,27 +471,58 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         Map<String, String> toolParams = new HashMap<>();
                         toolParams.put("input", actionInput);
                         if (tools.get(action).validate(toolParams)) {
-                            if (tools.get(action) instanceof MLModelTool) {
-                                Map<String, String> llmToolTmpParameters = new HashMap<>();
-                                llmToolTmpParameters.putAll(tmpParameters);
-                                llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
-                                // TODO: support tool parameter override : langauge_model_tool.prompt
-                                llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
-                                tools.get(action).run(llmToolTmpParameters, nextStepListener); // run tool
-                            } else {
-                                tools.get(action).run(toolParams, nextStepListener); // run tool
+                            try {
+                                String action1 = action;
+                                ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                                    ((ActionListener<Object>) nextStepListener).onResponse(r);
+                                    ;
+                                }, e -> {
+                                    ((ActionListener<Object>) nextStepListener)
+                                        .onResponse(
+                                            String
+                                                .format(
+                                                    Locale.ROOT,
+                                                    "Failed to run the tool %s with the error message %s.",
+                                                    action1,
+                                                    e.getMessage()
+                                                )
+                                        );
+                                });
+                                if (tools.get(action) instanceof MLModelTool) {
+                                    Map<String, String> llmToolTmpParameters = new HashMap<>();
+                                    llmToolTmpParameters.putAll(tmpParameters);
+                                    llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
+                                    // TODO: support tool parameter override : langauge_model_tool.prompt
+                                    llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
+                                    tools.get(action).run(llmToolTmpParameters, toolListener); // run tool
+                                } else {
+                                    tools.get(action).run(toolParams, toolListener); // run tool
+                                }
+                            } catch (Exception e) {
+                                ((ActionListener<Object>) nextStepListener)
+                                    .onResponse(
+                                        String
+                                            .format(
+                                                Locale.ROOT,
+                                                "Failed to run the tool %s with the error message %s.",
+                                                action,
+                                                e.getMessage()
+                                            )
+                                    );
                             }
                         } else {
-                            lastActionResult.set("Tool " + action + " can't work for input: " + actionInput);
+                            String res = String
+                                .format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
+                            lastActionResult.set(res);
                             lastTool.set(action);
-                            String res = "Tool " + action + " can't work for input: " + actionInput;
                             ((ActionListener<Object>) nextStepListener).onResponse(res);
                         }
                     } else {
-                        lastTool.set(null);
+                        lastTool.set(action);
                         lastToolListener.set(null);
-                        ((ActionListener<Object>) nextStepListener).onResponse("no access to this tool ");
-                        lastActionResult.set("no access to this tool ");
+                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        ((ActionListener<Object>) nextStepListener).onResponse(res);
+                        lastActionResult.set(res);
 
                         StringSubstitutor substitutor = new StringSubstitutor(
                             ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
