@@ -138,6 +138,25 @@ public class MLAgentExecutorTest {
 
     }
 
+    @Test
+    public void test_NoAgentIndex() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.when(metadata.hasIndex(Mockito.anyString())).thenReturn(false);
+
+        mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof ResourceNotFoundException);
+        Assert.assertEquals(exception.getMessage(), "Agent index not found");
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void test_NullInput_ThrowsException() {
         mlAgentExecutor.execute(null, agentActionListener);
