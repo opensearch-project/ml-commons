@@ -68,7 +68,8 @@ public class EncryptorImpl implements Encryptor {
         initMasterKey();
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
         byte[] bytes = Base64.getDecoder().decode(masterKey);
-        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NoPadding");
+        // https://github.com/aws/aws-encryption-sdk-java/issues/1879
+        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
 
         final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
             .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
@@ -81,7 +82,7 @@ public class EncryptorImpl implements Encryptor {
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
 
         byte[] bytes = Base64.getDecoder().decode(masterKey);
-        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NoPadding");
+        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
 
         final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
             .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
