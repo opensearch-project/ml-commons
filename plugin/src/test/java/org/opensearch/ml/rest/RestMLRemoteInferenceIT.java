@@ -107,7 +107,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         createConnector(completionModelConnectorEntity);
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
-                .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+            .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
         assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }

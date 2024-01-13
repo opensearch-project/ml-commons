@@ -84,19 +84,22 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
 
             ActionListener<SearchResponse> doubleWrappedListener = ActionListener.wrap(wrappedListener::onResponse, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
+                    log
+                        .debug(
+                            "Connectors index not created yet, therefore we will swallow the exception and return an empty search result"
+                        );
                     final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
                     final SearchResponse emptySearchResponse = new SearchResponse(
-                            internalSearchResponse,
-                            null,
-                            0,
-                            0,
-                            0,
-                            0,
-                            null,
-                            new ShardSearchFailure[]{},
-                            SearchResponse.Clusters.EMPTY,
-                            null
+                        internalSearchResponse,
+                        null,
+                        0,
+                        0,
+                        0,
+                        0,
+                        null,
+                        new ShardSearchFailure[] {},
+                        SearchResponse.Clusters.EMPTY,
+                        null
                     );
                     wrappedListener.onResponse(emptySearchResponse);
                 } else {
