@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -20,6 +21,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -27,6 +29,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -78,12 +81,35 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 excludes.toArray(new String[0])
             );
             request.source().fetchSource(rebuiltFetchSourceContext);
+
+            ActionListener<SearchResponse> doubleWrappedListener = ActionListener.wrap(wrappedListener::onResponse, e -> {
+                if (e instanceof IndexNotFoundException) {
+                    log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
+                    final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
+                    final SearchResponse emptySearchResponse = new SearchResponse(
+                            internalSearchResponse,
+                            null,
+                            0,
+                            0,
+                            0,
+                            0,
+                            null,
+                            new ShardSearchFailure[]{},
+                            SearchResponse.Clusters.EMPTY,
+                            null
+                    );
+                    wrappedListener.onResponse(emptySearchResponse);
+                } else {
+                    wrappedListener.onFailure(e);
+                }
+            });
+
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrappedListener);
             } else {
                 SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 request.source(sourceBuilder);
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrappedListener);
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);
