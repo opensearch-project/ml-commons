@@ -8,13 +8,22 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
+import static software.amazon.awssdk.http.SdkHttpMethod.GET;
+import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
+import java.net.URI;
+import java.nio.charset.Charset;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -26,6 +35,7 @@ import org.apache.http.util.EntityUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -40,6 +50,12 @@ import org.opensearch.script.ScriptService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpMethod;
+import software.amazon.awssdk.http.SdkHttpRequest;
+import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
@@ -65,34 +81,33 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
+    private SdkAsyncHttpClient httpClient;
+
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
+        this.httpClient = MLHttpClientFactory.getAsyncHttpClient();
     }
 
     @SuppressWarnings("removal")
     @Override
-    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
+    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Queue<ModelTensors> tensorOutputs, CountDownLatch countDownLatch, ActionListener<Queue<ModelTensors>> actionListener) {
         try {
             AtomicReference<String> responseRef = new AtomicReference<>("");
             AtomicReference<Integer> statusCodeRef = new AtomicReference<>();
 
-            HttpUriRequest request;
+            SdkHttpFullRequest request;
             switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
                 case "POST":
                     try {
-                        String predictEndpoint = connector.getPredictEndpoint(parameters);
-                        request = new HttpPost(predictEndpoint);
-                        String charset = parameters.containsKey("charset") ? parameters.get("charset") : "UTF-8";
-                        HttpEntity entity = new StringEntity(payload, charset);
-                        ((HttpPost) request).setEntity(entity);
+                        request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }
                     break;
                 case "GET":
                     try {
-                        request = new HttpGet(connector.getPredictEndpoint(parameters));
+                        request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET, actionListener);
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }
@@ -100,34 +115,19 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 default:
                     throw new IllegalArgumentException("unsupported http method");
             }
-
+            AsyncExecuteRequest executeRequest = AsyncExecuteRequest
+                .builder()
+                .request(request)
+                .requestContentPublisher(new SimpleHttpContentPublisher(request))
+                .responseHandler(new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService))
+                .build();
+            request.toBuilder().putHeader("Content-Type", "application/json");
             Map<String, ?> headers = connector.getDecryptedHeaders();
-            boolean hasContentTypeHeader = false;
-            if (headers != null) {
-                for (String key : headers.keySet()) {
-                    request.addHeader(key, (String) headers.get(key));
-                    if (key.toLowerCase().equals("Content-Type")) {
-                        hasContentTypeHeader = true;
-                    }
-                }
-            }
-            if (!hasContentTypeHeader) {
-                request.addHeader("Content-Type", "application/json");
-            }
-
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                int connectionTimeout = super.getConnectorClientConfig().getConnectionTimeout();
-                int readTimeout = super.getConnectorClientConfig().getReadTimeout();
-                int maxConnections = super.getConnectorClientConfig().getMaxConnections();
-                try (SdkAsyncHttpClient httpClient = getHttpClient(connectionTimeout, readTimeout, maxConnections); CloseableHttpResponse response = null) {
-                    HttpEntity responseEntity = response.getEntity();
-                    String responseBody = EntityUtils.toString(responseEntity);
-                    EntityUtils.consume(responseEntity);
-                    responseRef.set(responseBody);
-                    statusCodeRef.set(response.getStatusLine().getStatusCode());
-                }
-                return null;
-            });
+            Optional
+                .ofNullable(headers)
+                .flatMap(h -> h.entrySet().stream().filter(x -> x.getKey().equals("Content-Type")).findFirst())
+                .ifPresent(x -> request.toBuilder().putHeader("Content-Type", String.valueOf(x.getValue())));
+            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
             String modelResponse = responseRef.get();
             if (getMlGuard() != null && !getMlGuard().validate(modelResponse, MLGuard.Type.OUTPUT)) {
                 throw new IllegalArgumentException("guardrails triggered for LLM output");
