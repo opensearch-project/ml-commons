@@ -18,12 +18,14 @@ import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 
-import org.apache.commons.io.IOUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -38,11 +40,13 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpFullResponse;
+import software.amazon.awssdk.http.SdkHttpMethod;
 import software.amazon.awssdk.http.SdkHttpResponse;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -75,52 +79,16 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
 
 
     @Override
-    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
+    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Queue<ModelTensors> tensorOutputs, CountDownLatch countDownLatch, ActionListener<Queue<ModelTensors>> actionListener) {
         try {
-            String endpoint = connector.getPredictEndpoint(parameters);
-            RequestBody requestBody = RequestBody.fromString(payload);
-
-            SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
-                .builder()
-                .method(POST)
-                .uri(URI.create(endpoint))
-                .contentStreamProvider(requestBody.contentStreamProvider());
-            Map<String, String> headers = connector.getDecryptedHeaders();
-            if (headers != null) {
-                for (String key : headers.keySet()) {
-                    builder.putHeader(key, headers.get(key));
-                }
-            }
-            SdkHttpFullRequest request = builder.build();
+            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
-                .responseHandler(new SdkAsyncHttpResponseHandler() {
-                    @Override
-                    public void onHeaders(SdkHttpResponse response) {
-                        SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
-                        processResponse(sdkResponse, parameters, tensorOutputs);
-                    }
-
-                    @Override
-                    public void onStream(Publisher<ByteBuffer> stream) {
-                        throw new IllegalStateException("Streaming is not supported");
-                    }
-
-                    @Override
-                    public void onError(Throwable error) {
-                        log.error(error.getMessage(), error);
-                    }
-                })
+                .responseHandler(new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService))
                 .build();
-
-            AccessController.doPrivileged((PrivilegedExceptionAction<SdkHttpFullResponse>) () -> {
-                 httpClient.execute(executeRequest);
-                 return null;
-            });
-
-
+            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
             throw exception;
@@ -130,27 +98,6 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
         }
     }
 
-    private void processResponse(SdkHttpFullResponse sdkHttpFullResponse, Map<String, String> parameters, List<ModelTensors> tensorOutputs){
-        int statusCode = sdkHttpFullResponse.statusCode();
-        Optional<AbortableInputStream> optionalContent = sdkHttpFullResponse.content();
-        try (AbortableInputStream body = optionalContent.orElse(null)) {
-            if (body == null) {
-                throw new OpenSearchStatusException("No response from model", RestStatus.fromCode(statusCode));
-            } else {
-                String response = IOUtils.toString(body, StandardCharsets.UTF_8);
-                if (statusCode < 200 || statusCode > 300) {
-                    throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + response, RestStatus.fromCode(statusCode));
-                } else {
-                    ModelTensors tensors = processOutput(response, connector, scriptService, parameters);
-                    tensors.setStatusCode(statusCode);
-                    tensorOutputs.add(tensors);
-                }
-            }
-        } catch (IOException e) {
-            log.error("IOException while parsing response from model", e);
-            throw new OpenSearchStatusException("Error parsing response from model", RestStatus.fromCode(statusCode));
-        }
-    }
 
     private SdkHttpFullRequest signRequest(SdkHttpFullRequest request) {
         String accessKey = connector.getAccessKey();

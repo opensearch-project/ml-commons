@@ -6,18 +6,24 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.util.ArrayList;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
@@ -26,54 +32,62 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
+import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpFullResponse;
+import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 
 public interface RemoteConnectorExecutor {
 
-    default ModelTensorOutput executePredict(MLInput mlInput) {
-        List<ModelTensors> tensorOutputs = new ArrayList<>();
-
+    default void executePredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        ActionListener<Queue<ModelTensors>> tensorActionListener = ActionListener.wrap(r -> {
+            List<ModelTensors> tensorOutputs = List.of(r.toArray(new ModelTensors[0]));
+            actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(tensorOutputs)));
+        }, actionListener::onFailure);
+        Queue<ModelTensors> modelTensorsQueue = new ConcurrentLinkedQueue<>();
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-            int processedDocs = 0;
-            while (processedDocs < textDocsInputDataSet.getDocs().size()) {
+            Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
+            CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
+            for (int processedDocs = 0; processedDocs < calculatedChunkSize.v1(); processedDocs = processedDocs + calculatedChunkSize.v2()) {
                 List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
-                List<ModelTensors> tempTensorOutputs = new ArrayList<>();
                 preparePayloadAndInvokeRemoteModel(
                     MLInput
                         .builder()
                         .algorithm(FunctionName.TEXT_EMBEDDING)
                         .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                         .build(),
-                    tempTensorOutputs
-                );
-                int tensorCount = 0;
-                if (tempTensorOutputs.size() > 0 && tempTensorOutputs.get(0).getMlModelTensors() != null) {
-                    tensorCount = tempTensorOutputs.get(0).getMlModelTensors().size();
-                }
-                // This is to support some model which takes N text docs and embedding size is less than N.
-                // We need to tell executor what's the step size for each model run.
-                Map<String, String> parameters = getConnector().getParameters();
-                if (parameters != null && parameters.containsKey("input_docs_processed_step_size")) {
-                    int stepSize = Integer.parseInt(parameters.get("input_docs_processed_step_size"));
-                    // We need to check the parameter on runtime as parameter can be passed into predict request
-                    if (stepSize <= 0) {
-                        throw new IllegalArgumentException(
-                            "Invalid parameter: input_docs_processed_step_size. It must be positive integer."
-                        );
-                    }
-                    processedDocs += stepSize;
-                } else {
-                    processedDocs += Math.max(tensorCount, 1);
-                }
-                tensorOutputs.addAll(tempTensorOutputs);
+                    modelTensorsQueue, countDownLatch, tensorActionListener);
             }
         } else {
-            preparePayloadAndInvokeRemoteModel(mlInput, tensorOutputs);
+            preparePayloadAndInvokeRemoteModel(mlInput, modelTensorsQueue, new CountDownLatch(1), tensorActionListener);
         }
-        return new ModelTensorOutput(tensorOutputs);
+    }
+
+    private Tuple<Integer, Integer> calculateChunkSize(TextDocsInputDataSet textDocsInputDataSet) {
+        int textDocsLength = textDocsInputDataSet.getDocs().size();
+        Map<String, String> parameters = getConnector().getParameters();
+        if (parameters != null && parameters.containsKey("input_docs_processed_step_size")) {
+            int stepSize = Integer.parseInt(parameters.get("input_docs_processed_step_size"));
+            // We need to check the parameter on runtime as parameter can be passed into predict request
+            if (stepSize <= 0) {
+                throw new IllegalArgumentException("Invalid parameter: input_docs_processed_step_size. It must be positive integer.");
+            } else {
+                boolean isDivisible = textDocsLength % (stepSize + 1) == 0;
+                if (isDivisible) {
+                    return Tuple.tuple(textDocsLength % (stepSize + 1), stepSize + 1);
+                }
+                return Tuple.tuple(textDocsLength % (stepSize + 1) + 1, stepSize + 1);
+            }
+        } else {
+            return Tuple.tuple(textDocsLength, 1);
+        }
     }
 
     default void setScriptService(ScriptService scriptService) {}
@@ -98,7 +112,7 @@ public interface RemoteConnectorExecutor {
 
     default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
-    default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
+    default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, Queue<ModelTensors> tensorOutputs, CountDownLatch countDownLatch, ActionListener<Queue<ModelTensors>> actionListener) {
         Connector connector = getConnector();
 
         Map<String, String> parameters = new HashMap<>();
@@ -132,10 +146,9 @@ public interface RemoteConnectorExecutor {
                 RestStatus.TOO_MANY_REQUESTS
             );
         } else {
-            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs, countDownLatch, actionListener);
         }
     }
 
-    void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);
-
+    void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Queue<ModelTensors> tensorOutputs, CountDownLatch countDownLatch, ActionListener<Queue<ModelTensors>> actionListener);
 }

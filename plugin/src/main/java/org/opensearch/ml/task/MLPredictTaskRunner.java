@@ -219,15 +219,17 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (!predictor.isModelReady()) {
                         throw new IllegalArgumentException("Model not ready: " + modelId);
                     }
-                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
-                    if (output instanceof MLPredictionOutput) {
-                        ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                    if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
+                        predictor.predict(mlInput, mlTask, internalListener);
+                    } else {
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
+                        if (output instanceof MLPredictionOutput) {
+                            ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                        }
+                        // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
+                        handleAsyncMLTaskComplete(mlTask);
+                        listener.onResponse(new MLTaskResponse(output));
                     }
-
-                    // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
-                    handleAsyncMLTaskComplete(mlTask);
-                    MLTaskResponse response = MLTaskResponse.builder().output(output).build();
-                    internalListener.onResponse(response);
                     return;
                 } catch (Exception e) {
                     handlePredictFailure(mlTask, internalListener, e, false, modelId);

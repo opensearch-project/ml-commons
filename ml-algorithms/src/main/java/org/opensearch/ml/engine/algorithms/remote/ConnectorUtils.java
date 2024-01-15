@@ -11,8 +11,11 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executeBuildInPostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
+import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.Charset;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -21,9 +24,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 
+import io.netty.handler.codec.http.HttpMethod;
+import org.apache.commons.lang3.CharSet;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -43,7 +50,9 @@ import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.signer.Aws4Signer;
 import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpMethod;
 import software.amazon.awssdk.regions.Region;
 
 @Log4j2
@@ -218,5 +227,28 @@ public class ConnectorUtils {
             .build();
 
         return signer.sign(request, params);
+    }
+
+    public static SdkHttpFullRequest buildSdkRequest(Connector connector, Map<String, String> parameters, String payload, SdkHttpMethod method, ActionListener<Queue<ModelTensors>> actionListener) {
+        String endpoint = connector.getPredictEndpoint(parameters);
+        String charset = parameters.containsKey("charset") ? parameters.get("charset") : "UTF-8";
+        RequestBody requestBody = RequestBody.fromString(payload, Charset.forName(charset));
+        if (requestBody.optionalContentLength().isEmpty()) {
+            log.error("Content length is empty. Aborting request to remote model");
+            actionListener.onFailure(new IllegalArgumentException("Content length is empty. Aborting request to remote model"));
+        }
+        SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
+            .builder()
+            .method(method)
+            .uri(URI.create(endpoint))
+            .contentStreamProvider(requestBody.contentStreamProvider());
+        Map<String, String> headers = connector.getDecryptedHeaders();
+        if (headers != null) {
+            for (String key : headers.keySet()) {
+                builder.putHeader(key, headers.get(key));
+            }
+        }
+        builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
+        return builder.build();
     }
 }
