@@ -34,7 +34,7 @@ POST /_plugins/_ml/connectors/_create
     "api-version": "<YOUR API VERSION>"
   },
   "credential": {
-    "openAI_key": "YOUR API KEY"
+    "openAI_key": "<YOUR API KEY>"
   },
   "actions": [
     {

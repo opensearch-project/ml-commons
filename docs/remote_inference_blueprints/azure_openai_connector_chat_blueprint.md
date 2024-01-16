@@ -35,7 +35,7 @@ POST /_plugins/_ml/connectors/_create
     "temperature": 0.7
   },
   "credential": {
-    "openAI_key": "YOUR API KEY"
+    "openAI_key": "<YOUR API KEY>"
   },
   "actions": [
     {
