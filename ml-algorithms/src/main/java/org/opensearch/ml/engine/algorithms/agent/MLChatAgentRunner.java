@@ -294,13 +294,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         StepListener firstListener;
         AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
-        AtomicReference<StepListener<Object>> lastToolListener = new AtomicReference<>();
         AtomicBoolean getFinalAnswer = new AtomicBoolean(false);
-        AtomicReference<String> lastTool = new AtomicReference<>();
         AtomicReference<String> lastThought = new AtomicReference<>();
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
-        AtomicReference<String> lastActionResult = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
 
         StepListener<?> lastStepListener = null;
@@ -473,21 +470,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         if (tools.get(action).validate(toolParams)) {
                             try {
                                 String action1 = action;
-                                ActionListener<Object> toolListener = ActionListener.wrap(r -> {
-                                    ((ActionListener<Object>) nextStepListener).onResponse(r);
-                                    ;
-                                }, e -> {
-                                    ((ActionListener<Object>) nextStepListener)
-                                        .onResponse(
-                                            String
-                                                .format(
-                                                    Locale.ROOT,
-                                                    "Failed to run the tool %s with the error message %s.",
-                                                    action1,
-                                                    e.getMessage()
-                                                )
-                                        );
-                                });
+                                ActionListener<Object> toolListener = ActionListener
+                                    .wrap(r -> { ((ActionListener<Object>) nextStepListener).onResponse(r); }, e -> {
+                                        ((ActionListener<Object>) nextStepListener)
+                                            .onResponse(
+                                                String
+                                                    .format(
+                                                        Locale.ROOT,
+                                                        "Failed to run the tool %s with the error message %s.",
+                                                        action1,
+                                                        e.getMessage()
+                                                    )
+                                            );
+                                    });
                                 if (tools.get(action) instanceof MLModelTool) {
                                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                                     llmToolTmpParameters.putAll(tmpParameters);
@@ -513,17 +508,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         } else {
                             String res = String
                                 .format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
-                            lastActionResult.set(res);
-                            lastTool.set(action);
                             ((ActionListener<Object>) nextStepListener).onResponse(res);
                         }
                     } else {
-                        lastTool.set(action);
-                        lastToolListener.set(null);
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
-                        lastActionResult.set(res);
-
                         StringSubstitutor substitutor = new StringSubstitutor(
                             ImmutableMap.of(SCRATCHPAD, scratchpadBuilder.toString()),
                             "${parameters.",
