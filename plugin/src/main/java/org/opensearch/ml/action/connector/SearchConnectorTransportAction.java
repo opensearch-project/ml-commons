@@ -34,6 +34,8 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -83,30 +85,8 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
             );
             request.source().fetchSource(rebuiltFetchSourceContext);
 
-            ActionListener<SearchResponse> doubleWrappedListener = ActionListener.wrap(wrappedListener::onResponse, e -> {
-                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
-                    log
-                        .debug(
-                            "Connectors index not created yet, therefore we will swallow the exception and return an empty search result"
-                        );
-                    final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
-                    final SearchResponse emptySearchResponse = new SearchResponse(
-                        internalSearchResponse,
-                        null,
-                        0,
-                        0,
-                        0,
-                        0,
-                        null,
-                        new ShardSearchFailure[] {},
-                        SearchResponse.Clusters.EMPTY,
-                        null
-                    );
-                    wrappedListener.onResponse(emptySearchResponse);
-                } else {
-                    wrappedListener.onFailure(e);
-                }
-            });
+            ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleConnectorIndexNotFound(e, actionListener));
 
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 client.search(request, doubleWrappedListener);
@@ -118,6 +98,29 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
+        }
+    }
+
+    @VisibleForTesting
+    public static void wrapListenerToHandleConnectorIndexNotFound(Exception e, ActionListener<SearchResponse> listener) {
+        if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+            log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
+            final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
+            final SearchResponse emptySearchResponse = new SearchResponse(
+                internalSearchResponse,
+                null,
+                0,
+                0,
+                0,
+                0,
+                null,
+                new ShardSearchFailure[] {},
+                SearchResponse.Clusters.EMPTY,
+                null
+            );
+            listener.onResponse(emptySearchResponse);
+        } else {
+            listener.onFailure(e);
         }
     }
 }
