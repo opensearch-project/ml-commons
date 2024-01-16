@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.bwc;
 
+import static org.hamcrest.Matchers.equalTo;
 import static org.opensearch.client.RestClientBuilder.DEFAULT_MAX_CONN_PER_ROUTE;
 import static org.opensearch.client.RestClientBuilder.DEFAULT_MAX_CONN_TOTAL;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_ENABLED;
@@ -750,7 +751,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         return (String) task.get("state");
     }
 
-    public void waitForTask(String taskId, MLTaskState targetState) throws InterruptedException {
+    public void waitForTask(String taskId, MLTaskState targetState) throws InterruptedException, IOException {
         AtomicBoolean taskDone = new AtomicBoolean(false);
         waitUntil(() -> {
             try {
@@ -763,6 +764,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             }
             return taskDone.get();
         }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
+        assertThat(getTaskState(taskId), equalTo(targetState.name()));
         assertTrue(taskDone.get());
     }
 }

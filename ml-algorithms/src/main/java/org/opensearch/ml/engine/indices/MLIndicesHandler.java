@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.OpenSearchWrapperException;
+import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.mapping.put.PutMappingRequest;
@@ -85,7 +87,6 @@ public class MLIndicesHandler {
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();
-
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             if (!clusterService.state().metadata().hasIndex(indexName)) {
@@ -97,8 +98,14 @@ public class MLIndicesHandler {
                         internalListener.onResponse(false);
                     }
                 }, e -> {
-                    log.error("Failed to create index " + indexName, e);
-                    internalListener.onFailure(e);
+                    if (e instanceof ResourceAlreadyExistsException
+                        || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
+                        log.info("Skip creating the Index:{} that is already created by another parallel request", indexName);
+                        internalListener.onResponse(true);
+                    } else {
+                        log.error("Failed to create index " + indexName, e);
+                        internalListener.onFailure(e);
+                    }
                 });
                 CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping).settings(INDEX_SETTINGS);
                 client.admin().indices().create(request, actionListener);
