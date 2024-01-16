@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -63,7 +64,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -83,7 +84,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
             request.source().fetchSource(rebuiltFetchSourceContext);
 
             ActionListener<SearchResponse> doubleWrappedListener = ActionListener.wrap(wrappedListener::onResponse, e -> {
-                if (e instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
                     log
                         .debug(
                             "Connectors index not created yet, therefore we will swallow the exception and return an empty search result"
