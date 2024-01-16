@@ -469,7 +469,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         toolParams.put("input", actionInput);
                         if (tools.get(action).validate(toolParams)) {
                             try {
-                                String action1 = action;
+                                String finalAction = action;
                                 ActionListener<Object> toolListener = ActionListener
                                     .wrap(r -> { ((ActionListener<Object>) nextStepListener).onResponse(r); }, e -> {
                                         ((ActionListener<Object>) nextStepListener)
@@ -478,7 +478,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                                     .format(
                                                         Locale.ROOT,
                                                         "Failed to run the tool %s with the error message %s.",
-                                                        action1,
+                                                        finalAction,
                                                         e.getMessage()
                                                     )
                                             );
