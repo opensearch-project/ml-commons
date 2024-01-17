@@ -15,7 +15,6 @@ import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegist
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
@@ -40,6 +39,7 @@ import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -114,6 +114,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
                         Boolean isHidden = (Boolean) r.getSource().get(IS_HIDDEN_FIELD);
                         MLModelState mlModelState = mlModel.getModelState();
+                        FunctionName functionName = mlModel.getAlgorithm();
                         if (isHidden != null && isHidden) {
                             if (!isSuperAdmin) {
                                 wrappedListener
@@ -125,7 +126,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     );
                             } else {
                                 if (isModelNotDeployed(mlModelState)) {
-                                    deleteModel(modelId, actionListener);
+                                    deleteModel(modelId, functionName, actionListener);
                                 } else {
                                     wrappedListener
                                         .onFailure(
@@ -148,7 +149,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 )
                                             );
                                     } else if (isModelNotDeployed(mlModelState)) {
-                                        deleteModel(modelId, actionListener);
+                                        deleteModel(modelId, functionName, actionListener);
                                     } else {
                                         wrappedListener
                                             .onFailure(
@@ -186,13 +187,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
                 && (r.getSearchFailures() == null || r.getSearchFailures().size() == 0)) {
                 log.debug("All model chunks are deleted for model {}", modelId);
-                if (deleteResponse != null) {
-                    // If model metaData not found and deleteResponse is null, do not return here.
-                    // ResourceNotFound is returned to notify that this model was deleted.
-                    // This is a walk around to avoid cleaning up model leftovers. Will revisit if
-                    // necessary.
-                    actionListener.onResponse(deleteResponse);
-                }
+                actionListener.onResponse(deleteResponse);
             } else {
                 returnFailure(r, modelId, actionListener);
             }
@@ -215,22 +210,22 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void deleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
+    private void deleteModel(String modelId, FunctionName functionName, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
-                deleteModelChunks(modelId, deleteResponse, actionListener);
+                if (FunctionName.REMOTE != functionName) {
+                    deleteModelChunks(modelId, deleteResponse, actionListener);
+                } else {
+                    actionListener.onResponse(deleteResponse);
+                }
                 deleteController(modelId);
             }
 
             @Override
             public void onFailure(Exception e) {
                 log.error("Failed to delete model meta data for model: " + modelId, e);
-                if (e instanceof ResourceNotFoundException) {
-                    deleteModelChunks(modelId, null, actionListener);
-                    deleteController(modelId);
-                }
                 actionListener.onFailure(e);
             }
         });
