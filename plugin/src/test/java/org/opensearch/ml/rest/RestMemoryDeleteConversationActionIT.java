@@ -17,6 +17,11 @@
  */
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_CONVERSATION_LIST_FIELD;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_INTERACTION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_INTERACTION_LIST_FIELD;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
@@ -57,18 +62,11 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String id = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String id = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Response response = TestHelper
-            .makeRequest(
-                client(),
-                "DELETE",
-                ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{conversation_id}", id),
-                null,
-                "",
-                null
-            );
+            .makeRequest(client(), "DELETE", ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{memory_id}", id), null, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -83,7 +81,7 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
             .makeRequest(
                 client(),
                 "DELETE",
-                ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{conversation_id}", "happybirthday"),
+                ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{memory_id}", "happybirthday"),
                 null,
                 "",
                 null
@@ -104,8 +102,8 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String cid = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String cid = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Map<String, String> params = Map
             .of(
@@ -124,7 +122,7 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params),
                 null
@@ -134,18 +132,11 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
         HttpEntity cihttpEntity = ciresponse.getEntity();
         String cientityString = TestHelper.httpEntityToString(cihttpEntity);
         Map cimap = gson.fromJson(cientityString, Map.class);
-        assert (cimap.containsKey("interaction_id"));
-        String iid = (String) cimap.get("interaction_id");
+        assert (cimap.containsKey(RESPONSE_INTERACTION_ID_FIELD));
+        String iid = (String) cimap.get(RESPONSE_INTERACTION_ID_FIELD);
 
         Response dcresponse = TestHelper
-            .makeRequest(
-                client(),
-                "DELETE",
-                ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{conversation_id}", cid),
-                null,
-                "",
-                null
-            );
+            .makeRequest(client(), "DELETE", ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{memory_id}", cid), null, "", null);
         assert (dcresponse != null);
         assert (TestHelper.restStatus(dcresponse) == RestStatus.OK);
         HttpEntity dchttpEntity = dcresponse.getEntity();
@@ -160,21 +151,21 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
         HttpEntity gchttpEntity = gcresponse.getEntity();
         String gcentityString = TestHelper.httpEntityToString(gchttpEntity);
         Map gcmap = gson.fromJson(gcentityString, Map.class);
-        assert (gcmap.containsKey("conversations"));
+        assert (gcmap.containsKey(RESPONSE_CONVERSATION_LIST_FIELD));
         assert (!gcmap.containsKey("next_token"));
-        assert (((ArrayList) gcmap.get("conversations")).size() == 0);
+        assert (((ArrayList) gcmap.get(RESPONSE_CONVERSATION_LIST_FIELD)).size() == 0);
 
         try {
             Response giresponse = TestHelper
-                .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
+                .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", cid), null, "", null);
             assert (giresponse != null);
             assert (TestHelper.restStatus(giresponse) == RestStatus.OK);
             HttpEntity gihttpEntity = giresponse.getEntity();
             String gientityString = TestHelper.httpEntityToString(gihttpEntity);
             Map gimap = gson.fromJson(gientityString, Map.class);
-            assert (gimap.containsKey("interactions"));
+            assert (gimap.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
             assert (!gimap.containsKey("next_token"));
-            assert (((ArrayList) gimap.get("interactions")).size() == 0);
+            assert (((ArrayList) gimap.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 0);
             assert (false);
         } catch (ResponseException e) {
             assert (TestHelper.restStatus(e.getResponse()) == RestStatus.NOT_FOUND);

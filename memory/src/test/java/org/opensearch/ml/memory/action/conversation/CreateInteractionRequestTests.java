@@ -104,10 +104,12 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
             );
 
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid"))
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
             .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
             .build();
         CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
+        System.out.println(request.getConversationId());
+        System.out.println(request.getInput());
 
         assert (request.validate() == null);
         assert (request.getConversationId().equals("cid"));
@@ -138,7 +140,7 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
             );
 
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "tid"))
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "tid"))
             .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
             .build();
         CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);

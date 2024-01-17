@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -55,7 +57,7 @@ public class RestMemoryCreateConversationActionIT extends MLCommonsRestTestCase 
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("conversation_id"));
+        assert (map.containsKey(CONVERSATION_ID_FIELD));
     }
 
     public void testCreateConversationNamed() throws IOException {
@@ -73,6 +75,6 @@ public class RestMemoryCreateConversationActionIT extends MLCommonsRestTestCase 
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("conversation_id"));
+        assert (map.containsKey(CONVERSATION_ID_FIELD));
     }
 }

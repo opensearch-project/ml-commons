@@ -417,7 +417,7 @@ public class MLMemoryManagerTests {
         String query = Strings.toString(XContentType.JSON, queryBuilder);
         Assert
             .assertEquals(
-                "{\"bool\":{\"should\":[{\"ids\":{\"values\":[\"interaction-id-1\"],\"boost\":1.0}},{\"bool\":{\"must\":[{\"exists\":{\"field\":\"trace_number\",\"boost\":1.0}},{\"term\":{\"parent_interaction_id\":{\"value\":\"interaction-id-1\",\"boost\":1.0}}}],\"adjust_pure_negative\":true,\"boost\":1.0}}],\"adjust_pure_negative\":true,\"boost\":1.0}}",
+                "{\"bool\":{\"should\":[{\"ids\":{\"values\":[\"interaction-id-1\"],\"boost\":1.0}},{\"bool\":{\"must\":[{\"exists\":{\"field\":\"trace_number\",\"boost\":1.0}},{\"term\":{\"parent_message_id\":{\"value\":\"interaction-id-1\",\"boost\":1.0}}}],\"adjust_pure_negative\":true,\"boost\":1.0}}],\"adjust_pure_negative\":true,\"boost\":1.0}}",
                 query
             );
     }

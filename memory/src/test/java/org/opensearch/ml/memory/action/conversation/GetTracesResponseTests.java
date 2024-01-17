@@ -94,9 +94,9 @@ public class GetTracesResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
         System.out.println(result);
-        String expected = "{\"traces\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":"
+        String expected = "{\"traces\":[{\"memory_id\":\"cid\",\"message_id\":\"id0\",\"create_time\":"
             + trace.getCreateTime()
-            + ",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"},\"parent_interaction_id\":\"parent_id\",\"trace_number\":1}],\"next_token\":2}";
+            + ",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"},\"parent_message_id\":\"parent_id\",\"trace_number\":1}],\"next_token\":2}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         assert (ld.getDistance(result, expected) > 0.95);

@@ -104,19 +104,11 @@ public class GetInteractionsRequestTests extends OpenSearchTestCase {
     }
 
     public void testFromRestRequest() throws IOException {
-        Map<String, String> basic = Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid1");
-        Map<String, String> maxResOnly = Map
-            .of(ActionConstants.CONVERSATION_ID_FIELD, "cid2", ActionConstants.REQUEST_MAX_RESULTS_FIELD, "4");
-        Map<String, String> nextTokOnly = Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid3", ActionConstants.NEXT_TOKEN_FIELD, "6");
+        Map<String, String> basic = Map.of(ActionConstants.MEMORY_ID, "cid1");
+        Map<String, String> maxResOnly = Map.of(ActionConstants.MEMORY_ID, "cid2", ActionConstants.REQUEST_MAX_RESULTS_FIELD, "4");
+        Map<String, String> nextTokOnly = Map.of(ActionConstants.MEMORY_ID, "cid3", ActionConstants.NEXT_TOKEN_FIELD, "6");
         Map<String, String> bothFields = Map
-            .of(
-                ActionConstants.CONVERSATION_ID_FIELD,
-                "cid4",
-                ActionConstants.REQUEST_MAX_RESULTS_FIELD,
-                "2",
-                ActionConstants.NEXT_TOKEN_FIELD,
-                "7"
-            );
+            .of(ActionConstants.MEMORY_ID, "cid4", ActionConstants.REQUEST_MAX_RESULTS_FIELD, "2", ActionConstants.NEXT_TOKEN_FIELD, "7");
         RestRequest req1 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(basic).build();
         RestRequest req2 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(maxResOnly).build();
         RestRequest req3 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(nextTokOnly).build();

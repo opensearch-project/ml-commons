@@ -725,7 +725,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doReturn(false).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
         ActionListener<Interaction> getListener = mock(ActionListener.class);
-        interactionsIndex.getInteraction("cid", "iid", getListener);
+        interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor
@@ -747,7 +747,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Interaction> getListener = mock(ActionListener.class);
-        interactionsIndex.getInteraction("cid", "iid", getListener);
+        interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Interaction [iid] not found"));
@@ -767,7 +767,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Interaction> getListener = mock(ActionListener.class);
-        interactionsIndex.getInteraction("cid", "iid", getListener);
+        interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Interaction [iid] not found"));
@@ -783,7 +783,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(indicesAdminClient).refresh(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Interaction> getListener = mock(ActionListener.class);
-        interactionsIndex.getInteraction("cid", "iid", getListener);
+        interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Failed during Sg Get Refresh"));
@@ -795,20 +795,9 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doThrow(new RuntimeException("Client Failure in Sg Get")).when(client).admin();
         @SuppressWarnings("unchecked")
         ActionListener<Interaction> getListener = mock(ActionListener.class);
-        interactionsIndex.getInteraction("cid", "iid", getListener);
+        interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Failure in Sg Get"));
-    }
-
-    public void testGetSg_NoAccess_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        setupDenyAccess("Henry");
-        @SuppressWarnings("unchecked")
-        ActionListener<Interaction> getListener = mock(ActionListener.class);
-        interactionsIndex.getInteraction("cid", "iid", getListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [Henry] does not have access to conversation cid"));
     }
 }

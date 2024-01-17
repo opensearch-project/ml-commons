@@ -74,7 +74,7 @@ public class GetInteractionResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
         System.out.println(result);
-        String expected = "{\"conversation_id\":\"cid\",\"interaction_id\":\"iid\",\"create_time\":\""
+        String expected = "{\"memory_id\":\"cid\",\"message_id\":\"iid\",\"create_time\":\""
             + interaction.getCreateTime()
             + "\",\"input\":\"inp\",\"prompt_template\":\"pt\",\"response\":\"rsp\",\"origin\":\"ogn\",\"additional_info\":{\"metadata\":\"some meta\"}}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
