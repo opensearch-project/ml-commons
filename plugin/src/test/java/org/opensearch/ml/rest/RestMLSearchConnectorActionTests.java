@@ -20,10 +20,12 @@ import java.util.List;
 
 import org.apache.lucene.search.TotalHits;
 import org.hamcrest.Matchers;
+import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
@@ -35,6 +37,8 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
@@ -189,5 +193,52 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         );
         RestResponse restResponse = responseCaptor.getValue();
         assertEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
+    }
+
+    public void testDoubleWrapper_handleIndexNotFound() {
+        final IndexNotFoundException indexNotFoundException = new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
+        final DummyActionListener actionListener = new DummyActionListener();
+
+        SearchConnectorTransportAction.wrapListenerToHandleConnectorIndexNotFound(indexNotFoundException, actionListener);
+        Assert.assertTrue(actionListener.success);
+    }
+
+    public void testDoubleWrapper_handleIndexNotFoundWrappedException() {
+        final WrappedException wrappedException = new WrappedException();
+        final DummyActionListener actionListener = new DummyActionListener();
+
+        SearchConnectorTransportAction.wrapListenerToHandleConnectorIndexNotFound(wrappedException, actionListener);
+        Assert.assertTrue(actionListener.success);
+    }
+
+    public void testDoubleWrapper_notRelatedException() {
+        final RuntimeException exception = new RuntimeException("some random exception");
+        final DummyActionListener actionListener = new DummyActionListener();
+
+        SearchConnectorTransportAction.wrapListenerToHandleConnectorIndexNotFound(exception, actionListener);
+        Assert.assertFalse(actionListener.success);
+    }
+
+    public class DummyActionListener implements ActionListener<SearchResponse> {
+        public boolean success = false;
+
+        @Override
+        public void onResponse(SearchResponse searchResponse) {
+            logger.info("success");
+            this.success = true;
+        }
+
+        @Override
+        public void onFailure(Exception e) {
+            logger.error("failure", e);
+            this.success = false;
+        }
+    }
+
+    public static class WrappedException extends Exception implements OpenSearchWrapperException {
+        @Override
+        public synchronized Throwable getCause() {
+            return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
+        }
     }
 }
