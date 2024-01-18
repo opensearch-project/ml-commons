@@ -6,7 +6,7 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
-import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleConnectorIndexNotFound;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -61,7 +61,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
 
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
-                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleConnectorIndexNotFound(e, wrappedListener));
+                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, doubleWrappedListener);

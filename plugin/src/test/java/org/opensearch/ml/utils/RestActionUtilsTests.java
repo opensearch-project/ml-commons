@@ -327,7 +327,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         final IndexNotFoundException indexNotFoundException = new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         final DummyActionListener actionListener = new DummyActionListener();
 
-        RestActionUtils.wrapListenerToHandleConnectorIndexNotFound(indexNotFoundException, actionListener);
+        RestActionUtils.wrapListenerToHandleSearchIndexNotFound(indexNotFoundException, actionListener);
         Assert.assertTrue(actionListener.success);
     }
 
@@ -335,7 +335,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         final WrappedException wrappedException = new WrappedException();
         final DummyActionListener actionListener = new DummyActionListener();
 
-        RestActionUtils.wrapListenerToHandleConnectorIndexNotFound(wrappedException, actionListener);
+        RestActionUtils.wrapListenerToHandleSearchIndexNotFound(wrappedException, actionListener);
         Assert.assertTrue(actionListener.success);
     }
 
@@ -343,7 +343,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         final RuntimeException exception = new RuntimeException("some random exception");
         final DummyActionListener actionListener = new DummyActionListener();
 
-        RestActionUtils.wrapListenerToHandleConnectorIndexNotFound(exception, actionListener);
+        RestActionUtils.wrapListenerToHandleSearchIndexNotFound(exception, actionListener);
         Assert.assertFalse(actionListener.success);
     }
 

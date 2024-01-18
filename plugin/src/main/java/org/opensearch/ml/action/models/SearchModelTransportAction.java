@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleConnectorIndexNotFound;
-
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -23,7 +21,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class SearchModelTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
-    private MLSearchHandler mlSearchHandler;
+    private final MLSearchHandler mlSearchHandler;
 
     @Inject
     public SearchModelTransportAction(TransportService transportService, ActionFilters actionFilters, MLSearchHandler mlSearchHandler) {
@@ -34,8 +32,6 @@ public class SearchModelTransportAction extends HandledTransportAction<SearchReq
     @Override
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         request.indices(CommonValue.ML_MODEL_INDEX);
-        final ActionListener<SearchResponse> wrappedListener = ActionListener
-            .wrap(actionListener::onResponse, e -> wrapListenerToHandleConnectorIndexNotFound(e, actionListener));
-        mlSearchHandler.search(request, wrappedListener);
+        mlSearchHandler.search(request, actionListener);
     }
 }

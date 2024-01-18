@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
-import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleConnectorIndexNotFound;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,7 +82,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
             request.source().fetchSource(rebuiltFetchSourceContext);
 
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
-                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleConnectorIndexNotFound(e, wrappedListener));
+                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 client.search(request, doubleWrappedListener);

@@ -7,6 +7,7 @@ package org.opensearch.ml.action.handler;
 
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,6 +45,7 @@ import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 
 import lombok.extern.log4j.Log4j2;
@@ -122,10 +124,12 @@ public class MLSearchHandler {
 
             request.source().query(queryBuilder);
             request.source().fetchSource(rebuiltFetchSourceContext);
+            final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
+                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrapperListener);
             } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrapperListener);
             } else {
                 SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
                 SearchRequest modelGroupSearchRequest = new SearchRequest();
@@ -144,11 +148,11 @@ public class MLSearchHandler {
                         Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
 
                         request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
-                        client.search(request, wrappedListener);
+                        client.search(request, doubleWrapperListener);
                     } else {
                         log.debug("No model group found");
                         request.source().query(rewriteQueryBuilder(request.source().query(), null));
-                        client.search(request, wrappedListener);
+                        client.search(request, doubleWrapperListener);
                     }
                 }, e -> {
                     log.error("Fail to search model groups!", e);
@@ -162,7 +166,8 @@ public class MLSearchHandler {
         }
     }
 
-    private QueryBuilder rewriteQueryBuilder(QueryBuilder queryBuilder, List<String> modelGroupIds) {
+    @VisibleForTesting
+    static QueryBuilder rewriteQueryBuilder(QueryBuilder queryBuilder, List<String> modelGroupIds) {
         ExistsQueryBuilder existsQueryBuilder = new ExistsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD);
         BoolQueryBuilder modelGroupIdMustNotExistBoolQuery = new BoolQueryBuilder();
         modelGroupIdMustNotExistBoolQuery.mustNot(existsQueryBuilder);

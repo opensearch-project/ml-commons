@@ -27,6 +27,8 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchResponseSections;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
@@ -45,6 +47,7 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.test.OpenSearchTestCase;
@@ -161,7 +164,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         verify(client, times(1)).search(any(), any());
     }
 
-    public void test_DoExecute_searchModel_indexNotFound_exception() {
+    public void test_DoExecute_searchModel_before_model_creation_no_exception() {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onFailure(new IndexNotFoundException("index not found exception"));
@@ -171,7 +174,41 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         searchModelTransportAction.doExecute(null, searchRequest, actionListener);
         verify(mlSearchHandler).search(searchRequest, actionListener);
         verify(client, times(1)).search(any(), any());
-        verify(actionListener, times(1)).onFailure(any(IndexNotFoundException.class));
+        verify(actionListener, times(0)).onFailure(any(IndexNotFoundException.class));
+    }
+
+    public void test_DoExecute_searchModel_before_model_creation_empty_search() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+            SearchResponseSections searchSections = new SearchResponseSections(
+                hits,
+                InternalAggregations.EMPTY,
+                null,
+                false,
+                false,
+                null,
+                1
+            );
+            final SearchResponse searchResponse = new SearchResponse(
+                searchSections,
+                null,
+                1,
+                1,
+                0,
+                11,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+            );
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
+        searchModelTransportAction.doExecute(null, searchRequest, actionListener);
+        verify(mlSearchHandler).search(searchRequest, actionListener);
+        verify(client, times(1)).search(any(), any());
+        verify(actionListener, times(0)).onFailure(any(IndexNotFoundException.class));
+        verify(actionListener, times(1)).onResponse(any(SearchResponse.class));
     }
 
     public void test_DoExecute_searchModel_MLResourceNotFoundException_exception() {
