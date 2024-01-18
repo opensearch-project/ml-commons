@@ -54,7 +54,7 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversation_id\":\"cid\",\"create_time\":\""
+        String expected = "{\"memory_id\":\"cid\",\"create_time\":\""
             + convo.getCreatedTime()
             + "\",\"updated_time\":\""
             + convo.getUpdatedTime()

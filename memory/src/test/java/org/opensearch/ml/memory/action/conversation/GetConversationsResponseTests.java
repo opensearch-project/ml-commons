@@ -73,7 +73,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
+        String expected = "{\"conversations\":[{\"memory_id\":\"0\",\"create_time\":\""
             + conversation.getCreatedTime()
             + "\"updated_time\":\""
             + conversation.getUpdatedTime()
@@ -93,7 +93,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
+        String expected = "{\"conversations\":[{\"memory_id\":\"0\",\"create_time\":\""
             + conversation.getCreatedTime()
             + "\"updated_time\":\""
             + conversation.getUpdatedTime()

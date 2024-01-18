@@ -91,7 +91,7 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
-        this.request = new GetInteractionRequest("cid", "iid");
+        this.request = new GetInteractionRequest("iid");
 
         Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);
@@ -116,10 +116,10 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
             Collections.singletonMap("metadata", "some meta")
         );
         doAnswer(invocation -> {
-            ActionListener<Interaction> listener = invocation.getArgument(2);
+            ActionListener<Interaction> listener = invocation.getArgument(1);
             listener.onResponse(testInteraction);
             return null;
-        }).when(cmHandler).getInteraction(any(), any(), any());
+        }).when(cmHandler).getInteraction(any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<GetInteractionResponse> argCaptor = ArgumentCaptor.forClass(GetInteractionResponse.class);
         verify(actionListener, times(1)).onResponse(argCaptor.capture());
@@ -128,10 +128,10 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
 
     public void testGetInteractionFails_ThenFail() {
         doAnswer(invocation -> {
-            ActionListener<Interaction> listener = invocation.getArgument(2);
+            ActionListener<Interaction> listener = invocation.getArgument(1);
             listener.onFailure(new Exception("Storage layer failure"));
             return null;
-        }).when(cmHandler).getInteraction(any(), any(), any());
+        }).when(cmHandler).getInteraction(any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());
@@ -139,7 +139,7 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testHandlerThrows_ThenFail() {
-        doThrow(new RuntimeException("CMHandler Failure")).when(cmHandler).getInteraction(any(), any(), any());
+        doThrow(new RuntimeException("CMHandler Failure")).when(cmHandler).getInteraction(any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());

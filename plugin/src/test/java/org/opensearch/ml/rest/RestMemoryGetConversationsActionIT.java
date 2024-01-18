@@ -17,6 +17,9 @@
  */
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_CONVERSATION_LIST_FIELD;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
@@ -70,8 +73,8 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String id = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String id = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Response response = TestHelper.makeRequest(client(), "GET", ActionConstants.GET_CONVERSATIONS_REST_PATH, null, "", null);
         assert (response != null);
@@ -79,13 +82,13 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("conversations"));
+        assert (map.containsKey(RESPONSE_CONVERSATION_LIST_FIELD));
         assert (!map.containsKey("next_token"));
         @SuppressWarnings("unchecked")
-        ArrayList<Map> conversations = (ArrayList<Map>) map.get("conversations");
+        ArrayList<Map> conversations = (ArrayList<Map>) map.get(RESPONSE_CONVERSATION_LIST_FIELD);
         assert (conversations.size() == 1);
-        assert (conversations.get(0).containsKey("conversation_id"));
-        assert (((String) conversations.get(0).get("conversation_id")).equals(id));
+        assert (conversations.get(0).containsKey(CONVERSATION_ID_FIELD));
+        assert (((String) conversations.get(0).get(CONVERSATION_ID_FIELD)).equals(id));
     }
 
     public void testConversations_MorePages() throws IOException {
@@ -95,8 +98,8 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String id = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String id = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Response response = TestHelper
             .makeRequest(
@@ -112,13 +115,13 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("conversations"));
+        assert (map.containsKey(RESPONSE_CONVERSATION_LIST_FIELD));
         assert (map.containsKey("next_token"));
         @SuppressWarnings("unchecked")
-        ArrayList<Map> conversations = (ArrayList<Map>) map.get("conversations");
+        ArrayList<Map> conversations = (ArrayList<Map>) map.get(RESPONSE_CONVERSATION_LIST_FIELD);
         assert (conversations.size() == 1);
-        assert (conversations.get(0).containsKey("conversation_id"));
-        assert (((String) conversations.get(0).get("conversation_id")).equals(id));
+        assert (conversations.get(0).containsKey(CONVERSATION_ID_FIELD));
+        assert (((String) conversations.get(0).get(CONVERSATION_ID_FIELD)).equals(id));
         assert (((Double) map.get("next_token")).intValue() == 1);
     }
 
@@ -129,9 +132,9 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity1 = ccresponse1.getEntity();
         String ccentityString1 = TestHelper.httpEntityToString(cchttpEntity1);
         Map ccmap1 = gson.fromJson(ccentityString1, Map.class);
-        assert (ccmap1.containsKey("conversation_id"));
+        assert (ccmap1.containsKey(CONVERSATION_ID_FIELD));
         logger.info("ccentityString1={}", ccentityString1);
-        String id1 = (String) ccmap1.get("conversation_id");
+        String id1 = (String) ccmap1.get(CONVERSATION_ID_FIELD);
 
         // wait for 0.1s to make sure update time is different between conversation 1 and 2
         TimeUnit.MICROSECONDS.sleep(100);
@@ -142,8 +145,8 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity2 = ccresponse2.getEntity();
         String ccentityString2 = TestHelper.httpEntityToString(cchttpEntity2);
         Map ccmap2 = gson.fromJson(ccentityString2, Map.class);
-        assert (ccmap2.containsKey("conversation_id"));
-        String id2 = (String) ccmap2.get("conversation_id");
+        assert (ccmap2.containsKey(CONVERSATION_ID_FIELD));
+        String id2 = (String) ccmap2.get(CONVERSATION_ID_FIELD);
 
         Response response1 = TestHelper
             .makeRequest(
@@ -159,13 +162,13 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity1 = response1.getEntity();
         String entityString1 = TestHelper.httpEntityToString(httpEntity1);
         Map map1 = gson.fromJson(entityString1, Map.class);
-        assert (map1.containsKey("conversations"));
+        assert (map1.containsKey(RESPONSE_CONVERSATION_LIST_FIELD));
         assert (map1.containsKey("next_token"));
         @SuppressWarnings("unchecked")
-        ArrayList<Map> conversations1 = (ArrayList<Map>) map1.get("conversations");
+        ArrayList<Map> conversations1 = (ArrayList<Map>) map1.get(RESPONSE_CONVERSATION_LIST_FIELD);
         assert (conversations1.size() == 1);
-        assert (conversations1.get(0).containsKey("conversation_id"));
-        Assert.assertEquals(conversations1.get(0).get("conversation_id"), id2);
+        assert (conversations1.get(0).containsKey(CONVERSATION_ID_FIELD));
+        Assert.assertEquals(conversations1.get(0).get(CONVERSATION_ID_FIELD), id2);
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response = TestHelper
@@ -182,13 +185,13 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("conversations"));
+        assert (map.containsKey(RESPONSE_CONVERSATION_LIST_FIELD));
         assert (map.containsKey("next_token"));
         @SuppressWarnings("unchecked")
-        ArrayList<Map> conversations = (ArrayList<Map>) map.get("conversations");
+        ArrayList<Map> conversations = (ArrayList<Map>) map.get(RESPONSE_CONVERSATION_LIST_FIELD);
         assert (conversations.size() == 1);
-        assert (conversations.get(0).containsKey("conversation_id"));
-        assert (((String) conversations.get(0).get("conversation_id")).equals(id1));
+        assert (conversations.get(0).containsKey(CONVERSATION_ID_FIELD));
+        assert (((String) conversations.get(0).get(CONVERSATION_ID_FIELD)).equals(id1));
         assert (((Double) map.get("next_token")).intValue() == 2);
     }
 }

@@ -67,7 +67,7 @@ public class RestMemoryGetConversationActionIT extends MLCommonsRestTestCase {
         String id = (String) ccmap.get(ActionConstants.CONVERSATION_ID_FIELD);
 
         Response gcresponse = TestHelper
-            .makeRequest(client(), "GET", ActionConstants.GET_CONVERSATION_REST_PATH.replace("{conversation_id}", id), null, "", null);
+            .makeRequest(client(), "GET", ActionConstants.GET_CONVERSATION_REST_PATH.replace("{memory_id}", id), null, "", null);
         assert (gcresponse != null);
         assert (TestHelper.restStatus(gcresponse) == RestStatus.OK);
         HttpEntity gchttpEntity = gcresponse.getEntity();

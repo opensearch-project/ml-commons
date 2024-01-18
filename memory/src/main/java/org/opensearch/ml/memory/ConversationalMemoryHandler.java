@@ -269,18 +269,16 @@ public interface ConversationalMemoryHandler {
 
     /**
      * Get a single interaction
-     * @param conversationId id of the conversation this interaction belongs to
      * @param interactionId id of this interaction
      * @param listener receives the interaction
      */
-    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener);
+    public void getInteraction(String interactionId, ActionListener<Interaction> listener);
 
     /**
      * Get a single interaction
-     * @param conversationId id of the conversation this interaction belongs to
      * @param interactionId id of this interaction
      * @return ActionFuture for the interaction
      */
-    public ActionFuture<Interaction> getInteraction(String conversationId, String interactionId);
+    public ActionFuture<Interaction> getInteraction(String interactionId);
 
 }
