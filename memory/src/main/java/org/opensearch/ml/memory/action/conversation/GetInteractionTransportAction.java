@@ -79,16 +79,15 @@ public class GetInteractionTransportAction extends HandledTransportAction<GetInt
                 );
             return;
         }
-        String conversationId = request.getConversationId();
         String interactionId = request.getInteractionId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<GetInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<Interaction> al = ActionListener.wrap(interaction -> {
                 internalListener.onResponse(new GetInteractionResponse(interaction));
             }, e -> { internalListener.onFailure(e); });
-            cmHandler.getInteraction(conversationId, interactionId, al);
+            cmHandler.getInteraction(interactionId, al);
         } catch (Exception e) {
-            log.error("Failed to get interaction " + interactionId + " in conversation " + conversationId, e);
+            log.error("Failed to get interaction " + interactionId, e);
             actionListener.onFailure(e);
         }
     }

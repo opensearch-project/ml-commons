@@ -421,23 +421,21 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
 
     /**
      * Get a single interaction
-     * @param conversationId id of the conversation this interaction belongs to
      * @param interactionId id of this interaction
      * @param listener receives the interaction
      */
-    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
-        interactionsIndex.getInteraction(conversationId, interactionId, listener);
+    public void getInteraction(String interactionId, ActionListener<Interaction> listener) {
+        interactionsIndex.getInteraction(interactionId, listener);
     }
 
     /**
      * Get a single interaction
-     * @param conversationId id of the conversation this interaction belongs to
      * @param interactionId id of this interaction
      * @return ActionFuture for the interaction
      */
-    public ActionFuture<Interaction> getInteraction(String conversationId, String interactionId) {
+    public ActionFuture<Interaction> getInteraction(String interactionId) {
         PlainActionFuture<Interaction> fut = PlainActionFuture.newFuture();
-        getInteraction(conversationId, interactionId, fut);
+        getInteraction(interactionId, fut);
         return fut;
     }
 

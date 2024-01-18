@@ -84,7 +84,7 @@ public class RestMemoryGetInteractionActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params),
                 null
@@ -99,14 +99,7 @@ public class RestMemoryGetInteractionActionIT extends MLCommonsRestTestCase {
         String iid = cimap.get(ActionConstants.RESPONSE_INTERACTION_ID_FIELD);
 
         Response giresponse = TestHelper
-            .makeRequest(
-                client(),
-                "GET",
-                ActionConstants.GET_INTERACTION_REST_PATH.replace("{conversation_id}", cid).replace("{interaction_id}", iid),
-                null,
-                "",
-                null
-            );
+            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTION_REST_PATH.replace("{message_id}", iid), null, "", null);
         assert (giresponse != null);
         assert (TestHelper.restStatus(giresponse) == RestStatus.OK);
         HttpEntity gihttpEntity = giresponse.getEntity();

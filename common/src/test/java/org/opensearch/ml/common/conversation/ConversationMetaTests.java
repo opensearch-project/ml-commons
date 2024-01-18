@@ -89,7 +89,7 @@ public class ConversationMetaTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         conversationMeta.toXContent(builder, EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        assertEquals(content, "{\"conversation_id\":\"test_id\",\"create_time\":\"1970-01-01T00:00:00.123Z\",\"updated_time\":\"1970-01-01T00:00:00.123Z\",\"name\":\"test meta\",\"user\":\"admin\"}");
+        assertEquals(content, "{\"memory_id\":\"test_id\",\"create_time\":\"1970-01-01T00:00:00.123Z\",\"updated_time\":\"1970-01-01T00:00:00.123Z\",\"name\":\"test meta\",\"user\":\"admin\"}");
     }
 
     @Test

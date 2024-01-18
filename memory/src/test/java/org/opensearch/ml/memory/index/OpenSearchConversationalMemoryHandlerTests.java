@@ -322,11 +322,11 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             Collections.singletonMap("meta", "some meta")
         );
         doAnswer(invocation -> {
-            ActionListener<Interaction> listener = invocation.getArgument(2);
+            ActionListener<Interaction> listener = invocation.getArgument(1);
             listener.onResponse(interaction);
             return null;
-        }).when(interactionsIndex).getInteraction(any(), any(), any());
-        ActionFuture<Interaction> result = cmHandler.getInteraction("cid", "iid");
+        }).when(interactionsIndex).getInteraction(any(), any());
+        ActionFuture<Interaction> result = cmHandler.getInteraction("iid");
         assert (result.actionGet().equals(interaction));
     }
 }
