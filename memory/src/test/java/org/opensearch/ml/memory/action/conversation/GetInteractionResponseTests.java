@@ -73,7 +73,6 @@ public class GetInteractionResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        System.out.println(result);
         String expected = "{\"memory_id\":\"cid\",\"message_id\":\"iid\",\"create_time\":\""
             + interaction.getCreateTime()
             + "\",\"input\":\"inp\",\"prompt_template\":\"pt\",\"response\":\"rsp\",\"origin\":\"ogn\",\"additional_info\":{\"metadata\":\"some meta\"}}";

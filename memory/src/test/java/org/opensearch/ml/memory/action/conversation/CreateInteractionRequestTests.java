@@ -108,8 +108,6 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
             .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
             .build();
         CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
-        System.out.println(request.getConversationId());
-        System.out.println(request.getInput());
 
         assert (request.validate() == null);
         assert (request.getConversationId().equals("cid"));

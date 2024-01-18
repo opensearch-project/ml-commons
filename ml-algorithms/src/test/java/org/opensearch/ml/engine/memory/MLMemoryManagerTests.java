@@ -264,7 +264,6 @@ public class MLMemoryManagerTests {
         mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(interactionListActionListener, times(1)).onFailure(argCaptor.capture());
-        System.out.println(argCaptor.getValue().getMessage());
         assert (argCaptor.getValue().getMessage().equals("User [] does not have access to conversation cid"));
     }
 

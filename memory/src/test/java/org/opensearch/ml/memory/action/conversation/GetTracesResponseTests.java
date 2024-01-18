@@ -93,7 +93,6 @@ public class GetTracesResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        System.out.println(result);
         String expected = "{\"traces\":[{\"memory_id\":\"cid\",\"message_id\":\"id0\",\"create_time\":"
             + trace.getCreateTime()
             + ",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"},\"parent_message_id\":\"parent_id\",\"trace_number\":1}],\"next_token\":2}";
