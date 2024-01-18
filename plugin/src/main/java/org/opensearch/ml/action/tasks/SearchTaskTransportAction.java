@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.tasks;
 
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleConnectorIndexNotFound;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -32,7 +34,9 @@ public class SearchTaskTransportAction extends HandledTransportAction<SearchRequ
     @Override
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, ActionListener.runBefore(actionListener, () -> context.restore()));
+            final ActionListener<SearchResponse> wrappedListener = ActionListener
+                .wrap(actionListener::onResponse, e -> wrapListenerToHandleConnectorIndexNotFound(e, actionListener));
+            client.search(request, ActionListener.runBefore(wrappedListener, () -> context.restore()));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);

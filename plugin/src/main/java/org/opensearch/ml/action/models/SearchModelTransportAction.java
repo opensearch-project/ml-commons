@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleConnectorIndexNotFound;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -32,6 +34,8 @@ public class SearchModelTransportAction extends HandledTransportAction<SearchReq
     @Override
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         request.indices(CommonValue.ML_MODEL_INDEX);
-        mlSearchHandler.search(request, actionListener);
+        final ActionListener<SearchResponse> wrappedListener = ActionListener
+            .wrap(actionListener::onResponse, e -> wrapListenerToHandleConnectorIndexNotFound(e, actionListener));
+        mlSearchHandler.search(request, wrappedListener);
     }
 }

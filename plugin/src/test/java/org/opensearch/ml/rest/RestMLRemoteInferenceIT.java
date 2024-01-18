@@ -95,7 +95,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals("deleted", (String) responseMap.get("result"));
     }
 
-    public void testSearchConnectors_beforeConnectorCreation() throws IOException {
+    public void testSearchConnectors_beforeCreation() throws IOException {
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
@@ -103,11 +103,63 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
-    public void testSearchConnectors_afterConnectorCreation() throws IOException {
+    public void testSearchConnectors_afterCreation() throws IOException {
         createConnector(completionModelConnectorEntity);
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchRemoteModels_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchRemoteModels_afterCreation() throws IOException {
+        registerRemoteModel();
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchModelGroups_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/model_groups/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchModelGroups_afterCreation() throws IOException {
+        registerRemoteModel();
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/model_groups/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchMLTasks_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/tasks/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchMLTasks_afterCreation() throws IOException {
+        registerRemoteModel();
+
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/tasks/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
         assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
@@ -740,4 +792,14 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         return TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
     }
 
+    private String registerRemoteModel() throws IOException {
+        Response response = createConnector(completionModelConnectorEntity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        logger.info("task ID created: {}", taskId);
+        return taskId;
+    }
 }
