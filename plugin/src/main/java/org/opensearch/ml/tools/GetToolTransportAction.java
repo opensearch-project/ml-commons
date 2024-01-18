@@ -6,13 +6,14 @@
 package org.opensearch.ml.tools;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.transport.tools.*;
 import org.opensearch.tasks.Task;
@@ -45,7 +46,12 @@ public class GetToolTransportAction extends HandledTransportAction<ActionRequest
                 .stream()
                 .filter(tool -> tool.getName().equals(toolName))
                 .findFirst()
-                .orElseThrow(NoSuchElementException::new);
+                .orElseThrow(
+                    () -> new OpenSearchStatusException(
+                        "Failed to find tool information with the provided tool name: " + toolName,
+                        RestStatus.NOT_FOUND
+                    )
+                );
             listener.onResponse(MLToolGetResponse.builder().toolMetadata(theTool).build());
         } catch (Exception e) {
             log.error("Failed to get tool", e);

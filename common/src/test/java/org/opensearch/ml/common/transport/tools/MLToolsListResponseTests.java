@@ -67,7 +67,8 @@ public class MLToolsListResponseTests {
         mlToolsListResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"name\":\"SearchWikipediaTool\",\"description\":\"Useful when you need to use this tool to search general knowledge on wikipedia.\",\"type\":\"SearchWikipediaTool\",\"version\":\"undefined\"} {\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}", jsonStr);
+        System.out.println(jsonStr);
+        assertEquals("[{\"name\":\"SearchWikipediaTool\",\"description\":\"Useful when you need to use this tool to search general knowledge on wikipedia.\",\"type\":\"SearchWikipediaTool\",\"version\":\"undefined\"},{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}]", jsonStr);
     }
 
     @Test

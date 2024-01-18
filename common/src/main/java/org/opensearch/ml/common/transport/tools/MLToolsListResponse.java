@@ -45,6 +45,7 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
 
     @Override
     public XContentBuilder toXContent(XContentBuilder xContentBuilder, ToXContent.Params params) throws IOException {
+        xContentBuilder.startArray();
         for (ToolMetadata toolMetadata : toolMetadataList) {
             xContentBuilder.startObject();
             xContentBuilder.field(ToolMetadata.TOOL_NAME_FIELD, toolMetadata.getName());
@@ -53,6 +54,7 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
             xContentBuilder.field(ToolMetadata.TOOL_VERSION_FIELD, toolMetadata.getVersion() != null ? toolMetadata.getVersion() : "undefined");
             xContentBuilder.endObject();
         }
+        xContentBuilder.endArray();
         return xContentBuilder;
     }
 
