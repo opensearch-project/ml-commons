@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -55,8 +57,8 @@ public class RestMemoryCreateInteractionActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String id = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String id = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Map<String, String> params = Map
             .of(
@@ -75,7 +77,7 @@ public class RestMemoryCreateInteractionActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", id),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", id),
                 null,
                 gson.toJson(params),
                 null
@@ -85,6 +87,6 @@ public class RestMemoryCreateInteractionActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("interaction_id"));
+        assert (map.containsKey("message_id"));
     }
 }

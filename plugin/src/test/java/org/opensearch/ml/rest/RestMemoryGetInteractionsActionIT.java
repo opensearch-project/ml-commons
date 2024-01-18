@@ -17,6 +17,10 @@
  */
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_INTERACTION_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_INTERACTION_LIST_FIELD;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,14 +56,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
 
     public void testGetInteractions_NoConversation() throws IOException {
         Response response = TestHelper
-            .makeRequest(
-                client(),
-                "GET",
-                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", "coffee"),
-                null,
-                "",
-                null
-            );
+            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", "coffee"), null, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -77,19 +74,19 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String cid = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String cid = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Response response = TestHelper
-            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
+            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", cid), null, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("interactions"));
+        assert (map.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (!map.containsKey("next_token"));
-        assert (((ArrayList) map.get("interactions")).size() == 0);
+        assert (((ArrayList) map.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 0);
     }
 
     public void testGetInteractions_LastPage() throws IOException {
@@ -99,8 +96,8 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String cid = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String cid = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Map<String, Object> params = Map
             .of(
@@ -119,7 +116,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params),
                 null
@@ -129,22 +126,22 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("interaction_id"));
-        String iid = (String) map.get("interaction_id");
+        assert (map.containsKey(RESPONSE_INTERACTION_ID_FIELD));
+        String iid = (String) map.get(RESPONSE_INTERACTION_ID_FIELD);
 
         Response response1 = TestHelper
-            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
+            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", cid), null, "", null);
         assert (response1 != null);
         assert (TestHelper.restStatus(response1) == RestStatus.OK);
         HttpEntity httpEntity1 = response1.getEntity();
         String entityString1 = TestHelper.httpEntityToString(httpEntity1);
         Map map1 = gson.fromJson(entityString1, Map.class);
-        assert (map1.containsKey("interactions"));
+        assert (map1.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (!map1.containsKey("next_token"));
-        assert (((ArrayList) map1.get("interactions")).size() == 1);
+        assert (((ArrayList) map1.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 1);
         @SuppressWarnings("unchecked")
-        ArrayList<Map> interactions = (ArrayList<Map>) map1.get("interactions");
-        assert (((String) interactions.get(0).get("interaction_id")).equals(iid));
+        ArrayList<Map> interactions = (ArrayList<Map>) map1.get(RESPONSE_INTERACTION_LIST_FIELD);
+        assert (((String) interactions.get(0).get(RESPONSE_INTERACTION_ID_FIELD)).equals(iid));
     }
 
     public void testGetInteractions_MorePages() throws IOException {
@@ -154,8 +151,8 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String cid = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String cid = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Map<String, Object> params = Map
             .of(
@@ -174,7 +171,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params),
                 null
@@ -184,14 +181,14 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("interaction_id"));
-        String iid = (String) map.get("interaction_id");
+        assert (map.containsKey(RESPONSE_INTERACTION_ID_FIELD));
+        String iid = (String) map.get(RESPONSE_INTERACTION_ID_FIELD);
 
         Response response1 = TestHelper
             .makeRequest(
                 client(),
                 "GET",
-                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", cid),
                 Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
                 "",
                 null
@@ -201,12 +198,12 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity1 = response1.getEntity();
         String entityString1 = TestHelper.httpEntityToString(httpEntity1);
         Map map1 = gson.fromJson(entityString1, Map.class);
-        assert (map1.containsKey("interactions"));
+        assert (map1.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (map1.containsKey("next_token"));
-        assert (((ArrayList) map1.get("interactions")).size() == 1);
+        assert (((ArrayList) map1.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 1);
         @SuppressWarnings("unchecked")
-        ArrayList<Map> interactions = (ArrayList<Map>) map1.get("interactions");
-        assert (((String) interactions.get(0).get("interaction_id")).equals(iid));
+        ArrayList<Map> interactions = (ArrayList<Map>) map1.get(RESPONSE_INTERACTION_LIST_FIELD);
+        assert (((String) interactions.get(0).get(RESPONSE_INTERACTION_ID_FIELD)).equals(iid));
         assert (((Double) map1.get("next_token")).intValue() == 1);
     }
 
@@ -217,8 +214,8 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String cid = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey(CONVERSATION_ID_FIELD));
+        String cid = (String) ccmap.get(CONVERSATION_ID_FIELD);
 
         Map<String, Object> params = Map
             .of(
@@ -237,7 +234,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params),
                 null
@@ -247,14 +244,14 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("interaction_id"));
-        String iid = (String) map.get("interaction_id");
+        assert (map.containsKey(RESPONSE_INTERACTION_ID_FIELD));
+        String iid = (String) map.get(RESPONSE_INTERACTION_ID_FIELD);
 
         Response response2 = TestHelper
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params),
                 null
@@ -264,14 +261,14 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity2 = response2.getEntity();
         String entityString2 = TestHelper.httpEntityToString(httpEntity2);
         Map map2 = gson.fromJson(entityString2, Map.class);
-        assert (map2.containsKey("interaction_id"));
-        String iid2 = (String) map2.get("interaction_id");
+        assert (map2.containsKey(RESPONSE_INTERACTION_ID_FIELD));
+        String iid2 = (String) map2.get(RESPONSE_INTERACTION_ID_FIELD);
 
         Response response1 = TestHelper
             .makeRequest(
                 client(),
                 "GET",
-                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", cid),
                 Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
                 "",
                 null
@@ -281,19 +278,19 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity1 = response1.getEntity();
         String entityString1 = TestHelper.httpEntityToString(httpEntity1);
         Map map1 = gson.fromJson(entityString1, Map.class);
-        assert (map1.containsKey("interactions"));
+        assert (map1.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (map1.containsKey("next_token"));
-        assert (((ArrayList) map1.get("interactions")).size() == 1);
+        assert (((ArrayList) map1.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 1);
         @SuppressWarnings("unchecked")
-        ArrayList<Map> interactions = (ArrayList<Map>) map1.get("interactions");
-        assert (((String) interactions.get(0).get("interaction_id")).equals(iid));
+        ArrayList<Map> interactions = (ArrayList<Map>) map1.get(RESPONSE_INTERACTION_LIST_FIELD);
+        assert (((String) interactions.get(0).get(RESPONSE_INTERACTION_ID_FIELD)).equals(iid));
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
         Response response3 = TestHelper
             .makeRequest(
                 client(),
                 "GET",
-                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{memory_id}", cid),
                 Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_TOKEN_FIELD, "1"),
                 "",
                 null
@@ -303,12 +300,12 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity3 = response3.getEntity();
         String entityString3 = TestHelper.httpEntityToString(httpEntity3);
         Map map3 = gson.fromJson(entityString3, Map.class);
-        assert (map3.containsKey("interactions"));
+        assert (map3.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (map3.containsKey("next_token"));
-        assert (((ArrayList) map3.get("interactions")).size() == 1);
+        assert (((ArrayList) map3.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 1);
         @SuppressWarnings("unchecked")
-        ArrayList<Map> interactions3 = (ArrayList<Map>) map3.get("interactions");
-        assert (((String) interactions3.get(0).get("interaction_id")).equals(iid2));
+        ArrayList<Map> interactions3 = (ArrayList<Map>) map3.get(RESPONSE_INTERACTION_LIST_FIELD);
+        assert (((String) interactions3.get(0).get(RESPONSE_INTERACTION_ID_FIELD)).equals(iid2));
         assert (((Double) map3.get("next_token")).intValue() == 2);
     }
 }
