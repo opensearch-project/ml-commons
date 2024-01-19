@@ -11,21 +11,16 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.hc.core5.http.HttpEntity;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
-import org.opensearch.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLSearchModelActionIT extends MLCommonsRestTestCase {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     public void testSearchModelAPI_EmptyResources() throws Exception {
-        exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("index_not_found_exception");
-        TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, matchAllSearchQuery(), null);
+        Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, matchAllSearchQuery(), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchModelAPI_Success() throws IOException {
