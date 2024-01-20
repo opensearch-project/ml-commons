@@ -23,7 +23,8 @@ POST /_plugins/_ml/connectors/_create
       "method": "POST",
       "url": "https://api.cohere.ai/v1/embed",
       "headers": {
-        "Authorization": "Bearer ${credential.cohere_key}"
+        "Authorization": "Bearer ${credential.cohere_key}",
+        "Request-Source": "unspecified:opensearch"
       },
       "request_body": "{ \"texts\": ${parameters.texts}, \"truncate\": \"${parameters.truncate}\", \"model\": \"${parameters.model}\", \"input_type\": \"${parameters.input_type}\" }",
       "pre_process_function": "connector.pre_process.cohere.embedding",
