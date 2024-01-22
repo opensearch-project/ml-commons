@@ -75,12 +75,12 @@ public class RestActionUtils {
     public static final String PARAMETER_TOOL_NAME = "tool_name";
 
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
-    public static final String OPENDISTRO_SECURITY_SSL_PRINCIPAL = OPENDISTRO_SECURITY_CONFIG_PREFIX + "ssl_principal";
 
     public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
 
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
+    static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -241,7 +241,6 @@ public class RestActionUtils {
         Object userObject = client.threadPool().getThreadContext().getTransient(OPENDISTRO_SECURITY_USER);
         if (userObject == null)
             return false;
-        ObjectMapper objectMapper = new ObjectMapper();
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
                 String userContext = objectMapper.writeValueAsString(userObject);
@@ -261,8 +260,7 @@ public class RestActionUtils {
         try {
             return isAdminDN(new LdapName(dn));
         } catch (InvalidNameException e) {
-            boolean isAdmin = adminUsernames.contains(dn);
-            return isAdmin;
+            return adminUsernames.contains(dn);
         }
     }
 
