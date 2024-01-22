@@ -1,0 +1,27 @@
+name: Benchmark
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        java: [11, 17, 20]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up JDK
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'adopt'
+        java-version: ${{ matrix.java }}
+
+    - name: Run benchmarks
+      run: ./gradlew jmh
