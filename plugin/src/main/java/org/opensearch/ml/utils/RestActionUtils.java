@@ -239,18 +239,14 @@ public class RestActionUtils {
         }
 
         Object userObject = client.threadPool().getThreadContext().getTransient(OPENDISTRO_SECURITY_USER);
-        logger.info(userObject);
         if (userObject == null)
             return false;
         ObjectMapper objectMapper = new ObjectMapper();
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
                 String userContext = objectMapper.writeValueAsString(userObject);
-                logger.info(userContext);
                 final JsonNode node = objectMapper.readTree(userContext);
-                logger.info(node);
                 final String userName = node.get("name").asText();
-                logger.info(userName);
 
                 return isAdminDN(userName);
             });
