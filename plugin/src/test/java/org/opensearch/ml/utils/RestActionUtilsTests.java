@@ -297,11 +297,13 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
 
         when(clusterService.getSettings())
-            .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
+            .thenReturn(
+                Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "CN=kirk,OU=client,O=client,L=test, C=de").build()
+            );
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
 
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_SSL_PRINCIPAL, "cn=admin");
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "CN=kirk,OU=client,O=client,L=test,C=de"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertTrue(isAdmin);
