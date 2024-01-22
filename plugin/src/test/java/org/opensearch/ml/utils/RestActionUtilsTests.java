@@ -309,6 +309,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         Assert.assertTrue(isAdmin);
     }
 
+    // Need to add a test case to cover non Ldap user
+
     @Test
     public void testIsSuperAdminUser_NotAdmin() {
         ClusterService clusterService = mock(ClusterService.class);
@@ -319,7 +321,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_SSL_PRINCIPAL, "cn=notadmin");
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "nonAdmin"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertFalse(isAdmin);
