@@ -24,6 +24,9 @@ dependencies {
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
+    implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}") {
+       exclude group: "org.jetbrains", module: "annotations"
+    }
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
@@ -42,7 +45,7 @@ dependencies {
     implementation group: 'com.google.guava', name: 'guava', version: '32.0.1-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation platform("ai.djl:bom:0.21.0")
-    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
+    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo', version: '0.21.0'
     implementation group: 'ai.djl', name: 'api'
     implementation group: 'ai.djl.huggingface', name: 'tokenizers'
     implementation("ai.djl.onnxruntime:onnxruntime-engine:0.21.0") {

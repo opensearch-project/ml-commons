@@ -126,7 +126,7 @@ public class CreateInteractionRequest extends ActionRequest {
      * @throws IOException if something goes wrong reading from request
      */
     public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
-        String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
+        String cid = request.param(ActionConstants.MEMORY_ID);
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 

@@ -13,8 +13,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -22,6 +24,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -29,8 +32,11 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -62,7 +68,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -94,6 +100,29 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
+        }
+    }
+
+    @VisibleForTesting
+    public static void wrapListenerToHandleConnectorIndexNotFound(Exception e, ActionListener<SearchResponse> listener) {
+        if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+            log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
+            final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
+            final SearchResponse emptySearchResponse = new SearchResponse(
+                internalSearchResponse,
+                null,
+                0,
+                0,
+                0,
+                0,
+                null,
+                new ShardSearchFailure[] {},
+                SearchResponse.Clusters.EMPTY,
+                null
+            );
+            listener.onResponse(emptySearchResponse);
+        } else {
+            listener.onFailure(e);
         }
     }
 }

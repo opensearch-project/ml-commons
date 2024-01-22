@@ -139,7 +139,7 @@ public class MLAgentExecutor implements Executable {
                                         client
                                             .execute(
                                                 GetInteractionAction.INSTANCE,
-                                                new GetInteractionRequest(memoryId, regenerateInteractionId),
+                                                new GetInteractionRequest(regenerateInteractionId),
                                                 ActionListener.wrap(interactionRes -> {
                                                     inputDataSet
                                                         .getParameters()
@@ -170,8 +170,9 @@ public class MLAgentExecutor implements Executable {
                     listener.onFailure(e);
                 }), context::restore));
             }
+        } else {
+            listener.onFailure(new ResourceNotFoundException("Agent index not found"));
         }
-
     }
 
     /**

@@ -66,7 +66,7 @@ public class ConversationalIndexConstants {
     /** Name of the conversational interactions index */
     public final static String INTERACTIONS_INDEX_NAME = ".plugins-ml-memory-message";
     /** Name of the interaction field for the conversation Id */
-    public final static String INTERACTIONS_CONVERSATION_ID_FIELD = "conversation_id";
+    public final static String INTERACTIONS_CONVERSATION_ID_FIELD = "memory_id";
     /** Name of the interaction field for the human input */
     public final static String INTERACTIONS_INPUT_FIELD = "input";
     /** Name of the interaction field for the prompt template */
@@ -80,7 +80,7 @@ public class ConversationalIndexConstants {
     /** Name of the interaction field for the timestamp */
     public final static String INTERACTIONS_CREATE_TIME_FIELD = "create_time";
     /** Name of the interaction id */
-    public final static String PARENT_INTERACTIONS_ID_FIELD = "parent_interaction_id";
+    public final static String PARENT_INTERACTIONS_ID_FIELD = "parent_message_id";
     /** The trace number of an interaction */
     public final static String INTERACTIONS_TRACE_NUMBER_FIELD = "trace_number";
     /** Mappings for the interactions index */

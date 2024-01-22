@@ -127,7 +127,7 @@ public class InteractionTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         interaction.toXContent(builder, EMPTY_PARAMS);
         String interactionContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"conversation_id\":\"conversation id\",\"interaction_id\":null,\"create_time\":null,\"input\":null,\"prompt_template\":null,\"response\":null,\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_interaction_id\":\"parant id\",\"trace_number\":1}", interactionContent);
+        assertEquals("{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"input\":null,\"prompt_template\":null,\"response\":null,\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}", interactionContent);
     }
 
     @Test

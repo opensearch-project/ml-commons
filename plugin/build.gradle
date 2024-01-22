@@ -188,6 +188,10 @@ integTest {
     if (System.getProperty("test.debug") != null) {
         jvmArgs '-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005'
     }
+
+    // Set this to true this if you want to see the logs in the terminal test output.
+    // note: if left false the log output will still show in your IDE
+    testLogging.showStandardStreams = true
 }
 
 testClusters.integTest {
@@ -197,7 +201,7 @@ testClusters.integTest {
     // When running integration tests it doesn't forward the --debug-jvm to the cluster anymore
     // i.e. we have to use a custom property to flag when we want to debug elasticsearch JVM
     // since we also support multi node integration tests we increase debugPort per node
-    if (System.getProperty("opensearch.debug") != null) {
+    if (System.getProperty("cluster.debug") != null) {
         def debugPort = 5005
         nodes.forEach { node ->
             node.jvmArgs("-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,address=*:${debugPort}")
@@ -337,6 +341,7 @@ configurations.all {
     resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
     resolutionStrategy.force 'commons-codec:commons-codec:1.15'
     resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
+    resolutionStrategy.force 'org.codehaus.plexus:plexus-utils:3.3.0'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

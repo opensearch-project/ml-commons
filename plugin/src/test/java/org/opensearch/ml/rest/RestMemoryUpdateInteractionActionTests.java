@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.conversation.ActionConstants.RESPONSE_INTERACTION_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 
 import java.util.HashMap;
@@ -93,7 +94,7 @@ public class RestMemoryUpdateInteractionActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.PUT, route.getMethod());
-        assertEquals("/_plugins/_ml/memory/interaction/{interaction_id}/_update", route.getPath());
+        assertEquals("/_plugins/_ml/memory/message/{message_id}", route.getPath());
     }
 
     public void testUpdateInteractionRequest() throws Exception {
@@ -115,7 +116,7 @@ public class RestMemoryUpdateInteractionActionTests extends OpenSearchTestCase {
 
     public void testUpdateInteractionRequestWithNullInteractionId() throws Exception {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Request should contain interaction_id");
+        exceptionRule.expectMessage("Request should contain message_id");
         RestRequest request = getRestRequestWithNullInteractionId();
         restMemoryUpdateInteractionAction.handleRequest(request, channel, client);
     }
@@ -125,10 +126,10 @@ public class RestMemoryUpdateInteractionActionTests extends OpenSearchTestCase {
         final Map<String, Object> updateContent = Map.of(INTERACTIONS_ADDITIONAL_INFO_FIELD, Map.of("feedback", "thumbs up!"));
         String requestContent = new Gson().toJson(updateContent);
         Map<String, String> params = new HashMap<>();
-        params.put("interaction_id", "test_interactionId");
+        params.put(RESPONSE_INTERACTION_ID_FIELD, "test_interactionId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/memory/interaction/{interaction_id}/_update")
+            .withPath("/_plugins/_ml/memory/message/{message_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -138,10 +139,10 @@ public class RestMemoryUpdateInteractionActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequestWithEmptyContent() {
         RestRequest.Method method = RestRequest.Method.POST;
         Map<String, String> params = new HashMap<>();
-        params.put("interaction_id", "test_interactionId");
+        params.put(RESPONSE_INTERACTION_ID_FIELD, "test_interactionId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/memory/interaction/{interaction_id}/_update")
+            .withPath("/_plugins/_ml/memory/message/{message_id}")
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();
@@ -155,7 +156,7 @@ public class RestMemoryUpdateInteractionActionTests extends OpenSearchTestCase {
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/memory/interaction/{interaction_id}/_update")
+            .withPath("/_plugins/_ml/memory/message/{message_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();

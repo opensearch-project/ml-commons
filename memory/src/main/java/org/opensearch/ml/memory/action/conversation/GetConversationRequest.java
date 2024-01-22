@@ -71,7 +71,7 @@ public class GetConversationRequest extends ActionRequest {
      * @throws IOException if something goes wrong in translation
      */
     public static GetConversationRequest fromRestRequest(RestRequest request) throws IOException {
-        String conversationId = request.param(ActionConstants.CONVERSATION_ID_FIELD);
+        String conversationId = request.param(ActionConstants.MEMORY_ID);
         return new GetConversationRequest(conversationId);
     }
 }

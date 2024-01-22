@@ -13,7 +13,7 @@ POST /_plugins/_ml/connectors/_create
         "endpoint": "api.openai.com",
         "max_tokens": 7,
         "temperature": 0,
-        "model": "text-davinci-003"
+        "model": "gpt-3.5-turbo-instruct"
     },
     "credential": {
         "openAI_key": "<PLEASE ADD YOUR OPENAI API KEY HERE>"
@@ -62,7 +62,7 @@ POST /_plugins/_ml/models/<ENTER MODEL ID HERE>/_predict
             "id": "cmpl-7g0NPOJd8IvXTdhecdlR0VGfrLMWE",
             "object": "text_completion",
             "created": 1690245579,
-            "model": "text-davinci-003",
+            "model": "gpt-3.5-turbo-instruct",
             "choices": [
               {
                 "text": """

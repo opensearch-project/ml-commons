@@ -59,7 +59,7 @@ public class GetConversationRequestTests extends OpenSearchTestCase {
     }
 
     public void testFromRestRequest() throws IOException {
-        Map<String, String> params = Map.of(ActionConstants.CONVERSATION_ID_FIELD, "testcid");
+        Map<String, String> params = Map.of(ActionConstants.MEMORY_ID, "testcid");
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
         GetConversationRequest request = GetConversationRequest.fromRestRequest(rrequest);
         assert (request.validate() == null);
