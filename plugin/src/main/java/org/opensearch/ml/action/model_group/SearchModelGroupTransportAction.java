@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -58,13 +59,17 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
     private void preProcessRoleAndPerformSearch(SearchRequest request, User user, ActionListener<SearchResponse> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+
+            final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
+
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrappedListener);
             } else {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by " + user.getBackendRoles());
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrappedListener);
             }
         } catch (Exception e) {
             log.error("Failed to search", e);

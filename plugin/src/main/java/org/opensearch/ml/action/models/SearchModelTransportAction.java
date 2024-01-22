@@ -21,7 +21,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class SearchModelTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
-    private MLSearchHandler mlSearchHandler;
+    private final MLSearchHandler mlSearchHandler;
 
     @Inject
     public SearchModelTransportAction(TransportService transportService, ActionFilters actionFilters, MLSearchHandler mlSearchHandler) {
