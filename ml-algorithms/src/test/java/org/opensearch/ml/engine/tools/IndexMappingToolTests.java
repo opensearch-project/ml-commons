@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.tools;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
@@ -177,6 +178,8 @@ public class IndexMappingToolTests {
         Factory instance = IndexMappingTool.Factory.getInstance();
         assertEquals(instance, IndexMappingTool.Factory.getInstance());
         assertTrue(instance.getDefaultDescription().contains("tool"));
+        assertEquals("IndexMappingTool", instance.getDefaultType());
+        assertNull(instance.getDefaultVersion());
 
         Tool tool = instance.create(Collections.emptyMap());
         assertEquals(IndexMappingTool.TYPE, tool.getType());
