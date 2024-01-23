@@ -25,7 +25,6 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 
-
 public class MLCreateModelControllerRequestTest {
 	private MLModelController modelControllerInput;
 
@@ -34,30 +33,35 @@ public class MLCreateModelControllerRequestTest {
 	@Before
 	public void setUp() throws Exception {
 
-	MLRateLimiter rateLimiter = MLRateLimiter.builder()
-          .rateLimitNumber("1")
-          .rateLimitUnit(TimeUnit.MILLISECONDS)
-          .build();
-	modelControllerInput = MLModelController.builder()
-			.modelId("testModelId")
-			.userRateLimiterConfig(new HashMap<>() {{
-				put("testUser", rateLimiter);
-			}})
-			.build();
-	request = MLCreateModelControllerRequest.builder()
-			.modelControllerInput(modelControllerInput)
-			.build();
+		MLRateLimiter rateLimiter = MLRateLimiter.builder()
+				.limit("1")
+				.unit(TimeUnit.MILLISECONDS)
+				.build();
+		modelControllerInput = MLModelController.builder()
+				.modelId("testModelId")
+				.userRateLimiter(new HashMap<>() {
+					{
+						put("testUser", rateLimiter);
+					}
+				})
+				.build();
+		request = MLCreateModelControllerRequest.builder()
+				.modelControllerInput(modelControllerInput)
+				.build();
 	}
 
 	@Test
 	public void writeToSuccess() throws IOException {
 		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
 		request.writeTo(bytesStreamOutput);
-		MLCreateModelControllerRequest parsedRequest = new MLCreateModelControllerRequest(bytesStreamOutput.bytes().streamInput());
+		MLCreateModelControllerRequest parsedRequest = new MLCreateModelControllerRequest(
+				bytesStreamOutput.bytes().streamInput());
 		assertEquals("testModelId", parsedRequest.getModelControllerInput().getModelId());
-		assertTrue(parsedRequest.getModelControllerInput().getUserRateLimiterConfig().containsKey("testUser"));
-		assertEquals("1", parsedRequest.getModelControllerInput().getUserRateLimiterConfig().get("testUser").getRateLimitNumber());
-		assertEquals(TimeUnit.MILLISECONDS, parsedRequest.getModelControllerInput().getUserRateLimiterConfig().get("testUser").getRateLimitUnit());
+		assertTrue(parsedRequest.getModelControllerInput().getUserRateLimiter().containsKey("testUser"));
+		assertEquals("1", parsedRequest.getModelControllerInput().getUserRateLimiter().get("testUser")
+				.getLimit());
+		assertEquals(TimeUnit.MILLISECONDS,
+				parsedRequest.getModelControllerInput().getUserRateLimiter().get("testUser").getUnit());
 	}
 
 	@Test
@@ -74,13 +78,13 @@ public class MLCreateModelControllerRequestTest {
 
 	@Test
 	public void validateWithNullMLModelID() {
-	modelControllerInput.setModelId(null);
-	MLCreateModelControllerRequest request = MLCreateModelControllerRequest.builder()
-			.modelControllerInput(modelControllerInput)
-			.build();
+		modelControllerInput.setModelId(null);
+		MLCreateModelControllerRequest request = MLCreateModelControllerRequest.builder()
+				.modelControllerInput(modelControllerInput)
+				.build();
 
-	assertNull(request.validate());
-	assertNull(request.getModelControllerInput().getModelId());
+		assertNull(request.validate());
+		assertNull(request.getModelControllerInput().getModelId());
 	}
 
 	@Test

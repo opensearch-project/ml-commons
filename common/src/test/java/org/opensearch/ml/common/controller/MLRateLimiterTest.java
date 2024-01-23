@@ -4,7 +4,6 @@
  */
 package org.opensearch.ml.common.controller;
 
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -43,7 +42,7 @@ public class MLRateLimiterTest {
 
     private MLRateLimiter rateLimiterNull;
 
-    private final String expectedInputStr = "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"}";
+    private final String expectedInputStr = "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -51,15 +50,15 @@ public class MLRateLimiterTest {
     @Before
     public void setUp() throws Exception {
         rateLimiter = MLRateLimiter.builder()
-                .rateLimitNumber("1")
-                .rateLimitUnit(TimeUnit.MILLISECONDS)
+                .limit("1")
+                .unit(TimeUnit.MILLISECONDS)
                 .build();
         rateLimiterWithNumber = MLRateLimiter.builder()
-                .rateLimitNumber("1")
+                .limit("1")
                 .build();
 
         rateLimiterWithUnit = MLRateLimiter.builder()
-                .rateLimitUnit(TimeUnit.MILLISECONDS)
+                .unit(TimeUnit.MILLISECONDS)
                 .build();
 
         rateLimiterNull = MLRateLimiter.builder().build();
@@ -69,15 +68,15 @@ public class MLRateLimiterTest {
     @Test
     public void readInputStreamSuccess() throws IOException {
         readInputStream(rateLimiter, parsedInput -> {
-            assertEquals("1", parsedInput.getRateLimitNumber());
-            assertEquals(TimeUnit.MILLISECONDS, parsedInput.getRateLimitUnit());
+            assertEquals("1", parsedInput.getLimit());
+            assertEquals(TimeUnit.MILLISECONDS, parsedInput.getUnit());
         });
     }
 
     @Test
     public void readInputStreamSuccessWithNullFields() throws IOException {
         readInputStream(rateLimiterWithNumber, parsedInput -> {
-            assertNull(parsedInput.getRateLimitUnit());
+            assertNull(parsedInput.getUnit());
         });
     }
 
@@ -98,15 +97,15 @@ public class MLRateLimiterTest {
     @Test
     public void parseSuccess() throws Exception {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
-            assertEquals("1", parsedInput.getRateLimitNumber());
-            assertEquals(TimeUnit.MILLISECONDS, parsedInput.getRateLimitUnit());
+            assertEquals("1", parsedInput.getLimit());
+            assertEquals(TimeUnit.MILLISECONDS, parsedInput.getUnit());
         });
     }
 
     @Test
     public void parseWithNullField() throws Exception {
         exceptionRule.expect(IllegalStateException.class);
-        final String expectedInputStrWithNullField = "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":null}";
+        final String expectedInputStrWithNullField = "{\"limit\":\"1\",\"unit\":null}";
 
         testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
             try {
@@ -119,7 +118,7 @@ public class MLRateLimiterTest {
 
     @Test
     public void parseWithIllegalField() throws Exception {
-        final String expectedInputStrWithIllegalField = "{\"rate_limit_number\":\"1\",\"rate_limit_unit\":" +
+        final String expectedInputStrWithIllegalField = "{\"limit\":\"1\",\"unit\":" +
                 "\"MILLISECONDS\",\"illegal_field\":\"This field need to be skipped.\"}";
 
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
@@ -150,25 +149,25 @@ public class MLRateLimiterTest {
     @Test
     public void testRateLimiterUpdate() {
         MLRateLimiter updatedRateLimiter = MLRateLimiter.update(rateLimiterNull, rateLimiter);
-        assertEquals("1", updatedRateLimiter.getRateLimitNumber());
-        assertEquals(TimeUnit.MILLISECONDS, updatedRateLimiter.getRateLimitUnit());
+        assertEquals("1", updatedRateLimiter.getLimit());
+        assertEquals(TimeUnit.MILLISECONDS, updatedRateLimiter.getUnit());
     }
 
     @Test
     public void testRateLimiterPartiallyUpdate() {
         rateLimiterNull.update(rateLimiterWithNumber);
-        assertEquals("1", rateLimiterNull.getRateLimitNumber());
-        assertNull(rateLimiterNull.getRateLimitUnit());
+        assertEquals("1", rateLimiterNull.getLimit());
+        assertNull(rateLimiterNull.getUnit());
         rateLimiterNull.update(rateLimiterWithUnit);
-        assertEquals("1", rateLimiterNull.getRateLimitNumber());
-        assertEquals(TimeUnit.MILLISECONDS, rateLimiterNull.getRateLimitUnit());
+        assertEquals("1", rateLimiterNull.getLimit());
+        assertEquals(TimeUnit.MILLISECONDS, rateLimiterNull.getUnit());
     }
 
     @Test
     public void testRateLimiterUpdateNull() {
         MLRateLimiter updatedRateLimiter = MLRateLimiter.update(null, rateLimiter);
-        assertEquals("1", updatedRateLimiter.getRateLimitNumber());
-        assertEquals(TimeUnit.MILLISECONDS, updatedRateLimiter.getRateLimitUnit());
+        assertEquals("1", updatedRateLimiter.getLimit());
+        assertEquals(TimeUnit.MILLISECONDS, updatedRateLimiter.getUnit());
     }
 
     @Test
@@ -191,11 +190,11 @@ public class MLRateLimiterTest {
     @Test
     public void testRateLimiterIsDeployRequiredAfterUpdate() {
         MLRateLimiter rateLimiterWithNumber2 = MLRateLimiter.builder()
-                .rateLimitNumber("2")
+                .limit("2")
                 .build();
 
         MLRateLimiter rateLimiterWithUnit2 = MLRateLimiter.builder()
-                .rateLimitUnit(TimeUnit.NANOSECONDS)
+                .unit(TimeUnit.NANOSECONDS)
                 .build();
 
         assertTrue(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiter, rateLimiterWithNumber2));
@@ -209,8 +208,10 @@ public class MLRateLimiterTest {
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLRateLimiter> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
+        XContentParser parser = XContentType.JSON.xContent()
+                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                        Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE,
+                        expectedInputStr);
         parser.nextToken();
         MLRateLimiter parsedInput = MLRateLimiter.parse(parser);
         verify.accept(parsedInput);
@@ -235,7 +236,7 @@ public class MLRateLimiterTest {
     @Test
     public void testRateLimiterRemove() {
         MLRateLimiter updatedRateLimiter = MLRateLimiter.update(rateLimiter, rateLimiterNull);
-        assertNull(updatedRateLimiter.getRateLimitUnit());
-        assertNull(updatedRateLimiter.getRateLimitNumber());
+        assertNull(updatedRateLimiter.getUnit());
+        assertNull(updatedRateLimiter.getLimit());
     }
 }

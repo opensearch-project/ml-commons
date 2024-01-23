@@ -131,7 +131,7 @@ public class RestMLUpdateModelControllerActionTests extends OpenSearchTestCase {
 
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.PUT;
-        String requestContent = "{\"user_rate_limiter_config\":{\"testUser\":{}}}";
+        String requestContent = "{\"user_rate_limiter\":{\"testUser\":{}}}";
         Map<String, String> params = Map.of("model_id", "testModelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
@@ -156,7 +156,7 @@ public class RestMLUpdateModelControllerActionTests extends OpenSearchTestCase {
 
     private RestRequest getRestRequestWithNullModelId() {
         RestRequest.Method method = RestRequest.Method.PUT;
-        String requestContent = "{\"user_rate_limiter_config\":{\"testUser\":{}}}";
+        String requestContent = "{\"user_rate_limiter\":{\"testUser\":{}}}";
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
@@ -169,7 +169,7 @@ public class RestMLUpdateModelControllerActionTests extends OpenSearchTestCase {
 
     private RestRequest getRestRequestWithNullField() {
         RestRequest.Method method = RestRequest.Method.PUT;
-        String requestContent = "{\"user_rate_limiter_config\":{\"testUser\":null}}";
+        String requestContent = "{\"user_rate_limiter\":{\"testUser\":null}}";
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "testModelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

@@ -150,13 +150,13 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertNull(cacheHelper.getMLExecutor(modelId));
     }
 
-    public void testModelRateLimiter() {
+    public void testRateLimiter() {
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true);
-        assertNull(cacheHelper.getModelRateLimiter(modelId));
-        cacheHelper.setModelRateLimiter(modelId, rateLimiter);
-        assertEquals(rateLimiter, cacheHelper.getModelRateLimiter(modelId));
-        cacheHelper.removeModelRateLimiter(modelId);
-        assertNull(cacheHelper.getModelRateLimiter(modelId));
+        assertNull(cacheHelper.getRateLimiter(modelId));
+        cacheHelper.setRateLimiter(modelId, rateLimiter);
+        assertEquals(rateLimiter, cacheHelper.getRateLimiter(modelId));
+        cacheHelper.removeRateLimiter(modelId);
+        assertNull(cacheHelper.getRateLimiter(modelId));
     }
 
     public void testModelEnabled() {
@@ -250,7 +250,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     public void testRemoveModel_Deployed() {
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         cacheHelper.setIsModelEnabled(modelId, true);
-        cacheHelper.setModelRateLimiter(modelId, rateLimiter);
+        cacheHelper.setRateLimiter(modelId, rateLimiter);
         cacheHelper.setUserRateLimiterMap(modelId, userRateLimiterMap);
         cacheHelper.setPredictor(modelId, predictor);
         cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
@@ -261,7 +261,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertNull(cacheHelper.getMemEstGPU(modelId));
         assertNull(cacheHelper.getModelInfo(modelId));
         assertNull(cacheHelper.getIsModelEnabled(modelId));
-        assertNull(cacheHelper.getModelRateLimiter(modelId));
+        assertNull(cacheHelper.getRateLimiter(modelId));
         assertNull(cacheHelper.getUserRateLimiter(modelId, "user1"));
         assertNull(cacheHelper.getUserRateLimiterMap(modelId));
     }

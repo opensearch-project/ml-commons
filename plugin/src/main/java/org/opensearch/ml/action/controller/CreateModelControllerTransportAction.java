@@ -15,6 +15,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
@@ -188,7 +189,7 @@ public class CreateModelControllerTransportAction extends HandledTransportAction
                     if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
                         mlModelManager.updateModel(modelId, Map.of(MLModel.IS_MODEL_CONTROLLER_ENABLED_FIELD, true));
                     }
-                    if (mlModelCacheHelper.isModelDeployed(modelId)) {
+                    if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId))) {
                         log.info("Model {} is deployed. Start to deploy the model controller into cache.", modelId);
                         String[] targetNodeIds = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
                         MLDeployModelControllerNodesRequest deployModelControllerNodesRequest = new MLDeployModelControllerNodesRequest(

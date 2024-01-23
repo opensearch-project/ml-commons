@@ -43,8 +43,9 @@ public class MLModelCacheHelper {
 
     /**
      * Initialize model state.
-     * @param modelId model id
-     * @param state model state
+     * 
+     * @param modelId      model id
+     * @param state        model state
      * @param functionName function name
      */
     public synchronized void initModelState(
@@ -68,8 +69,9 @@ public class MLModelCacheHelper {
 
     /**
      * Set model state
+     * 
      * @param modelId model id
-     * @param state model state
+     * @param state   model state
      */
     public synchronized void setModelState(String modelId, MLModelState state) {
         log.debug("Updating State of Model {}  to state {}", modelId, state);
@@ -78,12 +80,13 @@ public class MLModelCacheHelper {
 
     /**
      * Set a rate limiter to enable model level throttling
-     * @param modelId model id
+     * 
+     * @param modelId     model id
      * @param rateLimiter rate limiter
      */
-    public synchronized void setModelRateLimiter(String modelId, TokenBucket rateLimiter) {
+    public synchronized void setRateLimiter(String modelId, TokenBucket rateLimiter) {
         log.debug("Setting the rate limiter for Model {}", modelId);
-        getExistingModelCache(modelId).setModelRateLimiter(rateLimiter);
+        getExistingModelCache(modelId).setRateLimiter(rateLimiter);
     }
 
     /**
@@ -91,28 +94,30 @@ public class MLModelCacheHelper {
      *
      * @param modelId model id
      */
-    public TokenBucket getModelRateLimiter(String modelId) {
+    public TokenBucket getRateLimiter(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache == null) {
             return null;
         }
-        return modelCache.getModelRateLimiter();
+        return modelCache.getRateLimiter();
     }
 
     /**
      * Remove the rate limiter from cache to disable model level throttling
+     * 
      * @param modelId model id
      */
-    public synchronized void removeModelRateLimiter(String modelId) {
+    public synchronized void removeRateLimiter(String modelId) {
         log.debug("Removing the rate limiter for Model {}", modelId);
-        getExistingModelCache(modelId).setModelRateLimiter(null);
+        getExistingModelCache(modelId).setRateLimiter(null);
     }
 
     /**
      * Set the user rate limiter map to enable user level throttling.
      *
-     * @param modelId model id
-     * @param userRateLimiterMap a map with user's name and its corresponding rate limiter
+     * @param modelId            model id
+     * @param userRateLimiterMap a map with user's name and its corresponding rate
+     *                           limiter
      */
     public synchronized void setUserRateLimiterMap(String modelId, Map<String, TokenBucket> userRateLimiterMap) {
         log.debug("Setting the user level rate limiter for Model {}", modelId);
@@ -157,7 +162,8 @@ public class MLModelCacheHelper {
 
     /**
      * Set a quota flag to control if the model can still receive request
-     * @param modelId model id
+     * 
+     * @param modelId        model id
      * @param isModelEnabled quota flag
      */
     public synchronized void setIsModelEnabled(String modelId, Boolean isModelEnabled) {
@@ -167,6 +173,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get the current quota flag condition for the model
+     * 
      * @param modelId model id
      */
     public Boolean getIsModelEnabled(String modelId) {
@@ -179,9 +186,10 @@ public class MLModelCacheHelper {
 
     /**
      * Set memory size estimation CPU/GPU
+     * 
      * @param modelId model id
-     * @param format model format like onnx
-     * @param size memory size
+     * @param format  model format like onnx
+     * @param size    memory size
      */
     public synchronized void setMemSizeEstimation(String modelId, MLModelFormat format, Long size) {
         Long memSize = getMemSizeEstimation(format, size);
@@ -206,6 +214,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get CPU memory estimation.
+     * 
      * @param modelId model id
      * @return Long
      */
@@ -219,6 +228,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get GPU memory estimation.
+     * 
      * @param modelId model id
      * @return Long
      */
@@ -232,6 +242,7 @@ public class MLModelCacheHelper {
 
     /**
      * Check if model deployed on node.
+     * 
      * @param modelId model id
      * @return true if model deployed
      */
@@ -242,6 +253,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get deployed models on node.
+     * 
      * @return array of model id
      */
     public String[] getDeployedModels() {
@@ -256,6 +268,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get deployed local models on node.
+     * 
      * @return array of model id
      */
     public String[] getLocalDeployedModels() {
@@ -273,6 +286,7 @@ public class MLModelCacheHelper {
 
     /**
      * Check if model is running on node.
+     * 
      * @param modelId model id
      * @return true if model is running on node.
      */
@@ -283,7 +297,8 @@ public class MLModelCacheHelper {
 
     /**
      * Set predictor of model.
-     * @param modelId model id
+     * 
+     * @param modelId   model id
      * @param predictor predictor
      */
     public synchronized void setPredictor(String modelId, Predictable predictor) {
@@ -306,6 +321,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get predictor of model.
+     * 
      * @param modelId model id
      * @return predictor
      */
@@ -319,7 +335,8 @@ public class MLModelCacheHelper {
 
     /**
      * Set target worker nodes of model.
-     * @param modelId model id
+     * 
+     * @param modelId           model id
      * @param targetWorkerNodes target worker nodes of model
      */
     public void setTargetWorkerNodes(String modelId, List<String> targetWorkerNodes) {
@@ -331,6 +348,7 @@ public class MLModelCacheHelper {
 
     /**
      * Remove model.
+     * 
      * @param modelId model id
      */
     public void removeModel(String modelId) {
@@ -344,6 +362,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get all model IDs in model cache.
+     * 
      * @return array of model id
      */
     public String[] getAllModels() {
@@ -352,6 +371,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get worker nodes of model.
+     * 
      * @param modelId model id
      * @return array of node id; return null if model not exists in cache
      */
@@ -365,8 +385,9 @@ public class MLModelCacheHelper {
 
     /**
      * Add worker node of model.
+     * 
      * @param modelId model id
-     * @param nodeId node id
+     * @param nodeId  node id
      */
     public synchronized void addWorkerNode(String modelId, String nodeId) {
         log.debug("add node {} to model routing table for model: {}", nodeId, modelId);
@@ -376,6 +397,7 @@ public class MLModelCacheHelper {
 
     /**
      * Remove worker nodes for all models.
+     * 
      * @param removedNodes removed nodes
      */
     public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
@@ -393,11 +415,15 @@ public class MLModelCacheHelper {
 
     /**
      * Remove worker node of model.
-     * @param modelId model id
-     * @param nodeId node id
-     * @param isFromUndeploy Only allow custom deploy is true and user undeployed partial nodes, the isFromUndeploy is true, in
-     *                       this case, we need to change the deployToAllNodes flag to false in cache to make sure it's consistent
-     *                       with model index, also we need to change the target worker nodes to exclude the removed worker nodes.
+     * 
+     * @param modelId        model id
+     * @param nodeId         node id
+     * @param isFromUndeploy Only allow custom deploy is true and user undeployed
+     *                       partial nodes, the isFromUndeploy is true, in
+     *                       this case, we need to change the deployToAllNodes flag
+     *                       to false in cache to make sure it's consistent
+     *                       with model index, also we need to change the target
+     *                       worker nodes to exclude the removed worker nodes.
      */
     public void removeWorkerNode(String modelId, String nodeId, boolean isFromUndeploy) {
         MLModelCache modelCache = modelCaches.get(modelId);
@@ -413,6 +439,7 @@ public class MLModelCacheHelper {
 
     /**
      * Sync worker nodes for all models.
+     * 
      * @param modelWorkerNodes worker nodes of all models
      */
     public void syncWorkerNodes(Map<String, Set<String>> modelWorkerNodes) {
@@ -438,6 +465,7 @@ public class MLModelCacheHelper {
 
     /**
      * Clear worker node of model.
+     * 
      * @param modelId model id
      */
     public void clearWorkerNodes(String modelId) {
@@ -453,6 +481,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get model profile.
+     * 
      * @param modelId model id
      * @return model profile
      */
@@ -484,7 +513,8 @@ public class MLModelCacheHelper {
 
     /**
      * Add model inference duration.
-     * @param modelId model id
+     * 
+     * @param modelId  model id
      * @param duration time in milliseconds used to run inference.
      */
     public void addModelInferenceDuration(String modelId, double duration) {
@@ -505,6 +535,7 @@ public class MLModelCacheHelper {
 
     /**
      * Get function name of model
+     * 
      * @param modelId model id
      * @return function name
      */

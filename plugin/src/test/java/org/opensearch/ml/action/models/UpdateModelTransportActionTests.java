@@ -872,7 +872,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelWithoutUpdateConnectorWithModelRateLimiterSuccess() {
+    public void testUpdateModelCacheModelWithoutUpdateConnectorWithRateLimiterSuccess() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -886,17 +886,17 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").rateLimitUnit(TimeUnit.MILLISECONDS).build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        testUpdateModelCacheRequest.getUpdateModelInput().setModelRateLimiterConfig(rateLimiter);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
         testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
         transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testUpdateModelCacheModelWithModelRateLimiterSuccess() {
+    public void testUpdateModelCacheModelWithRateLimiterSuccess() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -910,16 +910,16 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").rateLimitUnit(TimeUnit.MILLISECONDS).build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        testUpdateModelCacheRequest.getUpdateModelInput().setModelRateLimiterConfig(rateLimiter);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
         transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testUpdateModelWithPartialModelRateLimiterSuccess() {
+    public void testUpdateModelWithPartialRateLimiterSuccess() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -927,17 +927,17 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").build();
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        testUpdateModelCacheRequest.getUpdateModelInput().setModelRateLimiterConfig(rateLimiter);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
         testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
         transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testUpdateModelCacheModelWithPartialModelRateLimiterSuccess() {
+    public void testUpdateModelCacheModelWithPartialRateLimiterSuccess() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -951,10 +951,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").build();
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        testUpdateModelCacheRequest.getUpdateModelInput().setModelRateLimiterConfig(rateLimiter);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
         transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }

@@ -313,7 +313,7 @@ public class DeleteModelControllerTransportActionTests extends OpenSearchTestCas
     public void testDeleteModelControllerWithUndeploySuccessPartiallyFailures() {
         List<FailedNodeException> failures = List
             .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
         doAnswer(invocation -> {
             ActionListener<MLUndeployModelControllerNodesResponse> listener = invocation.getArgument(2);
@@ -333,7 +333,7 @@ public class DeleteModelControllerTransportActionTests extends OpenSearchTestCas
 
     @Test
     public void testDeleteModelControllerWithUndeployNullResponse() {
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[]{"foo1","foo2"});
 
         doAnswer(invocation -> {
             ActionListener<MLUndeployModelControllerNodesResponse> listener = invocation.getArgument(2);
@@ -352,7 +352,7 @@ public class DeleteModelControllerTransportActionTests extends OpenSearchTestCas
 
     @Test
     public void testDeleteModelControllerWithUndeployOtherException() {
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[]{"foo1","foo2"});
 
         doAnswer(invocation -> {
             ActionListener<MLUndeployModelControllerNodesResponse> actionListener = invocation.getArgument(2);

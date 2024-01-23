@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 package org.opensearch.ml.common.transport.controller;
 
 import static org.junit.Assert.assertEquals;
@@ -27,37 +26,42 @@ import org.opensearch.ml.common.controller.MLModelController;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 
 public class MLUpdateModelControllerRequestTest {
-    private MLModelController updateModelControllerInput;
+	private MLModelController updateModelControllerInput;
 
 	private MLUpdateModelControllerRequest request;
 
 	@Before
 	public void setUp() throws Exception {
 
-	MLRateLimiter rateLimiter = MLRateLimiter.builder()
-          .rateLimitNumber("1")
-          .rateLimitUnit(TimeUnit.MILLISECONDS)
-          .build();
-	updateModelControllerInput = MLModelController.builder()
-			.modelId("testModelId")
-			.userRateLimiterConfig(new HashMap<>() {{
-				put("testUser", rateLimiter);
-			}})
-			.build();
-	request = MLUpdateModelControllerRequest.builder()
-			.updateModelControllerInput(updateModelControllerInput)
-			.build();
+		MLRateLimiter rateLimiter = MLRateLimiter.builder()
+				.limit("1")
+				.unit(TimeUnit.MILLISECONDS)
+				.build();
+		updateModelControllerInput = MLModelController.builder()
+				.modelId("testModelId")
+				.userRateLimiter(new HashMap<>() {
+					{
+						put("testUser", rateLimiter);
+					}
+				})
+				.build();
+		request = MLUpdateModelControllerRequest.builder()
+				.updateModelControllerInput(updateModelControllerInput)
+				.build();
 	}
 
 	@Test
 	public void writeToSuccess() throws IOException {
 		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
 		request.writeTo(bytesStreamOutput);
-		MLUpdateModelControllerRequest parsedRequest = new MLUpdateModelControllerRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals("testModelId", parsedRequest.getUpdateModelControllerInput().getModelId());
-        assertTrue(parsedRequest.getUpdateModelControllerInput().getUserRateLimiterConfig().containsKey("testUser"));
-        assertEquals("1", parsedRequest.getUpdateModelControllerInput().getUserRateLimiterConfig().get("testUser").getRateLimitNumber());
-        assertEquals(TimeUnit.MILLISECONDS, parsedRequest.getUpdateModelControllerInput().getUserRateLimiterConfig().get("testUser").getRateLimitUnit());
+		MLUpdateModelControllerRequest parsedRequest = new MLUpdateModelControllerRequest(
+				bytesStreamOutput.bytes().streamInput());
+		assertEquals("testModelId", parsedRequest.getUpdateModelControllerInput().getModelId());
+		assertTrue(parsedRequest.getUpdateModelControllerInput().getUserRateLimiter().containsKey("testUser"));
+		assertEquals("1", parsedRequest.getUpdateModelControllerInput().getUserRateLimiter().get("testUser")
+				.getLimit());
+		assertEquals(TimeUnit.MILLISECONDS, parsedRequest.getUpdateModelControllerInput().getUserRateLimiter()
+				.get("testUser").getUnit());
 	}
 
 	@Test
@@ -67,20 +71,20 @@ public class MLUpdateModelControllerRequestTest {
 
 	@Test
 	public void validateWithNullMLModelControllerInputException() {
-        MLUpdateModelControllerRequest request = MLUpdateModelControllerRequest.builder().build();
+		MLUpdateModelControllerRequest request = MLUpdateModelControllerRequest.builder().build();
 		ActionRequestValidationException exception = request.validate();
 		assertEquals("Validation Failed: 1: Update model controller input can't be null;", exception.getMessage());
 	}
 
 	@Test
 	public void validateWithNullMLModelID() {
-	updateModelControllerInput.setModelId(null);
-	MLUpdateModelControllerRequest request = MLUpdateModelControllerRequest.builder()
-			.updateModelControllerInput(updateModelControllerInput)
-			.build();
+		updateModelControllerInput.setModelId(null);
+		MLUpdateModelControllerRequest request = MLUpdateModelControllerRequest.builder()
+				.updateModelControllerInput(updateModelControllerInput)
+				.build();
 
-	assertNull(request.validate());
-	assertNull(request.getUpdateModelControllerInput().getModelId());
+		assertNull(request.validate());
+		assertNull(request.getUpdateModelControllerInput().getModelId());
 	}
 
 	@Test
@@ -103,7 +107,8 @@ public class MLUpdateModelControllerRequestTest {
 		};
 		MLUpdateModelControllerRequest result = MLUpdateModelControllerRequest.fromActionRequest(actionRequest);
 		assertNotSame(result, request);
-		assertEquals(request.getUpdateModelControllerInput().getModelId(), result.getUpdateModelControllerInput().getModelId());
+		assertEquals(request.getUpdateModelControllerInput().getModelId(),
+				result.getUpdateModelControllerInput().getModelId());
 	}
 
 	@Test(expected = UncheckedIOException.class)

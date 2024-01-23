@@ -56,7 +56,7 @@ public class MLModel implements ToXContentObject {
 
     // Model level quota and throttling control
     public static final String IS_ENABLED_FIELD = "is_enabled";
-    public static final String MODEL_RATE_LIMITER_CONFIG_FIELD = "model_rate_limiter_config";
+    public static final String RATE_LIMITER_FIELD = "rate_limiter";
     public static final String IS_MODEL_CONTROLLER_ENABLED_FIELD = "is_model_controller_enabled";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
@@ -101,7 +101,7 @@ public class MLModel implements ToXContentObject {
     private MLModelConfig modelConfig;
     private Boolean isEnabled;
     private Boolean isModelControllerEnabled;
-    private MLRateLimiter modelRateLimiterConfig;
+    private MLRateLimiter rateLimiter;
     private Instant createdTime;
     private Instant lastUpdateTime;
     private Instant lastRegisteredTime;
@@ -120,7 +120,8 @@ public class MLModel implements ToXContentObject {
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
 
-    //is domain manager creates any special hidden model in the cluster this status will be true. Otherwise,
+    // is domain manager creates any special hidden model in the cluster this status
+    // will be true. Otherwise,
     // False by default
     private Boolean isHidden;
     @Setter
@@ -129,35 +130,35 @@ public class MLModel implements ToXContentObject {
 
     @Builder(toBuilder = true)
     public MLModel(String name,
-                   String modelGroupId,
-                   FunctionName algorithm,
-                   String version,
-                   String content,
-                   User user,
-                   String description,
-                   MLModelFormat modelFormat,
-                   MLModelState modelState,
-                   Long modelContentSizeInBytes,
-                   String modelContentHash,
-                   Boolean isEnabled,
-                   Boolean isModelControllerEnabled,
-                   MLRateLimiter modelRateLimiterConfig,
-                   MLModelConfig modelConfig,
-                   Instant createdTime,
-                   Instant lastUpdateTime,
-                   Instant lastRegisteredTime,
-                   Instant lastDeployedTime,
-                   Instant lastUndeployedTime,
-                   Integer autoRedeployRetryTimes,
-                   String modelId, Integer chunkNumber,
-                   Integer totalChunks,
-                   Integer planningWorkerNodeCount,
-                   Integer currentWorkerNodeCount,
-                   String[] planningWorkerNodes,
-                   boolean deployToAllNodes,
-                   Boolean isHidden,
-                   Connector connector,
-                   String connectorId) {
+            String modelGroupId,
+            FunctionName algorithm,
+            String version,
+            String content,
+            User user,
+            String description,
+            MLModelFormat modelFormat,
+            MLModelState modelState,
+            Long modelContentSizeInBytes,
+            String modelContentHash,
+            Boolean isEnabled,
+            Boolean isModelControllerEnabled,
+            MLRateLimiter rateLimiter,
+            MLModelConfig modelConfig,
+            Instant createdTime,
+            Instant lastUpdateTime,
+            Instant lastRegisteredTime,
+            Instant lastDeployedTime,
+            Instant lastUndeployedTime,
+            Integer autoRedeployRetryTimes,
+            String modelId, Integer chunkNumber,
+            Integer totalChunks,
+            Integer planningWorkerNodeCount,
+            Integer currentWorkerNodeCount,
+            String[] planningWorkerNodes,
+            boolean deployToAllNodes,
+            Boolean isHidden,
+            Connector connector,
+            String connectorId) {
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.algorithm = algorithm;
@@ -171,7 +172,7 @@ public class MLModel implements ToXContentObject {
         this.modelContentHash = modelContentHash;
         this.isEnabled = isEnabled;
         this.isModelControllerEnabled = isModelControllerEnabled;
-        this.modelRateLimiterConfig = modelRateLimiterConfig;
+        this.rateLimiter = rateLimiter;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -191,7 +192,7 @@ public class MLModel implements ToXContentObject {
         this.connectorId = connectorId;
     }
 
-    public MLModel(StreamInput input) throws IOException{
+    public MLModel(StreamInput input) throws IOException {
         name = input.readOptionalString();
         algorithm = input.readEnum(FunctionName.class);
         version = input.readString();
@@ -221,7 +222,7 @@ public class MLModel implements ToXContentObject {
             isEnabled = input.readOptionalBoolean();
             isModelControllerEnabled = input.readOptionalBoolean();
             if (input.readBoolean()) {
-                modelRateLimiterConfig = new MLRateLimiter(input);
+                rateLimiter = new MLRateLimiter(input);
             }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();
@@ -279,9 +280,9 @@ public class MLModel implements ToXContentObject {
         }
         out.writeOptionalBoolean(isEnabled);
         out.writeOptionalBoolean(isModelControllerEnabled);
-        if (modelRateLimiterConfig != null) {
+        if (rateLimiter != null) {
             out.writeBoolean(true);
-            modelRateLimiterConfig.writeTo(out);
+            rateLimiter.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -354,8 +355,8 @@ public class MLModel implements ToXContentObject {
         if (isModelControllerEnabled != null) {
             builder.field(IS_MODEL_CONTROLLER_ENABLED_FIELD, isModelControllerEnabled);
         }
-        if (modelRateLimiterConfig != null) {
-            builder.field(MODEL_RATE_LIMITER_CONFIG_FIELD, modelRateLimiterConfig);
+        if (rateLimiter != null) {
+            builder.field(RATE_LIMITER_FIELD, rateLimiter);
         }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
@@ -427,7 +428,7 @@ public class MLModel implements ToXContentObject {
         MLModelConfig modelConfig = null;
         Boolean isEnabled = null;
         Boolean isModelControllerEnabled = null;
-        MLRateLimiter modelRateLimiterConfig = null;
+        MLRateLimiter rateLimiter = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
         Instant lastUploadedTime = null;
@@ -519,8 +520,8 @@ public class MLModel implements ToXContentObject {
                 case IS_MODEL_CONTROLLER_ENABLED_FIELD:
                     isModelControllerEnabled = parser.booleanValue();
                     break;
-                case MODEL_RATE_LIMITER_CONFIG_FIELD:
-                    modelRateLimiterConfig = MLRateLimiter.parse(parser);
+                case RATE_LIMITER_FIELD:
+                    rateLimiter = MLRateLimiter.parse(parser);
                     break;
                 case PLANNING_WORKER_NODE_COUNT_FIELD:
                     planningWorkerNodeCount = parser.intValue();
@@ -590,12 +591,12 @@ public class MLModel implements ToXContentObject {
                 .modelConfig(modelConfig)
                 .isEnabled(isEnabled)
                 .isModelControllerEnabled(isModelControllerEnabled)
-                .modelRateLimiterConfig(modelRateLimiterConfig)
+                .rateLimiter(rateLimiter)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
-                .lastRegisteredTime(lastRegisteredTime == null? lastUploadedTime : lastRegisteredTime)
-                .lastDeployedTime(lastDeployedTime == null? lastLoadedTime : lastDeployedTime)
-                .lastUndeployedTime(lastUndeployedTime == null? lastUnloadedTime : lastUndeployedTime)
+                .lastRegisteredTime(lastRegisteredTime == null ? lastUploadedTime : lastRegisteredTime)
+                .lastDeployedTime(lastDeployedTime == null ? lastLoadedTime : lastDeployedTime)
+                .lastUndeployedTime(lastUndeployedTime == null ? lastUnloadedTime : lastUndeployedTime)
                 .modelId(modelId)
                 .autoRedeployRetryTimes(autoRedeployRetryTimes)
                 .chunkNumber(chunkNumber)

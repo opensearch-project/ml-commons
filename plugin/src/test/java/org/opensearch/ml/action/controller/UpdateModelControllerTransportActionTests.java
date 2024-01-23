@@ -150,17 +150,17 @@ public class UpdateModelControllerTransportActionTests extends OpenSearchTestCas
             )
         );
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").rateLimitUnit(TimeUnit.MILLISECONDS).build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
 
-        modelController = MLModelController.builder().modelId("testModelId").userRateLimiterConfig(new HashMap<>() {
+        modelController = MLModelController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
             {
                 put("testUser", rateLimiter);
             }
         }).build();
 
-        MLRateLimiter updateRateLimiter = MLRateLimiter.builder().rateLimitNumber("2").rateLimitUnit(TimeUnit.NANOSECONDS).build();
+        MLRateLimiter updateRateLimiter = MLRateLimiter.builder().limit("2").unit(TimeUnit.NANOSECONDS).build();
 
-        updatedModelController = MLModelController.builder().modelId("testModelId").userRateLimiterConfig(new HashMap<>() {
+        updatedModelController = MLModelController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
             {
                 put("newUser", updateRateLimiter);
             }
@@ -308,7 +308,9 @@ public class UpdateModelControllerTransportActionTests extends OpenSearchTestCas
         updateModelControllerTransportAction.doExecute(null, updateModelControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Creating model controller on this operation on the function category METRICS_CORRELATION is not supported.", argumentCaptor.getValue().getMessage());
+        assertEquals(
+                "Creating model controller on this operation on the function category METRICS_CORRELATION is not supported.",
+                argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -392,14 +394,14 @@ public class UpdateModelControllerTransportActionTests extends OpenSearchTestCas
         when(mlDeployModelControllerNodesResponse.failures()).thenReturn(new ArrayList<>());
 
         updateModelControllerTransportAction.doExecute(null, updateModelControllerRequest, actionListener);
-                verify(actionListener).onResponse(updateResponse);
+        verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
     public void testUpdateModelControllerWithUndeploySuccessPartiallyFailures() {
         List<FailedNodeException> failures = List
             .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
         doAnswer(invocation -> {
             ActionListener<MLDeployModelControllerNodesResponse> listener = invocation.getArgument(2);
@@ -420,7 +422,7 @@ public class UpdateModelControllerTransportActionTests extends OpenSearchTestCas
 
     @Test
     public void testUpdateModelControllerWithUndeployNullResponse() {
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
         doAnswer(invocation -> {
             ActionListener<MLDeployModelControllerNodesResponse> listener = invocation.getArgument(2);
@@ -434,20 +436,18 @@ public class UpdateModelControllerTransportActionTests extends OpenSearchTestCas
         assertEquals(
                 "Successfully update model controller index with model ID testModelId " +
                         "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
-                argumentCaptor.getValue().getMessage()
-        );
+                argumentCaptor.getValue().getMessage());
     }
 
     @Test
     public void testUpdateModelControllerWithUndeployOtherException() {
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
         doAnswer(invocation -> {
             ActionListener<MLDeployModelControllerNodesResponse> actionListener = invocation.getArgument(2);
             actionListener
                     .onFailure(
-                            new RuntimeException("Exception occurred. Please check log for more details.")
-                    );
+                            new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(client).execute(eq(MLDeployModelControllerAction.INSTANCE), any(), any());
 
@@ -456,8 +456,7 @@ public class UpdateModelControllerTransportActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
                 "Exception occurred. Please check log for more details.",
-                argumentCaptor.getValue().getMessage()
-        );
+                argumentCaptor.getValue().getMessage());
     }
 
 }

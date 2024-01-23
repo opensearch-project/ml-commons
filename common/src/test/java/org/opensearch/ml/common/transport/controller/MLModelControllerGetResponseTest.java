@@ -38,14 +38,16 @@ public class MLModelControllerGetResponseTest {
     @Before
     public void setUp() {
         MLRateLimiter rateLimiter = MLRateLimiter.builder()
-                .rateLimitNumber("1")
-                .rateLimitUnit(TimeUnit.MILLISECONDS)
+                .limit("1")
+                .unit(TimeUnit.MILLISECONDS)
                 .build();
         modelController = MLModelController.builder()
                 .modelId("testModelId")
-                .userRateLimiterConfig(new HashMap<>() {{
-                    put("testUser", rateLimiter);
-                }})
+                .userRateLimiter(new HashMap<>() {
+                    {
+                        put("testUser", rateLimiter);
+                    }
+                })
                 .build();
         response = MLModelControllerGetResponse.builder().modelController(modelController).build();
     }
@@ -54,11 +56,14 @@ public class MLModelControllerGetResponseTest {
     public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         response.writeTo(bytesStreamOutput);
-        MLModelControllerGetResponse parsedResponse = new MLModelControllerGetResponse(bytesStreamOutput.bytes().streamInput());
+        MLModelControllerGetResponse parsedResponse = new MLModelControllerGetResponse(
+                bytesStreamOutput.bytes().streamInput());
         assertNotEquals(response.getModelController(), parsedResponse.getModelController());
         assertEquals(response.getModelController().getModelId(), parsedResponse.getModelController().getModelId());
-        assertEquals(response.getModelController().getUserRateLimiterConfig().get("testUser").getRateLimitNumber(), parsedResponse.getModelController().getUserRateLimiterConfig().get("testUser").getRateLimitNumber());
-        assertEquals(response.getModelController().getUserRateLimiterConfig().get("testUser").getRateLimitUnit(), parsedResponse.getModelController().getUserRateLimiterConfig().get("testUser").getRateLimitUnit());
+        assertEquals(response.getModelController().getUserRateLimiter().get("testUser").getLimit(),
+                parsedResponse.getModelController().getUserRateLimiter().get("testUser").getLimit());
+        assertEquals(response.getModelController().getUserRateLimiter().get("testUser").getUnit(),
+                parsedResponse.getModelController().getUserRateLimiter().get("testUser").getUnit());
     }
 
     @Test
@@ -67,12 +72,15 @@ public class MLModelControllerGetResponseTest {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"model_id\":\"testModelId\",\"user_rate_limiter_config\":{\"testUser\":{\"rate_limit_number\":\"1\",\"rate_limit_unit\":\"MILLISECONDS\"}}}",jsonStr);
+        assertEquals(
+                "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}",
+                jsonStr);
     }
 
     @Test
     public void fromActionResponseWithMLModelControllerGetResponseSuccess() {
-        MLModelControllerGetResponse responseFromActionResponse = MLModelControllerGetResponse.fromActionResponse(response);
+        MLModelControllerGetResponse responseFromActionResponse = MLModelControllerGetResponse
+                .fromActionResponse(response);
         assertSame(response, responseFromActionResponse);
         assertEquals(response.getModelController(), responseFromActionResponse.getModelController());
     }
@@ -85,7 +93,8 @@ public class MLModelControllerGetResponseTest {
                 response.writeTo(out);
             }
         };
-        MLModelControllerGetResponse responseFromActionResponse = MLModelControllerGetResponse.fromActionResponse(actionResponse);
+        MLModelControllerGetResponse responseFromActionResponse = MLModelControllerGetResponse
+                .fromActionResponse(actionResponse);
         assertNotSame(response, responseFromActionResponse);
         assertNotEquals(response.getModelController(), responseFromActionResponse.getModelController());
     }

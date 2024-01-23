@@ -34,6 +34,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -248,8 +249,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
             @Override
             public void onFailure(Exception e) {
-                log.error("Failed to delete model controller for model: " + modelId, e);
-                actionListener.onFailure(e);
+                if (e instanceof IndexNotFoundException) {
+                    log.info("Model controller not deleted due to no model controller was found for model: " + modelId);
+                    actionListener.onFailure(e);
+                } else {
+                    log.error("Failed to delete model controller for model: " + modelId, e);
+                    actionListener.onFailure(e);
+                }
             }
         });
     }

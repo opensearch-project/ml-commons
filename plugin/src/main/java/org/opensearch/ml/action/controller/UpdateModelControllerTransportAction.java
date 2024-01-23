@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
@@ -177,7 +178,7 @@ public class UpdateModelControllerTransportAction extends HandledTransportAction
                             modelId,
                             updateResponse.getResult()
                         );
-                    if (mlModelCacheHelper.isModelDeployed(modelId) && isDeployRequiredAfterUpdate) {
+                    if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId)) && isDeployRequiredAfterUpdate) {
                         log
                             .info(
                                 "Model {} is deployed and the user rate limiter config is constructable. Start to deploy the model controller into cache.",

@@ -254,9 +254,9 @@ public class GetModelControllerTransportActionTests extends OpenSearchTestCase {
 
     public GetResponse prepareModelControllerGetResponse() throws IOException {
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").rateLimitUnit(TimeUnit.MILLISECONDS).build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
 
-        MLModelController modelController = MLModelController.builder().modelId("testModelId").userRateLimiterConfig(new HashMap<>() {
+        MLModelController modelController = MLModelController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
             {
                 put("testUser", rateLimiter);
             }

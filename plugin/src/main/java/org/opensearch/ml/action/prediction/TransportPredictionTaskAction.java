@@ -107,12 +107,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                     );
                             } else {
                                 if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
-                                    wrappedListener
-                                        .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
+                                    wrappedListener.onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
                                 } else {
                                     if (FunctionName.isDLModel(functionName)) {
-                                        if (modelCacheHelper.getModelRateLimiter(modelId) != null
-                                            && !modelCacheHelper.getModelRateLimiter(modelId).request()) {
+                                        if (modelCacheHelper.getRateLimiter(modelId) != null
+                                            && !modelCacheHelper.getRateLimiter(modelId).request()) {
                                             wrappedListener
                                                 .onFailure(
                                                     new OpenSearchStatusException(

@@ -152,9 +152,9 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
             )
         );
 
-        MLRateLimiter rateLimiter = MLRateLimiter.builder().rateLimitNumber("1").rateLimitUnit(TimeUnit.MILLISECONDS).build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
 
-        MLModelController modelController = MLModelController.builder().modelId("testModelId").userRateLimiterConfig(new HashMap<>() {
+        MLModelController modelController = MLModelController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
             {
                 put("testUser", rateLimiter);
             }
@@ -268,7 +268,9 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         createModelControllerTransportAction.doExecute(null, createModelControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it. Model ID: testModelId", argumentCaptor.getValue().getMessage());
+        assertEquals(
+                "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it. Model ID: testModelId",
+                argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -278,7 +280,9 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         createModelControllerTransportAction.doExecute(null, createModelControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Creating model controller on this operation on the function category METRICS_CORRELATION is not supported.", argumentCaptor.getValue().getMessage());
+        assertEquals(
+                "Creating model controller on this operation on the function category METRICS_CORRELATION is not supported.",
+                argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -350,7 +354,7 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
     public void testCreateModelControllerWithUndeploySuccessPartiallyFailures() {
         List<FailedNodeException> failures = List
             .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
         doAnswer(invocation -> {
             ActionListener<MLDeployModelControllerNodesResponse> listener = invocation.getArgument(2);
@@ -371,8 +375,7 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
 
     @Test
     public void testCreateModelControllerWithUndeployNullResponse() {
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
-
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
         doAnswer(invocation -> {
             ActionListener<MLDeployModelControllerNodesResponse> listener = invocation.getArgument(2);
             listener.onResponse(null);
@@ -385,20 +388,18 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         assertEquals(
                 "Successfully create model controller index with model ID testModelId " +
                         "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
-                argumentCaptor.getValue().getMessage()
-        );
+                argumentCaptor.getValue().getMessage());
     }
 
     @Test
     public void testCreateModelControllerWithUndeployOtherException() {
-        when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
         doAnswer(invocation -> {
             ActionListener<MLDeployModelControllerNodesResponse> actionListener = invocation.getArgument(2);
             actionListener
                     .onFailure(
-                            new RuntimeException("Exception occurred. Please check log for more details.")
-                    );
+                            new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(client).execute(eq(MLDeployModelControllerAction.INSTANCE), any(), any());
 
@@ -407,7 +408,6 @@ public class CreateModelControllerTransportActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
                 "Exception occurred. Please check log for more details.",
-                argumentCaptor.getValue().getMessage()
-        );
+                argumentCaptor.getValue().getMessage());
     }
 }

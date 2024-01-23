@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.FailedNodeException;
@@ -144,7 +145,7 @@ public class DeleteModelControllerTransportAction extends HandledTransportAction
     // This method is used to handle the condition if we need to undeploy the model controller before deleting it from the index or not.
     private void deleteModelControllerWithDeployedModel(String modelId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            if (mlModelCacheHelper.isModelDeployed(modelId)) {
+            if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId))) {
                 log.info("Model has already been deployed in ML cache, need undeploy model controller before sending delete request.");
                 String[] targetNodeIds = getAllNodes();
                 MLUndeployModelControllerNodesRequest undeployModelControllerNodesRequest = new MLUndeployModelControllerNodesRequest(
