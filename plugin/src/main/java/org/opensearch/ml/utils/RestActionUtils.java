@@ -8,6 +8,9 @@ package org.opensearch.ml.utils;
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -30,7 +33,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -44,6 +46,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
@@ -71,9 +75,12 @@ public class RestActionUtils {
     public static final String PARAMETER_TOOL_NAME = "tool_name";
 
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
-    public static final String OPENDISTRO_SECURITY_SSL_PRINCIPAL = OPENDISTRO_SECURITY_CONFIG_PREFIX + "ssl_principal";
+
+    public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
 
     static final Set<LdapName> adminDn = new HashSet<>();
+    static final Set<String> adminUsernames = new HashSet<String>();
+    static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -212,7 +219,7 @@ public class RestActionUtils {
      */
     public static User getUserContext(Client client) {
         String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        logger.debug("Filtering result by " + userStr);
+        logger.debug("Current user is " + userStr);
         return User.parse(userStr);
     }
 
@@ -226,13 +233,25 @@ public class RestActionUtils {
                 logger.debug("{} is registered as an admin dn", dn);
                 adminDn.add(new LdapName(dn));
             } catch (final InvalidNameException e) {
-                logger.error("Unable to parse admin dn {}", dn, e);
+                logger.debug("Unable to parse admin dn {}", dn, e);
+                adminUsernames.add(dn);
             }
         }
 
-        ThreadContext threadContext = client.threadPool().getThreadContext();
-        final String sslPrincipal = threadContext.getTransient(OPENDISTRO_SECURITY_SSL_PRINCIPAL);
-        return isAdminDN(sslPrincipal);
+        Object userObject = client.threadPool().getThreadContext().getTransient(OPENDISTRO_SECURITY_USER);
+        if (userObject == null)
+            return false;
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
+                String userContext = objectMapper.writeValueAsString(userObject);
+                final JsonNode node = objectMapper.readTree(userContext);
+                final String userName = node.get("name").asText();
+
+                return isAdminDN(userName);
+            });
+        } catch (PrivilegedActionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static boolean isAdminDN(String dn) {
@@ -241,7 +260,7 @@ public class RestActionUtils {
         try {
             return isAdminDN(new LdapName(dn));
         } catch (InvalidNameException e) {
-            return false;
+            return adminUsernames.contains(dn);
         }
     }
 
