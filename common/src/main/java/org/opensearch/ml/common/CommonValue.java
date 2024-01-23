@@ -7,7 +7,7 @@ package org.opensearch.ml.common;
 
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
-import org.opensearch.ml.common.controller.MLModelController;
+import org.opensearch.ml.common.controller.MLController;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -61,8 +61,8 @@ public class CommonValue {
         public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 2;
         public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
         public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
-        public static final String ML_MODEL_CONTROLLER_INDEX = ".plugins-ml-controller";
-        public static final Integer ML_MODEL_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
+        public static final String ML_CONTROLLER_INDEX = ".plugins-ml-controller";
+        public static final Integer ML_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MAP_RESPONSE_KEY = "response";
         public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
         public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
@@ -231,7 +231,7 @@ public class CommonValue {
                         + MLModel.IS_ENABLED_FIELD
                         + "\" : {\"type\": \"boolean\"},\n"
                         + "      \""
-                        + MLModel.IS_MODEL_CONTROLLER_ENABLED_FIELD
+                        + MLModel.IS_CONTROLLER_ENABLED_FIELD
                         + "\" : {\"type\": \"boolean\"},\n"
                         + "      \""
                         + MLModel.RATE_LIMITER_FIELD
@@ -364,13 +364,13 @@ public class CommonValue {
                         + "    }\n"
                         + "}";
 
-        public static final String ML_MODEL_CONTROLLER_INDEX_MAPPING = "{\n"
+        public static final String ML_CONTROLLER_INDEX_MAPPING = "{\n"
                         + "    \"_meta\": {\"schema_version\": "
-                        + ML_MODEL_CONTROLLER_INDEX_SCHEMA_VERSION
+                        + ML_CONTROLLER_INDEX_SCHEMA_VERSION
                         + "},\n"
                         + "    \"properties\": {\n"
                         + "      \""
-                        + MLModelController.USER_RATE_LIMITER
+                        + MLController.USER_RATE_LIMITER
                         + "\" : {\"type\": \"flat_object\"}\n"
                         + "    }\n"
                         + "}";

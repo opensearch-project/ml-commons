@@ -1013,7 +1013,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelControllerWithUndeploySuccessPartiallyFailures() {
+    public void testUpdateControllerWithUndeploySuccessPartiallyFailures() {
         List<FailedNodeException> failures = List
             .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
 
@@ -1044,7 +1044,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelControllerWithUndeployNullResponse() {
+    public void testUpdateControllerWithUndeployNullResponse() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -1070,7 +1070,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelControllerWithUndeployOtherException() {
+    public void testUpdateControllerWithUndeployOtherException() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);

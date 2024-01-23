@@ -76,8 +76,8 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.CONFIG, listener);
     }
 
-    public void initMLModelControllerIndex(ActionListener<Boolean> listener) {
-        initMLIndexIfAbsent(MLIndex.MODEL_CONTROLLER, listener);
+    public void initMLControllerIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.CONTROLLER, listener);
     }
 
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
@@ -148,7 +148,8 @@ public class MLIndicesHandler {
                                     })
                                 );
                         } else {
-                            // no need to update index if it does not exist or the version is already up-to-date.
+                            // no need to update index if it does not exist or the version is already
+                            // up-to-date.
                             indexMappingUpdated.get(indexName).set(true);
                             internalListener.onResponse(true);
                         }
@@ -169,9 +170,11 @@ public class MLIndicesHandler {
 
     /**
      * Check if we should update index based on schema version.
-     * @param indexName index name
+     * 
+     * @param indexName  index name
      * @param newVersion new index mapping version
-     * @param listener action listener, if should update index, will pass true to its onResponse method
+     * @param listener   action listener, if should update index, will pass true to
+     *                   its onResponse method
      */
     public void shouldUpdateIndex(String indexName, Integer newVersion, ActionListener<Boolean> listener) {
         IndexMetadata indexMetaData = clusterService.state().getMetadata().indices().get(indexName);

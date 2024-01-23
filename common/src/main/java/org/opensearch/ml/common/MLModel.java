@@ -57,7 +57,7 @@ public class MLModel implements ToXContentObject {
     // Model level quota and throttling control
     public static final String IS_ENABLED_FIELD = "is_enabled";
     public static final String RATE_LIMITER_FIELD = "rate_limiter";
-    public static final String IS_MODEL_CONTROLLER_ENABLED_FIELD = "is_model_controller_enabled";
+    public static final String IS_CONTROLLER_ENABLED_FIELD = "is_controller_enabled";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
@@ -100,7 +100,7 @@ public class MLModel implements ToXContentObject {
     private String modelContentHash;
     private MLModelConfig modelConfig;
     private Boolean isEnabled;
-    private Boolean isModelControllerEnabled;
+    private Boolean isControllerEnabled;
     private MLRateLimiter rateLimiter;
     private Instant createdTime;
     private Instant lastUpdateTime;
@@ -141,7 +141,7 @@ public class MLModel implements ToXContentObject {
             Long modelContentSizeInBytes,
             String modelContentHash,
             Boolean isEnabled,
-            Boolean isModelControllerEnabled,
+            Boolean isControllerEnabled,
             MLRateLimiter rateLimiter,
             MLModelConfig modelConfig,
             Instant createdTime,
@@ -171,7 +171,7 @@ public class MLModel implements ToXContentObject {
         this.modelContentSizeInBytes = modelContentSizeInBytes;
         this.modelContentHash = modelContentHash;
         this.isEnabled = isEnabled;
-        this.isModelControllerEnabled = isModelControllerEnabled;
+        this.isControllerEnabled = isControllerEnabled;
         this.rateLimiter = rateLimiter;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
@@ -220,7 +220,7 @@ public class MLModel implements ToXContentObject {
                 }
             }
             isEnabled = input.readOptionalBoolean();
-            isModelControllerEnabled = input.readOptionalBoolean();
+            isControllerEnabled = input.readOptionalBoolean();
             if (input.readBoolean()) {
                 rateLimiter = new MLRateLimiter(input);
             }
@@ -279,7 +279,7 @@ public class MLModel implements ToXContentObject {
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isEnabled);
-        out.writeOptionalBoolean(isModelControllerEnabled);
+        out.writeOptionalBoolean(isControllerEnabled);
         if (rateLimiter != null) {
             out.writeBoolean(true);
             rateLimiter.writeTo(out);
@@ -352,8 +352,8 @@ public class MLModel implements ToXContentObject {
         if (isEnabled != null) {
             builder.field(IS_ENABLED_FIELD, isEnabled);
         }
-        if (isModelControllerEnabled != null) {
-            builder.field(IS_MODEL_CONTROLLER_ENABLED_FIELD, isModelControllerEnabled);
+        if (isControllerEnabled != null) {
+            builder.field(IS_CONTROLLER_ENABLED_FIELD, isControllerEnabled);
         }
         if (rateLimiter != null) {
             builder.field(RATE_LIMITER_FIELD, rateLimiter);
@@ -427,7 +427,7 @@ public class MLModel implements ToXContentObject {
         String modelContentHash = null;
         MLModelConfig modelConfig = null;
         Boolean isEnabled = null;
-        Boolean isModelControllerEnabled = null;
+        Boolean isControllerEnabled = null;
         MLRateLimiter rateLimiter = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
@@ -517,8 +517,8 @@ public class MLModel implements ToXContentObject {
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
                     break;
-                case IS_MODEL_CONTROLLER_ENABLED_FIELD:
-                    isModelControllerEnabled = parser.booleanValue();
+                case IS_CONTROLLER_ENABLED_FIELD:
+                    isControllerEnabled = parser.booleanValue();
                     break;
                 case RATE_LIMITER_FIELD:
                     rateLimiter = MLRateLimiter.parse(parser);
@@ -590,7 +590,7 @@ public class MLModel implements ToXContentObject {
                 .modelContentHash(modelContentHash)
                 .modelConfig(modelConfig)
                 .isEnabled(isEnabled)
-                .isModelControllerEnabled(isModelControllerEnabled)
+                .isControllerEnabled(isControllerEnabled)
                 .rateLimiter(rateLimiter)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)

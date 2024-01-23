@@ -1,4 +1,17 @@
-package org.opensearch.ml.common.transport.model_group;
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.transport.controller;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -7,35 +20,28 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
+public class MLControllerDeleteRequestTest {
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
+    private String modelId;
 
-public class MLModelGroupDeleteRequestTest {
-
-    private String modelGroupId;
-
-    private MLModelGroupDeleteRequest request;
+    private MLControllerDeleteRequest request;
 
     @Before
     public void setUp() {
-        modelGroupId = "testGroupId";
 
-        request = MLModelGroupDeleteRequest.builder()
-                .modelGroupId(modelGroupId).build();
+        modelId = "testModelId";
+
+        request = MLControllerDeleteRequest.builder()
+                .modelId(modelId).build();
     }
 
     @Test
     public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
-        MLModelGroupDeleteRequest parsedRequest = new MLModelGroupDeleteRequest(
+        MLControllerDeleteRequest parsedRequest = new MLControllerDeleteRequest(
                 bytesStreamOutput.bytes().streamInput());
-        assertEquals(parsedRequest.getModelGroupId(), modelGroupId);
+        assertEquals(parsedRequest.getModelId(), modelId);
     }
 
     @Test
@@ -45,15 +51,15 @@ public class MLModelGroupDeleteRequestTest {
 
     @Test
     public void validateWithNullModelIdException() {
-        MLModelGroupDeleteRequest request = MLModelGroupDeleteRequest.builder().build();
+        MLControllerDeleteRequest request = MLControllerDeleteRequest.builder().build();
 
         ActionRequestValidationException exception = request.validate();
-        assertEquals("Validation Failed: 1: ML model group id can't be null;", exception.getMessage());
+        assertEquals("Validation Failed: 1: ML model id can't be null;", exception.getMessage());
     }
 
     @Test
     public void fromActionRequestWithMLUpdateControllerRequestSuccess() {
-        assertSame(MLModelGroupDeleteRequest.fromActionRequest(request), request);
+        assertSame(MLControllerDeleteRequest.fromActionRequest(request), request);
     }
 
     @Test
@@ -69,9 +75,9 @@ public class MLModelGroupDeleteRequestTest {
                 request.writeTo(out);
             }
         };
-        MLModelGroupDeleteRequest result = MLModelGroupDeleteRequest.fromActionRequest(actionRequest);
+        MLControllerDeleteRequest result = MLControllerDeleteRequest.fromActionRequest(actionRequest);
         assertNotSame(result, request);
-        assertEquals(result.getModelGroupId(), request.getModelGroupId());
+        assertEquals(result.getModelId(), request.getModelId());
     }
 
     @Test(expected = UncheckedIOException.class)
@@ -87,7 +93,7 @@ public class MLModelGroupDeleteRequestTest {
                 throw new IOException("test");
             }
         };
-        MLModelGroupDeleteRequest.fromActionRequest(actionRequest);
+        MLControllerDeleteRequest.fromActionRequest(actionRequest);
     }
 
 }
