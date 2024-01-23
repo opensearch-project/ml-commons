@@ -181,7 +181,7 @@ public class IndexMappingToolTests {
         Tool tool = instance.create(Collections.emptyMap());
         assertEquals(IndexMappingTool.TYPE, tool.getType());
         assertTrue(tool.validate(indexParams));
-        assertTrue(tool.validate(otherParams));
+        assertFalse(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
     }
 }

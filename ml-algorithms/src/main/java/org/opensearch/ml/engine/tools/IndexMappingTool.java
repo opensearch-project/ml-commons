@@ -33,7 +33,14 @@ import lombok.Setter;
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
-    private static final String DEFAULT_DESCRIPTION = "Use this tool to get index mapping information.";
+    private static final String DEFAULT_DESCRIPTION = String
+        .join(
+            " ",
+            "This tool gets index mapping information from a certain index.",
+            "It takes 1 required argument named `index` which is a comma-delimited list of one or more indices to get mapping information from, which expands wildcards.",
+            "It takes 1 optional argument named `local` which means whether to return information from the local node only instead of the cluster manager node (Default is false).",
+            "The tool returns the index mapping information, which is about how documents and their fields are stored and indexed, and also returns the index settings."
+        );
 
     @Setter
     @Getter
@@ -143,7 +150,7 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && !parameters.isEmpty();
+        return parameters != null && parameters.containsKey("index");
     }
 
     /**
