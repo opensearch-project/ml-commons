@@ -35,7 +35,7 @@ public class RemoteModel implements Predictable {
     public static final String SCRIPT_SERVICE = "script_service";
     public static final String CLIENT = "client";
     public static final String XCONTENT_REGISTRY = "xcontent_registry";
-    public static final String MODEL_RATE_LIMITER = "model_rate_limiter_config";
+    public static final String RATE_LIMITER = "rate_limiter";
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
 
     private RemoteConnectorExecutor connectorExecutor;
@@ -88,7 +88,7 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
             this.connectorExecutor.setClient((Client) params.get(CLIENT));
             this.connectorExecutor.setXContentRegistry((NamedXContentRegistry) params.get(XCONTENT_REGISTRY));
-            this.connectorExecutor.setModelRateLimiter((TokenBucket) params.get(MODEL_RATE_LIMITER));
+            this.connectorExecutor.setRateLimiter((TokenBucket) params.get(RATE_LIMITER));
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
         } catch (RuntimeException e) {
             log.error("Failed to init remote model.", e);
