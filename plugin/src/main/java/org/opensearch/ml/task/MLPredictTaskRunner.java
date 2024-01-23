@@ -232,6 +232,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     }
                     return;
                 } catch (Exception e) {
+                    log.error("Failed to predict model " + modelId, e);
                     handlePredictFailure(mlTask, internalListener, e, false, modelId);
                     return;
                 }
