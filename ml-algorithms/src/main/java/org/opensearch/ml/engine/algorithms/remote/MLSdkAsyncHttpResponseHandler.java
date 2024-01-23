@@ -69,7 +69,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onHeaders(SdkHttpResponse response) {
         SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
-        log.info("received response headers: " + sdkResponse.headers());
+        log.debug("received response headers: " + sdkResponse.headers());
         this.statusCode = sdkResponse.statusCode();
     }
 
@@ -111,6 +111,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onError(Throwable error) {
         log.error(error.getMessage(), error);
+        actionListener.onFailure(new OpenSearchStatusException("Error receiving response from remote: " + error.getMessage(), RestStatus.INTERNAL_SERVER_ERROR));
     }
 
     private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Queue<ModelTensors> tensorOutputs)
