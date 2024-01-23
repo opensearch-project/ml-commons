@@ -54,7 +54,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
     private ScriptService scriptService;
     @Setter
     @Getter
-    private TokenBucket modelRateLimiter;
+    private TokenBucket rateLimiter;
     @Setter
     @Getter
     private Map<String, TokenBucket> userRateLimiterMap;

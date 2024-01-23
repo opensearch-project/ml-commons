@@ -6,7 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_CONTROLLER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
@@ -34,6 +34,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -217,7 +218,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
                 deleteModelChunks(modelId, deleteResponse, actionListener);
-                deleteModelController(modelId);
+                deleteController(modelId);
             }
 
             @Override
@@ -225,7 +226,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 log.error("Failed to delete model meta data for model: " + modelId, e);
                 if (e instanceof ResourceNotFoundException) {
                     deleteModelChunks(modelId, null, actionListener);
-                    deleteModelController(modelId);
+                    deleteController(modelId);
                 }
                 actionListener.onFailure(e);
             }
@@ -233,12 +234,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     /**
-     * Delete the model controller for a model after the model is deleted from the ML index.
+     * Delete the model controller for a model after the model is deleted from the
+     * ML index.
      *
      * @param modelId model ID
      */
-    private void deleteModelController(String modelId, ActionListener<DeleteResponse> actionListener) {
-        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_CONTROLLER_INDEX, modelId);
+    private void deleteController(String modelId, ActionListener<DeleteResponse> actionListener) {
+        DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
@@ -248,19 +250,25 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
             @Override
             public void onFailure(Exception e) {
-                log.error("Failed to delete model controller for model: " + modelId, e);
-                actionListener.onFailure(e);
+                if (e instanceof IndexNotFoundException) {
+                    log.info("Model controller not deleted due to no model controller was found for model: " + modelId);
+                    actionListener.onFailure(e);
+                } else {
+                    log.error("Failed to delete model controller for model: " + modelId, e);
+                    actionListener.onFailure(e);
+                }
             }
         });
     }
 
     /**
-     * Delete the model controller for a model after the model is deleted from the ML index with build-in listener.
+     * Delete the model controller for a model after the model is deleted from the
+     * ML index with build-in listener.
      *
      * @param modelId model ID
      */
-    private void deleteModelController(String modelId) {
-        deleteModelController(modelId, ActionListener.wrap(deleteResponse -> {
+    private void deleteController(String modelId) {
+        deleteController(modelId, ActionListener.wrap(deleteResponse -> {
             if (deleteResponse.getResult() == DocWriteResponse.Result.DELETED) {
                 log.info("Model controller for model {} successfully deleted from index, result: {}", modelId, deleteResponse.getResult());
             } else {

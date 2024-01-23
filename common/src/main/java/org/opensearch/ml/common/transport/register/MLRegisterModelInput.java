@@ -45,7 +45,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String VERSION_FIELD = "version";
     public static final String IS_ENABLED_FIELD = "is_enabled";
-    public static final String MODEL_RATE_LIMITER_CONFIG_FIELD = "model_rate_limiter_config";
+    public static final String RATE_LIMITER_FIELD = "rate_limiter";
     public static final String URL_FIELD = "url";
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_CONFIG_FIELD = "model_config";
@@ -64,7 +64,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private String version;
     private String description;
     private Boolean isEnabled;
-    private MLRateLimiter modelRateLimiterConfig;
+    private MLRateLimiter rateLimiter;
     private String url;
     private String hashValue;
     private MLModelFormat modelFormat;
@@ -85,26 +85,25 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
-                                String modelName,
-                                String modelGroupId,
-                                String version,
-                                String description,
-                                Boolean isEnabled,
-                                MLRateLimiter modelRateLimiterConfig,
-                                String url,
-                                String hashValue,
-                                MLModelFormat modelFormat,
-                                MLModelConfig modelConfig,
-                                boolean deployModel,
-                                String[] modelNodeIds,
-                                Connector connector,
-                                String connectorId,
-                                List<String> backendRoles,
-                                Boolean addAllBackendRoles,
-                                AccessMode accessMode,
-                                Boolean doesVersionCreateModelGroup,
-                                Boolean isHidden
-    ) {
+            String modelName,
+            String modelGroupId,
+            String version,
+            String description,
+            Boolean isEnabled,
+            MLRateLimiter rateLimiter,
+            String url,
+            String hashValue,
+            MLModelFormat modelFormat,
+            MLModelConfig modelConfig,
+            boolean deployModel,
+            String[] modelNodeIds,
+            Connector connector,
+            String connectorId,
+            List<String> backendRoles,
+            Boolean addAllBackendRoles,
+            AccessMode accessMode,
+            Boolean doesVersionCreateModelGroup,
+            Boolean isHidden) {
         this.functionName = Objects.requireNonNullElse(functionName, FunctionName.TEXT_EMBEDDING);
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
@@ -113,7 +112,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
             }
-            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently, we only support one type of sparse model, which is pretrained, and it doesn't necessitate a model configuration.
+            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE
+                    && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model
+                                                                       // configuration. Currently, we only support one
+                                                                       // type of sparse model, which is pretrained, and
+                                                                       // it doesn't necessitate a model configuration.
                 throw new IllegalArgumentException("model config is null");
             }
         }
@@ -122,7 +125,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.version = version;
         this.description = description;
         this.isEnabled = isEnabled;
-        this.modelRateLimiterConfig = modelRateLimiterConfig;
+        this.rateLimiter = rateLimiter;
         this.url = url;
         this.hashValue = hashValue;
         this.modelFormat = modelFormat;
@@ -138,7 +141,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.isHidden = isHidden;
     }
 
-
     public MLRegisterModelInput(StreamInput in) throws IOException {
         this.functionName = in.readEnum(FunctionName.class);
         this.modelName = in.readString();
@@ -147,7 +149,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.description = in.readOptionalString();
         this.isEnabled = in.readOptionalBoolean();
         if (in.readBoolean()) {
-            this.modelRateLimiterConfig = new MLRateLimiter(in);
+            this.rateLimiter = new MLRateLimiter(in);
         }
         this.url = in.readOptionalString();
         this.hashValue = in.readOptionalString();
@@ -186,9 +188,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(version);
         out.writeOptionalString(description);
         out.writeOptionalBoolean(isEnabled);
-        if (modelRateLimiterConfig != null) {
+        if (rateLimiter != null) {
             out.writeBoolean(true);
-            modelRateLimiterConfig.writeTo(out);
+            rateLimiter.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -249,8 +251,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (isEnabled != null) {
             builder.field(IS_ENABLED_FIELD, isEnabled);
         }
-        if (modelRateLimiterConfig != null) {
-            builder.field(MODEL_RATE_LIMITER_CONFIG_FIELD, modelRateLimiterConfig);
+        if (rateLimiter != null) {
+            builder.field(RATE_LIMITER_FIELD, rateLimiter);
         }
         if (url != null) {
             builder.field(URL_FIELD, url);
@@ -293,11 +295,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel) throws IOException {
+    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version,
+            boolean deployModel) throws IOException {
         FunctionName functionName = null;
         String modelGroupId = null;
         Boolean isEnabled = null;
-        MLRateLimiter modelRateLimiterConfig = null;
+        MLRateLimiter rateLimiter = null;
         String url = null;
         String hashValue = null;
         String description = null;
@@ -326,8 +329,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
                     break;
-                case MODEL_RATE_LIMITER_CONFIG_FIELD:
-                    modelRateLimiterConfig = MLRateLimiter.parse(parser);
+                case RATE_LIMITER_FIELD:
+                    rateLimiter = MLRateLimiter.parse(parser);
                     break;
                 case URL_FIELD:
                     url = parser.text();
@@ -379,7 +382,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, isEnabled, modelRateLimiterConfig, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
+        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, isEnabled,
+                rateLimiter, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]),
+                connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
+                isHidden);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -388,7 +394,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String modelGroupId = null;
         String version = null;
         Boolean isEnabled = null;
-        MLRateLimiter modelRateLimiterConfig = null;
+        MLRateLimiter rateLimiter = null;
         String url = null;
         String hashValue = null;
         String description = null;
@@ -427,8 +433,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
                     break;
-                case MODEL_RATE_LIMITER_CONFIG_FIELD:
-                    modelRateLimiterConfig = MLRateLimiter.parse(parser);
+                case RATE_LIMITER_FIELD:
+                    rateLimiter = MLRateLimiter.parse(parser);
                     break;
                 case URL_FIELD:
                     url = parser.text();
@@ -477,6 +483,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, isEnabled, modelRateLimiterConfig, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
+        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, isEnabled, rateLimiter,
+                url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector,
+                connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
     }
 }
