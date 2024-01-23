@@ -94,7 +94,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals("deleted", (String) responseMap.get("result"));
     }
 
-
     public void testSearchConnectors_beforeConnectorCreation() throws IOException {
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
