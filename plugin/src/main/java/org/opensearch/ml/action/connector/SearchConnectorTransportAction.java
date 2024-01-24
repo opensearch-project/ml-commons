@@ -5,14 +5,8 @@
 
 package org.opensearch.ml.action.connector;
 
-import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
+import com.google.common.annotations.VisibleForTesting;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -36,9 +30,13 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 @Log4j2
 public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
@@ -115,7 +113,6 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 0,
                 0,
                 0,
-                null,
                 new ShardSearchFailure[] {},
                 SearchResponse.Clusters.EMPTY,
                 null

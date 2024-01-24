@@ -5,24 +5,10 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
-import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
-
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.Set;
-
-import javax.naming.InvalidNameException;
-import javax.naming.ldap.LdapName;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,11 +32,22 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.annotations.VisibleForTesting;
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
+import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
 @Log4j2
 public class RestActionUtils {
@@ -296,7 +293,6 @@ public class RestActionUtils {
                 0,
                 0,
                 0,
-                null,
                 new ShardSearchFailure[] {},
                 SearchResponse.Clusters.EMPTY,
                 null
