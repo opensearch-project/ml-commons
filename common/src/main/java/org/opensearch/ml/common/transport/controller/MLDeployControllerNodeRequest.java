@@ -7,11 +7,11 @@ package org.opensearch.ml.common.transport.controller;
 
 import java.io.IOException;
 import lombok.Getter;
+import org.opensearch.action.support.nodes.BaseNodeRequest;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.transport.TransportRequest;
 
-public class MLDeployControllerNodeRequest extends TransportRequest {
+public class MLDeployControllerNodeRequest extends BaseNodeRequest {
     @Getter
     private MLDeployControllerNodesRequest deployControllerNodesRequest;
 
