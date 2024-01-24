@@ -5,29 +5,19 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.io.IOException;
-import java.net.URI;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
@@ -41,22 +31,14 @@ import org.opensearch.script.ScriptService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
-import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
-import software.amazon.awssdk.http.SdkHttpFullResponse;
-import software.amazon.awssdk.http.SdkHttpMethod;
-import software.amazon.awssdk.http.SdkHttpResponse;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
-import software.amazon.awssdk.http.async.SdkAsyncHttpResponseHandler;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
-public class AwsConnectorExecutor extends AbstractConnectorExecutor {
+public class AwsConnectorExecutor implements RemoteConnectorExecutor {
 
     @Getter
     private AwsConnector connector;
@@ -79,11 +61,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     public AwsConnectorExecutor(Connector connector) {
         this.connector = (AwsConnector) connector;
-        Duration connectionTimeout = Duration.ofMillis(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofMillis(super.getConnectorClientConfig().getReadTimeout());
-        int maxConnections = super.getConnectorClientConfig().getMaxConnections();
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections);
+        this.httpClient = MLHttpClientFactory.getAsyncHttpClient();
     }
+
 
     @SuppressWarnings("removal")
     @Override
