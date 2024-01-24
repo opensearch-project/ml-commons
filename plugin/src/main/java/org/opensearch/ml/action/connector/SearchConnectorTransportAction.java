@@ -5,8 +5,14 @@
 
 package org.opensearch.ml.action.connector;
 
-import com.google.common.annotations.VisibleForTesting;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -30,13 +36,9 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import com.google.common.annotations.VisibleForTesting;
 
-import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
