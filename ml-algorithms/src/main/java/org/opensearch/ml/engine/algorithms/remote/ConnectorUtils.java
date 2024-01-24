@@ -11,7 +11,6 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executeBuildInPostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
-import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.io.IOException;
 import java.net.URI;
@@ -26,8 +25,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 
-import io.netty.handler.codec.http.HttpMethod;
-import org.apache.commons.lang3.CharSet;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.action.ActionListener;
@@ -248,7 +245,12 @@ public class ConnectorUtils {
                 builder.putHeader(key, headers.get(key));
             }
         }
-        builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
+        if (builder.matchingHeaders("Content-Type").isEmpty()) {
+            builder.putHeader("Content-Type", "application/json");
+        }
+        if (builder.matchingHeaders("Content-Length").isEmpty()) {
+            builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
+        }
         return builder.build();
     }
 }

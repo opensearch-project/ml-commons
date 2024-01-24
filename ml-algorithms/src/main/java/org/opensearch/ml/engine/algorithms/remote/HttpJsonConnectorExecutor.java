@@ -13,7 +13,6 @@ import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -93,12 +92,6 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService))
                 .build();
-            request.toBuilder().putHeader("Content-Type", "application/json");
-            Map<String, ?> headers = connector.getDecryptedHeaders();
-            Optional
-                .ofNullable(headers)
-                .flatMap(h -> h.entrySet().stream().filter(x -> x.getKey().equals("Content-Type")).findFirst())
-                .ifPresent(x -> request.toBuilder().putHeader("Content-Type", String.valueOf(x.getValue())));
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
