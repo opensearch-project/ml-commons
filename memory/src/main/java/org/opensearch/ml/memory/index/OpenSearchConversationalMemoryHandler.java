@@ -384,10 +384,23 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         return fut;
     }
 
+    /**
+     * List all traces of an interaction
+     * @param interactionId id of the parent interaction
+     * @param from where to start listing from
+     * @maxResults how many traces to list
+     * @listener process the response
+     */
     public void getTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
         interactionsIndex.getTraces(interactionId, from, maxResults, listener);
     }
 
+    /**
+     * Update conversation in the index
+     * @param conversationId the conversation id that needs update
+     * @param updateContent original update content
+     * @param listener receives the update response for the wrapped query
+     */
     public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener) {
         UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.META_INDEX_NAME, conversationId);
         updateContent.putIfAbsent(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, Instant.now());
@@ -396,7 +409,23 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         updateRequest.docAsUpsert(true);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        conversationMetaIndex.updateConversation(updateRequest, listener);
+        conversationMetaIndex.updateConversation(conversationId, updateRequest, listener);
+    }
+
+    /**
+     * Update interaction in the index
+     * @param interactionId the interaction id that needs update
+     * @param updateContent original update content
+     * @param listener receives the update response for the wrapped query
+     */
+    public void updateInteraction(String interactionId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener) {
+        UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.INTERACTIONS_INDEX_NAME, interactionId);
+
+        updateRequest.doc(updateContent);
+        updateRequest.docAsUpsert(true);
+        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+        interactionsIndex.updateInteraction(interactionId, updateRequest, listener);
     }
 
     /**

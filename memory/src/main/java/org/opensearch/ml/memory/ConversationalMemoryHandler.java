@@ -248,10 +248,19 @@ public interface ConversationalMemoryHandler {
 
     /**
      * Update a conversation
+     * @param conversationId the conversation id to update
      * @param updateContent update content for the conversations index
      * @param listener receives the update response
      */
     public void updateConversation(String conversationId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener);
+
+    /**
+     * Update an interaction
+     * @param interactionId the interaction id to update
+     * @param updateContent update content for the interaction index
+     * @param listener receives the update response
+     */
+    public void updateInteraction(String interactionId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener);
 
     /**
      * Get a single ConversationMeta object

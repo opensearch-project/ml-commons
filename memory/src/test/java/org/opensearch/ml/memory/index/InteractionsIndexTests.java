@@ -480,7 +480,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doReturn(true).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
         ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
-        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        interactionsIndex.innerGetTraces("cid", 0, 10, getTracesListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
         verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
@@ -491,7 +491,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Failure")).when(client).search(any(), any());
         ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
-        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        interactionsIndex.innerGetTraces("cid", 0, 10, getTracesListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getTracesListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Failure"));
