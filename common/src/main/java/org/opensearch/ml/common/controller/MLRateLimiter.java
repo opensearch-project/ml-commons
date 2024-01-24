@@ -25,21 +25,21 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @Setter
 @Getter
 public class MLRateLimiter implements ToXContentObject, Writeable {
-    public static final String RATE_LIMIT_NUMBER_FIELD = "rate_limit_number";
-    public static final String RATE_LIMIT_UNIT_FIELD = "rate_limit_unit";
+    public static final String LIMIT_FIELD = "limit";
+    public static final String UNIT_FIELD = "unit";
 
-    private String rateLimitNumber;
-    private TimeUnit rateLimitUnit;
+    private String limit;
+    private TimeUnit unit;
 
     @Builder(toBuilder = true)
-    public MLRateLimiter(String rateLimitNumber, TimeUnit rateLimitUnit) {
-        this.rateLimitNumber = rateLimitNumber;
-        this.rateLimitUnit = rateLimitUnit;
+    public MLRateLimiter(String limit, TimeUnit unit) {
+        this.limit = limit;
+        this.unit = unit;
     }
 
     public static MLRateLimiter parse(XContentParser parser) throws IOException {
-        String rateLimitNumber = null;
-        TimeUnit rateLimitUnit = null;
+        String limit = null;
+        TimeUnit unit = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -47,33 +47,33 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case RATE_LIMIT_NUMBER_FIELD:
-                    rateLimitNumber = parser.text();
+                case LIMIT_FIELD:
+                    limit = parser.text();
                     break;
-                case RATE_LIMIT_UNIT_FIELD:
-                    rateLimitUnit = TimeUnit.valueOf(parser.text());
+                case UNIT_FIELD:
+                    unit = TimeUnit.valueOf(parser.text());
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRateLimiter(rateLimitNumber, rateLimitUnit);
+        return new MLRateLimiter(limit, unit);
     }
 
-    public MLRateLimiter(StreamInput in) throws IOException{
-        this.rateLimitNumber = in.readOptionalString();
+    public MLRateLimiter(StreamInput in) throws IOException {
+        this.limit = in.readOptionalString();
         if (in.readBoolean()) {
-            this.rateLimitUnit = in.readEnum(TimeUnit.class);
+            this.unit = in.readEnum(TimeUnit.class);
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeOptionalString(rateLimitNumber);
-        if (rateLimitUnit != null) {
+        out.writeOptionalString(limit);
+        if (unit != null) {
             out.writeBoolean(true);
-            out.writeEnum(rateLimitUnit);
+            out.writeEnum(unit);
         } else {
             out.writeBoolean(false);
         }
@@ -82,22 +82,22 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
-        if (rateLimitNumber != null) {
-            builder.field(RATE_LIMIT_NUMBER_FIELD, rateLimitNumber);
+        if (limit != null) {
+            builder.field(LIMIT_FIELD, limit);
         }
-        if (rateLimitUnit != null) {
-            builder.field(RATE_LIMIT_UNIT_FIELD, rateLimitUnit);
+        if (unit != null) {
+            builder.field(UNIT_FIELD, unit);
         }
         builder.endObject();
         return builder;
     }
 
     public void update(MLRateLimiter updateContent) {
-        if (updateContent.getRateLimitNumber() != null) {
-            this.rateLimitNumber = updateContent.getRateLimitNumber();
+        if (updateContent.getLimit() != null) {
+            this.limit = updateContent.getLimit();
         }
-        if (updateContent.getRateLimitUnit() != null) {
-            this.rateLimitUnit = updateContent.getRateLimitUnit();
+        if (updateContent.getUnit() != null) {
+            this.unit = updateContent.getUnit();
         }
     }
 
@@ -111,11 +111,13 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
     }
 
     /**
-     * Checks the validity of this incoming update before performing an update operation.
-     * A valid update indicates the corresponding index will be updated with the current MLRateLimiter config and the update content
+     * Checks the validity of this incoming update before performing an update
+     * operation.
+     * A valid update indicates the corresponding index will be updated with the
+     * current MLRateLimiter config and the update content
      *
-     * @param rateLimiter    The existing rate limiter.
-     * @param updateContent  The update content.
+     * @param rateLimiter   The existing rate limiter.
+     * @param updateContent The update content.
      * @return true if the update is valid, false otherwise.
      */
     public static boolean updateValidityPreCheck(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
@@ -125,15 +127,19 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
             return true;
         } else if (updateContent.isEmpty()) {
             return false;
-        } else return (!Objects.equals(updateContent.getRateLimitNumber(), rateLimiter.getRateLimitNumber()) && updateContent.getRateLimitNumber() != null)
-                || (!Objects.equals(updateContent.getRateLimitUnit(), rateLimiter.getRateLimitUnit()) &&  updateContent.getRateLimitUnit() != null);
+        } else
+            return (!Objects.equals(updateContent.getLimit(), rateLimiter.getLimit())
+                    && updateContent.getLimit() != null)
+                    || (!Objects.equals(updateContent.getUnit(), rateLimiter.getUnit())
+                            && updateContent.getUnit() != null);
     }
 
     /**
-     * Checks if we need to deploy this update into ML Cache (if model is deployed) after performing this update operation.
+     * Checks if we need to deploy this update into ML Cache (if model is deployed)
+     * after performing this update operation.
      *
-     * @param rateLimiter    The existing rate limiter.
-     * @param updateContent  The update content.
+     * @param rateLimiter   The existing rate limiter.
+     * @param updateContent The update content.
      * @return true if the update is valid, false otherwise.
      */
     public static boolean isDeployRequiredAfterUpdate(MLRateLimiter rateLimiter, MLRateLimiter updateContent) {
@@ -141,16 +147,16 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
             return false;
         } else {
             return updateContent.isValid()
-                    || (rateLimiter.getRateLimitUnit() != null && updateContent.getRateLimitNumber() != null)
-                    || (rateLimiter.getRateLimitNumber() != null && updateContent.getRateLimitUnit() != null);
+                    || (rateLimiter.getUnit() != null && updateContent.getLimit() != null)
+                    || (rateLimiter.getLimit() != null && updateContent.getUnit() != null);
         }
     }
 
     public boolean isValid() {
-        return (this.rateLimitUnit != null && this.rateLimitNumber != null);
+        return (this.unit != null && this.limit != null);
     }
 
     public boolean isEmpty() {
-        return (this.rateLimitUnit == null && this.rateLimitNumber == null);
+        return (this.unit == null && this.limit == null);
     }
 }

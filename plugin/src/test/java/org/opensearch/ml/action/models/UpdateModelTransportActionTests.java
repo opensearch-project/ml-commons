@@ -14,14 +14,18 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
-import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -32,13 +36,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -47,6 +55,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.ToXContent;
@@ -59,6 +68,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -143,7 +153,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     ThreadContext threadContext;
 
-    ClusterState testState;
+    @Mock
+    ClusterState clusterState;
 
     @Mock
     ClusterService clusterService;
@@ -156,7 +167,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        testState = setupTestClusterState();
         updateLocalModelInput = MLUpdateModelInput
             .builder()
             .modelId("test_model_id")
@@ -182,13 +192,40 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX);
 
+        InetAddress inetAddress1 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 1 });
+        InetAddress inetAddress2 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 2 });
+
+        DiscoveryNode node1 = new DiscoveryNode(
+            "foo1",
+            "foo1",
+            new TransportAddress(inetAddress1, 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+
+        DiscoveryNode node2 = new DiscoveryNode(
+            "foo2",
+            "foo2",
+            new TransportAddress(inetAddress2, 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+
+        DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
+        String[] targetNodeIds = new String[] { node1.getId(), node2.getId() };
+
         localModel = prepareMLModel("TEXT_EMBEDDING");
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(clusterService.state()).thenReturn(testState);
+        when(clusterService.state()).thenReturn(clusterState);
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterState.nodes()).thenReturn(nodes);
+        when(mlModelManager.getWorkerNodes("test_model_id", FunctionName.REMOTE)).thenReturn(targetNodeIds);
+
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
@@ -706,6 +743,20 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testGetUpdateResponseListenerWithNullUpdateResponse() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to update ML model: test_model_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
     public void testGetUpdateResponseListenerWrongStatus() {
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
         doAnswer(invocation -> {
@@ -759,6 +810,24 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateModelStateLoadingException() {
+        MLModel testDeployingModel = prepareMLModel("TEXT_EMBEDDING", MLModelState.LOADING);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testDeployingModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model is deploying. Please wait for the model to complete deployment. model ID test_model_id",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
     public void testUpdateModelCacheModelStateDeployedSuccess() {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
@@ -777,6 +846,251 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
         transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateModelCacheModelWithIsModelEnabledSuccess() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
+        testUpdateModelCacheRequest.getUpdateModelInput().setIsEnabled(true);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateModelCacheModelWithoutUpdateConnectorWithRateLimiterSuccess() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
+        testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateModelCacheModelWithRateLimiterSuccess() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateModelWithPartialRateLimiterSuccess() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").build();
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
+        testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateModelCacheModelWithPartialRateLimiterSuccess() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").build();
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateModelCacheUpdateResponseListenerWithNullUpdateResponse() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+        when(updateModelCacheNodesResponse.failures()).thenReturn(null);
+
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to update ML model: test_model_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateModelCacheModelWithUndeploySuccessEmptyFailures() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+        when(updateModelCacheNodesResponse.failures()).thenReturn(new ArrayList<>());
+
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateControllerWithUndeploySuccessPartiallyFailures() {
+        List<FailedNodeException> failures = List
+            .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
+
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+        when(updateModelCacheNodesResponse.failures()).thenReturn(failures);
+
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Successfully update ML model index with model ID test_model_id but update model cache was failed on following nodes [foo1], please retry or redeploy model manually.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateControllerWithUndeployNullResponse() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(null);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Successfully update ML model index with model ID test_model_id but update model cache was failed on following nodes [foo1, foo2], please retry or redeploy model manually.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateControllerWithUndeployOtherException() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
+        testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -1179,56 +1493,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
-    }
-
-    @Ignore
-    @Test
-    public void testUpdateModelStateLoadingException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.LOADING).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Ignore
-    @Test
-    public void testUpdateModelStateLoadedException() {
-        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
-        doReturn("mockId").when(mockUpdateModelInput).getModelId();
-
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mockModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
-
-        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
-        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
-        doReturn(MLModelState.LOADED).when(mockModel).getModelState();
-
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
-            argumentCaptor.getValue().getMessage()
-        );
     }
 
     @Ignore
