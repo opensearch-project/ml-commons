@@ -37,8 +37,6 @@ import lombok.Getter;
 @AllArgsConstructor
 public class GetInteractionRequest extends ActionRequest {
     @Getter
-    private String conversationId;
-    @Getter
     private String interactionId;
 
     /**
@@ -48,23 +46,18 @@ public class GetInteractionRequest extends ActionRequest {
      */
     public GetInteractionRequest(StreamInput in) throws IOException {
         super(in);
-        this.conversationId = in.readString();
         this.interactionId = in.readString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(this.conversationId);
         out.writeString(this.interactionId);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (conversationId == null) {
-            exception = addValidationError("Get Interaction Request must have a conversation id", exception);
-        }
         if (interactionId == null) {
             exception = addValidationError("Get Interaction Request must have an interaction id", exception);
         }
@@ -78,8 +71,7 @@ public class GetInteractionRequest extends ActionRequest {
      * @throws IOException if something goes wrong reading from the rest request
      */
     public static GetInteractionRequest fromRestRequest(RestRequest request) throws IOException {
-        String conversationId = request.param(ActionConstants.CONVERSATION_ID_FIELD);
-        String interactionId = request.param(ActionConstants.RESPONSE_INTERACTION_ID_FIELD);
-        return new GetInteractionRequest(conversationId, interactionId);
+        String interactionId = request.param(ActionConstants.MESSAGE_ID);
+        return new GetInteractionRequest(interactionId);
     }
 }

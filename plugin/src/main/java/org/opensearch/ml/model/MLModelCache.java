@@ -35,7 +35,7 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLExecutable executor;
-    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) TokenBucket modelRateLimiter;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) TokenBucket rateLimiter;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Map<String, TokenBucket> userRateLimiterMap;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isModelEnabled;
     private final Set<String> targetWorkerNodes;
@@ -113,6 +113,7 @@ public class MLModelCache {
      * New ml node joins cluster, the new node will not be deployed with model, but in Cron job the new node will be regards as
      * a planning worker node and the model status is PARTIALLY_DEPLOYED, if we don't update here, the model status in model index
      * and profile API will be not consistent.
+     * 
      * @param nodeId
      */
     public void addWorkerNode(String nodeId) {
@@ -163,7 +164,7 @@ public class MLModelCache {
             executor.close();
         }
         isModelEnabled = null;
-        modelRateLimiter = null;
+        rateLimiter = null;
         userRateLimiterMap = null;
     }
 

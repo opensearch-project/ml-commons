@@ -82,7 +82,7 @@ public interface RemoteConnectorExecutor {
 
     Connector getConnector();
 
-    TokenBucket getModelRateLimiter();
+    TokenBucket getRateLimiter();
 
     Map<String, TokenBucket> getUserRateLimiterMap();
 
@@ -94,7 +94,7 @@ public interface RemoteConnectorExecutor {
 
     default void setClusterService(ClusterService clusterService) {}
 
-    default void setModelRateLimiter(TokenBucket modelRateLimiter) {}
+    default void setRateLimiter(TokenBucket rateLimiter) {}
 
     default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
 
@@ -121,7 +121,7 @@ public interface RemoteConnectorExecutor {
             .getThreadContext()
             .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
         User user = User.parse(userStr);
-        if (getModelRateLimiter() != null && !getModelRateLimiter().request()) {
+        if (getRateLimiter() != null && !getRateLimiter().request()) {
             throw new OpenSearchStatusException("Request is throttled at model level.", RestStatus.TOO_MANY_REQUESTS);
         } else if (user != null
             && getUserRateLimiterMap() != null

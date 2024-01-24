@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_NAME_FIELD;
 
 import java.util.HashMap;
@@ -93,7 +94,7 @@ public class RestMemoryUpdateConversationTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.PUT, route.getMethod());
-        assertEquals("/_plugins/_ml/memory/conversation/{conversation_id}/_update", route.getPath());
+        assertEquals("/_plugins/_ml/memory/{memory_id}", route.getPath());
     }
 
     public void testUpdateConversationRequest() throws Exception {
@@ -115,7 +116,7 @@ public class RestMemoryUpdateConversationTests extends OpenSearchTestCase {
 
     public void testUpdateConnectorRequestWithNullConversationId() throws Exception {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Request should contain conversation_id");
+        exceptionRule.expectMessage("Request should contain memory_id");
         RestRequest request = getRestRequestWithNullConversationId();
         restMemoryUpdateConversationAction.handleRequest(request, channel, client);
     }
@@ -125,10 +126,10 @@ public class RestMemoryUpdateConversationTests extends OpenSearchTestCase {
         final Map<String, Object> updateContent = Map.of(META_NAME_FIELD, "new name");
         String requestContent = new Gson().toJson(updateContent);
         Map<String, String> params = new HashMap<>();
-        params.put("conversation_id", "test_conversationId");
+        params.put(CONVERSATION_ID_FIELD, "test_conversationId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/memory/conversation/{conversation_id}/_update")
+            .withPath("/_plugins/_ml/memory/{memory_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -138,10 +139,10 @@ public class RestMemoryUpdateConversationTests extends OpenSearchTestCase {
     private RestRequest getRestRequestWithEmptyContent() {
         RestRequest.Method method = RestRequest.Method.POST;
         Map<String, String> params = new HashMap<>();
-        params.put("conversation_id", "test_conversationId");
+        params.put(CONVERSATION_ID_FIELD, "test_conversationId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/memory/conversation/{conversation_id}/_update")
+            .withPath("/_plugins/_ml/memory/{memory_id}")
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();
@@ -155,7 +156,7 @@ public class RestMemoryUpdateConversationTests extends OpenSearchTestCase {
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/memory/conversation/{conversation_id}/_update")
+            .withPath("/_plugins/_ml/memory/{memory_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();

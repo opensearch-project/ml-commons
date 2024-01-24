@@ -545,13 +545,13 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         });
 
         StepListener<Interaction> get1 = new StepListener<>();
-        iid2.whenComplete(iid -> { index.getInteraction(conversation, iid1.result(), get1); }, e -> {
+        iid2.whenComplete(iid -> { index.getInteraction(iid1.result(), get1); }, e -> {
             cdl.countDown();
             log.error(e);
         });
 
         StepListener<Interaction> get2 = new StepListener<>();
-        get1.whenComplete(interaction1 -> { index.getInteraction(conversation, iid2.result(), get2); }, e -> {
+        get1.whenComplete(interaction1 -> { index.getInteraction(iid2.result(), get2); }, e -> {
             cdl.countDown();
             log.error(e);
         });

@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.conversation.ActionConstants.CONVERSATION_ID_FIELD;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
@@ -49,7 +50,7 @@ public class RestMemoryUpdateConversationAction extends BaseRestHandler {
             throw new OpenSearchParseException("Failed to update conversation: Request body is empty");
         }
 
-        String conversationId = getParameterId(request, "conversation_id");
+        String conversationId = getParameterId(request, CONVERSATION_ID_FIELD);
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

@@ -33,7 +33,8 @@ public class MLModelGroupDeleteRequestTest {
     public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
-        MLModelGroupDeleteRequest parsedRequest = new MLModelGroupDeleteRequest(bytesStreamOutput.bytes().streamInput());
+        MLModelGroupDeleteRequest parsedRequest = new MLModelGroupDeleteRequest(
+                bytesStreamOutput.bytes().streamInput());
         assertEquals(parsedRequest.getModelGroupId(), modelGroupId);
     }
 
@@ -51,7 +52,7 @@ public class MLModelGroupDeleteRequestTest {
     }
 
     @Test
-    public void fromActionRequestWithMLUpdateModelControllerRequestSuccess() {
+    public void fromActionRequestWithMLUpdateControllerRequestSuccess() {
         assertSame(MLModelGroupDeleteRequest.fromActionRequest(request), request);
     }
 

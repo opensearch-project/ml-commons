@@ -113,7 +113,7 @@ public class GetInteractionsRequest extends ActionRequest {
      * @throws IOException if something goes wrong
      */
     public static GetInteractionsRequest fromRestRequest(RestRequest request) throws IOException {
-        String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
+        String cid = request.param(ActionConstants.MEMORY_ID);
         if (request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
             int from = Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD));
             if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {

@@ -50,7 +50,7 @@ public class RestMemoryGetInteractionActionTests extends OpenSearchTestCase {
     public void testPrepareRequest() throws Exception {
         RestMemoryGetInteractionAction action = new RestMemoryGetInteractionAction();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid", ActionConstants.RESPONSE_INTERACTION_ID_FIELD, "iid"))
+            .withParams(Map.of(ActionConstants.MESSAGE_ID, "iid"))
             .build();
 
         NodeClient client = mock(NodeClient.class);
@@ -59,7 +59,6 @@ public class RestMemoryGetInteractionActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<GetInteractionRequest> argCaptor = ArgumentCaptor.forClass(GetInteractionRequest.class);
         verify(client, times(1)).execute(eq(GetInteractionAction.INSTANCE), argCaptor.capture(), any());
-        assert (argCaptor.getValue().getConversationId().equals("cid"));
         assert (argCaptor.getValue().getInteractionId().equals("iid"));
     }
 }

@@ -58,8 +58,8 @@ public class RestMemorySearchConversationsActionIT extends MLCommonsRestTestCase
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String id = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey("memory_id"));
+        String id = (String) ccmap.get("memory_id");
 
         Response scresponse = TestHelper
             .makeRequest(client(), "POST", ActionConstants.SEARCH_CONVERSATIONS_REST_PATH, null, matchAllSearchQuery(), null);

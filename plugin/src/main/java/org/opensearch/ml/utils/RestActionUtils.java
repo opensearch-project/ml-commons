@@ -8,6 +8,9 @@ package org.opensearch.ml.utils;
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -23,23 +26,33 @@ import javax.naming.ldap.LdapName;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.search.internal.InternalSearchResponse;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class RestActionUtils {
 
     private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
@@ -62,9 +75,12 @@ public class RestActionUtils {
     public static final String PARAMETER_TOOL_NAME = "tool_name";
 
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
-    public static final String OPENDISTRO_SECURITY_SSL_PRINCIPAL = OPENDISTRO_SECURITY_CONFIG_PREFIX + "ssl_principal";
+
+    public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
 
     static final Set<LdapName> adminDn = new HashSet<>();
+    static final Set<String> adminUsernames = new HashSet<String>();
+    static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -203,7 +219,7 @@ public class RestActionUtils {
      */
     public static User getUserContext(Client client) {
         String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        logger.debug("Filtering result by " + userStr);
+        logger.debug("Current user is " + userStr);
         return User.parse(userStr);
     }
 
@@ -217,13 +233,25 @@ public class RestActionUtils {
                 logger.debug("{} is registered as an admin dn", dn);
                 adminDn.add(new LdapName(dn));
             } catch (final InvalidNameException e) {
-                logger.error("Unable to parse admin dn {}", dn, e);
+                logger.debug("Unable to parse admin dn {}", dn, e);
+                adminUsernames.add(dn);
             }
         }
 
-        ThreadContext threadContext = client.threadPool().getThreadContext();
-        final String sslPrincipal = threadContext.getTransient(OPENDISTRO_SECURITY_SSL_PRINCIPAL);
-        return isAdminDN(sslPrincipal);
+        Object userObject = client.threadPool().getThreadContext().getTransient(OPENDISTRO_SECURITY_USER);
+        if (userObject == null)
+            return false;
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
+                String userContext = objectMapper.writeValueAsString(userObject);
+                final JsonNode node = objectMapper.readTree(userContext);
+                final String userName = node.get("name").asText();
+
+                return isAdminDN(userName);
+            });
+        } catch (PrivilegedActionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static boolean isAdminDN(String dn) {
@@ -232,7 +260,7 @@ public class RestActionUtils {
         try {
             return isAdminDN(new LdapName(dn));
         } catch (InvalidNameException e) {
-            return false;
+            return adminUsernames.contains(dn);
         }
     }
 
@@ -244,6 +272,39 @@ public class RestActionUtils {
             logger.trace("Is principal {} an admin cert? {}", dn.toString(), isAdmin);
         }
         return isAdmin;
+    }
+
+    /**
+     * Utility to wrap over an action listener to handle index not found error to return empty results instead of failing.
+     * This is important when the user is performing a search request against connectors/models/model groups/tasks or other constructs that
+     * do not imply an index error but rather imply no items found.
+     * @see <a href=https://github.com/opensearch-project/ml-commons/issues/1787>Issue 1787</a>
+     * @see <a href=https://github.com/opensearch-project/ml-commons/issues/1778>Issue 1878</a>
+     * @see <a href=https://github.com/opensearch-project/ml-commons/issues/1879>Issue 1879</a>
+     * @see <a href=https://github.com/opensearch-project/ml-commons/issues/1880>Issue 1880</a>
+     * @param e Exception to wrap
+     * @param listener ActionListener for a search response to wrap
+     */
+    public static void wrapListenerToHandleSearchIndexNotFound(Exception e, ActionListener<SearchResponse> listener) {
+        if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+            log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
+            final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
+            final SearchResponse emptySearchResponse = new SearchResponse(
+                internalSearchResponse,
+                null,
+                0,
+                0,
+                0,
+                0,
+                null,
+                new ShardSearchFailure[] {},
+                SearchResponse.Clusters.EMPTY,
+                null
+            );
+            listener.onResponse(emptySearchResponse);
+        } else {
+            listener.onFailure(e);
+        }
     }
 
 }

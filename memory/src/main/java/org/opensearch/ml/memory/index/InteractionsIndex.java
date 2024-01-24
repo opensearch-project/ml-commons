@@ -491,11 +491,10 @@ public class InteractionsIndex {
 
     /**
      * Get a single interaction
-     * @param conversationId id of the conversation this interaction belongs to
      * @param interactionId id of this interaction
      * @param listener receives the interaction
      */
-    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
+    public void getInteraction(String interactionId, ActionListener<Interaction> listener) {
         if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener
                 .onFailure(
@@ -506,39 +505,25 @@ public class InteractionsIndex {
                 );
             return;
         }
-        conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
-            if (access) {
-                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                    ActionListener<Interaction> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                    GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
-                    ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
-                        // If the conversation doesn't exist, fail
-                        if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
-                            throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
-                        }
-                        Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
-                        internalListener.onResponse(interaction);
-                    }, e -> { internalListener.onFailure(e); });
-                    client
-                        .admin()
-                        .indices()
-                        .refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
-                            client.get(request, al);
-                        }, e -> {
-                            log.error("Failed to refresh interactions index during get interaction ", e);
-                            internalListener.onFailure(e);
-                        }));
-                } catch (Exception e) {
-                    listener.onFailure(e);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Interaction> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
+            ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
+                // If the conversation doesn't exist, fail
+                if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
+                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
                 }
-            } else {
-                String userstr = client
-                    .threadPool()
-                    .getThreadContext()
-                    .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
-            }
-        }, e -> { listener.onFailure(e); }));
+                Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
+                internalListener.onResponse(interaction);
+            }, e -> { internalListener.onFailure(e); });
+            client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                client.get(request, al);
+            }, e -> {
+                log.error("Failed to refresh interactions index during get interaction ", e);
+                internalListener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 }
