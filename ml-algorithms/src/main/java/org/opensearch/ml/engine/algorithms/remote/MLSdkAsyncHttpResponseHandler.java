@@ -48,8 +48,6 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private ScriptService scriptService;
 
-    private Subscription subscription;
-
     public MLSdkAsyncHttpResponseHandler(
         CountDownLatch countDownLatch,
         ActionListener<Queue<ModelTensors>> actionListener,
@@ -94,7 +92,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             public void onComplete() {
                 String fullResponseBody = responseBody.toString();
                 try {
-                    processResponse(statusCode, fullResponseBody, parameters, tensorOutputs);
+                    processResponse(statusCode, fullResponseBody, parameters, tensorOutputs, actionListener);
                     countDownLatch.countDown();
                     if (countDownLatch.getCount() == 0) {
                         log.debug("All responses received, calling action listener to return final results.");
@@ -114,13 +112,13 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         actionListener.onFailure(new OpenSearchStatusException("Error receiving response from remote: " + error.getMessage(), RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Queue<ModelTensors> tensorOutputs)
+    private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Queue<ModelTensors> tensorOutputs, ActionListener<Queue<ModelTensors>> actionListener)
         throws IOException {
         if (body == null) {
-            throw new OpenSearchStatusException("No response from model", RestStatus.fromCode(statusCode));
+            actionListener.onFailure(new OpenSearchStatusException("No response from model", RestStatus.fromCode(statusCode)));
         } else {
             if (statusCode < 200 || statusCode > 300) {
-                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode));
+                actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
             } else {
                 ModelTensors tensors = processOutput(body, connector, scriptService, parameters);
                 tensors.setStatusCode(statusCode);
