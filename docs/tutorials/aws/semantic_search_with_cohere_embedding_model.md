@@ -1,5 +1,9 @@
 # Topic
 
+> The easiest way for setting up Bedrock titan embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
+
+> This tutorial explains detail steps if you want to configure everything manually. You can also connect to other service with similar way.
+
 This doc introduces how to build semantic search in Amazon managed OpenSearch with [Cohere embedding model](https://docs.cohere.com/reference/embed).
 If you are not using Amazon OpenSearch, you can refer to [cohere_v3_connector_embedding_blueprint](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/cohere_v3_connector_embedding_blueprint.md) and [OpenSearch semantic search](https://opensearch.org/docs/latest/search-plugins/semantic-search/).
 
@@ -72,7 +76,7 @@ Generate a new IAM role specifically for signing your create connector request.
 
 
 Create IAM role `my_create_connector_role` with 
-- Custom trust policy, `your_iam_user_arn` is the IAM user which will run `aws sts assume-role` in step 4.1
+- Custom trust policy. Note: `your_iam_user_arn` is the IAM user which will run `aws sts assume-role` in step 4.1
 ```
 {
     "Version": "2012-10-17",
