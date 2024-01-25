@@ -73,7 +73,23 @@ Copy the role ARN which will be used in later steps.
 Generate a new IAM role specifically for signing your create connector request.
 
 
-Create IAM role `my_create_connector_role` with permission
+Create IAM role `my_create_connector_role` with 
+- Custom trust policy, `your_iam_user_arn` is the IAM user which will run `aws sts assume-role` in step 4.1
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "your_iam_user_arn"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+```
+- permission
 ```
 {
     "Version": "2012-10-17",
@@ -108,11 +124,23 @@ Click "Map", then the IAM role configured successfully in your OpenSearch cluste
 Find more details on [connector](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/connectors/)
 
 
-Get temporary credential of the role created in step 3.1:
+### 4.1 Get temporary credential of the role created in step 3.1:
 ```
 aws sts assume-role —role-arn your_iam_role_arn_created_in_step3.1 --role-session-name your_session_name
 ```
-Run this python code with the temporary credential
+
+the temporary credential configured in `~/.aws/credentials` like this
+
+```
+[default]
+AWS_ACCESS_KEY_ID=your_access_key_of_role_created_in_step3.1
+AWS_SECRET_ACCESS_KEY=your_secret_key_of_role_created_in_step3.1
+AWS_SESSION_TOKEN=your_session_token_of_role_created_in_step3.1
+```
+
+### 4.2 Create connector
+
+Run this python code with the temporary credential configured in `~/.aws/credentials`
  
 ```
 import boto3
