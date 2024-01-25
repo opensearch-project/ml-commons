@@ -10,11 +10,11 @@ If you are not using Amazon OpenSearch, you can refer to [sagemaker_connector_bl
 Note: You should replace the placeholders with prefix `your_` with your own value
 
 This doc doesn't cover how to deploy model to Sagemaker, read [Sagemaker doc](https://docs.aws.amazon.com/sagemaker/latest/dg/realtime-endpoints.html) for more details.
-Make sure your Sagemaker model input follow such format, so the [default pre-process function](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/blueprints/#preprocessing-function) can work
+Make sure your sageMaker model inputs follow the format as an array of Strings, so the [default pre-process function](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/blueprints/#preprocessing-function) can work
 ```
 ["hello world", "how are you"]
 ```
-and output follow such format, so the [default post-process function](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/blueprints/#post-processing-function) can work
+and output follow such format as an array of array, with each array corresponds to the result of an input String, so the [default post-process function](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/blueprints/#post-processing-function) can work
 ```
 [
   [

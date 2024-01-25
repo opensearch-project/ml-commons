@@ -10,6 +10,8 @@ If you are not using Amazon OpenSearch, you can refer to [cohere_v3_connector_em
 
 Note: You should replace the placeholders with prefix `your_` with your own value
 
+Cohere embedding model also available on Bedrock. You can use same steps of [semantic_search_with_cohere_embedding_model.md](https://github.com/opensearch-project/ml-commons/tree/2.x/docs/tutorials/aws/semantic_search_with_bedrock_titan_embedding_model.md) to use Bedrock Cohere embedding model.
+
 # Steps
 
 ## 0. Create OpenSearch cluster
