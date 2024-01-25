@@ -10,10 +10,9 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
+import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
@@ -62,7 +61,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
 
 
     @Override
-    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Queue<ModelTensors> tensorOutputs, CountDownLatch countDownLatch, ActionListener<Queue<ModelTensors>> actionListener) {
+    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Map<Integer, ModelTensors> tensorOutputs, WrappedCountDownLatch countDownLatch, ActionListener<List<ModelTensors>> actionListener) {
         try {
             SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
