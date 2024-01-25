@@ -1,6 +1,6 @@
 # Topic
 
-> The easiest way for setting up Bedrock titan embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
+> The easiest way for setting up embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
 
 > This tutorial explains detail steps if you want to configure everything manually. You can also connect to other service with similar way.
 
