@@ -296,7 +296,6 @@ public class RestActionUtils {
                 0,
                 0,
                 0,
-                null,
                 new ShardSearchFailure[] {},
                 SearchResponse.Clusters.EMPTY,
                 null

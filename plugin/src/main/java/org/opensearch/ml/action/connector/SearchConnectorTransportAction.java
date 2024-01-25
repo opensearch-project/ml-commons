@@ -115,7 +115,6 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 0,
                 0,
                 0,
-                null,
                 new ShardSearchFailure[] {},
                 SearchResponse.Clusters.EMPTY,
                 null
