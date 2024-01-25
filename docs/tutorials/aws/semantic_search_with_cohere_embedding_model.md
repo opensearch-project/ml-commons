@@ -126,7 +126,7 @@ Find more details on [connector](https://opensearch.org/docs/latest/ml-commons-p
 
 ### 4.1 Get temporary credential of the role created in step 3.1:
 ```
-aws sts assume-role —role-arn your_iam_role_arn_created_in_step3.1 --role-session-name your_session_name
+aws sts assume-role --role-arn your_iam_role_arn_created_in_step3.1 --role-session-name your_session_name
 ```
 
 the temporary credential configured in `~/.aws/credentials` like this
