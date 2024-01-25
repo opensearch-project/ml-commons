@@ -17,6 +17,7 @@ import java.util.Map;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -25,6 +26,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -42,9 +44,14 @@ public class RestMLDeleteAgentActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
-        restMLDeleteAgentAction = new RestMLDeleteAgentAction();
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -63,7 +70,7 @@ public class RestMLDeleteAgentActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLDeleteAgentAction mLDeleteAgentAction = new RestMLDeleteAgentAction();
+        RestMLDeleteAgentAction mLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         assertNotNull(mLDeleteAgentAction);
     }
 
@@ -90,6 +97,13 @@ public class RestMLDeleteAgentActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLAgentDeleteAction.INSTANCE), argumentCaptor.capture(), any());
         String agentId = argumentCaptor.getValue().getAgentId();
         assertEquals(agentId, "agent_id");
+    }
+
+    public void test_PrepareRequest_disabled() {
+        RestRequest request = getRestRequest();
+
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+        assertThrows(IllegalStateException.class, () -> restMLDeleteAgentAction.handleRequest(request, channel, client));
     }
 
     private RestRequest getRestRequest() {

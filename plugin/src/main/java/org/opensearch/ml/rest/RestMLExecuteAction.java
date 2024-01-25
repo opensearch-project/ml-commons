@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
@@ -25,6 +26,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -34,11 +36,14 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RestMLExecuteAction extends BaseRestHandler {
     private static final String ML_EXECUTE_ACTION = "ml_execute_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLExecuteAction() {}
+    public RestMLExecuteAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -75,6 +80,9 @@ public class RestMLExecuteAction extends BaseRestHandler {
         FunctionName functionName = null;
         Input input = null;
         if (uri.startsWith(ML_BASE_URI + "/agents/")) {
+            if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
+                throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
+            }
             String agentId = request.param(PARAMETER_AGENT_ID);
             functionName = FunctionName.AGENT;
             input = MLInput.parse(parser, functionName.name());

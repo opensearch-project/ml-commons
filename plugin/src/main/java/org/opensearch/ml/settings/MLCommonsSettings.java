@@ -174,4 +174,8 @@ public final class MLCommonsSettings {
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
     public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED =
         GenerativeQAProcessorConstants.RAG_PIPELINE_FEATURE_ENABLED;
+
+    // This setting is to enable/disable agent related API register/execute/delete/get/search agent.
+    public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.agent_framework_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
