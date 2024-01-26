@@ -261,7 +261,12 @@ public class ConnectorUtils {
     public static SdkHttpFullRequest buildSdkRequest(Connector connector, Map<String, String> parameters, String payload, SdkHttpMethod method, ActionListener<List<ModelTensors>> actionListener) {
         String endpoint = connector.getPredictEndpoint(parameters);
         String charset = parameters.getOrDefault("charset", "UTF-8");
-        RequestBody requestBody = RequestBody.fromString(payload, Charset.forName(charset));
+        RequestBody requestBody;
+        if (payload != null) {
+            requestBody = RequestBody.fromString(payload, Charset.forName(charset));
+        } else {
+            requestBody = RequestBody.empty();
+        }
         if (requestBody.optionalContentLength().isEmpty()) {
             log.error("Content length is empty. Aborting request to remote model");
             actionListener.onFailure(new IllegalArgumentException("Content length is empty. Aborting request to remote model"));
