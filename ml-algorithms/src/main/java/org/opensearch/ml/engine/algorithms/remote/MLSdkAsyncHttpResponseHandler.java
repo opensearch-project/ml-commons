@@ -138,7 +138,9 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             } else {
                 ModelTensors tensors = processOutput(body, connector, scriptService, parameters);
                 tensors.setStatusCode(statusCode);
+                log.info("################## Starting to put tensors into tensorOutputs, sequence is {} ", countDownLatch.getSequence());
                 tensorOutputs.put(countDownLatch.getSequence(), tensors);
+                log.info("################## End to put tensors into tensorOutputs, sequence is {} ", countDownLatch.getSequence());
             }
         }
     }
@@ -146,6 +148,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     private List<ModelTensors> reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         TreeMap<Integer, ModelTensors> sortedMap = new TreeMap<>(tensorOutputs);
+        log.info("Reordered tensor outputs size is {}", sortedMap.size());
         for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
             modelTensors.add(entry.getKey(), entry.getValue());
         }
