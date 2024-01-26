@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
 
 public class MLPostProcessFunctionTest {
@@ -29,18 +31,18 @@ public class MLPostProcessFunctionTest {
 
     @Test
     public void get() {
-        Assert.assertNotNull(MLPostProcessFunction.get(OPENAI_EMBEDDING));
+        Assert.assertNotNull(MLPostProcessFunction.get(COHERE_EMBEDDING));
         Assert.assertNull(MLPostProcessFunction.get("wrong value"));
     }
 
     @Test
     public void test_getResponseFilter() {
-        assert null != MLPostProcessFunction.getResponseFilter(OPENAI_EMBEDDING);
+        assert null != MLPostProcessFunction.getResponseFilter(BEDROCK_EMBEDDING);
         assert null == MLPostProcessFunction.getResponseFilter("wrong value");
     }
 
     @Test
-    public void test_buildMultipleResultModelTensorList() {
+    public void test_buildModelTensorList() {
         Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList());
         List<List<Float>> numbersList = new ArrayList<>();
         numbersList.add(Collections.singletonList(1.0f));
@@ -48,20 +50,8 @@ public class MLPostProcessFunctionTest {
     }
 
     @Test
-    public void test_buildMultipleResultModelTensorList_exception() {
+    public void test_buildModelTensorList_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLPostProcessFunction.buildModelTensorList().apply(null);
-    }
-
-    @Test
-    public void test_buildSingleResultModelTensorList() {
-        Assert.assertNotNull(MLPostProcessFunction.buildSingleResultModelTensor());
-        Assert.assertNotNull(MLPostProcessFunction.buildSingleResultModelTensor().apply(Collections.singletonList(1.0f)));
-    }
-
-    @Test
-    public void test_buildSingleResultModelTensorList_exception() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.buildSingleResultModelTensor().apply(null);
     }
 }
