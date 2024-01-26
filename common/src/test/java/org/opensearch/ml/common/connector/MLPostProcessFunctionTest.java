@@ -41,16 +41,16 @@ public class MLPostProcessFunctionTest {
 
     @Test
     public void test_buildMultipleResultModelTensorList() {
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorResult());
+        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList());
         List<List<Float>> numbersList = new ArrayList<>();
         numbersList.add(Collections.singletonList(1.0f));
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorResult().apply(numbersList));
+        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList().apply(numbersList));
     }
 
     @Test
     public void test_buildMultipleResultModelTensorList_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.buildModelTensorResult().apply(null);
+        MLPostProcessFunction.buildModelTensorList().apply(null);
     }
 
     @Test

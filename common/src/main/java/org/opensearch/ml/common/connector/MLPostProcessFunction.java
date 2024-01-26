@@ -32,13 +32,13 @@ public class MLPostProcessFunction {
         JSON_PATH_EXPRESSION.put(COHERE_EMBEDDING, "$.embeddings");
         JSON_PATH_EXPRESSION.put(DEFAULT_EMBEDDING, "$[*]");
         JSON_PATH_EXPRESSION.put(BEDROCK_EMBEDDING, "$.embedding");
-        POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, buildModelTensorResult());
-        POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, buildModelTensorResult());
-        POST_PROCESS_FUNCTIONS.put(DEFAULT_EMBEDDING, buildModelTensorResult());
-        POST_PROCESS_FUNCTIONS.put(BEDROCK_EMBEDDING, buildModelTensorResult());
+        POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, buildModelTensorList());
+        POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, buildModelTensorList());
+        POST_PROCESS_FUNCTIONS.put(DEFAULT_EMBEDDING, buildModelTensorList());
+        POST_PROCESS_FUNCTIONS.put(BEDROCK_EMBEDDING, buildModelTensorList());
     }
 
-    public static Function<List<?>, List<ModelTensor>> buildModelTensorResult() {
+    public static Function<List<?>, List<ModelTensor>> buildModelTensorList() {
         return embeddings -> {
             List<ModelTensor> modelTensors = new ArrayList<>();
             if (embeddings == null) {
