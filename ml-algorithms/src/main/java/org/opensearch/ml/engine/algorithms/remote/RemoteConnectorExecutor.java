@@ -40,13 +40,13 @@ public interface RemoteConnectorExecutor {
         ActionListener<List<ModelTensors>> tensorActionListener = ActionListener.wrap(r -> {
             actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(r)));
         }, actionListener::onFailure);
-        Map<Integer, ModelTensors> modelTensorsQueue = new ConcurrentHashMap<>();
+        Map<Integer, ModelTensors> modelTensors = new ConcurrentHashMap<>();
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
             Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
             CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
             int sequence = 0;
-            for (int processedDocs = 0; processedDocs < calculatedChunkSize.v1(); processedDocs = processedDocs + calculatedChunkSize.v2()) {
+            for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize.v2()) {
                 List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
                 preparePayloadAndInvokeRemoteModel(
                     MLInput
@@ -54,10 +54,10 @@ public interface RemoteConnectorExecutor {
                         .algorithm(FunctionName.TEXT_EMBEDDING)
                         .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                         .build(),
-                    modelTensorsQueue, new WrappedCountDownLatch(sequence++, countDownLatch) , tensorActionListener);
+                    modelTensors, new WrappedCountDownLatch(sequence++, countDownLatch) , tensorActionListener);
             }
         } else {
-            preparePayloadAndInvokeRemoteModel(mlInput, modelTensorsQueue, new WrappedCountDownLatch(0, new CountDownLatch(1)), tensorActionListener);
+            preparePayloadAndInvokeRemoteModel(mlInput, modelTensors, new WrappedCountDownLatch(0, new CountDownLatch(1)), tensorActionListener);
         }
     }
 

@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
@@ -85,6 +86,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                 subscription.request(Long.MAX_VALUE);
             }
             @Override public void onError(Throwable t) {
+                countDownLatch.getCountDownLatch().countDown();
                 log.error("Error on receiving response body from remote: {}", t instanceof NullPointerException ? "NullPointerException" : t.getMessage(), t);
                 errorMsg.add("Error on receiving response body from remote: " + (t instanceof NullPointerException ? "NullPointerException" : t.getMessage()));
                 if (countDownLatch.getCountDownLatch().getCount() == 0) {
@@ -96,15 +98,16 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
             @Override
             public void onComplete() {
-                countDownLatch.getCountDownLatch().countDown();
                 try {
                     String fullResponseBody = responseBody.toString();
                     processResponse(statusCode, fullResponseBody, parameters, tensorOutputs);
+                    countDownLatch.getCountDownLatch().countDown();
                     if (countDownLatch.getCountDownLatch().getCount() == 0) {
                         log.debug("All responses received, calling action listener to return final results.");
                         actionListener.onResponse(reOrderTensorResponses(tensorOutputs));
                     }
                 } catch (Throwable e) {
+                    countDownLatch.getCountDownLatch().countDown();
                     log.error("Error on processing response from remote: {}", e instanceof NullPointerException ? "NullPointerException" : e.getMessage(), e);
                     errorMsg.add("Error on receiving response from remote: " + (e instanceof NullPointerException ? "NullPointerException" : e.getMessage()));
                     if (countDownLatch.getCountDownLatch().getCount() == 0) {
@@ -142,7 +145,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private List<ModelTensors> reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
         List<ModelTensors> modelTensors = new ArrayList<>();
-        for (Map.Entry<Integer, ModelTensors> entry : tensorOutputs.entrySet()) {
+        TreeMap<Integer, ModelTensors> sortedMap = new TreeMap<>(tensorOutputs);
+        for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
             modelTensors.add(entry.getKey(), entry.getValue());
         }
         return modelTensors;
