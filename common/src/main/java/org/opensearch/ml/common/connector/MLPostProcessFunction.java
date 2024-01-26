@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import com.google.common.collect.ImmutableList;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
@@ -31,36 +32,20 @@ public class MLPostProcessFunction {
         JSON_PATH_EXPRESSION.put(COHERE_EMBEDDING, "$.embeddings");
         JSON_PATH_EXPRESSION.put(DEFAULT_EMBEDDING, "$[*]");
         JSON_PATH_EXPRESSION.put(BEDROCK_EMBEDDING, "$.embedding");
-        POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, buildMultipleResultModelTensor());
-        POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, buildMultipleResultModelTensor());
-        POST_PROCESS_FUNCTIONS.put(DEFAULT_EMBEDDING, buildMultipleResultModelTensor());
-        POST_PROCESS_FUNCTIONS.put(BEDROCK_EMBEDDING, buildSingleResultModelTensor());
+        POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, buildModelTensorResult());
+        POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, buildModelTensorResult());
+        POST_PROCESS_FUNCTIONS.put(DEFAULT_EMBEDDING, buildModelTensorResult());
+        POST_PROCESS_FUNCTIONS.put(BEDROCK_EMBEDDING, buildModelTensorResult());
     }
 
-    public static Function<List<?>, List<ModelTensor>> buildSingleResultModelTensor() {
-        return embedding -> {
-            List<ModelTensor> modelTensors = new ArrayList<>();
-            if (embedding == null) {
-                throw new IllegalArgumentException("The embedding is null when using the built-in post-processing function.");
-            }
-            modelTensors.add(
-                ModelTensor
-                    .builder()
-                    .name("sentence_embedding")
-                    .dataType(MLResultDataType.FLOAT32)
-                    .shape(new long[]{embedding.size()})
-                    .data(embedding.toArray(new Number[0]))
-                    .build()
-            );
-            return modelTensors;
-        };
-    }
-
-    public static Function<List<?>, List<ModelTensor>> buildMultipleResultModelTensor() {
+    public static Function<List<?>, List<ModelTensor>> buildModelTensorResult() {
         return embeddings -> {
             List<ModelTensor> modelTensors = new ArrayList<>();
             if (embeddings == null) {
                 throw new IllegalArgumentException("The list of embeddings is null when using the built-in post-processing function.");
+            }
+            if (embeddings.get(0) instanceof Number) {
+                embeddings = ImmutableList.of(embeddings);
             }
             embeddings.forEach(embedding -> {
                 List<Number> eachEmbedding = (List<Number>) embedding;
