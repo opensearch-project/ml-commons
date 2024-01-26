@@ -1778,6 +1778,11 @@ public class MLModelManager {
         return t;
     }
 
+    public void trackPredictDuration(String modelId, long startTime) {
+        long end = System.nanoTime();
+        double durationInMs = (end - startTime) / 1e6;
+        modelCacheHelper.addModelInferenceDuration(modelId, durationInMs);
+    }
     public FunctionName getModelFunctionName(String modelId) {
         return modelCacheHelper.getFunctionName(modelId);
     }

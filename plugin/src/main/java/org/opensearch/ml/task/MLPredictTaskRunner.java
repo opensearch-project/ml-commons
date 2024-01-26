@@ -220,7 +220,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         throw new IllegalArgumentException("Model not ready: " + modelId);
                     }
                     if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
-                        predictor.predict(mlInput, mlTask, internalListener);
+                        long startTime = System.nanoTime();
+                        ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
+                            mlModelManager.trackPredictDuration(modelId, startTime);
+                            internalListener.onResponse(output);
+                        }, internalListener::onFailure);
+                        predictor.predict(mlInput, mlTask, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
                         if (output instanceof MLPredictionOutput) {
