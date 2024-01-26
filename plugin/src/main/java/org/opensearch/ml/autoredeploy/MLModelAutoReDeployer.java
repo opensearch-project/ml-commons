@@ -23,6 +23,7 @@ import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
+import org.opensearch.cluster.block.ClusterBlockException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -187,6 +188,8 @@ public class MLModelAutoReDeployer {
         }, e -> {
             if (e instanceof IndexNotFoundException) {
                 log.info("Index not found, not performing auto reloading!");
+            } else if (e instanceof ClusterBlockException) {
+                log.info("Cluster status not ready, not performing auto reloading now!");
             } else {
                 log.error("Failed to query need auto redeploy models, no action will be performed, addedNodes are: {}", addedNodes, e);
             }
