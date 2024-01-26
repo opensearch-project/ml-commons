@@ -13,10 +13,6 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 
-import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.http.HttpHost;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -27,61 +23,22 @@ public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient() {
         try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<SdkAsyncHttpClient>) () ->  NettyNioAsyncHttpClient
-                .builder().maxConcurrency(100).build());
+            return AccessController.doPrivileged((PrivilegedExceptionAction<SdkAsyncHttpClient>) () ->
+                NettyNioAsyncHttpClient
+                .builder()
+                .maxConcurrency(100)
+                .build());
         } catch (PrivilegedActionException e) {
             return null;
         }
     }
 
-//    private static SdkAsyncHttpClient createHttpClient() {
-
-        // Only allow HTTP and HTTPS schemes
-//        builder.setSchemePortResolver(new DefaultSchemePortResolver() {
-//            @Override
-//            public int resolve(HttpHost host) throws UnsupportedSchemeException {
-//                validateSchemaAndPort(host);
-//                return super.resolve(host);
-//            }
-//        });
-
-//        builder.setDnsResolver(MLHttpClientFactory::validateIp);
-
-//        builder.setRedirectStrategy(new LaxRedirectStrategy() {
-//            @Override
-//            public boolean isRedirected(HttpRequest request, HttpResponse response, HttpContext context) {
-//                // Do not follow redirects
-//                return false;
-//            }
-//        });
-//        return builder.build();
-//    }
-
-    @VisibleForTesting
-    protected static void validateSchemaAndPort(HttpHost host) {
-        String scheme = host.getSchemeName();
-        if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
-            String[] hostNamePort = host.getHostName().split(":");
-            if (hostNamePort.length > 1 && NumberUtils.isDigits(hostNamePort[1])) {
-                int port = Integer.parseInt(hostNamePort[1]);
-                if (port < 0 || port > 65536) {
-                    log.error("Remote inference port out of range: " + port);
-                    throw new IllegalArgumentException("Port out of range: " + port);
-                }
-            }
-        } else {
-            log.error("Remote inference scheme not supported: " + scheme);
-            throw new IllegalArgumentException("Unsupported scheme: " + scheme);
-        }
-    }
-
-    protected static InetAddress[] validateIp(String hostName) throws UnknownHostException {
+    public static void validateIp(String hostName) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if (hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: " + hostName);
             throw new IllegalArgumentException(hostName);
         }
-        return addresses;
     }
 
     private static boolean hasPrivateIpAddress(InetAddress[] ipAddress) {

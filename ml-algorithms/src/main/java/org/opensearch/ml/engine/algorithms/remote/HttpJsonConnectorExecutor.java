@@ -71,6 +71,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     try {
                         log.debug("original payload to remote model: " + payload);
                         request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
+                        MLHttpClientFactory.validateIp(request.getUri().getHost());
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }
@@ -78,6 +79,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                 case "GET":
                     try {
                         request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET, actionListener);
+                        MLHttpClientFactory.validateIp(request.getUri().getHost());
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }

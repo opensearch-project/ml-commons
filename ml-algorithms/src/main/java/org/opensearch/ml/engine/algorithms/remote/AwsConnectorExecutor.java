@@ -8,6 +8,8 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
@@ -64,6 +66,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Map<Integer, ModelTensors> tensorOutputs, WrappedCountDownLatch countDownLatch, ActionListener<List<ModelTensors>> actionListener) {
         try {
             SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
+            MLHttpClientFactory.validateIp(request.getUri().getHost());
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
