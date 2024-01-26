@@ -360,11 +360,12 @@ public class ConversationMetaIndex {
     }
 
     /**
-     * Update conversations in the index
+     * Update conversation in the index
+     * @param conversationId the conversation id that needs update
      * @param updateRequest original update request
      * @param listener receives the update response for the wrapped query
      */
-    public void updateConversation(UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
+    public void updateConversation(String conversationId, UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
             listener
                 .onFailure(
@@ -372,6 +373,22 @@ public class ConversationMetaIndex {
                 );
             return;
         }
+
+        this.checkAccess(conversationId, ActionListener.wrap(access -> {
+            if (access) {
+                innerUpdateConversation(updateRequest, listener);
+            } else {
+                String userstr = client
+                    .threadPool()
+                    .getThreadContext()
+                    .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+            }
+        }, e -> { listener.onFailure(e); }));
+    }
+
+    private void innerUpdateConversation(UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             client.update(updateRequest, internalListener);

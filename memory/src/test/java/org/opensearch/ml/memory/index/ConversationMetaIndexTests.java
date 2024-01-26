@@ -644,7 +644,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         doReturn(false).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
-        conversationMetaIndex.updateConversation(new UpdateRequest(), getListener);
+        conversationMetaIndex.updateConversation("tester_id", new UpdateRequest(), getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor
@@ -654,6 +654,16 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     public void testUpdateConversation_Success() {
+        setupRefreshSuccess();
+        final String id = "test_id";
+        GetResponse dummyGetResponse = mock(GetResponse.class);
+        doReturn(true).when(dummyGetResponse).isExists();
+        doReturn(id).when(dummyGetResponse).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(dummyGetResponse);
+            return null;
+        }).when(client).get(any(), any());
         doReturn(true).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
@@ -665,20 +675,45 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             listener.onResponse(updateResponse);
             return null;
         }).when(client).update(any(), any());
-        conversationMetaIndex.updateConversation(new UpdateRequest(), getListener);
+        conversationMetaIndex.updateConversation("test_id", new UpdateRequest(), getListener);
         ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(getListener, times(1)).onResponse(argCaptor.capture());
     }
 
     public void testUpdateConversation_ClientFails() {
+        setupRefreshSuccess();
+        final String id = "test_id";
+        GetResponse dummyGetResponse = mock(GetResponse.class);
+        doReturn(true).when(dummyGetResponse).isExists();
+        doReturn(id).when(dummyGetResponse).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(dummyGetResponse);
+            return null;
+        }).when(client).get(any(), any());
         doReturn(true).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
         ActionListener<UpdateResponse> getListener = mock(ActionListener.class);
 
         doThrow(new RuntimeException("Client Failure")).when(client).update(any(), any());
-        conversationMetaIndex.updateConversation(new UpdateRequest(), getListener);
+        conversationMetaIndex.updateConversation("test_id", new UpdateRequest(), getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Failure"));
+    }
+
+    public void testUpdateConversation_NoAccess_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> al = invocation.getArgument(1);
+            al.onResponse(false);
+            return null;
+        }).when(conversationMetaIndex).checkAccess(anyString(), any());
+
+        ActionListener<UpdateResponse> updateListener = mock(ActionListener.class);
+        conversationMetaIndex.updateConversation("conversationId", new UpdateRequest(), updateListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(updateListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("User [BAD_USER] does not have access to conversation conversationId"));
     }
 }

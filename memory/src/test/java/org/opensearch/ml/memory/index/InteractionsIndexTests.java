@@ -32,12 +32,14 @@ import static org.mockito.Mockito.verify;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.refresh.RefreshResponse;
 import org.opensearch.action.bulk.BulkResponse;
@@ -47,6 +49,8 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.IndicesAdminClient;
@@ -59,6 +63,8 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.Index;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
@@ -441,46 +447,34 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().size() == 0);
     }
 
-    public void testGetTraces() {
-        doAnswer(invocation -> {
-            XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
-            content.startObject();
-            content.field(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now());
-            content.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "sample inputs");
-            content.field(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, "conversation-id");
-            content.endObject();
-
-            SearchHit[] hits = new SearchHit[1];
-            hits[0] = new SearchHit(0, "iId", null, null).sourceRef(BytesReference.bytes(content));
-            SearchHits searchHits = new SearchHits(hits, null, Float.NaN);
-            SearchResponseSections searchSections = new SearchResponseSections(
-                searchHits,
-                InternalAggregations.EMPTY,
-                null,
-                false,
-                false,
-                null,
-                1
-            );
-            SearchResponse searchResponse = new SearchResponse(
-                searchSections,
-                null,
-                1,
-                1,
-                0,
-                11,
-                ShardSearchFailure.EMPTY_ARRAY,
-                SearchResponse.Clusters.EMPTY
-            );
-            ActionListener<SearchResponse> al = invocation.getArgument(1);
-            al.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
+    public void testInnerGetTraces_success() {
+        setUpSearchTraceResponse();
         doReturn(true).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
         ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
-        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        interactionsIndex.innerGetTraces("cid", 0, 10, getTracesListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
+        verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().size() == 1);
+    }
+
+    public void testGetTraces_success() {
+        setupGrantAccess();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+
+        GetResponse response = setUpInteractionResponse("iid");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        setUpSearchTraceResponse();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
+        interactionsIndex.getTraces("iid", 0, 10, getTracesListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
         verify(getTracesListener, times(1)).onResponse(argCaptor.capture());
@@ -491,7 +485,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Failure")).when(client).search(any(), any());
         ActionListener<List<Interaction>> getTracesListener = mock(ActionListener.class);
-        interactionsIndex.getTraces("cid", 0, 10, getTracesListener);
+        interactionsIndex.innerGetTraces("cid", 0, 10, getTracesListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getTracesListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Failure"));
@@ -799,5 +793,157 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Failure in Sg Get"));
+    }
+
+    public void testGetSg_NoAccess_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupDenyAccess("Henry");
+        setupRefreshSuccess();
+        GetResponse response = setUpInteractionResponse("iid");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("iid", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("User [Henry] does not have access to interaction iid"));
+    }
+
+    public void testGetSg_GrantAccess_Success() {
+        setupGrantAccess();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        GetResponse response = setUpInteractionResponse("iid");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        ActionListener<Interaction> getListener = mock(ActionListener.class);
+        interactionsIndex.getInteraction("iid", getListener);
+        ArgumentCaptor<Interaction> argCaptor = ArgumentCaptor.forClass(Interaction.class);
+        verify(getListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().getId().equals("iid"));
+        assert (argCaptor.getValue().getConversationId().equals("conversation test 1"));
+    }
+
+    public void testGetTraces_NoAccess_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        setupDenyAccess("Xun");
+        GetResponse response = setUpInteractionResponse("iid");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        ActionListener<List<Interaction>> getListener = mock(ActionListener.class);
+        interactionsIndex.getTraces("iid", 0, 10, getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("User [Xun] does not have access to interaction iid"));
+    }
+
+    public void testUpdateInteraction_NoAccess_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        setupDenyAccess("Xun");
+        GetResponse response = setUpInteractionResponse("iid");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        ActionListener<UpdateResponse> updateListener = mock(ActionListener.class);
+        interactionsIndex.updateInteraction("iid", new UpdateRequest(), updateListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(updateListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("User [Xun] does not have access to interaction iid"));
+    }
+
+    public void testUpdateInteraction_Success() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        setupGrantAccess();
+        GetResponse response = setUpInteractionResponse("iid");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        ActionListener<UpdateResponse> updateListener = mock(ActionListener.class);
+        interactionsIndex.updateInteraction("iid", new UpdateRequest(), updateListener);
+        ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(updateListener, times(1)).onResponse(argCaptor.capture());
+    }
+
+    private GetResponse setUpInteractionResponse(String interactionId) {
+        @SuppressWarnings("unchecked")
+        GetResponse response = mock(GetResponse.class);
+        doReturn(true).when(response).isExists();
+        doReturn(interactionId).when(response).getId();
+        doReturn(
+            Map
+                .of(
+                    ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                    Instant.now().toString(),
+                    ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
+                    "conversation test 1",
+                    ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                    "answer1"
+                )
+        ).when(response).getSourceAsMap();
+        return response;
+    }
+
+    private void setUpSearchTraceResponse() {
+        doAnswer(invocation -> {
+            XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+            content.startObject();
+            content.field(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now());
+            content.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "sample inputs");
+            content.field(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, "conversation-id");
+            content.endObject();
+
+            SearchHit[] hits = new SearchHit[1];
+            hits[0] = new SearchHit(0, "iId", null, null).sourceRef(BytesReference.bytes(content));
+            SearchHits searchHits = new SearchHits(hits, null, Float.NaN);
+            SearchResponseSections searchSections = new SearchResponseSections(
+                searchHits,
+                InternalAggregations.EMPTY,
+                null,
+                false,
+                false,
+                null,
+                1
+            );
+            SearchResponse searchResponse = new SearchResponse(
+                searchSections,
+                null,
+                1,
+                1,
+                0,
+                11,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+            );
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
     }
 }
