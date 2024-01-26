@@ -117,7 +117,7 @@ public class MLTaskManager {
             throw new IllegalArgumentException("Duplicate taskId");
         }
         taskCaches.put(taskId, new MLTaskCache(mlTask, workerNodes));
-        log.debug("add ML task to cache " + taskId);
+        log.debug("add ML task to cache, taskId: {}, taskType: {} ", taskId, mlTask.getTaskType());
     }
 
     /**
