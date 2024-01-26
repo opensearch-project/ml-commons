@@ -45,7 +45,6 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
         super(UpdateConversationAction.NAME, transportService, actionFilters, UpdateConversationRequest::new);
         this.client = client;
         this.cmHandler = cmHandler;
-        System.out.println(clusterService.getSettings());
         this.featureIsEnabled = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
         clusterService
             .getClusterSettings()

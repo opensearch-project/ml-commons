@@ -701,4 +701,19 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         verify(getListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Failure"));
     }
+
+    public void testUpdateConversation_NoAccess_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> al = invocation.getArgument(1);
+            al.onResponse(false);
+            return null;
+        }).when(conversationMetaIndex).checkAccess(anyString(), any());
+
+        ActionListener<UpdateResponse> updateListener = mock(ActionListener.class);
+        conversationMetaIndex.updateConversation("conversationId", new UpdateRequest(), updateListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(updateListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("User [BAD_USER] does not have access to conversation conversationId"));
+    }
 }
