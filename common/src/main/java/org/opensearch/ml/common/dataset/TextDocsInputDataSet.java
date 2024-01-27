@@ -48,14 +48,12 @@ public class TextDocsInputDataSet extends MLInputDataset{
         super(MLInputDataType.TEXT_DOCS);
         Version version = streamInput.getVersion();
         if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL)) {
-            System.out.println("seasonsg debug: read stream input shows bwc not working" );
             docs = new ArrayList<>();
             int size = streamInput.readInt();
             for (int i=0; i<size; i++) {
                 docs.add(streamInput.readOptionalString());
             }
         } else {
-            System.out.println("seasonsg debug: read stream input shows bwc" );
             docs = streamInput.readStringList();
         }
         if (streamInput.readBoolean()) {
@@ -70,13 +68,11 @@ public class TextDocsInputDataSet extends MLInputDataset{
         super.writeTo(streamOutput);
         Version version = streamOutput.getVersion();
         if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL)) {
-            System.out.println("seasonsg debug: read stream output shows bwc not working" );
             streamOutput.writeInt(docs.size());
             for (String doc : docs) {
                 streamOutput.writeOptionalString(doc);
             }
         } else {
-            System.out.println("seasonsg debug: write stream output shows bwc" );
             streamOutput.writeStringCollection(docs);
         }
         if (resultFilter != null) {

@@ -90,11 +90,9 @@ public class RestMLPredictionAction extends BaseRestHandler {
                 .execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
         }
 
-        System.out.println("seasonsg debug: rest predict request send." );
         return channel -> {
             MLModelGetRequest getModelRequest = new MLModelGetRequest(modelId, false);
             ActionListener<MLModelGetResponse> listener = ActionListener.wrap(r -> {
-                System.out.println("seasonsg debug: predict response" + r.toString());
                 MLModel mlModel = r.getMlModel();
                 String algoName = mlModel.getAlgorithm().name();
                 client

@@ -24,7 +24,6 @@ import java.util.Map;
 public abstract class TextEmbeddingModel extends DLModel {
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
-        System.out.println("seasonsg debug: TextEmbeddingModel predict method called" );
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
