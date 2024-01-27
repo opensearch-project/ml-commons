@@ -24,6 +24,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
 /**
  * This tool supports running any Agent.
  */
@@ -51,6 +53,11 @@ public class AgentTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+        log.info("Agent tool before");
+        log.info(parameters);
+        parameters = extractFromChatParameters(parameters);
+        log.info("Agent tool after");
+        log.info(parameters);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
@@ -134,5 +141,17 @@ public class AgentTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
+    }
+
+    private Map<String, String> extractFromChatParameters(Map<String, String> parameters) {
+        if (parameters.containsKey("input")) {
+            try {
+                Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
+                parameters.putAll(chatParameters);
+            } finally {
+                return parameters;
+            }
+        }
+        return parameters;
     }
 }
