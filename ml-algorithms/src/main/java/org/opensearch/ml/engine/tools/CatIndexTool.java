@@ -100,9 +100,7 @@ public class CatIndexTool implements Tool {
         final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
         final boolean local = parameters.containsKey("local") ? Boolean.parseBoolean("local") : false;
         final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
-        final boolean includeUnloadedSegments = parameters.containsKey("include_unloaded_segments")
-            ? Boolean.parseBoolean(parameters.get("include_unloaded_segments"))
-            : false;
+        final boolean includeUnloadedSegments = Boolean.parseBoolean(parameters.get("include_unloaded_segments"));
 
         final ActionListener<Table> internalListener = ActionListener.notifyOnce(ActionListener.wrap(table -> {
             // Handle empty table
@@ -297,10 +295,7 @@ public class CatIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
-            return false;
-        }
-        return true;
+        return parameters != null && !parameters.isEmpty();
     }
 
     /**
@@ -388,7 +383,7 @@ public class CatIndexTool implements Tool {
         final Table table = getTableWithHeader();
 
         indicesSettings.forEach((indexName, settings) -> {
-            if (indicesMetadatas.containsKey(indexName) == false) {
+            if (!indicesMetadatas.containsKey(indexName)) {
                 // the index exists in the Get Indices response but is not present in the cluster state:
                 // it is likely that the index was deleted in the meanwhile, so we ignore it.
                 return;
