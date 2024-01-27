@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.upload_chunk;
 
 import lombok.Builder;
 import lombok.Data;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -48,6 +49,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
 
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
 
     private FunctionName functionName;
     private String name;
@@ -111,6 +113,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     }
 
     public MLRegisterModelMetaInput(StreamInput in) throws IOException{
+        Version streamInputVersion = in.getVersion();
         this.name = in.readString();
         this.functionName = in.readEnum(FunctionName.class);
         this.modelGroupId = in.readOptionalString();
@@ -133,11 +136,14 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
             accessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
-        this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
+            this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(name);
         out.writeEnum(functionName);
         out.writeOptionalString(modelGroupId);
@@ -177,7 +183,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isAddAllBackendRoles);
-        out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
+            out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        }
     }
 
     @Override

@@ -9,6 +9,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
@@ -18,6 +19,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
@@ -27,6 +30,8 @@ public class TextDocsInputDataSet extends MLInputDataset{
     private ModelResultFilter resultFilter;
 
     private List<String> docs;
+
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL = Version.V_2_11_0;
 
     @Builder(toBuilder = true)
     public TextDocsInputDataSet(List<String> docs, ModelResultFilter resultFilter) {
@@ -41,10 +46,17 @@ public class TextDocsInputDataSet extends MLInputDataset{
 
     public TextDocsInputDataSet(StreamInput streamInput) throws IOException {
         super(MLInputDataType.TEXT_DOCS);
-        docs = new ArrayList<>();
-        int size = streamInput.readInt();
-        for (int i=0; i<size; i++) {
-            docs.add(streamInput.readOptionalString());
+        Version version = streamInput.getVersion();
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL)) {
+            System.out.println("seasonsg debug: read stream input shows bwc not working" );
+            docs = new ArrayList<>();
+            int size = streamInput.readInt();
+            for (int i=0; i<size; i++) {
+                docs.add(streamInput.readOptionalString());
+            }
+        } else {
+            System.out.println("seasonsg debug: read stream input shows bwc" );
+            docs = streamInput.readStringList();
         }
         if (streamInput.readBoolean()) {
             resultFilter = new ModelResultFilter(streamInput);
@@ -56,9 +68,16 @@ public class TextDocsInputDataSet extends MLInputDataset{
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
         super.writeTo(streamOutput);
-        streamOutput.writeInt(docs.size());
-        for (String doc : docs) {
-            streamOutput.writeOptionalString(doc);
+        Version version = streamOutput.getVersion();
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL)) {
+            System.out.println("seasonsg debug: read stream output shows bwc not working" );
+            streamOutput.writeInt(docs.size());
+            for (String doc : docs) {
+                streamOutput.writeOptionalString(doc);
+            }
+        } else {
+            System.out.println("seasonsg debug: write stream output shows bwc" );
+            streamOutput.writeStringCollection(docs);
         }
         if (resultFilter != null) {
             streamOutput.writeBoolean(true);
