@@ -8,8 +8,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
