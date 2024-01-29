@@ -197,6 +197,9 @@ public class TransportSyncUpOnNodeAction extends
             return;
         }
         for (String taskId : allTaskIds) {
+            if (taskId == null) {
+                continue;
+            }
             MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
             // Task could be a prediction task, and it could be completed and removed from cache in predict thread during the cleaning up.
             if (mlTaskCache == null) {
