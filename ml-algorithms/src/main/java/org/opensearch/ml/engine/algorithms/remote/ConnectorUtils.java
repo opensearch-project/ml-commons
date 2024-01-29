@@ -7,20 +7,18 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.utils.ScriptUtils.executeBuildInPostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
-import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -28,6 +26,8 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
+import org.opensearch.ml.common.connector.functions.preprocess.DefaultPreProcessFunction;
+import org.opensearch.ml.common.connector.functions.preprocess.RemoteInferencePreProcessFunction;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -63,14 +63,11 @@ public class ConnectorUtils {
         if (mlInput == null) {
             throw new IllegalArgumentException("Input is null");
         }
-        RemoteInferenceInputDataSet inputData;
-        if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
-            inputData = processTextDocsInput((TextDocsInputDataSet) mlInput.getInputDataset(), connector, parameters, scriptService);
-        } else if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
-            inputData = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
-        } else {
-            throw new IllegalArgumentException("Wrong input type");
+        Optional<ConnectorAction> predictAction = connector.findPredictAction();
+        if (predictAction.isEmpty()) {
+            throw new IllegalArgumentException("no predict action found");
         }
+        RemoteInferenceInputDataSet inputData = processMLInput(mlInput, connector, parameters, scriptService);
         if (inputData.getParameters() != null) {
             Map<String, String> newParameters = new HashMap<>();
             inputData.getParameters().forEach((key, value) -> {
@@ -88,65 +85,56 @@ public class ConnectorUtils {
         return inputData;
     }
 
-    private static RemoteInferenceInputDataSet processTextDocsInput(
-        TextDocsInputDataSet inputDataSet,
+    private static RemoteInferenceInputDataSet processMLInput(
+        MLInput mlInput,
         Connector connector,
         Map<String, String> parameters,
         ScriptService scriptService
     ) {
-        Optional<ConnectorAction> predictAction = connector.findPredictAction();
-        if (predictAction.isEmpty()) {
-            throw new IllegalArgumentException("no predict action found");
-        }
-        String preProcessFunction = predictAction.get().getPreProcessFunction();
-        preProcessFunction = preProcessFunction == null ? MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT : preProcessFunction;
-        if (MLPreProcessFunction.contains(preProcessFunction)) {
-            Map<String, Object> buildInFunctionResult = MLPreProcessFunction.get(preProcessFunction).apply(inputDataSet.getDocs());
-            return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(buildInFunctionResult)).build();
+        String preProcessFunction = getPreprocessFunction(mlInput, connector);
+        if (preProcessFunction == null) {
+            if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                return (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+            } else {
+                throw new IllegalArgumentException("pre_process_function not defined in connector");
+            }
         } else {
-            List<String> docs = new ArrayList<>();
-            for (String doc : inputDataSet.getDocs()) {
-                if (doc != null) {
-                    String gsonString = gson.toJson(doc);
-                    // in 2.9, user will add " before and after string
-                    // gson.toString(string) will add extra " before after string, so need to remove
-                    docs.add(gsonString.substring(1, gsonString.length() - 1));
+            preProcessFunction = fillProcessFunctionParameter(parameters, preProcessFunction);
+            if (MLPreProcessFunction.contains(preProcessFunction)) {
+                Function<MLInput, RemoteInferenceInputDataSet> function = MLPreProcessFunction.get(preProcessFunction);
+                return function.apply(mlInput);
+            } else if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                if (parameters.containsKey(PROCESS_REMOTE_INFERENCE_INPUT)
+                    && Boolean.parseBoolean(parameters.get(PROCESS_REMOTE_INFERENCE_INPUT))) {
+                    RemoteInferencePreProcessFunction function = new RemoteInferencePreProcessFunction(scriptService, preProcessFunction);
+                    return function.apply(mlInput);
                 } else {
-                    docs.add(null);
+                    return (RemoteInferenceInputDataSet) mlInput.getInputDataset();
                 }
+            } else {
+                boolean convertInputToJsonString = parameters.containsKey(CONVERT_INPUT_TO_JSON_STRING)
+                    && Boolean.parseBoolean(parameters.get(CONVERT_INPUT_TO_JSON_STRING));
+                DefaultPreProcessFunction function = DefaultPreProcessFunction
+                    .builder()
+                    .scriptService(scriptService)
+                    .preProcessFunction(preProcessFunction)
+                    .convertInputToJsonString(convertInputToJsonString)
+                    .build();
+                return function.apply(mlInput);
             }
-            if (preProcessFunction.contains("${parameters.")) {
-                StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-                preProcessFunction = substitutor.replace(preProcessFunction);
-            }
-            Optional<String> processedInput = executePreprocessFunction(scriptService, preProcessFunction, docs);
-            if (processedInput.isEmpty()) {
-                throw new IllegalArgumentException("Wrong input");
-            }
-            Map<String, Object> map = gson.fromJson(processedInput.get(), Map.class);
-            return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(map)).build();
         }
     }
 
-    private static Map<String, String> convertScriptStringToJsonString(Map<String, Object> processedInput) {
-        Map<String, String> parameterStringMap = new HashMap<>();
-        try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                Map<String, Object> parametersMap = (Map<String, Object>) processedInput.get("parameters");
-                for (String key : parametersMap.keySet()) {
-                    if (parametersMap.get(key) instanceof String) {
-                        parameterStringMap.put(key, (String) parametersMap.get(key));
-                    } else {
-                        parameterStringMap.put(key, gson.toJson(parametersMap.get(key)));
-                    }
-                }
-                return null;
-            });
-        } catch (PrivilegedActionException e) {
-            log.error("Error processing parameters", e);
-            throw new RuntimeException(e);
+    private static String getPreprocessFunction(MLInput mlInput, Connector connector) {
+        Optional<ConnectorAction> predictAction = connector.findPredictAction();
+        String preProcessFunction = predictAction.get().getPreProcessFunction();
+        if (preProcessFunction != null) {
+            return preProcessFunction;
         }
-        return parameterStringMap;
+        if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
+            return MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT;
+        }
+        return null;
     }
 
     public static ModelTensors processOutput(
@@ -165,21 +153,16 @@ public class ConnectorUtils {
         }
         ConnectorAction connectorAction = predictAction.get();
         String postProcessFunction = connectorAction.getPostProcessFunction();
-        if (postProcessFunction != null && postProcessFunction.contains("${parameters")) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            postProcessFunction = substitutor.replace(postProcessFunction);
-        }
+        postProcessFunction = fillProcessFunctionParameter(parameters, postProcessFunction);
 
         String responseFilter = parameters.get(RESPONSE_FILTER_FIELD);
         if (MLPostProcessFunction.contains(postProcessFunction)) {
             // in this case, we can use jsonpath to build a List<List<Float>> result from model response.
             if (StringUtils.isBlank(responseFilter))
                 responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
-            List<?> vectors = JsonPath.read(modelResponse, responseFilter);
-            List<ModelTensor> processedResponse = executeBuildInPostProcessFunction(
-                vectors,
-                MLPostProcessFunction.get(postProcessFunction)
-            );
+
+            Object filteredOutput = JsonPath.read(modelResponse, responseFilter);
+            List<ModelTensor> processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput);
             return ModelTensors.builder().mlModelTensors(processedResponse).build();
         }
 
@@ -196,6 +179,18 @@ public class ConnectorUtils {
             connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
+    }
+
+    private static String fillProcessFunctionParameter(Map<String, String> parameters, String processFunction) {
+        if (processFunction != null && processFunction.contains("${parameters.")) {
+            Map<String, String> tmpParameters = new HashMap<>();
+            for (String key : parameters.keySet()) {
+                tmpParameters.put(key, gson.toJson(parameters.get(key)));
+            }
+            StringSubstitutor substitutor = new StringSubstitutor(tmpParameters, "${parameters.", "}");
+            processFunction = substitutor.replace(processFunction);
+        }
+        return processFunction;
     }
 
     public static SdkHttpFullRequest signRequest(

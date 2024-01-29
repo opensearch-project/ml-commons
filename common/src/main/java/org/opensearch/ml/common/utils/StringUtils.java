@@ -8,6 +8,7 @@ package org.opensearch.ml.common.utils;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import lombok.extern.log4j.Log4j2;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -21,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Log4j2
 public class StringUtils {
 
     public static final Gson gson;
@@ -96,5 +98,26 @@ public class StringUtils {
         } catch (PrivilegedActionException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static Map<String, String> convertScriptStringToJsonString(Map<String, Object> processedInput) {
+        Map<String, String> parameterStringMap = new HashMap<>();
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                Map<String, Object> parametersMap = (Map<String, Object>) processedInput.get("parameters");
+                for (String key : parametersMap.keySet()) {
+                    if (parametersMap.get(key) instanceof String) {
+                        parameterStringMap.put(key, (String) parametersMap.get(key));
+                    } else {
+                        parameterStringMap.put(key, gson.toJson(parametersMap.get(key)));
+                    }
+                }
+                return null;
+            });
+        } catch (PrivilegedActionException e) {
+            log.error("Error processing parameters", e);
+            throw new RuntimeException(e);
+        }
+        return parameterStringMap;
     }
 }
