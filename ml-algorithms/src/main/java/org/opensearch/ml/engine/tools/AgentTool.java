@@ -53,11 +53,7 @@ public class AgentTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        log.info("Agent tool before");
-        log.info(parameters);
         parameters = extractFromChatParameters(parameters);
-        log.info("Agent tool after");
-        log.info(parameters);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)

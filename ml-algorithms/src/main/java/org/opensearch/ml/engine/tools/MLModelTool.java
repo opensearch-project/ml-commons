@@ -65,8 +65,6 @@ public class MLModelTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        log.info("ML input");
-        log.info(parameters);
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
         ActionRequest request = new MLPredictionTaskRequest(
             modelId,

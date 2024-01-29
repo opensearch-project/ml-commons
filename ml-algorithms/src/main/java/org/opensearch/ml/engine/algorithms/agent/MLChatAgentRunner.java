@@ -629,15 +629,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
                         }
                     } else {
-                        ActionRequest request2 = new MLPredictionTaskRequest(
-                                llm.getModelId(),
-                                RemoteInferenceMLInput
-                                        .builder()
-                                        .algorithm(FunctionName.REMOTE)
-                                        .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                                        .build()
-                        );
-                        client.execute(MLPredictionTaskAction.INSTANCE, request2, (ActionListener<MLTaskResponse>) nextStepListener);
+                        client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
                     }
                 }
             }, e -> {
