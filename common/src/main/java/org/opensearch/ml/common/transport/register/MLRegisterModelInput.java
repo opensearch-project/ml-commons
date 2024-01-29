@@ -61,6 +61,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.CURRENT;
 
     private FunctionName functionName;
     private String modelName;
@@ -152,10 +153,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.modelGroupId = in.readOptionalString();
         this.version = in.readOptionalString();
         this.description = in.readOptionalString();
-        this.isEnabled = in.readOptionalBoolean();
-        if (in.readBoolean()) {
-            this.rateLimiter = new MLRateLimiter(in);
-        }
         this.url = in.readOptionalString();
         this.hashValue = in.readOptionalString();
         if (in.readBoolean()) {
@@ -181,9 +178,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.accessMode = in.readEnum(AccessMode.class);
         }
-        this.isHidden = in.readOptionalBoolean();
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
             this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        }
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            this.isEnabled = in.readOptionalBoolean();
+            if (in.readBoolean()) {
+                this.rateLimiter = new MLRateLimiter(in);
+            }
+            this.isHidden = in.readOptionalBoolean();
         }
     }
 
@@ -195,13 +198,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(modelGroupId);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
-        out.writeOptionalBoolean(isEnabled);
-        if (rateLimiter != null) {
-            out.writeBoolean(true);
-            rateLimiter.writeTo(out);
-        } else {
-            out.writeBoolean(false);
-        }
         out.writeOptionalString(url);
         out.writeOptionalString(hashValue);
         if (modelFormat != null) {
@@ -238,9 +234,18 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalBoolean(isHidden);
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
             out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            out.writeOptionalBoolean(isEnabled);
+            if (rateLimiter != null) {
+                out.writeBoolean(true);
+                rateLimiter.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+            out.writeOptionalBoolean(isHidden);
         }
     }
 

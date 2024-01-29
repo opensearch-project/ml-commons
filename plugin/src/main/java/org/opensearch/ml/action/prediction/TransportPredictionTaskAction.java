@@ -89,7 +89,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         final User userInfo = user;
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            System.out.println("seasonsg debug: predict request send to transport layer." );
             ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
             ActionListener<MLModel> modelActionListener = new ActionListener<>() {
