@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
 
 public class MLPostProcessFunctionTest {
@@ -29,13 +31,13 @@ public class MLPostProcessFunctionTest {
 
     @Test
     public void get() {
-        Assert.assertNotNull(MLPostProcessFunction.get(OPENAI_EMBEDDING));
+        Assert.assertNotNull(MLPostProcessFunction.get(COHERE_EMBEDDING));
         Assert.assertNull(MLPostProcessFunction.get("wrong value"));
     }
 
     @Test
     public void test_getResponseFilter() {
-        assert null != MLPostProcessFunction.getResponseFilter(OPENAI_EMBEDDING);
+        assert null != MLPostProcessFunction.getResponseFilter(BEDROCK_EMBEDDING);
         assert null == MLPostProcessFunction.getResponseFilter("wrong value");
     }
 

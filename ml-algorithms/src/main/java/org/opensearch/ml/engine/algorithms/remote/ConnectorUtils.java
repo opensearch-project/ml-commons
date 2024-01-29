@@ -175,7 +175,7 @@ public class ConnectorUtils {
             // in this case, we can use jsonpath to build a List<List<Float>> result from model response.
             if (StringUtils.isBlank(responseFilter))
                 responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
-            List<List<Float>> vectors = JsonPath.read(modelResponse, responseFilter);
+            List<?> vectors = JsonPath.read(modelResponse, responseFilter);
             List<ModelTensor> processedResponse = executeBuildInPostProcessFunction(
                 vectors,
                 MLPostProcessFunction.get(postProcessFunction)
