@@ -61,7 +61,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.CURRENT;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.V_2_12_0;
 
     private FunctionName functionName;
     private String modelName;
