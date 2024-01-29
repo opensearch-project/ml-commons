@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.common.utils.StringUtils.toUTF8;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelResponseJson;
 
 import java.security.AccessController;
@@ -546,7 +545,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         .singletonList(
                                             ModelTensor
                                                 .builder()
-                                                .dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + outputToOutputString(output)))
+                                                .dataAsMap(
+                                                    ImmutableMap
+                                                        .of(
+                                                            "response",
+                                                            lastThought.get() + "\nObservation: " + outputToOutputString(output)
+                                                        )
+                                                )
                                                 .build()
                                         )
                                 )
@@ -654,22 +659,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     private String outputToOutputString(Object output) throws PrivilegedActionException {
         String outputString;
-        if (output instanceof ModelTensorOutput)
-        {
+        if (output instanceof ModelTensorOutput) {
             ModelTensor outputModel = ((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors().get(0);
-            if (outputModel.getDataAsMap() != null)
-            {
-                outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
-            }
-            else {
+            if (outputModel.getDataAsMap() != null) {
+                outputString = AccessController
+                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
+            } else {
                 outputString = outputModel.getResult();
             }
-        }
-        else if (output instanceof String)
-        {
+        } else if (output instanceof String) {
             outputString = (String) output;
-        }
-        else {
+        } else {
             outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
         }
         return outputString;

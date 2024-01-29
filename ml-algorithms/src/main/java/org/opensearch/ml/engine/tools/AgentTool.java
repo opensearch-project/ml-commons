@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
@@ -23,8 +25,6 @@ import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesti
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 /**
  * This tool supports running any Agent.
