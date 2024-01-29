@@ -465,7 +465,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     action = toolName;
 
                     if (tools.containsKey(action) && inputTools.contains(action)) {
-                        Map<String, String> toolParams = new HashMap<>();
+                        Map<String, String> toolParams = new HashMap<>(toolSpecMap.get(action).getParameters());
                         toolParams.put("input", actionInput);
                         if (tools.get(action).validate(toolParams)) {
                             try {
@@ -491,7 +491,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
                                     tools.get(action).run(llmToolTmpParameters, toolListener); // run tool
                                 } else {
-                                    toolParams.putAll(toolSpecMap.get(action).getParameters());
                                     tools.get(action).run(toolParams, toolListener); // run tool
                                 }
                             } catch (Exception e) {
