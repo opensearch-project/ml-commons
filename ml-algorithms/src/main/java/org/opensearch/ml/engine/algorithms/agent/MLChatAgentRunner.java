@@ -326,7 +326,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                     String thought = String.valueOf(dataAsMap.get("thought"));
                     String action = String.valueOf(dataAsMap.get("action"));
-                    String actionInput = gson.toJson(dataAsMap.get("action_input"));
+                    String actionInput = parseInputFromLLMReturn(dataAsMap);
                     String finalAnswer = (String) dataAsMap.get("final_answer");
                     if (!dataAsMap.containsKey("thought")) {
                         String response = (String) dataAsMap.get("response");
@@ -337,7 +337,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             Map map = gson.fromJson(jsonBlock, Map.class);
                             thought = String.valueOf(map.get("thought"));
                             action = String.valueOf(map.get("action"));
-                            actionInput = gson.toJson(map.get("action_input"));
+                            actionInput = parseInputFromLLMReturn(map);
                             finalAnswer = (String) map.get("final_answer");
                         } else {
                             finalAnswer = response;
@@ -673,6 +673,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
             outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
         }
         return outputString;
+    }
+
+    private String parseInputFromLLMReturn(Map<String, ?> retMap){
+        Object actionInput = retMap.get("action_input");
+        if (actionInput instanceof Map)
+        {
+            return gson.toJson(actionInput);
+        }
+        else {
+            return String.valueOf(actionInput);
+        }
+
     }
 
 }

@@ -53,7 +53,7 @@ public class AgentTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        parameters = extractFromChatParameters(parameters);
+        extractFromChatParameters(parameters);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
@@ -139,15 +139,14 @@ public class AgentTool implements Tool {
         }
     }
 
-    private Map<String, String> extractFromChatParameters(Map<String, String> parameters) {
+    private void extractFromChatParameters(Map<String, String> parameters) {
         if (parameters.containsKey("input")) {
             try {
                 Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
                 parameters.putAll(chatParameters);
             } finally {
-                return parameters;
+                return ;
             }
         }
-        return parameters;
     }
 }
