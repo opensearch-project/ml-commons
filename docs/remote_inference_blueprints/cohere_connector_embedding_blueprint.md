@@ -2,15 +2,15 @@
 
 This blueprint will show you how to connect a Cohere embedding model to your Opensearch instance, including creating a k-nn index and your own Embedding pipeline. You will require a Cohere API key.
 
-Cohere currently offers the following Embedding models (model name and embedding dimensions):
+Cohere currently offers the following Embedding models (with model name and embedding dimensions). Note that only a couple are tested.
 
-- embed-english-v3.0 1024
-- embed-multilingual-v3.0 1024
-- embed-english-light-v3.0 384
-- embed-multilingual-light-v3.0 384
-- embed-english-v2.0 4096
-- embed-english-light-v2.0 1024
-- embed-multilingual-v2.0 768
+- embed-english-v3.0 1024 (Tested)
+- embed-english-v2.0 4096 (Tested)
+- embed-multilingual-v3.0 1024 (Untested)
+- embed-english-light-v3.0 384 (Untested)
+- embed-multilingual-light-v3.0 384 (Untested)
+- embed-english-light-v2.0 1024 (Untested)
+- embed-multilingual-v2.0 768 (Untested)
 
 See [Cohere's /embed API docs](https://docs.cohere.com/reference/embed) for more details.
 
@@ -22,7 +22,7 @@ PUT /_cluster/settings
 {
     "persistent": {
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
-          "^https://production\\.api\\.cohere\\ai/.*$",
+          "^https://api\\.cohere\\ai/.*$",
         ]
     }
 }
@@ -60,7 +60,7 @@ POST /_plugins/_ml/connectors/_create
     "cohere_key": "<ENTER_COHERE_API_KEY_HERE>"
   },
   "parameters": {
-    "model": "<ENTER_MODEL_NAME_HERE>",
+    "model": "<ENTER_MODEL_NAME_HERE>", // Choose a Model from the provided list above
     "input_type":"search_document",
     "truncate": "END"
   },
@@ -280,7 +280,7 @@ Sample response:
 First, you can insert a record:
 
 ```json
-PUT /cohere-nlp-index/\_doc/1
+PUT /cohere-nlp-index/_doc/1
 {
   "passage_text": "Hi - Cohere Embeddings are cool!",
   "id": "c1"
