@@ -69,7 +69,7 @@ public class RemoteModelTest {
     @Test
     public void predict_ModelDeployed_WrongInput() {
         exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("Wrong input type");
+        exceptionRule.expectMessage("pre_process_function not defined in connector");
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);

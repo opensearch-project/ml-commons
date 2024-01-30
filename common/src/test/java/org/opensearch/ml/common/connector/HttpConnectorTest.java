@@ -174,6 +174,16 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPredictPayload_InvalidJson() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Invalid payload: {\"input\": ${parameters.input} }");
+        String requestBody = "{\"input\": ${parameters.input} }";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        String predictPayload = connector.createPredictPayload(null);
+        connector.validatePayload(predictPayload);
+    }
+
+    @Test
     public void createPredictPayload() {
         HttpConnector connector = createHttpConnector();
         Map<String, String> parameters = new HashMap<>();
@@ -268,12 +278,16 @@ public class HttpConnectorTest {
     }
 
     public static HttpConnector createHttpConnector() {
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        return createHttpConnectorWithRequestBody(requestBody);
+    }
+
+    public static HttpConnector createHttpConnectorWithRequestBody(String requestBody) {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = "POST";
         String url = "https://test.com";
         Map<String, String> headers = new HashMap<>();
         headers.put("api_key", "${credential.key}");
-        String requestBody = "{\"input\": \"${parameters.input}\"}";
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
 
