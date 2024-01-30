@@ -9,8 +9,8 @@ import static org.hamcrest.Matchers.containsString;
 
 import java.io.IOException;
 
-import org.apache.hc.core5.http.HttpHeaders;
-import org.apache.hc.core5.http.message.BasicHeader;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
 import org.junit.After;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
