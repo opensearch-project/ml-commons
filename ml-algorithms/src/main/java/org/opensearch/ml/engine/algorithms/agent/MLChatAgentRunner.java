@@ -465,7 +465,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     action = toolName;
 
                     if (tools.containsKey(action) && inputTools.contains(action)) {
-                        Map<String, String> toolParams = new HashMap<>();
+                        Map<String, String> toolParams = new HashMap<>(toolSpecMap.get(action).getParameters());
                         toolParams.put("input", actionInput);
                         if (tools.get(action).validate(toolParams)) {
                             try {
