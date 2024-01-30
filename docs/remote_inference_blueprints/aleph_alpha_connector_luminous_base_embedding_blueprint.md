@@ -1,8 +1,8 @@
 # Aleph Alpha connector blueprint example for luminous-base embedding model
+This is an AI connector blueprint for the [Aleph Alpha Luminous-Base Embedding Model](https://docs.aleph-alpha.com/api/semantic-embed/).
+This model is particularly effective for German language applications, providing nuanced and contextually relevant embeddings. 
 
 ## 1. Add connector endpoint to trusted URLs:
-
-Note: no need to do this after 2.11.0
 
 ```json
 PUT /_cluster/settings
@@ -26,8 +26,8 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "api.aleph-alpha.com",
-	"representation": "document",
-	"normalize": true
+    "representation": "document",
+    "normalize": true
   },
   "credential": {
     "AlephAlpha_API_Token": "<PLEASE ADD YOUR ALEPH ALPHA API TOKEN HERE>"
@@ -44,7 +44,7 @@ POST /_plugins/_ml/connectors/_create
       },
       "request_body": "{ \"model\": \"luminous-base\", \"prompt\": \"${parameters.input}\", \"representation\": \"${parameters.representation}\", \"normalize\": ${parameters.normalize}}",
       "pre_process_function": "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"input\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";",
-      "post_process_function": "\n      def name = \"embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
+      "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
     }
   ]
 }
@@ -122,7 +122,7 @@ Sample response:
     {
       "output": [
         {
-          "name": "embedding",
+          "name": "sentence_embedding",
           "data_type": "FLOAT32",
           "shape": [
             5120
