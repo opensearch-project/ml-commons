@@ -59,17 +59,25 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient();
     }
 
-
     @Override
-    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Map<Integer, ModelTensors> tensorOutputs, WrappedCountDownLatch countDownLatch, ActionListener<List<ModelTensors>> actionListener) {
+    public void invokeRemoteModel(
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        Map<Integer, ModelTensors> tensorOutputs,
+        WrappedCountDownLatch countDownLatch,
+        ActionListener<List<ModelTensors>> actionListener
+    ) {
         try {
-            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
+            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
             MLHttpClientFactory.validateIp(request.getUri().getHost());
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
-                .responseHandler(new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService))
+                .responseHandler(
+                    new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService)
+                )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException exception) {
@@ -80,7 +88,6 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
             actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
         }
     }
-
 
     private SdkHttpFullRequest signRequest(SdkHttpFullRequest request) {
         String accessKey = connector.getAccessKey();

@@ -7,8 +7,16 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
@@ -19,19 +27,12 @@ import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.SdkHttpFullResponse;
 import software.amazon.awssdk.http.SdkHttpResponse;
 import software.amazon.awssdk.http.async.SdkAsyncHttpResponseHandler;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 @Log4j2
 public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandler {
@@ -85,7 +86,13 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onError(Throwable error) {
         log.error(error.getMessage(), error);
-        actionListener.onFailure(new OpenSearchStatusException("Error on communication with remote model: " + error.getMessage(), RestStatus.INTERNAL_SERVER_ERROR));
+        actionListener
+            .onFailure(
+                new OpenSearchStatusException(
+                    "Error on communication with remote model: " + error.getMessage(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                )
+            );
     }
 
     private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Map<Integer, ModelTensors> tensorOutputs)
@@ -116,49 +123,82 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     }
 
     protected class MLResponseSubscriber implements Subscriber<ByteBuffer> {
-            private Subscription subscription;
-            @Override
-            public void onSubscribe(Subscription s) {
-                this.subscription = s;
-                s.request(Long.MAX_VALUE);
-            }
+        private Subscription subscription;
 
         @Override
-            public void onNext(ByteBuffer byteBuffer) {
-                responseBody.append(StandardCharsets.UTF_8.decode(byteBuffer));
-                subscription.request(Long.MAX_VALUE);
+        public void onSubscribe(Subscription s) {
+            this.subscription = s;
+            s.request(Long.MAX_VALUE);
+        }
+
+        @Override
+        public void onNext(ByteBuffer byteBuffer) {
+            responseBody.append(StandardCharsets.UTF_8.decode(byteBuffer));
+            subscription.request(Long.MAX_VALUE);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            countDownLatch.getCountDownLatch().countDown();
+            log
+                .error(
+                    "Error on receiving response body from remote: {}",
+                    t instanceof NullPointerException ? "NullPointerException" : t.getMessage(),
+                    t
+                );
+            errorMsg
+                .add(
+                    "Error on receiving response body from remote: "
+                        + (t instanceof NullPointerException ? "NullPointerException" : t.getMessage())
+                );
+            if (countDownLatch.getCountDownLatch().getCount() == 0) {
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Error on receiving response body from remote: " + String.join(",", errorMsg),
+                            RestStatus.INTERNAL_SERVER_ERROR
+                        )
+                    );
+            } else {
+                log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
             }
-            @Override public void onError(Throwable t) {
+        }
+
+        @Override
+        public void onComplete() {
+            try {
+                String fullResponseBody = responseBody.toString();
+                processResponse(statusCode, fullResponseBody, parameters, tensorOutputs);
                 countDownLatch.getCountDownLatch().countDown();
-                log.error("Error on receiving response body from remote: {}", t instanceof NullPointerException ? "NullPointerException" : t.getMessage(), t);
-                errorMsg.add("Error on receiving response body from remote: " + (t instanceof NullPointerException ? "NullPointerException" : t.getMessage()));
                 if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                    actionListener.onFailure(new OpenSearchStatusException("Error on receiving response body from remote: " + String.join(",", errorMsg), RestStatus.INTERNAL_SERVER_ERROR));
+                    log.debug("All responses received, calling action listener to return final results.");
+                    actionListener.onResponse(reOrderTensorResponses(tensorOutputs));
+                }
+            } catch (Throwable e) {
+                countDownLatch.getCountDownLatch().countDown();
+                log
+                    .error(
+                        "Error on processing response from remote: {}",
+                        e instanceof NullPointerException ? "NullPointerException" : e.getMessage(),
+                        e
+                    );
+                errorMsg
+                    .add(
+                        "Error on receiving response from remote: "
+                            + (e instanceof NullPointerException ? "NullPointerException" : e.getMessage())
+                    );
+                if (countDownLatch.getCountDownLatch().getCount() == 0) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Error on receiving response from remote: " + String.join(",", errorMsg),
+                                RestStatus.INTERNAL_SERVER_ERROR
+                            )
+                        );
                 } else {
                     log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
                 }
             }
-
-            @Override
-            public void onComplete() {
-                try {
-                    String fullResponseBody = responseBody.toString();
-                    processResponse(statusCode, fullResponseBody, parameters, tensorOutputs);
-                    countDownLatch.getCountDownLatch().countDown();
-                    if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                        log.debug("All responses received, calling action listener to return final results.");
-                        actionListener.onResponse(reOrderTensorResponses(tensorOutputs));
-                    }
-                } catch (Throwable e) {
-                    countDownLatch.getCountDownLatch().countDown();
-                    log.error("Error on processing response from remote: {}", e instanceof NullPointerException ? "NullPointerException" : e.getMessage(), e);
-                    errorMsg.add("Error on receiving response from remote: " + (e instanceof NullPointerException ? "NullPointerException" : e.getMessage()));
-                    if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                        actionListener.onFailure(new OpenSearchStatusException("Error on receiving response from remote: " + String.join(",", errorMsg), RestStatus.INTERNAL_SERVER_ERROR));
-                    } else {
-                        log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
-                    }
-                }
-            }
         }
     }
+}

@@ -7,6 +7,15 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -19,38 +28,28 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
+
 import software.amazon.awssdk.http.HttpStatusCode;
 import software.amazon.awssdk.http.SdkHttpFullResponse;
 import software.amazon.awssdk.http.SdkHttpResponse;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.when;
-
 public class MLSdkAsyncHttpResponseHandlerTest {
 
     private final WrappedCountDownLatch countDownLatch = new WrappedCountDownLatch(0, new CountDownLatch(1));
-@Mock
+    @Mock
     private ActionListener<List<ModelTensors>> actionListener;
-@Mock
+    @Mock
     private Map<String, String> parameters;
-@Mock
+    @Mock
     private Map<Integer, ModelTensors> tensorOutputs;
     private Connector connector;
 
-@Mock
-private SdkHttpFullResponse sdkHttpResponse;
-@Mock
+    @Mock
+    private SdkHttpFullResponse sdkHttpResponse;
+    @Mock
     private ScriptService scriptService;
 
-private MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler;
+    private MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler;
 
     MLSdkAsyncHttpResponseHandler.MLResponseSubscriber responseSubscriber;
 
@@ -72,7 +71,14 @@ private MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler;
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService);
+        mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
+            countDownLatch,
+            actionListener,
+            parameters,
+            tensorOutputs,
+            connector,
+            scriptService
+        );
         responseSubscriber = mlSdkAsyncHttpResponseHandler.new MLResponseSubscriber();
     }
 
@@ -122,9 +128,18 @@ private MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler;
 
     @Test
     public void test_onComplete_success() {
-        String response = "{\n" + "    \"embedding\": [\n" + "        0.46484375,\n" + "        -0.017822266,\n" + "        0.17382812,\n"
-            + "        0.10595703,\n" + "        0.875,\n" + "        0.19140625,\n" + "        -0.36914062,\n" + "        -0.0011978149\n"
-            + "    ]\n" + "}";
+        String response = "{\n"
+            + "    \"embedding\": [\n"
+            + "        0.46484375,\n"
+            + "        -0.017822266,\n"
+            + "        0.17382812,\n"
+            + "        0.10595703,\n"
+            + "        0.875,\n"
+            + "        0.19140625,\n"
+            + "        -0.36914062,\n"
+            + "        -0.0011978149\n"
+            + "    ]\n"
+            + "}";
         mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
         Publisher<ByteBuffer> stream = s -> {
             try {

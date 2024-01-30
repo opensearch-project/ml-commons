@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import java.util.List;
 import java.util.Map;
 
 import org.opensearch.client.Client;
@@ -59,7 +58,10 @@ public class RemoteModel implements Predictable {
     @Override
     public void predict(MLInput mlInput, MLTask mlTask, ActionListener<MLTaskResponse> actionListener) {
         if (!isModelReady()) {
-            actionListener.onFailure(new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy"));
+            actionListener
+                .onFailure(
+                    new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy")
+                );
         }
         try {
             connectorExecutor.executePredict(mlInput, actionListener);

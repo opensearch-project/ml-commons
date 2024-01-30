@@ -13,7 +13,6 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 
-
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
@@ -23,11 +22,10 @@ public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient() {
         try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<SdkAsyncHttpClient>) () ->
-                NettyNioAsyncHttpClient
-                .builder()
-                .maxConcurrency(100)
-                .build());
+            return AccessController
+                .doPrivileged(
+                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient.builder().maxConcurrency(100).build()
+                );
         } catch (PrivilegedActionException e) {
             return null;
         }

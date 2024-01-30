@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
@@ -63,17 +64,24 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     }
 
     @Override
-    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Map<Integer, ModelTensors> tensorOutputs, WrappedCountDownLatch countDownLatch, ActionListener<List<ModelTensors>> actionListener) {
+    public void invokeRemoteModel(
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        Map<Integer, ModelTensors> tensorOutputs,
+        WrappedCountDownLatch countDownLatch,
+        ActionListener<List<ModelTensors>> actionListener
+    ) {
         try {
             SdkHttpFullRequest request;
             switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
-                    request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
+                    request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
                     MLHttpClientFactory.validateIp(request.getUri().getHost());
                     break;
                 case "GET":
-                    request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET, actionListener);
+                    request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET);
                     MLHttpClientFactory.validateIp(request.getUri().getHost());
                     break;
                 default:
@@ -83,7 +91,9 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                 .builder()
                 .request(request)
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
-                .responseHandler(new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService))
+                .responseHandler(
+                    new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService)
+                )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException e) {
