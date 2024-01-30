@@ -289,6 +289,7 @@ public class HttpConnector extends AbstractConnector {
             payload = fillNullParameters(parameters, payload);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
+
             if (!isJson(payload)) {
                 throw new IllegalArgumentException("Invalid JSON in payload");
             }
