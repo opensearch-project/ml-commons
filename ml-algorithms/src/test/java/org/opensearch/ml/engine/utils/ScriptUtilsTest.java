@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.utils;
 
 import static org.junit.Assert.assertEquals;
@@ -40,8 +45,7 @@ public class ScriptUtilsTest {
     @Test
     public void test_executeBuildInPostProcessFunction() {
         List<List<Float>> input = Arrays.asList(Arrays.asList(1.0f, 2.0f), Arrays.asList(3.0f, 4.0f));
-        List<ModelTensor> modelTensors = ScriptUtils
-            .executeBuildInPostProcessFunction(input, MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING));
+        List<ModelTensor> modelTensors = MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING).apply(input);
         assertNotNull(modelTensors);
         assertEquals(2, modelTensors.size());
     }

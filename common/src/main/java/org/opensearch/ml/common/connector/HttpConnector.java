@@ -291,7 +291,7 @@ public class HttpConnector extends AbstractConnector {
             payload = substitutor.replace(payload);
 
             if (!isJson(payload)) {
-                throw new IllegalArgumentException("Invalid JSON in payload");
+                throw new IllegalArgumentException("Invalid payload: " + payload);
             }
             return (T) payload;
         }

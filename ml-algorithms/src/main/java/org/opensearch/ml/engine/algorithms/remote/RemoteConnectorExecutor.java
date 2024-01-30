@@ -106,14 +106,17 @@ public interface RemoteConnectorExecutor {
             parameters.putAll(connector.getParameters());
         }
         MLInputDataset inputDataset = mlInput.getInputDataset();
+        Map<String, String> inputParameters = new HashMap<>();
         if (inputDataset instanceof RemoteInferenceInputDataSet && ((RemoteInferenceInputDataSet) inputDataset).getParameters() != null) {
-            parameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
+            inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
-
+        parameters.putAll(inputParameters);
         RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
         }
+        // override again to always prioritize the input parameter
+        parameters.putAll(inputParameters);
         String payload = connector.createPredictPayload(parameters);
         connector.validatePayload(payload);
         String userStr = getClient()
