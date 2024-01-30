@@ -144,8 +144,10 @@ public class AgentTool implements Tool {
             try {
                 Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
                 parameters.putAll(chatParameters);
+            } catch (Exception exception) {
+                log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
             } finally {
-                return ;
+                return;
             }
         }
     }

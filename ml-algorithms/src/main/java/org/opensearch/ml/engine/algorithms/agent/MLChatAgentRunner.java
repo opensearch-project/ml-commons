@@ -8,11 +8,8 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelResponseJson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.*;
 
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -655,36 +652,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 .build()
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
-    }
-
-    private String outputToOutputString(Object output) throws PrivilegedActionException {
-        String outputString;
-        if (output instanceof ModelTensorOutput) {
-            ModelTensor outputModel = ((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors().get(0);
-            if (outputModel.getDataAsMap() != null) {
-                outputString = AccessController
-                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
-            } else {
-                outputString = outputModel.getResult();
-            }
-        } else if (output instanceof String) {
-            outputString = (String) output;
-        } else {
-            outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
-        }
-        return outputString;
-    }
-
-    private String parseInputFromLLMReturn(Map<String, ?> retMap){
-        Object actionInput = retMap.get("action_input");
-        if (actionInput instanceof Map)
-        {
-            return gson.toJson(actionInput);
-        }
-        else {
-            return String.valueOf(actionInput);
-        }
-
     }
 
 }
