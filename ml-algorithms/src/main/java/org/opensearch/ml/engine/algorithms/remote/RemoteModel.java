@@ -59,16 +59,16 @@ public class RemoteModel implements Predictable {
     @Override
     public void predict(MLInput mlInput, MLTask mlTask, ActionListener<MLTaskResponse> actionListener) {
         if (!isModelReady()) {
-            throw new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy");
+            actionListener.onFailure(new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy"));
         }
         try {
             connectorExecutor.executePredict(mlInput, actionListener);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
-            throw e;
+            actionListener.onFailure(e);
         } catch (Throwable e) {
             log.error("Failed to call remote model.", e);
-            throw new MLException(e);
+            actionListener.onFailure(new MLException(e));
         }
     }
 

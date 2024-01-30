@@ -68,21 +68,13 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             SdkHttpFullRequest request;
             switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
                 case "POST":
-                    try {
-                        log.debug("original payload to remote model: " + payload);
-                        request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
-                        MLHttpClientFactory.validateIp(request.getUri().getHost());
-                    } catch (Exception e) {
-                        throw new MLException("Failed to create http request for remote model", e);
-                    }
+                    log.debug("original payload to remote model: " + payload);
+                    request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST, actionListener);
+                    MLHttpClientFactory.validateIp(request.getUri().getHost());
                     break;
                 case "GET":
-                    try {
-                        request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET, actionListener);
-                        MLHttpClientFactory.validateIp(request.getUri().getHost());
-                    } catch (Exception e) {
-                        throw new MLException("Failed to create http request for remote model", e);
-                    }
+                    request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET, actionListener);
+                    MLHttpClientFactory.validateIp(request.getUri().getHost());
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
@@ -96,10 +88,10 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
-            throw e;
+            actionListener.onFailure(e);
         } catch (Throwable e) {
             log.error("Fail to execute http connector", e);
-            throw new MLException("Fail to execute http connector", e);
+            actionListener.onFailure(new MLException("Fail to execute http connector", e));
         }
     }
 }

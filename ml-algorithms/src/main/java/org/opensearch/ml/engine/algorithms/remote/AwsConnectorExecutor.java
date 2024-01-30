@@ -74,10 +74,10 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
-            throw exception;
+            actionListener.onFailure(exception);
         } catch (Throwable e) {
             log.error("Failed to execute predict in aws connector", e);
-            throw new MLException("Fail to execute predict in aws connector", e);
+            actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
         }
     }
 
