@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
@@ -19,6 +21,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
@@ -94,8 +97,6 @@ public class AwsConnectorExecutorTest {
 
     @Test
     public void executePredict_RemoteInferenceInput_invalidIp() {
-        exceptionRule.expect(MLException.class);
-
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
@@ -125,11 +126,11 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        Mockito.verify(actionListener, times(1)).onFailure(any(MLException.class));
     }
 
     @Test
     public void executePredict_RemoteInferenceInput_illegalIpAddress() {
-        exceptionRule.expect(IllegalArgumentException.class);
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
