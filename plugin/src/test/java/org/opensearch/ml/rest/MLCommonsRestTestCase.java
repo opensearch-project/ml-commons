@@ -780,7 +780,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return taskId;
     }
 
-    private Map parseResponseToMap(Response response) throws IOException {
+    Map parseResponseToMap(Response response) throws IOException {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
         String entityString = TestHelper.httpEntityToString(entity);

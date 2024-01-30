@@ -53,7 +53,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
     @Setter
     @Getter
-    private TokenBucket modelRateLimiter;
+    private TokenBucket rateLimiter;
     @Setter
     @Getter
     private Map<String, TokenBucket> userRateLimiterMap;

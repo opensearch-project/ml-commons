@@ -36,9 +36,8 @@ import org.opensearch.test.rest.FakeRestRequest;
 public class GetInteractionRequestTests extends OpenSearchTestCase {
 
     public void testConstructorAndStreaming() throws IOException {
-        GetInteractionRequest request = new GetInteractionRequest("cid", "iid");
+        GetInteractionRequest request = new GetInteractionRequest("iid");
         assert (request.validate() == null);
-        assert (request.getConversationId().equals("cid"));
         assert (request.getInteractionId().equals("iid"));
 
         BytesStreamOutput outbytes = new BytesStreamOutput();
@@ -47,39 +46,24 @@ public class GetInteractionRequestTests extends OpenSearchTestCase {
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         GetInteractionRequest newRequest = new GetInteractionRequest(in);
         assert (newRequest.validate() == null);
-        assert (newRequest.getConversationId().equals("cid"));
         assert (newRequest.getInteractionId().equals("iid"));
     }
 
     public void testMalformedRequest_ThenInvalid() {
-        GetInteractionRequest bad1 = new GetInteractionRequest(null, "iid");
-        GetInteractionRequest bad2 = new GetInteractionRequest("cid", null);
-        GetInteractionRequest bad3 = new GetInteractionRequest(null, null);
-        ActionRequestValidationException exc1 = bad1.validate();
+        String nullId = null;
+        GetInteractionRequest bad2 = new GetInteractionRequest(nullId);
         ActionRequestValidationException exc2 = bad2.validate();
-        ActionRequestValidationException exc3 = bad3.validate();
-
-        assert (exc1 != null);
-        assert (exc1.validationErrors().size() == 1);
-        assert (exc1.validationErrors().get(0).equals("Get Interaction Request must have a conversation id"));
 
         assert (exc2 != null);
         assert (exc2.validationErrors().size() == 1);
         assert (exc2.validationErrors().get(0).equals("Get Interaction Request must have an interaction id"));
-
-        assert (exc3 != null);
-        assert (exc3.validationErrors().size() == 2);
-        assert (exc3.validationErrors().get(0).equals("Get Interaction Request must have a conversation id"));
-        assert (exc3.validationErrors().get(1).equals("Get Interaction Request must have an interaction id"));
     }
 
     public void testFromRestRequest() throws IOException {
-        Map<String, String> params = Map
-            .of(ActionConstants.CONVERSATION_ID_FIELD, "testcid", ActionConstants.RESPONSE_INTERACTION_ID_FIELD, "testiid");
+        Map<String, String> params = Map.of(ActionConstants.MESSAGE_ID, "testiid");
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
         GetInteractionRequest request = GetInteractionRequest.fromRestRequest(rrequest);
         assert (request.validate() == null);
-        assert (request.getConversationId().equals("testcid"));
         assert (request.getInteractionId().equals("testiid"));
     }
 }

@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +62,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -78,12 +80,16 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 excludes.toArray(new String[0])
             );
             request.source().fetchSource(rebuiltFetchSourceContext);
+
+            final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
+
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrappedListener);
             } else {
                 SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 request.source(sourceBuilder);
-                client.search(request, wrappedListener);
+                client.search(request, doubleWrappedListener);
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);

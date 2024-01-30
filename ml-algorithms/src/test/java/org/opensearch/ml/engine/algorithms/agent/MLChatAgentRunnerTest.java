@@ -89,6 +89,9 @@ public class MLChatAgentRunnerTest {
     @Captor
     private ArgumentCaptor<StepListener<Object>> nextStepListenerCaptor;
 
+    @Captor
+    private ArgumentCaptor<ActionListener<Object>> toolListenerCaptor;
+
     private MLMemorySpec mlMemorySpec;
     @Mock
     private ConversationIndexMemory conversationIndexMemory;
@@ -134,14 +137,8 @@ public class MLChatAgentRunnerTest {
         when(secondTool.getDescription()).thenReturn("Second tool description");
         when(firstTool.validate(Mockito.anyMap())).thenReturn(true);
         when(secondTool.validate(Mockito.anyMap())).thenReturn(true);
-        Mockito
-            .doAnswer(generateToolResponse("First tool response"))
-            .when(firstTool)
-            .run(Mockito.anyMap(), nextStepListenerCaptor.capture());
-        Mockito
-            .doAnswer(generateToolResponse("Second tool response"))
-            .when(secondTool)
-            .run(Mockito.anyMap(), nextStepListenerCaptor.capture());
+        Mockito.doAnswer(generateToolResponse("First tool response")).when(firstTool).run(Mockito.anyMap(), toolListenerCaptor.capture());
+        Mockito.doAnswer(generateToolResponse("Second tool response")).when(secondTool).run(Mockito.anyMap(), toolListenerCaptor.capture());
 
         Mockito
             .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 1", "action", FIRST_TOOL)))
@@ -194,8 +191,18 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputNotSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
+        MLToolSpec secondToolSpec = MLToolSpec
+            .builder()
+            .name(SECOND_TOOL)
+            .type(SECOND_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -215,8 +222,20 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .includeOutputInAgentResponse(false)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
+        MLToolSpec secondToolSpec = MLToolSpec
+            .builder()
+            .name(SECOND_TOOL)
+            .type(SECOND_TOOL)
+            .includeOutputInAgentResponse(true)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -422,10 +441,93 @@ public class MLChatAgentRunnerTest {
         verify(secondTool, never()).run(any(), any());
     }
 
+    @Test
+    public void testToolFailure() {
+        // Mock tool validation to return false
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with tools
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        Mockito
+                .doAnswer(generateToolFailure(new IllegalArgumentException("tool error")))
+                .when(firstTool)
+                .run(Mockito.anyMap(), toolListenerCaptor.capture());
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called
+        verify(firstTool).run(any(), any());
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testToolThrowException() {
+        // Mock tool validation to return false
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with tools
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        Mockito
+                .doThrow(new IllegalArgumentException("tool error"))
+                .when(firstTool)
+                .run(Mockito.anyMap(), toolListenerCaptor.capture());
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called
+        verify(firstTool).run(any(), any());
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testToolParameters() {
+        // Mock tool validation to return false.
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with a tool including two parameters.
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent.
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        // Run the MLChatAgentRunner.
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called.
+        verify(firstTool).run(any(), any());
+        // Verify the size of parameters passed in the tool run method.
+        ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
+        assertEquals(3, ((Map) argumentCaptor.getValue()).size());
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
     // Helper methods to create MLAgent and parameters
     private MLAgent createMLAgentWithTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
         return MLAgent.builder().name("TestAgent").tools(Arrays.asList(firstToolSpec)).memory(mlMemorySpec).llm(llmSpec).build();
     }
 
@@ -459,6 +561,14 @@ public class MLChatAgentRunnerTest {
         return invocation -> {
             ActionListener<Object> listener = invocation.getArgument(1);
             listener.onResponse(response);
+            return null;
+        };
+    }
+
+    private Answer generateToolFailure(Exception e) {
+        return invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(e);
             return null;
         };
     }

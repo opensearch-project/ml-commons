@@ -264,7 +264,6 @@ public class MLMemoryManagerTests {
         mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(interactionListActionListener, times(1)).onFailure(argCaptor.capture());
-        System.out.println(argCaptor.getValue().getMessage());
         assert (argCaptor.getValue().getMessage().equals("User [] does not have access to conversation cid"));
     }
 
@@ -417,7 +416,7 @@ public class MLMemoryManagerTests {
         String query = Strings.toString(XContentType.JSON, queryBuilder);
         Assert
             .assertEquals(
-                "{\"bool\":{\"should\":[{\"ids\":{\"values\":[\"interaction-id-1\"],\"boost\":1.0}},{\"bool\":{\"must\":[{\"exists\":{\"field\":\"trace_number\",\"boost\":1.0}},{\"term\":{\"parent_interaction_id\":{\"value\":\"interaction-id-1\",\"boost\":1.0}}}],\"adjust_pure_negative\":true,\"boost\":1.0}}],\"adjust_pure_negative\":true,\"boost\":1.0}}",
+                "{\"bool\":{\"should\":[{\"ids\":{\"values\":[\"interaction-id-1\"],\"boost\":1.0}},{\"bool\":{\"must\":[{\"exists\":{\"field\":\"trace_number\",\"boost\":1.0}},{\"term\":{\"parent_message_id\":{\"value\":\"interaction-id-1\",\"boost\":1.0}}}],\"adjust_pure_negative\":true,\"boost\":1.0}}],\"adjust_pure_negative\":true,\"boost\":1.0}}",
                 query
             );
     }

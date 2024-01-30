@@ -24,13 +24,16 @@ dependencies {
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
+    implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}") {
+       exclude group: "org.jetbrains", module: "annotations"
+    }
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-classification-sgd', version: '4.2.1'
-    implementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
+    implementation group: 'commons-io', name: 'commons-io', version: '2.15.0'
     implementation 'software.amazon.randomcutforest:randomcutforest-parkservices:3.0-rc3'
     implementation 'software.amazon.randomcutforest:randomcutforest-core:3.0-rc3'
     implementation group: 'io.protostuff', name: 'protostuff-core', version: '1.8.0'
@@ -38,11 +41,11 @@ dependencies {
     implementation group: 'io.protostuff', name: 'protostuff-api', version: '1.8.0'
     implementation group: 'io.protostuff', name: 'protostuff-collectionschema', version: '1.8.0'
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.3.1'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
     implementation group: 'com.google.guava', name: 'guava', version: '32.0.1-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation platform("ai.djl:bom:0.21.0")
-    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
+    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo', version: '0.21.0'
     implementation group: 'ai.djl', name: 'api'
     implementation group: 'ai.djl.huggingface', name: 'tokenizers'
     implementation("ai.djl.onnxruntime:onnxruntime-engine:0.21.0") {
@@ -64,7 +67,7 @@ dependencies {
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
-    implementation 'com.jayway.jsonpath:json-path:2.8.0'
+    implementation 'com.jayway.jsonpath:json-path:2.9.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
 }
 

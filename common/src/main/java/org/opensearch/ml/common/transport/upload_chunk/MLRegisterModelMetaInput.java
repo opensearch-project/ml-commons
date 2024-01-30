@@ -31,26 +31,25 @@ import java.util.Locale;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
-public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
+public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
-    public static final String MODEL_NAME_FIELD = "name"; //mandatory
-    public static final String DESCRIPTION_FIELD = "description"; //optional
-    public static final String IS_ENABLED_FIELD = "is_enabled"; //optional
-    public static final String MODEL_RATE_LIMITER_CONFIG_FIELD = "model_rate_limiter_config";  //optional
+    public static final String MODEL_NAME_FIELD = "name"; // mandatory
+    public static final String DESCRIPTION_FIELD = "description"; // optional
+    public static final String IS_ENABLED_FIELD = "is_enabled"; // optional
+    public static final String RATE_LIMITER_FIELD = "rate_limiter"; // optional
     public static final String VERSION_FIELD = "version";
-    public static final String MODEL_FORMAT_FIELD = "model_format"; //mandatory
+    public static final String MODEL_FORMAT_FIELD = "model_format"; // mandatory
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value"; //mandatory
-    public static final String MODEL_CONFIG_FIELD = "model_config"; //mandatory
-    public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //mandatory
-    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //optional
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String ACCESS_MODE = "access_mode"; //optional
-    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
+    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value"; // mandatory
+    public static final String MODEL_CONFIG_FIELD = "model_config"; // mandatory
+    public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; // mandatory
+    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // optional
+    public static final String ACCESS_MODE = "access_mode"; // optional
+    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; // optional
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
-
 
     private FunctionName functionName;
     private String name;
@@ -59,7 +58,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private String description;
     private String version;
     private Boolean isEnabled;
-    private MLRateLimiter modelRateLimiterConfig;
+    private MLRateLimiter rateLimiter;
     private MLModelFormat modelFormat;
 
     private MLModelState modelState;
@@ -75,10 +74,13 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private Boolean isHidden;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, Boolean isEnabled, MLRateLimiter modelRateLimiterConfig, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
-                                    AccessMode accessMode,
-                                    Boolean isAddAllBackendRoles,
-                                    Boolean doesVersionCreateModelGroup, Boolean isHidden) {
+    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version,
+            String description, Boolean isEnabled, MLRateLimiter rateLimiter, MLModelFormat modelFormat,
+            MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue,
+            MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
+            AccessMode accessMode,
+            Boolean isAddAllBackendRoles,
+            Boolean doesVersionCreateModelGroup, Boolean isHidden) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -93,7 +95,11 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (modelContentHashValue == null) {
             throw new IllegalArgumentException("model content hash value is null");
         }
-        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently, we only support one type of sparse model, which is pretrained, and it doesn't necessitate a model configuration.
+        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE
+                && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model
+                                                                   // configuration. Currently, we only support one type
+                                                                   // of sparse model, which is pretrained, and it
+                                                                   // doesn't necessitate a model configuration.
             throw new IllegalArgumentException("model config is null");
         }
         if (totalChunks == null) {
@@ -104,7 +110,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.version = version;
         this.description = description;
         this.isEnabled = isEnabled;
-        this.modelRateLimiterConfig = modelRateLimiterConfig;
+        this.rateLimiter = rateLimiter;
         this.modelFormat = modelFormat;
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
@@ -118,7 +124,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.isHidden = isHidden;
     }
 
-    public MLRegisterModelMetaInput(StreamInput in) throws IOException{
+    public MLRegisterModelMetaInput(StreamInput in) throws IOException {
         this.name = in.readString();
         this.functionName = in.readEnum(FunctionName.class);
         this.modelGroupId = in.readOptionalString();
@@ -126,7 +132,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.description = in.readOptionalString();
         this.isEnabled = in.readOptionalBoolean();
         if (in.readBoolean()) {
-            modelRateLimiterConfig = new MLRateLimiter(in);
+            rateLimiter = new MLRateLimiter(in);
         }
         if (in.readBoolean()) {
             modelFormat = in.readEnum(MLModelFormat.class);
@@ -157,9 +163,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         out.writeOptionalString(version);
         out.writeOptionalString(description);
         out.writeOptionalBoolean(isEnabled);
-        if (modelRateLimiterConfig != null) {
+        if (rateLimiter != null) {
             out.writeBoolean(true);
-            modelRateLimiterConfig.writeTo(out);
+            rateLimiter.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -218,8 +224,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (isEnabled != null) {
             builder.field(IS_ENABLED_FIELD, isEnabled);
         }
-        if (modelRateLimiterConfig != null) {
-            builder.field(MODEL_RATE_LIMITER_CONFIG_FIELD, modelRateLimiterConfig);
+        if (rateLimiter != null) {
+            builder.field(RATE_LIMITER_FIELD, rateLimiter);
         }
         builder.field(MODEL_FORMAT_FIELD, modelFormat);
         if (modelState != null) {
@@ -257,7 +263,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         String version = null;
         String description = null;
         Boolean isEnabled = null;
-        MLRateLimiter modelRateLimiterConfig = null;
+        MLRateLimiter rateLimiter = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
@@ -293,8 +299,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
                     break;
-                case MODEL_RATE_LIMITER_CONFIG_FIELD:
-                    modelRateLimiterConfig = MLRateLimiter.parse(parser);
+                case RATE_LIMITER_FIELD:
+                    rateLimiter = MLRateLimiter.parse(parser);
                     break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text());
@@ -338,7 +344,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, isEnabled, modelRateLimiterConfig, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup, isHidden);
+        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, isEnabled,
+                rateLimiter, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig,
+                totalChunks, backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup, isHidden);
     }
 
 }

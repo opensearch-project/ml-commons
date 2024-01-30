@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
@@ -39,7 +38,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "    \"content_type\": \"application/json\",\n"
         + "    \"max_tokens\": 7,\n"
         + "    \"temperature\": 0,\n"
-        + "    \"model\": \"text-davinci-003\"\n"
+        + "    \"model\": \"gpt-3.5-turbo-instruct\"\n"
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"openAI_key\": \""
@@ -95,11 +94,71 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals("deleted", (String) responseMap.get("result"));
     }
 
-    public void testSearchConnectors() throws IOException {
+    public void testSearchConnectors_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchConnectors_afterCreation() throws IOException {
         createConnector(completionModelConnectorEntity);
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchRemoteModels_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchRemoteModels_afterCreation() throws IOException {
+        registerRemoteModel();
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchModelGroups_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/model_groups/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchModelGroups_afterCreation() throws IOException {
+        registerRemoteModel();
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/model_groups/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchMLTasks_beforeCreation() throws IOException {
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/tasks/_search", null, TestHelper.toHttpEntity(searchEntity), null);
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+    }
+
+    public void testSearchMLTasks_afterCreation() throws IOException {
+        registerRemoteModel();
+
+        String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
+        Response response = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/tasks/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
         assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
@@ -265,7 +324,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"endpoint\": \"api.openai.com\",\n"
             + "      \"auth\": \"API_Key\",\n"
             + "      \"content_type\": \"application/json\",\n"
-            + "      \"model\": \"text-davinci-edit-001\"\n"
+            + "      \"model\": \"gpt-4\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -276,18 +335,18 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      {\n"
             + "      \"action_type\": \"predict\",\n"
             + "          \"method\": \"POST\",\n"
-            + "          \"url\": \"https://api.openai.com/v1/edits\",\n"
+            + "          \"url\": \"https://api.openai.com/v1/chat/completions\",\n"
             + "          \"headers\": { \n"
             + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
             + "          },\n"
-            + "          \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"input\\\": \\\"${parameters.input}\\\",  \\\"instruction\\\": \\\"${parameters.instruction}\\\"  }\"\n"
+            + "      \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.input}\\\"}]}\"\n"
             + "      }\n"
             + "  ]\n"
             + "}";
         Response response = createConnector(entity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("openAI-GPT-3.5 edit model", connectorId);
+        response = registerRemoteModel("openAI-GPT-4 edit model", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -298,12 +357,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = parseResponseToMap(response);
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        String predictInput = "{\n"
-            + "  \"parameters\": {\n"
-            + "      \"input\": \"What day of the wek is it?\",\n"
-            + "      \"instruction\": \"Fix the spelling mistakes\"\n"
-            + "  }\n"
-            + "}";
+        String predictInput = "{\"parameters\":{\"input\":\"What day of the wek is it?\"}}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
         List responseList = (List) responseMap.get("inference_results");
@@ -317,7 +371,9 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        responseMap = (Map) responseMap.get("message");
+
+        assertFalse(((String) responseMap.get("content")).isEmpty());
     }
 
     public void testOpenAIModerationsModel() throws IOException, InterruptedException {
@@ -711,13 +767,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         return message.equals("You exceeded your current quota, please check your plan and billing details.");
     }
 
-    private Map parseResponseToMap(Response response) throws IOException {
-        HttpEntity entity = response.getEntity();
-        assertNotNull(response);
-        String entityString = TestHelper.httpEntityToString(entity);
-        return gson.fromJson(entityString, Map.class);
-    }
-
     private void disableClusterConnectorAccessControl() throws IOException {
         Response response = TestHelper
             .makeRequest(
@@ -735,4 +784,14 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         return TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
     }
 
+    private String registerRemoteModel() throws IOException {
+        Response response = createConnector(completionModelConnectorEntity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        logger.info("task ID created: {}", taskId);
+        return taskId;
+    }
 }

@@ -8,7 +8,7 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_CONTROLLER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
@@ -26,7 +26,7 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
-import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.MODEL_RATE_LIMITER;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
@@ -100,7 +100,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.controller.MLModelController;
+import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -138,7 +138,8 @@ import com.google.common.io.Files;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * Manager class for ML models. It contains ML model related operations like register, deploy model etc.
+ * Manager class for ML models. It contains ML model related operations like
+ * register, deploy model etc.
  */
 @Log4j2
 public class MLModelManager {
@@ -286,7 +287,7 @@ public class MLModelManager {
                     .version(version)
                     .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
                     .description(mlRegisterModelMetaInput.getDescription())
-                    .modelRateLimiterConfig(mlRegisterModelMetaInput.getModelRateLimiterConfig())
+                    .rateLimiter(mlRegisterModelMetaInput.getRateLimiter())
                     .modelFormat(mlRegisterModelMetaInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(mlRegisterModelMetaInput.getModelConfig())
@@ -329,9 +330,9 @@ public class MLModelManager {
 
     /**
      *
-     * @param mlRegisterModelInput  register model input for remote models
-     * @param mlTask  ML task
-     * @param listener action listener
+     * @param mlRegisterModelInput register model input for remote models
+     * @param mlTask               ML task
+     * @param listener             action listener
      */
     public void registerMLRemoteModel(
         MLRegisterModelInput mlRegisterModelInput,
@@ -398,10 +399,11 @@ public class MLModelManager {
     }
 
     /**
-     * Register model. Basically download model file, split into chunks and save into model index.
+     * Register model. Basically download model file, split into chunks and save
+     * into model index.
      *
      * @param registerModelInput register model input
-     * @param mlTask      ML task
+     * @param mlTask             ML task
      */
     public void registerMLModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
 
@@ -516,7 +518,7 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
-                    .modelRateLimiterConfig(registerModelInput.getModelRateLimiterConfig())
+                    .rateLimiter(registerModelInput.getRateLimiter())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -580,7 +582,7 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
-                    .modelRateLimiterConfig(registerModelInput.getModelRateLimiterConfig())
+                    .rateLimiter(registerModelInput.getRateLimiter())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -646,7 +648,7 @@ public class MLModelManager {
                     .algorithm(functionName)
                     .version(version)
                     .description(registerModelInput.getDescription())
-                    .modelRateLimiterConfig(registerModelInput.getModelRateLimiterConfig())
+                    .rateLimiter(registerModelInput.getRateLimiter())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(registerModelInput.getModelConfig())
@@ -729,7 +731,7 @@ public class MLModelManager {
                             .algorithm(functionName)
                             .version(version)
                             .modelFormat(registerModelInput.getModelFormat())
-                            .modelRateLimiterConfig(registerModelInput.getModelRateLimiterConfig())
+                            .rateLimiter(registerModelInput.getRateLimiter())
                             .chunkNumber(chunkNum)
                             .totalChunks(chunkFiles.size())
                             .content(Base64.getEncoder().encodeToString(bytes))
@@ -805,7 +807,8 @@ public class MLModelManager {
 
     /**
      * Check if exceed running task limit and if circuit breaker is open.
-     * @param mlTask ML task
+     * 
+     * @param mlTask           ML task
      * @param runningTaskLimit limit
      */
     public void checkAndAddRunningTask(MLTask mlTask, Integer runningTaskLimit) {
@@ -873,7 +876,8 @@ public class MLModelManager {
     }
 
     private void deleteOrUpdateModelGroup(String modelGroupID, Boolean doesVersionCreateModelGroup, String modelVersion) {
-        // This checks if model group is created when registering the version. If yes, model group is deleted since the version registration
+        // This checks if model group is created when registering the version. If yes,
+        // model group is deleted since the version registration
         // had failed. Else model group latest version is decremented by 1
         if (doesVersionCreateModelGroup) {
             DeleteRequest deleteModelGroupRequest = new DeleteRequest();
@@ -915,7 +919,8 @@ public class MLModelManager {
     }
 
     /**
-     * Read model chunks from model index. Concat chunks into a whole model file, then load
+     * Read model chunks from model index. Concat chunks into a whole model file,
+     * then load
      * into memory.
      *
      * @param modelId          model id
@@ -960,10 +965,11 @@ public class MLModelManager {
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
-                    // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
-                    if (BooleanUtils.isTrue(mlModel.getIsModelControllerEnabled())) {
-                        getModelController(modelId, ActionListener.wrap(modelController -> {
-                            setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
+                    // deploy remote model with internal connector or model trained by built-in
+                    // algorithm like kmeans
+                    if (BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
+                        getController(modelId, ActionListener.wrap(controller -> {
+                            setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
                             log.info("Successfully redeployed model controller for model " + modelId);
                             log.info("Trying to deploy remote model with model controller configured.");
                             deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, wrappedListener);
@@ -984,8 +990,8 @@ public class MLModelManager {
                     return;
                 }
 
-                setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
-                deployModelControllerWithDeployingModel(mlModel, eligibleNodeCount);
+                setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
+                deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1045,7 +1051,7 @@ public class MLModelManager {
 
     private void deployRemoteOrBuiltInModel(MLModel mlModel, Integer eligibleNodeCount, ActionListener<String> wrappedListener) {
         String modelId = mlModel.getModelId();
-        setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
+        setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
@@ -1071,7 +1077,7 @@ public class MLModelManager {
     }
 
     private Map<String, Object> setUpParameterMap(String modelId) {
-        TokenBucket modelRateLimiter = getModelRateLimiter(modelId);
+        TokenBucket rateLimiter = getRateLimiter(modelId);
         Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
 
         Map<String, Object> params = new HashMap<>();
@@ -1081,19 +1087,19 @@ public class MLModelManager {
         params.put(XCONTENT_REGISTRY, xContentRegistry);
         params.put(CLUSTER_SERVICE, clusterService);
 
-        if (modelRateLimiter == null && userRateLimiterMap == null) {
+        if (rateLimiter == null && userRateLimiterMap == null) {
             log.info("Setting up basic ML predictor parameters.");
             return Collections.unmodifiableMap(params);
-        } else if (modelRateLimiter != null && userRateLimiterMap == null) {
-            params.put(MODEL_RATE_LIMITER, modelRateLimiter);
+        } else if (rateLimiter != null && userRateLimiterMap == null) {
+            params.put(RATE_LIMITER, rateLimiter);
             log.info("Setting up basic ML predictor parameters with model level throttling.");
             return Collections.unmodifiableMap(params);
-        } else if (modelRateLimiter == null) {
+        } else if (rateLimiter == null) {
             params.put(USER_RATE_LIMITER_MAP, userRateLimiterMap);
             log.info("Setting up basic ML predictor parameters with user level throttling.");
             return Collections.unmodifiableMap(params);
         } else {
-            params.put(MODEL_RATE_LIMITER, modelRateLimiter);
+            params.put(RATE_LIMITER, rateLimiter);
             params.put(USER_RATE_LIMITER_MAP, userRateLimiterMap);
             log.info("Setting up basic ML predictor parameters with both model and user level throttling.");
             return Collections.unmodifiableMap(params);
@@ -1118,7 +1124,7 @@ public class MLModelManager {
             getModel(modelId, ActionListener.wrap(mlModel -> {
                 int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                setupModelRateLimiter(modelId, eligibleNodeCount, mlModel.getModelRateLimiterConfig());
+                setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
                 if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
                     if (mlModel.getConnector() != null) {
                         setupParamsAndPredictable(modelId, mlModel);
@@ -1143,13 +1149,15 @@ public class MLModelManager {
     }
 
     /**
-     * Deploy the model controller with a model id. This method should be called AFTER a model is deployed.
-     * If you want to implement similar behavior during model deploy, deployModelControllerWithDeployingModel is the one supposed be called.
+     * Deploy the model controller with a model id. This method should be called
+     * AFTER a model is deployed.
+     * If you want to implement similar behavior during model deploy,
+     * deployControllerWithDeployingModel is the one supposed be called.
      *
-     * @param modelId ml model ID
+     * @param modelId  ml model ID
      * @param listener action listener
      */
-    public synchronized void deployModelControllerWithDeployedModel(String modelId, ActionListener<String> listener) {
+    public synchronized void deployControllerWithDeployedModel(String modelId, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (!modelCacheHelper.isModelDeployed(modelId)) {
                 throw new OpenSearchStatusException(
@@ -1159,9 +1167,9 @@ public class MLModelManager {
             }
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
             getModel(modelId, ActionListener.wrap(mlModel -> {
-                getModelController(modelId, ActionListener.wrap(modelController -> {
+                getController(modelId, ActionListener.wrap(controller -> {
                     int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
-                    setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
+                    setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
                     if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
                         if (mlModel.getConnector() != null) {
                             setupParamsAndPredictable(modelId, mlModel);
@@ -1191,10 +1199,10 @@ public class MLModelManager {
      * Undploy the model controller for a model.
      * Usually this method is called during deleting the model controller.
      *
-     * @param modelId ml model ID
+     * @param modelId  ml model ID
      * @param listener action listener
      */
-    public synchronized void undeployModelController(String modelId, ActionListener<String> listener) {
+    public synchronized void undeployController(String modelId, ActionListener<String> listener) {
         if (modelCacheHelper.isModelDeployed(modelId)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
@@ -1245,31 +1253,32 @@ public class MLModelManager {
     /**
      * Deploy the model controller for a model during model is deploying.
      *
-     * @param mlModel ml model
+     * @param mlModel  ml model
      * @param listener action listener
      */
-    private synchronized void deployModelControllerWithDeployingModel(
+    private synchronized void deployControllerWithDeployingModel(
         MLModel mlModel,
         Integer eligibleNodeCount,
         ActionListener<String> listener
     ) {
         String modelId = mlModel.getModelId();
         FetchSourceContext fetchContext = new FetchSourceContext(true);
-        GetRequest getRequest = new GetRequest(ML_MODEL_CONTROLLER_INDEX).id(modelId).fetchSourceContext(fetchContext);
+        GetRequest getRequest = new GetRequest(ML_CONTROLLER_INDEX).id(modelId).fetchSourceContext(fetchContext);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLModelController modelController = MLModelController.parse(parser);
-                    setupUserRateLimiterMap(modelId, eligibleNodeCount, modelController.getUserRateLimiterConfig());
+                    MLController controller = MLController.parse(parser);
+                    setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
                     log.info("Successfully redeployed model controller for model " + modelId);
                     listener.onResponse("Successfully redeployed model controller for model " + modelId);
                 } catch (Exception e) {
                     log.error("Failed to parse ml task" + r.getId(), e);
                     listener.onFailure(e);
                 }
-            } else if (mlModel.getIsModelControllerEnabled() == null || !mlModel.getIsModelControllerEnabled()) {
-                // Not going to respond the failure here due to the model deploy can still work well
+            } else if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
+                // Not going to respond the failure here due to the model deploy can still work
+                // well
                 listener
                     .onResponse(
                         "The model "
@@ -1289,19 +1298,21 @@ public class MLModelManager {
     }
 
     /**
-     * Deploy the model controller for a model during model is deploying with build-in listener.
-     * Usually this method is called when re-deploying a previous un-deployed model with the model controller.
+     * Deploy the model controller for a model during model is deploying with
+     * build-in listener.
+     * Usually this method is called when re-deploying a previous un-deployed model
+     * with the model controller.
      *
      * @param mlModel ml model
      */
-    public void deployModelControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
+    public void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
         if (mlModel.getModelState() != MLModelState.DEPLOYING) {
             throw new OpenSearchStatusException(
                 "This method should only be called when model is in DEPLOYING state, but the model is in state: " + mlModel.getModelState(),
                 RestStatus.CONFLICT
             );
         }
-        deployModelControllerWithDeployingModel(mlModel, eligibleNodeCount, ActionListener.wrap(response -> {
+        deployControllerWithDeployingModel(mlModel, eligibleNodeCount, ActionListener.wrap(response -> {
             if (response.startsWith("Successfully")) {
                 log.debug(response, mlModel.getModelId());
             } else if (response.startsWith("Failed")) {
@@ -1312,19 +1323,18 @@ public class MLModelManager {
         }, e -> log.error("Failed to re-deploy the model controller for model: " + mlModel.getModelId(), e)));
     }
 
-    private void setupModelRateLimiter(String modelId, Integer eligibleNodeCount, MLRateLimiter modelRateLimiter) {
-        if (modelRateLimiter != null) {
-            modelCacheHelper.setModelRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, modelRateLimiter));
+    private void setupRateLimiter(String modelId, Integer eligibleNodeCount, MLRateLimiter rateLimiter) {
+        if (rateLimiter != null) {
+            modelCacheHelper.setRateLimiter(modelId, createTokenBucket(eligibleNodeCount, rateLimiter));
         } else {
-            modelCacheHelper.removeModelRateLimiter(modelId);
+            modelCacheHelper.removeRateLimiter(modelId);
         }
     }
 
-    private void setupUserRateLimiterMap(String modelId, Integer eligibleNodeCount, Map<String, MLRateLimiter> userRateLimiterConfig) {
-        if (userRateLimiterConfig != null && !userRateLimiterConfig.isEmpty()) {
+    private void setupUserRateLimiterMap(String modelId, Integer eligibleNodeCount, Map<String, MLRateLimiter> userRateLimiter) {
+        if (userRateLimiter != null && !userRateLimiter.isEmpty()) {
             Map<String, TokenBucket> userRateLimiterMap = new HashMap<>();
-            userRateLimiterConfig
-                .forEach((user, rateLimiter) -> userRateLimiterMap.put(user, rateLimiterConstructor(eligibleNodeCount, rateLimiter)));
+            userRateLimiter.forEach((user, rateLimiter) -> userRateLimiterMap.put(user, createTokenBucket(eligibleNodeCount, rateLimiter)));
             modelCacheHelper.setUserRateLimiterMap(modelId, userRateLimiterMap);
         } else {
             modelCacheHelper.removeUserRateLimiterMap(modelId);
@@ -1339,22 +1349,22 @@ public class MLModelManager {
      * Construct a TokenBucket object from its rate limiter config.
      * 
      * @param eligibleNodeCount eligible node count
-     * @param modelRateLimiter model rate limiter config
+     * @param rateLimiter       model rate limiter config
      * @return a TokenBucket object to enable throttling
      */
-    private TokenBucket rateLimiterConstructor(Integer eligibleNodeCount, MLRateLimiter modelRateLimiter) {
-        if (modelRateLimiter.isValid()) {
-            double rateLimitNumber = Double.parseDouble(modelRateLimiter.getRateLimitNumber());
-            TimeUnit rateLimitUnit = modelRateLimiter.getRateLimitUnit();
+    private TokenBucket createTokenBucket(Integer eligibleNodeCount, MLRateLimiter rateLimiter) {
+        if (rateLimiter.isValid()) {
+            double limit = Double.parseDouble(rateLimiter.getLimit());
+            TimeUnit unit = rateLimiter.getUnit();
             log
                 .info(
                     "Initializing the rate limiter with setting {} per {} (TPS limit {}), evenly distributed on {} nodes",
-                    rateLimitNumber,
-                    rateLimitUnit,
-                    rateLimitNumber / rateLimitUnit.toSeconds(1),
+                    limit,
+                    unit,
+                    limit / unit.toSeconds(1),
                     eligibleNodeCount
                 );
-            return new TokenBucket(System::nanoTime, rateLimitNumber / rateLimitUnit.toNanos(1) / eligibleNodeCount, rateLimitNumber);
+            return new TokenBucket(System::nanoTime, limit / unit.toNanos(1) / eligibleNodeCount, limit, limit / eligibleNodeCount);
         }
         return null;
     }
@@ -1365,15 +1375,16 @@ public class MLModelManager {
      * @param modelId model id
      * @return a TokenBucket object to enable model-level throttling
      */
-    public TokenBucket getModelRateLimiter(String modelId) {
-        return modelCacheHelper.getModelRateLimiter(modelId);
+    public TokenBucket getRateLimiter(String modelId) {
+        return modelCacheHelper.getRateLimiter(modelId);
     }
 
     /**
      * Get model-level rate limiter with model id.
      *
      * @param modelId model id
-     * @return a map with user's name and its corresponding rate limiter object to track user-level throttling
+     * @return a map with user's name and its corresponding rate limiter object to
+     *         track user-level throttling
      */
     public Map<String, TokenBucket> getUserRateLimiterMap(String modelId) {
         return modelCacheHelper.getUserRateLimiterMap(modelId);
@@ -1423,18 +1434,18 @@ public class MLModelManager {
     /**
      * Get model controller from model controller index.
      * 
-     * @param modelId model id
+     * @param modelId  model id
      * @param listener action listener
      */
-    public void getModelController(String modelId, ActionListener<MLModelController> listener) {
+    public void getController(String modelId, ActionListener<MLController> listener) {
         FetchSourceContext fetchContext = new FetchSourceContext(true);
-        GetRequest getRequest = new GetRequest(ML_MODEL_CONTROLLER_INDEX).id(modelId).fetchSourceContext(fetchContext);
+        GetRequest getRequest = new GetRequest(ML_CONTROLLER_INDEX).id(modelId).fetchSourceContext(fetchContext);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLModelController modelController = MLModelController.parse(parser);
-                    listener.onResponse(modelController);
+                    MLController controller = MLController.parse(parser);
+                    listener.onResponse(controller);
                 } catch (Exception e) {
                     log.error("Failed to parse ml task" + r.getId(), e);
                     listener.onFailure(e);
@@ -1449,7 +1460,7 @@ public class MLModelManager {
      * Get connector from connector index.
      *
      * @param connectorId connector id
-     * @param listener action listener
+     * @param listener    action listener
      */
     private void getConnector(String connectorId, ActionListener<Connector> listener) {
         GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
@@ -1479,7 +1490,7 @@ public class MLModelManager {
      * Retreive a model's all chunks.
      * 
      * @param mlModelMeta model meta
-     * @param listener action listener
+     * @param listener    action listener
      */
     private void retrieveModelChunks(MLModel mlModelMeta, ActionListener<File> listener) throws InterruptedException {
         String modelId = mlModelMeta.getModelId();
@@ -1570,7 +1581,7 @@ public class MLModelManager {
     /**
      * Get model chunk id.
      * 
-     * @param modelId model id
+     * @param modelId     model id
      * @param chunkNumber model chunk number
      * @return model chunk id
      */
@@ -1669,8 +1680,8 @@ public class MLModelManager {
     /**
      * Get worker nodes of specific model.
      *
-     * @param modelId model id
-     * @param functionName function name
+     * @param modelId          model id
+     * @param functionName     function name
      * @param onlyEligibleNode return only eligible node
      * @return list of worker node ids
      */
@@ -1697,7 +1708,7 @@ public class MLModelManager {
     /**
      * Get worker node of specific model without filtering eligible node.
      *
-     * @param modelId model id
+     * @param modelId      model id
      * @param functionName function name
      * @return list of worker node ids
      */
@@ -1720,7 +1731,8 @@ public class MLModelManager {
     }
 
     /**
-     * Get all model ids in cache, both local model id and remote model in routing table.
+     * Get all model ids in cache, both local model id and remote model in routing
+     * table.
      *
      * @return array of model ids
      */

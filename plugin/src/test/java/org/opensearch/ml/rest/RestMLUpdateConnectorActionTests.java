@@ -142,14 +142,14 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequest() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         final Map<String, Object> updateContent = Map.of("version", "2", "description", "This is test description");
         String requestContent = new Gson().toJson(updateContent).toString();
         Map<String, String> params = new HashMap<>();
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/_update/{connector_id}")
+            .withPath("/_plugins/_ml/connectors/{connector_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -157,13 +157,13 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequestWithNullValue() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         String requestContent = "{\"version\":\"2\",\"description\":null}";
         Map<String, String> params = new HashMap<>();
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/_update/{connector_id}")
+            .withPath("/_plugins/_ml/connectors/{connector_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -171,12 +171,12 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequestWithEmptyContent() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         Map<String, String> params = new HashMap<>();
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/_update/{connector_id}")
+            .withPath("/_plugins/_ml/connectors/{connector_id}")
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();
@@ -184,13 +184,13 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequestWithNullConnectorId() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         final Map<String, Object> updateContent = Map.of("version", "2", "description", "This is test description");
         String requestContent = new Gson().toJson(updateContent).toString();
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/_update/{connector_id}")
+            .withPath("/_plugins/_ml/connectors/{connector_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();

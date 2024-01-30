@@ -22,6 +22,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.support.master.AcknowledgedResponse;
@@ -186,6 +187,23 @@ public class MLIndicesHandlerTest {
         }).when(indicesAdminClient).create(any(), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         indicesHandler.initMLAgentIndex(listener);
+
+        verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
+        verify(listener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue());
+    }
+
+    @Test
+    public void initMLConnectorIndex_ResourceAlreadyExistsException_RaceCondition() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        when(metadata.hasIndex(anyString())).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new ResourceAlreadyExistsException("index [.plugins-ml-connector] already exists"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        indicesHandler.initMLConnectorIndex(listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         verify(listener).onResponse(argumentCaptor.capture());

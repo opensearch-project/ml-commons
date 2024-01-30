@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.OpenSearchWrapperException;
+import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.mapping.put.PutMappingRequest;
@@ -74,8 +76,8 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.CONFIG, listener);
     }
 
-    public void initMLModelControllerIndex(ActionListener<Boolean> listener) {
-        initMLIndexIfAbsent(MLIndex.MODEL_CONTROLLER, listener);
+    public void initMLControllerIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.CONTROLLER, listener);
     }
 
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
@@ -85,7 +87,6 @@ public class MLIndicesHandler {
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();
-
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             if (!clusterService.state().metadata().hasIndex(indexName)) {
@@ -97,8 +98,14 @@ public class MLIndicesHandler {
                         internalListener.onResponse(false);
                     }
                 }, e -> {
-                    log.error("Failed to create index " + indexName, e);
-                    internalListener.onFailure(e);
+                    if (e instanceof ResourceAlreadyExistsException
+                        || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
+                        log.info("Skip creating the Index:{} that is already created by another parallel request", indexName);
+                        internalListener.onResponse(true);
+                    } else {
+                        log.error("Failed to create index " + indexName, e);
+                        internalListener.onFailure(e);
+                    }
                 });
                 CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping).settings(INDEX_SETTINGS);
                 client.admin().indices().create(request, actionListener);
@@ -141,7 +148,8 @@ public class MLIndicesHandler {
                                     })
                                 );
                         } else {
-                            // no need to update index if it does not exist or the version is already up-to-date.
+                            // no need to update index if it does not exist or the version is already
+                            // up-to-date.
                             indexMappingUpdated.get(indexName).set(true);
                             internalListener.onResponse(true);
                         }
@@ -162,9 +170,11 @@ public class MLIndicesHandler {
 
     /**
      * Check if we should update index based on schema version.
-     * @param indexName index name
+     * 
+     * @param indexName  index name
      * @param newVersion new index mapping version
-     * @param listener action listener, if should update index, will pass true to its onResponse method
+     * @param listener   action listener, if should update index, will pass true to
+     *                   its onResponse method
      */
     public void shouldUpdateIndex(String indexName, Integer newVersion, ActionListener<Boolean> listener) {
         IndexMetadata indexMetaData = clusterService.state().getMetadata().indices().get(indexName);

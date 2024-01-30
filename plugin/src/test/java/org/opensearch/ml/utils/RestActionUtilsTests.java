@@ -8,6 +8,7 @@ package org.opensearch.ml.utils;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.OPENSEARCH_DASHBOARDS_USER_AGENT;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -28,7 +29,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.Version;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -38,8 +41,10 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.rest.RestChannel;
@@ -292,15 +297,19 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
 
         when(clusterService.getSettings())
-            .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
+            .thenReturn(
+                Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "CN=kirk,OU=client,O=client,L=test, C=de").build()
+            );
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
 
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_SSL_PRINCIPAL, "cn=admin");
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "CN=kirk,OU=client,O=client,L=test,C=de"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertTrue(isAdmin);
     }
+
+    // Need to add a test case to cover non Ldap user
 
     @Test
     public void testIsSuperAdminUser_NotAdmin() {
@@ -312,9 +321,56 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_SSL_PRINCIPAL, "cn=notadmin");
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "nonAdmin"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertFalse(isAdmin);
+    }
+
+    public void testDoubleWrapper_handleIndexNotFound() {
+        final IndexNotFoundException indexNotFoundException = new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
+        final DummyActionListener actionListener = new DummyActionListener();
+
+        RestActionUtils.wrapListenerToHandleSearchIndexNotFound(indexNotFoundException, actionListener);
+        Assert.assertTrue(actionListener.success);
+    }
+
+    public void testDoubleWrapper_handleIndexNotFoundWrappedException() {
+        final WrappedException wrappedException = new WrappedException();
+        final DummyActionListener actionListener = new DummyActionListener();
+
+        RestActionUtils.wrapListenerToHandleSearchIndexNotFound(wrappedException, actionListener);
+        Assert.assertTrue(actionListener.success);
+    }
+
+    public void testDoubleWrapper_notRelatedException() {
+        final RuntimeException exception = new RuntimeException("some random exception");
+        final DummyActionListener actionListener = new DummyActionListener();
+
+        RestActionUtils.wrapListenerToHandleSearchIndexNotFound(exception, actionListener);
+        Assert.assertFalse(actionListener.success);
+    }
+
+    public class DummyActionListener implements ActionListener<SearchResponse> {
+        public boolean success = false;
+
+        @Override
+        public void onResponse(SearchResponse searchResponse) {
+            logger.info("success");
+            this.success = true;
+        }
+
+        @Override
+        public void onFailure(Exception e) {
+            logger.error("failure", e);
+            this.success = false;
+        }
+    }
+
+    public static class WrappedException extends Exception implements OpenSearchWrapperException {
+        @Override
+        public synchronized Throwable getCause() {
+            return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
+        }
     }
 }

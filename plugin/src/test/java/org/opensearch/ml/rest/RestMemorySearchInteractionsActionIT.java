@@ -58,8 +58,8 @@ public class RestMemorySearchInteractionsActionIT extends MLCommonsRestTestCase 
         HttpEntity cchttpEntity = ccresponse.getEntity();
         String ccentityString = TestHelper.httpEntityToString(cchttpEntity);
         Map ccmap = gson.fromJson(ccentityString, Map.class);
-        assert (ccmap.containsKey("conversation_id"));
-        String cid = (String) ccmap.get("conversation_id");
+        assert (ccmap.containsKey("memory_id"));
+        String cid = (String) ccmap.get("memory_id");
 
         Map<String, String> params1 = Map
             .of(
@@ -78,7 +78,7 @@ public class RestMemorySearchInteractionsActionIT extends MLCommonsRestTestCase 
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params1),
                 null
@@ -88,8 +88,8 @@ public class RestMemorySearchInteractionsActionIT extends MLCommonsRestTestCase 
         HttpEntity cihttpEntity1 = ciresponse1.getEntity();
         String cientityString1 = TestHelper.httpEntityToString(cihttpEntity1);
         Map cimap1 = gson.fromJson(cientityString1, Map.class);
-        assert (cimap1.containsKey("interaction_id"));
-        String iid1 = (String) cimap1.get("interaction_id");
+        assert (cimap1.containsKey("message_id"));
+        String iid1 = (String) cimap1.get("message_id");
 
         Map<String, String> params2 = Map
             .of(
@@ -108,7 +108,7 @@ public class RestMemorySearchInteractionsActionIT extends MLCommonsRestTestCase 
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid),
                 null,
                 gson.toJson(params2),
                 null
@@ -118,14 +118,14 @@ public class RestMemorySearchInteractionsActionIT extends MLCommonsRestTestCase 
         HttpEntity cihttpEntity2 = ciresponse2.getEntity();
         String cientityString2 = TestHelper.httpEntityToString(cihttpEntity2);
         Map cimap2 = gson.fromJson(cientityString2, Map.class);
-        assert (cimap2.containsKey("interaction_id"));
-        String iid2 = (String) cimap2.get("interaction_id");
+        assert (cimap2.containsKey("message_id"));
+        String iid2 = (String) cimap2.get("message_id");
 
         Response siresponse = TestHelper
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.SEARCH_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
+                ActionConstants.SEARCH_INTERACTIONS_REST_PATH.replace("{memory_id}", cid),
                 null,
                 matchAllSearchQuery(),
                 null

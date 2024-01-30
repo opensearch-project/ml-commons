@@ -40,6 +40,8 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
@@ -330,6 +332,47 @@ public class InteractionsIndex {
             listener.onResponse(List.of());
             return;
         }
+
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
+            ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
+                // If the interaction doesn't exist, fail
+                if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
+                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
+                }
+                Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
+                // checks if the user has permission to access the conversation that the interaction belongs to
+                String conversationId = interaction.getConversationId();
+                ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
+                    if (access) {
+                        innerGetTraces(interactionId, from, maxResults, listener);
+                    } else {
+                        String userstr = client
+                            .threadPool()
+                            .getThreadContext()
+                            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                        String user = User.parse(userstr) == null
+                            ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
+                            : User.parse(userstr).getName();
+                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + interactionId);
+                    }
+                }, e -> { listener.onFailure(e); });
+                conversationMetaIndex.checkAccess(conversationId, accessListener);
+            }, e -> { internalListener.onFailure(e); });
+            client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                client.get(request, ActionListener.runBefore(al, () -> threadContext.restore()));
+            }, e -> {
+                log.error("Failed to refresh interactions index during get interaction ", e);
+                internalListener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    @VisibleForTesting
+    void innerGetTraces(String interactionId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
         SearchRequest request = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
         // Build the query
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
@@ -364,7 +407,7 @@ public class InteractionsIndex {
     }
 
     /**
-     * Gets all of the interactions in a conversation, regardless of conversation size
+     * Gets all interactions in a conversation, regardless of conversation size
      * @param conversationId conversation to get all interactions of
      * @param maxResults how many interactions to get per search query
      * @param listener receives the list of all interactions in the conversation
@@ -491,11 +534,10 @@ public class InteractionsIndex {
 
     /**
      * Get a single interaction
-     * @param conversationId id of the conversation this interaction belongs to
      * @param interactionId id of this interaction
      * @param listener receives the interaction
      */
-    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
+    public void getInteraction(String interactionId, ActionListener<Interaction> listener) {
         if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener
                 .onFailure(
@@ -506,39 +548,109 @@ public class InteractionsIndex {
                 );
             return;
         }
-        conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
-            if (access) {
-                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                    ActionListener<Interaction> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                    GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
-                    ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
-                        // If the conversation doesn't exist, fail
-                        if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
-                            throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
-                        }
-                        Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
-                        internalListener.onResponse(interaction);
-                    }, e -> { internalListener.onFailure(e); });
-                    client
-                        .admin()
-                        .indices()
-                        .refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
-                            client.get(request, al);
-                        }, e -> {
-                            log.error("Failed to refresh interactions index during get interaction ", e);
-                            internalListener.onFailure(e);
-                        }));
-                } catch (Exception e) {
-                    listener.onFailure(e);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Interaction> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
+            ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
+                // If the interaction doesn't exist, fail
+                if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
+                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
                 }
+                Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
+                // checks if the user has permission to access the conversation that the interaction belongs to
+                checkInteractionPermission(interactionId, interaction, internalListener);
+            }, e -> { internalListener.onFailure(e); });
+            client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                client.get(request, ActionListener.runBefore(al, () -> threadContext.restore()));
+            }, e -> {
+                log.error("Failed to refresh interactions index during get interaction ", e);
+                internalListener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Update interaction in the index
+     * @param interactionId the interaction id that needs update
+     * @param updateRequest original update request
+     * @param listener receives the update response for the wrapped query
+     */
+    public void updateInteraction(String interactionId, UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
+        if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
+            listener
+                .onFailure(
+                    new IndexNotFoundException(
+                        "cannot update interaction since the interaction index does not exist",
+                        INTERACTIONS_INDEX_NAME
+                    )
+                );
+            return;
+        }
+
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            GetRequest request = Requests.getRequest(INTERACTIONS_INDEX_NAME).id(interactionId);
+            ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
+                // If the interaction doesn't exist, fail
+                if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
+                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
+                }
+                Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
+                // checks if the user has permission to access the conversation that the interaction belongs to
+                String conversationId = interaction.getConversationId();
+                ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
+                    if (access) {
+                        innerUpdateInteraction(updateRequest, internalListener);
+                    } else {
+                        String userstr = client
+                            .threadPool()
+                            .getThreadContext()
+                            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                        String user = User.parse(userstr) == null
+                            ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
+                            : User.parse(userstr).getName();
+                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + interactionId);
+                    }
+                }, e -> { listener.onFailure(e); });
+                conversationMetaIndex.checkAccess(conversationId, accessListener);
+            }, e -> { internalListener.onFailure(e); });
+            client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
+                client.get(request, ActionListener.runBefore(al, () -> threadContext.restore()));
+            }, e -> {
+                log.error("Failed to refresh interactions index during get interaction ", e);
+                internalListener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    private void innerUpdateInteraction(UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            client.update(updateRequest, internalListener);
+        } catch (Exception e) {
+            log.error("Failed to update Conversation. Details {}:", e);
+            listener.onFailure(e);
+        }
+    }
+
+    private void checkInteractionPermission(String interactionId, Interaction interaction, ActionListener<Interaction> internalListener) {
+        String conversationId = interaction.getConversationId();
+        ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
+            if (access) {
+                internalListener.onResponse(interaction);
             } else {
                 String userstr = client
                     .threadPool()
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + interactionId);
             }
-        }, e -> { listener.onFailure(e); }));
+        }, e -> { internalListener.onFailure(e); });
+        conversationMetaIndex.checkAccess(conversationId, accessListener);
     }
 }
