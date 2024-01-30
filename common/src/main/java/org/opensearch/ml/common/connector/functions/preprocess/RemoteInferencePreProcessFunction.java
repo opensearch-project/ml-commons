@@ -48,7 +48,7 @@ public class RemoteInferencePreProcessFunction extends ConnectorPreProcessFuncti
         inputParams.putAll(((RemoteInferenceInputDataSet)mlInput.getInputDataset()).getParameters());
         String processedInput = executeScript(scriptService, preProcessFunction, inputParams);
         if (processedInput == null) {
-            throw new IllegalArgumentException("Input is null after processed by preprocess function");
+            throw new IllegalArgumentException("Preprocess function output is null");
         }
         Map<String, Object> map = gson.fromJson(processedInput, Map.class);
         return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(map)).build();

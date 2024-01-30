@@ -23,7 +23,7 @@ public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<L
 
         if (!outerList.isEmpty()) {
             if (!(outerList.get(0) instanceof List)) {
-                throw new IllegalArgumentException("Post process function input is not a List of List.");
+                throw new IllegalArgumentException("The embedding should be a non-empty List containing List of Float values.");
             }
             List<?> innerList = (List<?>) outerList.get(0);
 

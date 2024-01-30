@@ -55,7 +55,7 @@ public class DefaultPreProcessFunction extends ConnectorPreProcessFunction {
             }
             String processedInput = executeScript(scriptService, preProcessFunction, inputParams);
             if (processedInput == null) {
-                throw new IllegalArgumentException("Pre-process function output is null");
+                throw new IllegalArgumentException("Preprocess function output is null");
             }
             Map<String, Object> map = gson.fromJson(processedInput, Map.class);
             return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(map)).build();

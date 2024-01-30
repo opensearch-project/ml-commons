@@ -23,6 +23,9 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
 
     @Override
     public RemoteInferenceInputDataSet apply(MLInput mlInput) {
+        if (mlInput == null) {
+            throw new IllegalArgumentException("Preprocess function input can't be null");
+        }
         if (returnDirectlyForRemoteInferenceInput && mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
             return (RemoteInferenceInputDataSet)mlInput.getInputDataset();
         } else {
