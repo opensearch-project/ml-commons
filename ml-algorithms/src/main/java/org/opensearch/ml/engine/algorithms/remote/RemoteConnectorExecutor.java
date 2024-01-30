@@ -57,10 +57,18 @@ public interface RemoteConnectorExecutor {
                         .algorithm(FunctionName.TEXT_EMBEDDING)
                         .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                         .build(),
-                    modelTensors, new WrappedCountDownLatch(sequence++, countDownLatch) , tensorActionListener);
+                    modelTensors,
+                    new WrappedCountDownLatch(sequence++, countDownLatch),
+                    tensorActionListener
+                );
             }
         } else {
-            preparePayloadAndInvokeRemoteModel(mlInput, modelTensors, new WrappedCountDownLatch(0, new CountDownLatch(1)), tensorActionListener);
+            preparePayloadAndInvokeRemoteModel(
+                mlInput,
+                modelTensors,
+                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                tensorActionListener
+            );
         }
     }
 
@@ -111,7 +119,12 @@ public interface RemoteConnectorExecutor {
 
     default void setMlGuard(MLGuard mlGuard) {}
 
-    default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, Map<Integer, ModelTensors> tensorOutputs, WrappedCountDownLatch countDownLatch, ActionListener<List<ModelTensors>> actionListener) {
+    default void preparePayloadAndInvokeRemoteModel(
+        MLInput mlInput,
+        Map<Integer, ModelTensors> tensorOutputs,
+        WrappedCountDownLatch countDownLatch,
+        ActionListener<List<ModelTensors>> actionListener
+    ) {
         Connector connector = getConnector();
 
         Map<String, String> parameters = new HashMap<>();
@@ -156,5 +169,12 @@ public interface RemoteConnectorExecutor {
         }
     }
 
-    void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, Map<Integer, ModelTensors> tensorOutputs, WrappedCountDownLatch countDownLatch, ActionListener<List<ModelTensors>> actionListener);
+    void invokeRemoteModel(
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        Map<Integer, ModelTensors> tensorOutputs,
+        WrappedCountDownLatch countDownLatch,
+        ActionListener<List<ModelTensors>> actionListener
+    );
 }

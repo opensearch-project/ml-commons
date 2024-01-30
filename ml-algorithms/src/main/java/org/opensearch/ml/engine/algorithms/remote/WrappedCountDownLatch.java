@@ -7,10 +7,10 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import java.util.concurrent.CountDownLatch;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
-
-import java.util.concurrent.CountDownLatch;
 
 @Data
 @AllArgsConstructor

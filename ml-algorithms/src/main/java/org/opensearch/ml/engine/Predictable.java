@@ -34,9 +34,9 @@ public interface Predictable {
      * @param mlInput input data
      * @return predicted results
      */
-   default MLOutput predict(MLInput mlInput) {
-       throw new IllegalStateException("Method is not implemented");
-   }
+    default MLOutput predict(MLInput mlInput) {
+        throw new IllegalStateException("Method is not implemented");
+    }
 
     default void predict(MLInput mlInput, MLTask mlTask, ActionListener<MLTaskResponse> actionListener) {
 

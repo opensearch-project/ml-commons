@@ -26,7 +26,6 @@ import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -258,7 +257,12 @@ public class ConnectorUtils {
         return signer.sign(request, params);
     }
 
-    public static SdkHttpFullRequest buildSdkRequest(Connector connector, Map<String, String> parameters, String payload, SdkHttpMethod method, ActionListener<List<ModelTensors>> actionListener) {
+    public static SdkHttpFullRequest buildSdkRequest(
+        Connector connector,
+        Map<String, String> parameters,
+        String payload,
+        SdkHttpMethod method
+    ) {
         String endpoint = connector.getPredictEndpoint(parameters);
         String charset = parameters.getOrDefault("charset", "UTF-8");
         RequestBody requestBody;
@@ -266,6 +270,10 @@ public class ConnectorUtils {
             requestBody = RequestBody.fromString(payload, Charset.forName(charset));
         } else {
             requestBody = RequestBody.empty();
+        }
+        if (requestBody.optionalContentLength().isEmpty()) {
+            log.error("Content length is empty. Aborting request to remote model");
+            throw new IllegalArgumentException("Content length is empty. Aborting request to remote model");
         }
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()

@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -82,7 +81,15 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), null, new HashMap<>(), new WrappedCountDownLatch(0, new CountDownLatch(1)), actionListener);
+        executor
+            .invokeRemoteModel(
+                createMLInput(),
+                new HashMap<>(),
+                null,
+                new HashMap<>(),
+                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                actionListener
+            );
     }
 
     @Test
@@ -102,9 +109,16 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), null, new HashMap<>(), new WrappedCountDownLatch(0, new CountDownLatch(1)), actionListener);
+        executor
+            .invokeRemoteModel(
+                createMLInput(),
+                new HashMap<>(),
+                null,
+                new HashMap<>(),
+                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                actionListener
+            );
     }
-
 
     private MLInput createMLInput() {
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();

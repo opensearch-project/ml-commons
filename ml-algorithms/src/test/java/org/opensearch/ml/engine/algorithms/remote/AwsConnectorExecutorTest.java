@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIEL
 
 import java.util.Arrays;
 import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -159,8 +160,7 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
     }
 
     @Test
