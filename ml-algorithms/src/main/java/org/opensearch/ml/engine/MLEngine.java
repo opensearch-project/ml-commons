@@ -58,7 +58,7 @@ public class MLEngine {
 
     public String getPrebuiltModelConfigPath(String modelName, String version, MLModelFormat modelFormat) {
         String format = modelFormat.name().toLowerCase(Locale.ROOT);
-        return String.format("%s/%s/%s/%s/config.json", MODEL_REPO, modelName, version, format, Locale.ROOT);
+        return String.format(Locale.ROOT, "%s/%s/%s/%s/config.json", MODEL_REPO, modelName, version, format);
     }
 
     public String getPrebuiltModelPath(String modelName, String version, MLModelFormat modelFormat) {
@@ -67,7 +67,7 @@ public class MLEngine {
         // /huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.0/onnx/config.json
         String format = modelFormat.name().toLowerCase(Locale.ROOT);
         String modelZipFileName = modelName.substring(index).replace("/", "_") + "-" + version + "-" + format;
-        return String.format("%s/%s/%s/%s/%s.zip", MODEL_REPO, modelName, version, format, modelZipFileName, Locale.ROOT);
+        return String.format(Locale.ROOT, "%s/%s/%s/%s/%s.zip", MODEL_REPO, modelName, version, format, modelZipFileName);
     }
 
     public Path getRegisterModelPath(String modelId, String modelName, String version) {
