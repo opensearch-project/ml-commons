@@ -229,7 +229,10 @@ public class ModelHelper {
                 DownloadUtils.download(url, modelPath, new ProgressBar());
                 verifyModelZipFile(modelFormat, modelPath, modelName, functionName);
                 String hash = calculateFileHash(modelZipFile);
-                if (hash.equals(modelContentHash)) {
+                if (modelContentHash == null) {
+                    log.error("Hash code need to be provided when register via url.");
+                    throw (new IllegalArgumentException("Hash code need to be provided when register via url."));
+                } else if (hash.equals(modelContentHash)) {
                     List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
                     Map<String, Object> result = new HashMap<>();
                     result.put(CHUNK_FILES, chunkFiles);
