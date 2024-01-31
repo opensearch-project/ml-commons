@@ -231,7 +231,9 @@ public class ModelHelper {
                 String hash = calculateFileHash(modelZipFile);
                 if (modelContentHash == null) {
                     log.error("Hash code need to be provided when register via url.");
-                    throw (new IllegalArgumentException("Hash code need to be provided when register via url."));
+                    throw (new IllegalArgumentException(
+                        "Model content Hash code need to be provided when register via url. Please calculate sha 256 Hash code."
+                    ));
                 } else if (hash.equals(modelContentHash)) {
                     List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
                     Map<String, Object> result = new HashMap<>();
