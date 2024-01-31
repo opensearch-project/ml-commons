@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.register;
 
 import lombok.Builder;
 import lombok.Data;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -54,6 +55,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
+
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
+
     private FunctionName functionName;
     private String modelName;
     private String modelGroupId;
@@ -130,6 +134,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
 
     public MLRegisterModelInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         this.functionName = in.readEnum(FunctionName.class);
         this.modelName = in.readString();
         this.modelGroupId = in.readOptionalString();
@@ -160,11 +165,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.accessMode = in.readEnum(AccessMode.class);
         }
-        this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
+            this.doesVersionCreateModelGroup = in.readOptionalBoolean();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeEnum(functionName);
         out.writeString(modelName);
         out.writeOptionalString(modelGroupId);
@@ -206,7 +214,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
+            out.writeOptionalBoolean(doesVersionCreateModelGroup);
+        }
     }
 
     @Override
