@@ -9,10 +9,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +55,7 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
@@ -212,6 +216,11 @@ public class MLChatAgentRunnerTest {
             .build();
         mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        // 2 tools thought + 1 final answer thought + 1 final answer
+        Mockito.verify(conversationIndexMemory, times(4)).save(any(ConversationIndexMessage.class), any(), anyInt(), eq(null));
+        // two tools response
+        Mockito.verify(conversationIndexMemory, times(1)).save(any(ConversationIndexMessage.class), any(), anyInt(), eq(FIRST_TOOL));
+        Mockito.verify(conversationIndexMemory, times(1)).save(any(ConversationIndexMessage.class), any(), anyInt(), eq(SECOND_TOOL));
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors();
         assertEquals(1, agentOutput.size());
