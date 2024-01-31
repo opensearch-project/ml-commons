@@ -226,6 +226,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                 "Model already deployed to these nodes: "
                                     + Arrays.toString(difference.toArray(new String[0]))
                                     + ", but they are not included in target node ids. Undeploy model from these nodes if don't need them any more."
+                                    + "Undeploy from old nodes before try to deploy model on new nodes. Or include all old nodes on your target nodes."
+
                             )
                         );
                     return;
