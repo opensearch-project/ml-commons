@@ -147,6 +147,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
+            throw new IllegalArgumentException(
+                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
+            );
+        }
         registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
@@ -174,11 +179,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         Boolean isModelNameAlreadyExisting
     ) {
         User user = RestActionUtils.getUserContext(client);
-        if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
-            throw new IllegalArgumentException(
-                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."
-            );
-        }
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
                 if (access) {
