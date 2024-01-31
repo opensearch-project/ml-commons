@@ -86,13 +86,23 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onError(Throwable error) {
         log.error(error.getMessage(), error);
-        actionListener
-            .onFailure(
-                new OpenSearchStatusException(
-                    "Error on communication with remote model: " + error.getMessage(),
-                    RestStatus.INTERNAL_SERVER_ERROR
-                )
-            );
+        if (statusCode == null) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Error on communication with remote model: " + error.getMessage(),
+                        RestStatus.INTERNAL_SERVER_ERROR
+                    )
+                );
+        } else {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Error on communication with remote model: " + error.getMessage(),
+                        RestStatus.fromCode(statusCode)
+                    )
+                );
+        }
     }
 
     private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Map<Integer, ModelTensors> tensorOutputs)
@@ -152,13 +162,17 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                         + (t instanceof NullPointerException ? "NullPointerException" : t.getMessage())
                 );
             if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                actionListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "Error on receiving response body from remote: " + String.join(",", errorMsg),
-                            RestStatus.INTERNAL_SERVER_ERROR
-                        )
-                    );
+                if (t instanceof OpenSearchStatusException) {
+                    actionListener.onFailure((OpenSearchStatusException) t);
+                } else {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Error on receiving response body from remote: " + String.join(",", errorMsg),
+                                RestStatus.INTERNAL_SERVER_ERROR
+                            )
+                        );
+                }
             } else {
                 log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
             }
@@ -188,13 +202,17 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                             + (e instanceof NullPointerException ? "NullPointerException" : e.getMessage())
                     );
                 if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "Error on receiving response from remote: " + String.join(",", errorMsg),
-                                RestStatus.INTERNAL_SERVER_ERROR
-                            )
-                        );
+                    if (e instanceof OpenSearchStatusException) {
+                        actionListener.onFailure((OpenSearchStatusException) e);
+                    } else {
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Error on receiving response from remote: " + String.join(",", errorMsg),
+                                    RestStatus.INTERNAL_SERVER_ERROR
+                                )
+                            );
+                    }
                 } else {
                     log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
                 }
