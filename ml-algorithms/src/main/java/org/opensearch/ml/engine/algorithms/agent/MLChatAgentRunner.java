@@ -377,21 +377,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
                         if (conversationIndexMemory != null) {
-                            // Create final trace message.
-                            ConversationIndexMessage msgTemp = ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .type("ReAct")
-                                .question(question)
-                                .response(finalAnswer)
-                                .finalAnswer(true)
-                                .sessionId(sessionId)
-                                .build();
-                            conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
-                        }
-                    }
-                    if (finalAnswer != null) {
-                        finalAnswer = finalAnswer.trim();
-                        if (conversationIndexMemory != null) {
                             String finalAnswer1 = finalAnswer;
                             // Create final trace message.
                             ConversationIndexMessage msgTemp = ConversationIndexMessage
