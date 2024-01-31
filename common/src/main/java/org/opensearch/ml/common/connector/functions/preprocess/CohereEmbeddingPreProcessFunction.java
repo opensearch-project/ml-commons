@@ -28,7 +28,7 @@ public class CohereEmbeddingPreProcessFunction extends ConnectorPreProcessFuncti
     @Override
     public RemoteInferenceInputDataSet process(MLInput mlInput) {
         TextDocsInputDataSet inputData = (TextDocsInputDataSet) mlInput.getInputDataset();
-        Map<String, Object> processedResult = Map.of("parameters", Map.of("texts", processTextDocs(inputData)));
+        Map<String, Object> processedResult = Map.of("parameters", Map.of("texts", inputData.getDocs()));
         return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(processedResult)).build();
     }
 }
