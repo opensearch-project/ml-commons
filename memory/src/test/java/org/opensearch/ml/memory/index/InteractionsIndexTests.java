@@ -106,6 +106,8 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
 
     InteractionsIndex interactionsIndex;
 
+    Interaction interaction;
+
     @Before
     public void setup() {
         this.client = mock(Client.class);
@@ -123,6 +125,16 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doReturn(indicesAdminClient).when(adminClient).indices();
         doReturn(threadPool).when(client).threadPool();
         doReturn(new ThreadContext(Settings.EMPTY)).when(threadPool).getThreadContext();
+        interaction = new Interaction(
+            "iid",
+            Instant.ofEpochMilli(1234),
+            "cid",
+            "inp",
+            "pt",
+            "rsp",
+            "ogn",
+            Collections.singletonMap("metadata", "some meta")
+        );
         this.interactionsIndex = spy(new InteractionsIndex(client, clusterService, conversationMetaIndex));
     }
 
@@ -573,7 +585,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(client).bulk(any(), any());
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(2);
-            al.onResponse(List.of());
+            al.onResponse(List.of(interaction));
             return null;
         }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
         @SuppressWarnings("unchecked")
@@ -594,7 +606,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(client).bulk(any(), any());
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(2);
-            al.onResponse(List.of());
+            al.onResponse(List.of(interaction));
             return null;
         }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
         @SuppressWarnings("unchecked")
@@ -619,6 +631,22 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Failure during GetAllInteractions"));
+    }
+
+    public void testDelete_SearchReturnEmpty_ThenPass() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> al = invocation.getArgument(2);
+            al.onResponse(List.of());
+            return null;
+        }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        interactionsIndex.deleteConversation("cid", deleteConversationListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
     }
 
     public void testDelete_NoAccessNoUser_ThenFail() {
