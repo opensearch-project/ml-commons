@@ -8,6 +8,7 @@ package org.opensearch.ml.common.utils;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,5 +99,14 @@ public class StringUtilsTest {
         Assert.assertEquals("2.1", parameterMap.get("key3"));
         Assert.assertEquals("[10,20]", parameterMap.get("key4"));
         Assert.assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
+    }
+
+    @Test
+    public void processTextDocs() {
+        List<String> processedDocs = StringUtils.processTextDocs(Arrays.asList("abc \n\n123\"4", null, "[1.01,\"abc\"]"));
+        Assert.assertEquals(3, processedDocs.size());
+        Assert.assertEquals("abc \\n\\n123\\\"4", processedDocs.get(0));
+        Assert.assertNull(processedDocs.get(1));
+        Assert.assertEquals("[1.01,\\\"abc\\\"]", processedDocs.get(2));
     }
 }
