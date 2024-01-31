@@ -19,7 +19,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.script.ScriptService;
 
 import java.util.Arrays;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 import java.util.ArrayList;
@@ -108,6 +109,7 @@ public interface RemoteConnectorExecutor {
         MLInputDataset inputDataset = mlInput.getInputDataset();
         Map<String, String> inputParameters = new HashMap<>();
         if (inputDataset instanceof RemoteInferenceInputDataSet && ((RemoteInferenceInputDataSet) inputDataset).getParameters() != null) {
+            escapeRemoteInferenceInputData((RemoteInferenceInputDataSet) inputDataset);
             inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
         parameters.putAll(inputParameters);

@@ -10,6 +10,8 @@ import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_F
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
+import static org.opensearch.ml.common.utils.StringUtils.processTextDocs;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 
 import java.io.IOException;
@@ -29,6 +31,7 @@ import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.DefaultPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.RemoteInferencePreProcessFunction;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -68,20 +71,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("no predict action found");
         }
         RemoteInferenceInputDataSet inputData = processMLInput(mlInput, connector, parameters, scriptService);
-        if (inputData.getParameters() != null) {
-            Map<String, String> newParameters = new HashMap<>();
-            inputData.getParameters().forEach((key, value) -> {
-                if (value == null) {
-                    newParameters.put(key, null);
-                } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
-                    // no need to escape if it's already valid json
-                    newParameters.put(key, value);
-                } else {
-                    newParameters.put(key, escapeJson(value));
-                }
-            });
-            inputData.setParameters(newParameters);
-        }
+        escapeRemoteInferenceInputData(inputData);
         return inputData;
     }
 
@@ -112,6 +102,7 @@ public class ConnectorUtils {
                     return (RemoteInferenceInputDataSet) mlInput.getInputDataset();
                 }
             } else {
+                MLInput newInput = escapeMLInput(mlInput);
                 boolean convertInputToJsonString = parameters.containsKey(CONVERT_INPUT_TO_JSON_STRING)
                     && Boolean.parseBoolean(parameters.get(CONVERT_INPUT_TO_JSON_STRING));
                 DefaultPreProcessFunction function = DefaultPreProcessFunction
@@ -120,8 +111,48 @@ public class ConnectorUtils {
                     .preProcessFunction(preProcessFunction)
                     .convertInputToJsonString(convertInputToJsonString)
                     .build();
-                return function.apply(mlInput);
+                return function.apply(newInput);
             }
+        }
+    }
+
+    private static MLInput escapeMLInput(MLInput mlInput) {
+        if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
+            List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
+            List<String> newDocs = processTextDocs(docs);
+            TextDocsInputDataSet newInputData = ((TextDocsInputDataSet) mlInput.getInputDataset()).toBuilder().docs(newDocs).build();
+            return mlInput.toBuilder().inputDataset(newInputData).build();
+        }
+
+        if (mlInput.getInputDataset() instanceof TextSimilarityInputDataSet) {
+            String query = ((TextSimilarityInputDataSet) mlInput.getInputDataset()).getQueryText();
+            String newQuery = processTextDoc(query);
+            List<String> docs = ((TextSimilarityInputDataSet) mlInput.getInputDataset()).getTextDocs();
+            List<String> newDocs = processTextDocs(docs);
+            TextSimilarityInputDataSet newInputData = ((TextSimilarityInputDataSet) mlInput.getInputDataset())
+                .toBuilder()
+                .queryText(newQuery)
+                .textDocs(newDocs)
+                .build();
+            return mlInput.toBuilder().inputDataset(newInputData).build();
+        }
+        return mlInput;
+    }
+
+    public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
+        Map<String, String> newParameters = new HashMap<>();
+        if (inputData.getParameters() != null) {
+            inputData.getParameters().forEach((key, value) -> {
+                if (value == null) {
+                    newParameters.put(key, null);
+                } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
+                    // no need to escape if it's already valid json
+                    newParameters.put(key, value);
+                } else {
+                    newParameters.put(key, escapeJson(value));
+                }
+            });
+            inputData.setParameters(newParameters);
         }
     }
 

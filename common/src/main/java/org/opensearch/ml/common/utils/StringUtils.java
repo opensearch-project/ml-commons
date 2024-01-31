@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -119,5 +120,24 @@ public class StringUtils {
             throw new RuntimeException(e);
         }
         return parameterStringMap;
+    }
+
+    public static List<String> processTextDocs(List<String> inputDocs) {
+        List<String> docs = new ArrayList<>();
+        for (String doc : inputDocs) {
+            docs.add(processTextDoc(doc));
+        }
+        return docs;
+    }
+
+    public static String processTextDoc(String doc) {
+        if (doc != null) {
+            String gsonString = gson.toJson(doc);
+            // in 2.9, user will add " before and after string
+            // gson.toString(string) will add extra " before after string, so need to remove
+            return gsonString.substring(1, gsonString.length() - 1);
+        } else {
+            return null;
+        }
     }
 }
