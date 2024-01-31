@@ -86,6 +86,15 @@ public class ModelHelperTest {
     }
 
     @Test
+    public void testDownloadAndSplit_nullHashCode() throws URISyntaxException {
+        String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, null, FunctionName.TEXT_EMBEDDING, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(IllegalArgumentException.class, argumentCaptor.getValue().getClass());
+    }
+
+    @Test
     public void testDownloadAndSplit_HashFailure() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
         modelHelper
