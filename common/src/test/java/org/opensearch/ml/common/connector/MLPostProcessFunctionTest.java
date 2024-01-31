@@ -16,6 +16,7 @@ import java.util.List;
 
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
 
 public class MLPostProcessFunctionTest {
@@ -43,15 +44,14 @@ public class MLPostProcessFunctionTest {
 
     @Test
     public void test_buildModelTensorList() {
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList());
         List<List<Float>> numbersList = new ArrayList<>();
         numbersList.add(Collections.singletonList(1.0f));
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList().apply(numbersList));
+        Assert.assertNotNull(MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(numbersList));
     }
 
     @Test
     public void test_buildModelTensorList_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.buildModelTensorList().apply(null);
+        MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(null);
     }
 }
