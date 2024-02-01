@@ -14,6 +14,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -155,12 +156,14 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         settings = Settings
             .builder()
             .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true)
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
             .build();
         threadContext = new ThreadContext(settings);
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_URL_REGEX,
+            ML_COMMONS_ALLOW_MODEL_URL,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
@@ -292,6 +295,50 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("URL can't match trusted url regex", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testRegisterModelUrlNotAllowed() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false)
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_URL_REGEX,
+            ML_COMMONS_ALLOW_MODEL_URL,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        transportRegisterModelAction = new TransportRegisterModelAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlIndicesHandler,
+            mlModelManager,
+            mlTaskManager,
+            clusterService,
+            settings,
+            threadPool,
+            client,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlStats,
+            modelAccessControlHelper,
+            connectorAccessControlHelper,
+            mlModelGroupManager
+        );
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> transportRegisterModelAction.doExecute(task, prepareRequest("test url", "testModelGroupsID"), actionListener)
+        );
+        assertEquals(
+            e.getMessage(),
+            "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
+        );
     }
 
     public void testDoExecute_successWithLocalNodeNotEqualToClusterNode() {
