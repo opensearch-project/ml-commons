@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.AgentTool.DEFAULT_DESCRIPTION;
 
 import java.util.Arrays;
@@ -67,13 +68,19 @@ public class AgentToolTests {
     public void testAgenttestRunMethod() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("testKey", "testValue");
-        AgentMLInput agentMLInput = AgentMLInput
-            .AgentMLInputBuilder()
-            .agentId("agentId")
-            .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
-            .build();
+        doTestRunMethod(parameters);
+    }
 
+    @Test
+    public void testAgentWithChatAgentInput() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("testKey", "testValue");
+        Map<String, String> chatAgentInput = ImmutableMap.of("input", gson.toJson(parameters));
+        doTestRunMethod(chatAgentInput);
+    }
+
+    private void doTestRunMethod(Map<String, String> parameters)
+    {
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
