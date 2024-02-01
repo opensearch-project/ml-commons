@@ -1286,10 +1286,10 @@ public class MLModelManager {
                             + " is expected not having a model controller. Please use the create controller api to create one if this is unexpected."
                     );
                 log
-                    .warn(
+                    .debug(
                         "No controller is deployed because the model "
                             + modelId
-                            + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                            + " is expected not having a model controller."
                     );
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
@@ -1306,10 +1306,10 @@ public class MLModelManager {
                                 + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
                         );
                     log
-                        .warn(
+                        .debug(
                             "No controller is deployed because the model "
                                 + modelId
-                                + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                                + " is expected not having a model controller."
                         );
                 } else {
                     listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
