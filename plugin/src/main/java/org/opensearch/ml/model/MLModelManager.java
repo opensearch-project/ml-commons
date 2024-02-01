@@ -1276,40 +1276,40 @@ public class MLModelManager {
                     log.error("Failed to parse ml task" + r.getId(), e);
                     listener.onFailure(e);
                 }
-            } else if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
+            } else if (!BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                 // Not going to respond the failure here due to the model deploy can still work
                 // well
                 listener
                     .onResponse(
                         "No controller is deployed because the model "
                             + modelId
-                            + " is expected not having a model controller. Please use the create controller api to create one if this is unexpected."
+                            + " is expected not having an enabled model controller. Please use the create controller api to create one if this is unexpected."
                     );
                 log
                     .debug(
                         "No controller is deployed because the model "
                             + modelId
-                            + " is expected not having a model controller."
+                            + " is expected not having an enabled model controller."
                     );
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {
-                if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
+                if (!BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                     // Not going to respond the failure here due to the model deploy can still work
                     // well
                     listener
                         .onResponse(
                             "No controller is deployed because the model "
                                 + modelId
-                                + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                                + " is expected not having an enabled model controller. Please use the create model controller api to create one if this is unexpected."
                         );
                     log
                         .debug(
                             "No controller is deployed because the model "
                                 + modelId
-                                + " is expected not having a model controller."
+                                + " is expected not having an enabled model controller."
                         );
                 } else {
                     listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
@@ -1391,11 +1391,12 @@ public class MLModelManager {
                     limit / unit.toSeconds(1),
                     eligibleNodeCount
                 );
+            // Burst token must be greater than 1 to accept request
             return new TokenBucket(
                 System::nanoTime,
                 limit / unit.toNanos(1) / eligibleNodeCount,
-                Math.ceil(limit / eligibleNodeCount),
-                Math.ceil(limit / eligibleNodeCount)
+                Math.max(limit / eligibleNodeCount, 1),
+                Math.max(limit / eligibleNodeCount, 1)
             );
         }
         return null;
