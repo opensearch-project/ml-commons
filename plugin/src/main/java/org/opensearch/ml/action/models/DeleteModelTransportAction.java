@@ -251,7 +251,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             @Override
             public void onFailure(Exception e) {
                 if (e instanceof IndexNotFoundException) {
-                    log.info("Model controller not deleted due to no model controller was found for model: " + modelId);
+                    log.info("Model controller not deleted due to no model controller found for model: " + modelId);
                     actionListener.onFailure(e);
                 } else {
                     log.error("Failed to delete model controller for model: " + modelId, e);
@@ -274,7 +274,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             } else {
                 log.warn("The deletion of model controller for model {} returned with result: {}", modelId, deleteResponse.getResult());
             }
-        }, e -> log.error("Failed to re-deploy the model controller for model: " + modelId, e)));
+        }, e -> {
+            if (e instanceof IndexNotFoundException) {
+                log.warn("Model controller not deleted due to no model controller found for model: " + modelId);
+            } else {
+                log.error("Failed to delete model controller for model: " + modelId, e);
+            }
+        }));
     }
 
     private Boolean isModelNotDeployed(MLModelState mlModelState) {
