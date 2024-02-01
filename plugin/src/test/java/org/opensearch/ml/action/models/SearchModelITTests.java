@@ -5,11 +5,14 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
@@ -185,6 +188,11 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
+    }
+
+    @Override
+    protected Settings nodeSettings(int ordinal) {
+        return Settings.builder().put(super.nodeSettings(ordinal)).put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true).build();
     }
 
 }
