@@ -117,7 +117,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 }
             }, listener::onFailure));
         } else {
-            // Only allow user undeploy one model if model access control enabled.
+            // Only allow user to undeploy one model if model access control enabled.
+            // With multiple models, it is difficult to check to which models user has access to.
             if (modelAccessControlHelper.isModelAccessControlEnabled()) {
                 throw new IllegalArgumentException("only support undeploy one model");
             } else {
@@ -196,7 +197,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
             // Create a TermQueryBuilder for IS_HIDDEN_FIELD with value true
             TermQueryBuilder isHiddenQuery = QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, true);
 
-            // Combine the queries using a bool query with must clause
+            // Create an existsQuery to exclude model chunks
+            // Combine the queries using a bool query with must and mustNot clause
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             searchSourceBuilder
                 .query(
@@ -207,7 +209,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                         .mustNot(QueryBuilders.existsQuery(MLModel.CHUNK_NUMBER_FIELD))
                 );
 
-            // Set up the rest of the search request
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
 
             client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(models -> { listener.onResponse(models); }, e -> {
@@ -219,7 +220,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 }
             }), () -> context.restore()));
         } catch (Exception e) {
-            log.error("Failed to search model group index", e);
+            log.error("Failed to search model index", e);
             listener.onFailure(e);
         }
     }
