@@ -146,8 +146,6 @@ public class AgentTool implements Tool {
                 parameters.putAll(chatParameters);
             } catch (Exception exception) {
                 log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
-            } finally {
-                return;
             }
         }
     }
