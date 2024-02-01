@@ -1287,9 +1287,7 @@ public class MLModelManager {
                     );
                 log
                     .debug(
-                        "No controller is deployed because the model "
-                            + modelId
-                            + " is expected not having an enabled model controller."
+                        "No controller is deployed because the model " + modelId + " is expected not having an enabled model controller."
                     );
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
