@@ -2,15 +2,10 @@
 
 This blueprint will show you how to connect a Cohere embedding model to your Opensearch instance, including creating a k-nn index and your own Embedding pipeline. You will require a Cohere API key.
 
-Cohere currently offers the following Embedding models (with model name and embedding dimensions). Note that only a couple are tested.
+Cohere currently offers the following Embedding models (with model name and embedding dimensions). Note that only the following have been tested with the blueprint guide.
 
-- embed-english-v3.0 1024 (Tested)
-- embed-english-v2.0 4096 (Tested)
-- embed-multilingual-v3.0 1024 (Untested)
-- embed-english-light-v3.0 384 (Untested)
-- embed-multilingual-light-v3.0 384 (Untested)
-- embed-english-light-v2.0 1024 (Untested)
-- embed-multilingual-v2.0 768 (Untested)
+- embed-english-v3.0 1024
+- embed-english-v2.0 4096
 
 See [Cohere's /embed API docs](https://docs.cohere.com/reference/embed) for more details.
 
