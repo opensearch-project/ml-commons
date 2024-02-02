@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
@@ -53,12 +54,12 @@ public class AgentTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        extractFromChatParameters(parameters);
+        Map<String, String> extractedParameters = extractInputParameters(parameters);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
             .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
             .build();
         ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
         client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
@@ -139,14 +140,17 @@ public class AgentTool implements Tool {
         }
     }
 
-    private void extractFromChatParameters(Map<String, String> parameters) {
+    private Map<String, String> extractInputParameters(Map<String, String> parameters) {
+        Map<String, String> extractedParameters = new HashMap<>();
+        extractedParameters.putAll(parameters);
         if (parameters.containsKey("input")) {
             try {
                 Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
-                parameters.putAll(chatParameters);
+                extractedParameters.putAll(chatParameters);
             } catch (Exception exception) {
                 log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
             }
         }
+        return extractedParameters;
     }
 }

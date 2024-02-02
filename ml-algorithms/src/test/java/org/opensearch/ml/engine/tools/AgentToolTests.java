@@ -76,6 +76,8 @@ public class AgentToolTests {
         Map<String, String> chatAgentInput = new HashMap<>();
         chatAgentInput.put("input", gson.toJson(parameters));
         doTestRunMethod(chatAgentInput);
+        assertEquals(chatAgentInput.size(), 1);
+        assertEquals(chatAgentInput.get("input"), gson.toJson(parameters)); // assert no influence on original parameters
     }
 
     @Test
