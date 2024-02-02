@@ -200,7 +200,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLModel mlModel,
         User user,
         ActionListener<UpdateResponse> wrappedListener
-    ) {
+    ) throws IOException {
         String newModelGroupId = (Strings.hasLength(updateModelInput.getModelGroupId())
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
@@ -330,7 +330,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 .validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasNewModelGroupPermission -> {
                     if (hasNewModelGroupPermission) {
                         mlModelGroupManager.getModelGroupResponse(newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
-                            updateRequestConstructor(
+                            buildUpdateRequest(
                                 modelId,
                                 newModelGroupId,
                                 updateRequest,
@@ -364,11 +364,11 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     wrappedListener.onFailure(exception);
                 }));
         } else {
-            updateRequestConstructor(modelId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
+            buildUpdateRequest(modelId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
         }
     }
 
-    private void updateRequestConstructor(
+    private void buildUpdateRequest(
         String modelId,
         UpdateRequest updateRequest,
         MLUpdateModelInput updateModelInput,
@@ -377,7 +377,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         try {
             updateModelInput.setLastUpdateTime(Instant.now());
-            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.doc(updateModelInput.toXContentForUpdateRequestDoc(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {
@@ -397,7 +397,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
-    private void updateRequestConstructor(
+    private void buildUpdateRequest(
         String modelId,
         String newModelGroupId,
         UpdateRequest updateRequest,
@@ -418,7 +418,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             Integer.parseInt(updatedVersion)
         );
         try {
-            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.doc(updateModelInput.toXContentForUpdateRequestDoc(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {
