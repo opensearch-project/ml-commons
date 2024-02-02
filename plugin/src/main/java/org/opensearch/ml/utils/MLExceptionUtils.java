@@ -20,6 +20,8 @@ public class MLExceptionUtils {
     public static final String NOT_SERIALIZABLE_EXCEPTION_WRAPPER = "NotSerializableExceptionWrapper: ";
     public static final String REMOTE_INFERENCE_DISABLED_ERR_MSG =
         "Remote Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.remote_inference_enabled\" to true.";
+    public static final String AGENT_FRAMEWORK_DISABLED_ERR_MSG =
+        "Agent Framework is currently disabled. To enable it, update the setting \"plugins.ml_commons.agent_framework_enabled\" to true.";
 
     public static String getRootCauseMessage(final Throwable throwable) {
         String message = ExceptionUtils.getRootCauseMessage(throwable);

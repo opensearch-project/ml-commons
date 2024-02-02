@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 
 import java.io.IOException;
@@ -15,6 +16,7 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -26,8 +28,11 @@ import com.google.common.collect.ImmutableList;
  */
 public class RestMLDeleteAgentAction extends BaseRestHandler {
     private static final String ML_DELETE_AGENT_ACTION = "ml_delete_agent_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public void RestMLDeleteAgentAction() {}
+    public RestMLDeleteAgentAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -42,6 +47,9 @@ public class RestMLDeleteAgentAction extends BaseRestHandler {
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
+            throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
+        }
         String agentId = request.param(PARAMETER_AGENT_ID);
 
         MLAgentDeleteRequest mlAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
