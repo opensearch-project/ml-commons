@@ -663,7 +663,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
@@ -676,7 +676,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             settings,
             mlFeatureEnabledSetting
         );
-        RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction();
+        RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction(mlFeatureEnabledSetting);
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
@@ -705,12 +705,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction();
         RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction();
         RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction();
-        RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction();
-        RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction();
+        RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
+        RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
-        RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction();
+        RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction(mlFeatureEnabledSetting);
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         return ImmutableList
@@ -873,7 +873,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
+                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED
             );
         return settings;
     }
