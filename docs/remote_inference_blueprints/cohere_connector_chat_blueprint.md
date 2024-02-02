@@ -80,7 +80,6 @@ You will now register the model you created using the `model_group_id` and `conn
 
 ```json
 POST /_plugins/_ml/models/_register
-Content-Type: application/json
 
 {
     "name": "Cohere Chat Model",
