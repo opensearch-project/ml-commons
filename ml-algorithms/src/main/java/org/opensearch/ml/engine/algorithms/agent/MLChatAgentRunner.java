@@ -8,7 +8,9 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.*;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelResponseJson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseInputFromLLMReturn;
 
 import java.util.ArrayList;
 import java.util.Collections;
