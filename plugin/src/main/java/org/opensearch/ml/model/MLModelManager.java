@@ -1233,14 +1233,14 @@ public class MLModelManager {
         } else if (isModelRunningOnNode(modelId)) {
             log
                 .error(
-                    "Failed to undeploy model controller due to model is in ML cache but with a state other than deployed. Please check model: "
+                    "Failed to undeploy model controller because model is in ML cache but with a state other than deployed. Please check model: "
                         + modelId,
                     new RuntimeException()
                 );
             listener
                 .onFailure(
                     new RuntimeException(
-                        "Failed to undeploy model controller due to model is in ML cache but with a state other than deployed. Please check model: "
+                        "Failed to undeploy model controller because model is in ML cache but with a state other than deployed. Please check model: "
                             + modelId
                     )
                 );
@@ -1276,25 +1276,47 @@ public class MLModelManager {
                     log.error("Failed to parse ml task" + r.getId(), e);
                     listener.onFailure(e);
                 }
-            } else if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
+            } else if (!BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                 // Not going to respond the failure here due to the model deploy can still work
                 // well
                 listener
                     .onResponse(
-                        "The model "
+                        "No controller is deployed because the model "
                             + modelId
-                            + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                            + " is expected not having an enabled model controller. Please use the create controller api to create one if this is unexpected."
                     );
                 log
-                    .warn(
-                        "The model "
-                            + modelId
-                            + " is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                    .debug(
+                        "No controller is deployed because the model " + modelId + " is expected not having an enabled model controller."
                     );
             } else {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
             }
-        }, listener::onFailure));
+        }, e -> {
+            if (e instanceof IndexNotFoundException) {
+                if (!BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
+                    // Not going to respond the failure here due to the model deploy can still work
+                    // well
+                    listener
+                        .onResponse(
+                            "No controller is deployed because the model "
+                                + modelId
+                                + " is expected not having an enabled model controller. Please use the create model controller api to create one if this is unexpected."
+                        );
+                    log
+                        .debug(
+                            "No controller is deployed because the model "
+                                + modelId
+                                + " is expected not having an enabled model controller."
+                        );
+                } else {
+                    listener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
+                }
+            } else {
+                log.error("Failed to re-deploy the model controller for model: " + modelId, e);
+                listener.onFailure(e);
+            }
+        }));
     }
 
     /**
@@ -1315,10 +1337,13 @@ public class MLModelManager {
         deployControllerWithDeployingModel(mlModel, eligibleNodeCount, ActionListener.wrap(response -> {
             if (response.startsWith("Successfully")) {
                 log.debug(response, mlModel.getModelId());
-            } else if (response.startsWith("Failed")) {
-                log.error(response);
+            } else if (response
+                .endsWith(
+                    "is expected not having a model controller. Please use the create model controller api to create one if this is unexpected."
+                )) {
+                log.warn(response);
             } else {
-                log.info(response);
+                log.error(response);
             }
         }, e -> log.error("Failed to re-deploy the model controller for model: " + mlModel.getModelId(), e)));
     }
@@ -1364,7 +1389,13 @@ public class MLModelManager {
                     limit / unit.toSeconds(1),
                     eligibleNodeCount
                 );
-            return new TokenBucket(System::nanoTime, limit / unit.toNanos(1) / eligibleNodeCount, limit, limit / eligibleNodeCount);
+            // Burst token must be greater than 1 to accept request
+            return new TokenBucket(
+                System::nanoTime,
+                limit / unit.toNanos(1) / eligibleNodeCount,
+                Math.max(limit / eligibleNodeCount, 1),
+                Math.max(limit / eligibleNodeCount, 1)
+            );
         }
         return null;
     }
