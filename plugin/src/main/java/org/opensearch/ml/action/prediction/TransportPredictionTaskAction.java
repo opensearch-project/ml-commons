@@ -19,8 +19,12 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -132,6 +136,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         } else {
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
+                                    } else if (functionName == FunctionName.REMOTE) {
+                                        deployRemoteModel(modelId, functionName, wrappedListener, mlPredictionTaskRequest);
                                     } else {
                                         executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                     }
@@ -157,6 +163,44 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 mlModelManager.getModel(modelId, modelActionListener);
             }
         }
+    }
+
+    private void deployRemoteModel(
+        String modelId,
+        FunctionName functionName,
+        ActionListener<MLTaskResponse> wrappedListener,
+        MLPredictionTaskRequest mlPredictionTaskRequest
+    ) {
+        String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
+        if (workerNodes != null && workerNodes.length != 0) {
+            return;
+        }
+
+        MLDeployModelRequest deployModelRequest = MLDeployModelRequest.builder().modelId(modelId).async(false).dispatchTask(true).build();
+        ActionListener<MLDeployModelResponse> deployModelActionListener = ActionListener.wrap(deployModelResponse -> {
+            // Deployment failed, existing
+            if (!deployModelResponse.getStatus().equals(MLTaskState.COMPLETED.name())) {
+                wrappedListener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + modelId + "/_deploy"
+                        )
+                    );
+                return;
+            }
+            // The DeployModel is async, set this maximum wait time for deployment to finish
+            long startTime = System.currentTimeMillis();
+            long maxDuration = 100; // 1 second in milliseconds
+            while (workerNodes == null || workerNodes.length == 0) {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - startTime >= maxDuration) {
+                    log.info("Wait Time limit reached. Exiting loop.");
+                    break;
+                }
+            }
+            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+        }, wrappedListener::onFailure);
+        client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, deployModelActionListener);
     }
 
     private void executePredict(
