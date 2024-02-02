@@ -192,15 +192,15 @@ public class MLChatAgentRunnerTest {
     public void testParsingJsonBlockFromResponse2() {
         // Prepare the response with JSON block
         String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-                + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
+            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
         String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
 
         // Mock LLM response to not contain "thought" but contain "response" with JSON block
         Map<String, String> llmResponse = new HashMap<>();
         llmResponse.put("response", responseWithJsonBlock);
         doAnswer(getLLMAnswer(llmResponse))
-                .when(client)
-                .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
 
         // Create an MLAgent and run the MLChatAgentRunner
         MLAgent mlAgent = createMLAgentWithTools();
@@ -252,17 +252,23 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputMLModel() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        Mockito.doAnswer(generateToolResponseAsMLModelResult("First tool response", 1)).when(firstTool).run(Mockito.anyMap(), toolListenerCaptor.capture());
-        Mockito.doAnswer(generateToolResponseAsMLModelResult("Second tool response", 2)).when(secondTool).run(Mockito.anyMap(), toolListenerCaptor.capture());
+        Mockito
+            .doAnswer(generateToolResponseAsMLModelResult("First tool response", 1))
+            .when(firstTool)
+            .run(Mockito.anyMap(), toolListenerCaptor.capture());
+        Mockito
+            .doAnswer(generateToolResponseAsMLModelResult("Second tool response", 2))
+            .when(secondTool)
+            .run(Mockito.anyMap(), toolListenerCaptor.capture());
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
         final MLAgent mlAgent = MLAgent
-                .builder()
-                .name("TestAgent")
-                .llm(llmSpec)
-                .memory(mlMemorySpec)
-                .tools(Arrays.asList(firstToolSpec, secondToolSpec))
-                .build();
+            .builder()
+            .name("TestAgent")
+            .llm(llmSpec)
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
         mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
@@ -579,8 +585,7 @@ public class MLChatAgentRunnerTest {
         ModelTensor modelTensor;
         if (type == 1) {
             modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("return", response)).build();
-        }
-        else {
+        } else {
             modelTensor = ModelTensor.builder().result(response).build();
         }
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
