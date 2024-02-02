@@ -73,7 +73,15 @@ public class AgentToolTests {
     public void testAgentWithChatAgentInput() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("testKey", "testValue");
-        Map<String, String> chatAgentInput = ImmutableMap.of("input", gson.toJson(parameters));
+        Map<String, String> chatAgentInput = new HashMap<>();
+        chatAgentInput.put("input", gson.toJson(parameters));
+        doTestRunMethod(chatAgentInput);
+    }
+
+    @Test
+    public void testAgentWithChatAgentInputWrongFormat() {
+        Map<String, String> chatAgentInput = new HashMap<>();
+        chatAgentInput.put("input", "wrong format");
         doTestRunMethod(chatAgentInput);
     }
 
