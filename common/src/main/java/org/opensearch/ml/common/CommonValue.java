@@ -45,6 +45,7 @@ public class CommonValue {
 
         public static final String MASTER_KEY = "master_key";
         public static final String CREATE_TIME_FIELD = "create_time";
+        public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
 
         public static final String BOX_TYPE_KEY = "box_type";
         // hot node
@@ -359,7 +360,16 @@ public class CommonValue {
                         + MASTER_KEY
                         + "\": {\"type\": \"keyword\"},\n"
                         + "      \""
+                        + MLConfig.TYPE_FIELD
+                        + "\" : {\"type\":\"keyword\"},\n"
+                        + "      \""
+                        + MLConfig.CONFIGURATION_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + CREATE_TIME_FIELD
+                        + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+                        + "      \""
+                        + LAST_UPDATE_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
                         + "    }\n"
                         + "}";

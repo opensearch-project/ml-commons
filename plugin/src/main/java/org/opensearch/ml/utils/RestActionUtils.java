@@ -69,6 +69,7 @@ public class RestActionUtils {
     public static final String PARAMETER_DEPLOY_MODEL = "deploy";
     public static final String PARAMETER_VERSION = "version";
     public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
+    public static final String PARAMETER_CONFIG_ID = "config_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
