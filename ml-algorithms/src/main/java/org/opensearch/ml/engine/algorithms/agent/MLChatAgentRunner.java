@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelR
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -29,11 +30,13 @@ import java.util.regex.Pattern;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
+import org.opensearch.action.support.GroupedActionListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
@@ -55,6 +58,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 
@@ -376,6 +380,47 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
+                        String finalAnswer2 = finalAnswer;
+                        // Composite execution response and reply.
+                        final ActionListener<Boolean> executionListener = ActionListener.notifyOnce(ActionListener.wrap(r -> {
+                            cotModelTensors
+                                .add(
+                                    ModelTensors
+                                        .builder()
+                                        .mlModelTensors(
+                                            Collections.singletonList(ModelTensor.builder().name("response").result(finalAnswer2).build())
+                                        )
+                                        .build()
+                                );
+
+                            List<ModelTensors> finalModelTensors = new ArrayList<>();
+                            finalModelTensors
+                                .add(
+                                    ModelTensors
+                                        .builder()
+                                        .mlModelTensors(
+                                            Collections
+                                                .singletonList(
+                                                    ModelTensor
+                                                        .builder()
+                                                        .name("response")
+                                                        .dataAsMap(
+                                                            ImmutableMap.of("response", finalAnswer2, ADDITIONAL_INFO_FIELD, additionalInfo)
+                                                        )
+                                                        .build()
+                                                )
+                                        )
+                                        .build()
+                                );
+                            getFinalAnswer.set(true);
+                            if (verbose) {
+                                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
+                            } else {
+                                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+                            }
+                        }, listener::onFailure));
+                        // Sending execution response by internalListener is after the trace and answer saving.
+                        final GroupedActionListener<ActionResponse> groupedListener = createGroupedListener(2, executionListener);
                         if (conversationIndexMemory != null) {
                             String finalAnswer1 = finalAnswer;
                             // Create final trace message.
@@ -387,53 +432,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .finalAnswer(true)
                                 .sessionId(sessionId)
                                 .build();
-                            conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), null);
-                            // Update root interaction.
+                            // Save last trace and update final answer in parallel.
+                            conversationIndexMemory
+                                .save(
+                                    msgTemp,
+                                    parentInteractionId,
+                                    traceNumber.addAndGet(1),
+                                    null,
+                                    ActionListener.<CreateInteractionResponse>wrap(groupedListener::onResponse, groupedListener::onFailure)
+                                );
                             conversationIndexMemory
                                 .getMemoryManager()
                                 .updateInteraction(
                                     parentInteractionId,
                                     ImmutableMap.of(AI_RESPONSE_FIELD, finalAnswer1, ADDITIONAL_INFO_FIELD, additionalInfo),
-                                    ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                                        log.info("Updated final answer into interaction id: {}", parentInteractionId);
-                                        log.info("Final answer: {}", finalAnswer1);
-                                    }, e -> log.error("Failed to update root interaction", e))
+                                    ActionListener.<UpdateResponse>wrap(groupedListener::onResponse, groupedListener::onFailure)
                                 );
-                        }
-                        cotModelTensors
-                            .add(
-                                ModelTensors
-                                    .builder()
-                                    .mlModelTensors(
-                                        Collections.singletonList(ModelTensor.builder().name("response").result(finalAnswer).build())
-                                    )
-                                    .build()
-                            );
-
-                        List<ModelTensors> finalModelTensors = new ArrayList<>();
-                        finalModelTensors
-                            .add(
-                                ModelTensors
-                                    .builder()
-                                    .mlModelTensors(
-                                        Collections
-                                            .singletonList(
-                                                ModelTensor
-                                                    .builder()
-                                                    .name("response")
-                                                    .dataAsMap(
-                                                        ImmutableMap.of("response", finalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo)
-                                                    )
-                                                    .build()
-                                            )
-                                    )
-                                    .build()
-                            );
-                        getFinalAnswer.set(true);
-                        if (verbose) {
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
-                        } else {
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
                         }
                         return;
                     }
@@ -641,4 +655,27 @@ public class MLChatAgentRunner implements MLAgentRunner {
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
     }
 
+    private GroupedActionListener<ActionResponse> createGroupedListener(final int size, final ActionListener<Boolean> listener) {
+        return new GroupedActionListener<>(new ActionListener<Collection<ActionResponse>>() {
+            @Override
+            public void onResponse(final Collection<ActionResponse> responses) {
+                CreateInteractionResponse createInteractionResponse = extractResponse(responses, CreateInteractionResponse.class);
+                log.info("saved message with interaction id: {}", createInteractionResponse.getId());
+                UpdateResponse updateResponse = extractResponse(responses, UpdateResponse.class);
+                log.info("Updated final answer into interaction id: {}", updateResponse.getId());
+
+                listener.onResponse(true);
+            }
+
+            @Override
+            public void onFailure(final Exception e) {
+                listener.onFailure(e);
+            }
+        }, size);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <A extends ActionResponse> A extractResponse(final Collection<? extends ActionResponse> responses, Class<A> c) {
+        return (A) responses.stream().filter(c::isInstance).findFirst().get();
+    }
 }

@@ -35,6 +35,7 @@ import org.mockito.stubbing.Answer;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionType;
 import org.opensearch.action.StepListener;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -53,6 +54,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class MLChatAgentRunnerTest {
@@ -97,6 +99,10 @@ public class MLChatAgentRunnerTest {
     private ConversationIndexMemory conversationIndexMemory;
     @Mock
     private MLMemoryManager mlMemoryManager;
+    @Mock
+    private CreateInteractionResponse createInteractionResponse;
+    @Mock
+    private UpdateResponse updateResponse;
 
     @Mock
     private ConversationIndexMemory.Factory memoryFactory;
@@ -104,6 +110,10 @@ public class MLChatAgentRunnerTest {
     private ArgumentCaptor<ActionListener<ConversationIndexMemory>> memoryFactoryCapture;
     @Captor
     private ArgumentCaptor<ActionListener<List<Interaction>>> memoryInteractionCapture;
+    @Captor
+    private ArgumentCaptor<ActionListener<CreateInteractionResponse>> conversationIndexMemoryCapture;
+    @Captor
+    private ArgumentCaptor<ActionListener<UpdateResponse>> mlMemoryManagerCapture;
 
     @Before
     @SuppressWarnings("unchecked")
@@ -127,6 +137,18 @@ public class MLChatAgentRunnerTest {
             listener.onResponse(conversationIndexMemory);
             return null;
         }).when(memoryFactory).create(any(), any(), any(), memoryFactoryCapture.capture());
+        when(createInteractionResponse.getId()).thenReturn("create_interaction_id");
+        doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
+            listener.onResponse(createInteractionResponse);
+            return null;
+        }).when(conversationIndexMemory).save(any(), any(), any(), any(), conversationIndexMemoryCapture.capture());
+        when(updateResponse.getId()).thenReturn("update_interaction_id");
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), mlMemoryManagerCapture.capture());
 
         mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
@@ -517,6 +539,31 @@ public class MLChatAgentRunnerTest {
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testSaveLastTraceFailure() {
+        // Mock tool validation to return true.
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with tools
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        doAnswer(invocation -> {
+            ActionListener<CreateInteractionResponse> listener = invocation.getArgument(4);
+            listener.onFailure(new IllegalArgumentException());
+            return null;
+        }).when(conversationIndexMemory).save(any(), any(), any(), any(), conversationIndexMemoryCapture.capture());
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called
+        verify(firstTool).run(any(), any());
+
+        Mockito.verify(agentActionListener).onFailure(any(IllegalArgumentException.class));
     }
 
     // Helper methods to create MLAgent and parameters
