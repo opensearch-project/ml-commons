@@ -15,6 +15,9 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 
 public class AgentUtils {
@@ -151,5 +156,33 @@ public class AgentUtils {
         } else {
             throw new IllegalArgumentException("Model output is invalid");
         }
+    }
+
+    public static String outputToOutputString(Object output) throws PrivilegedActionException {
+        String outputString;
+        if (output instanceof ModelTensorOutput) {
+            ModelTensor outputModel = ((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors().get(0);
+            if (outputModel.getDataAsMap() != null) {
+                outputString = AccessController
+                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
+            } else {
+                outputString = outputModel.getResult();
+            }
+        } else if (output instanceof String) {
+            outputString = (String) output;
+        } else {
+            outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+        }
+        return outputString;
+    }
+
+    public static String parseInputFromLLMReturn(Map<String, ?> retMap) {
+        Object actionInput = retMap.get("action_input");
+        if (actionInput instanceof Map) {
+            return gson.toJson(actionInput);
+        } else {
+            return String.valueOf(actionInput);
+        }
+
     }
 }
