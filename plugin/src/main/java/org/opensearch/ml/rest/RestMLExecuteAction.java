@@ -126,6 +126,6 @@ public class RestMLExecuteAction extends BaseRestHandler {
     }
 
     private static boolean isClientError(Exception e) {
-        return e instanceof NullPointerException || e instanceof IllegalArgumentException || e instanceof IllegalAccessException;
+        return e instanceof IllegalArgumentException || e instanceof IllegalAccessException;
     }
 }
