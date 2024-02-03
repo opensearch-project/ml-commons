@@ -416,6 +416,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 ModelTensors
                                     .builder()
                                     .mlModelTensors(
+                                        List
+                                            .of(
+                                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                                ModelTensor
+                                                    .builder()
+                                                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                                                    .result(parentInteractionId)
+                                                    .build()
+                                            )
+                                    )
+                                    .build()
+                            );
+                        finalModelTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(
                                         Collections
                                             .singletonList(
                                                 ModelTensor
@@ -603,6 +620,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
                         } else {
                             List<ModelTensors> finalModelTensors = new ArrayList<>();
+                            finalModelTensors
+                                .add(
+                                    ModelTensors
+                                        .builder()
+                                        .mlModelTensors(
+                                            List
+                                                .of(
+                                                    ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                                    ModelTensor
+                                                        .builder()
+                                                        .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                                                        .result(parentInteractionId)
+                                                        .build()
+                                                )
+                                        )
+                                        .build()
+                                );
                             finalModelTensors
                                 .add(
                                     ModelTensors
