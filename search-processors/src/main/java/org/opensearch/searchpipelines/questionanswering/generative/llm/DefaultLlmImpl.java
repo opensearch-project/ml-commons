@@ -83,7 +83,7 @@ public class DefaultLlmImpl implements Llm {
 
         // Response from a remote model
         Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        log.info("dataAsMap: {}", dataAsMap.toString());
+        // log.info("dataAsMap: {}", dataAsMap.toString());
 
         // TODO dataAsMap can be null or can contain information such as throttling. Handle non-happy cases.
 
@@ -104,7 +104,7 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getContexts()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
-            log.info("Messages to LLM: {}", messages);
+            // log.info("Messages to LLM: {}", messages);
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK) {
             inputParameters
                 .put(
@@ -122,7 +122,7 @@ public class DefaultLlmImpl implements Llm {
             throw new IllegalArgumentException("Unknown/unsupported model provider: " + chatCompletionInput.getModelProvider());
         }
 
-        log.info("LLM input parameters: {}", inputParameters.toString());
+        // log.info("LLM input parameters: {}", inputParameters.toString());
         return inputParameters;
     }
 
@@ -138,14 +138,15 @@ public class DefaultLlmImpl implements Llm {
                 errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
             } else {
                 Map firstChoiceMap = (Map) choices.get(0);
-                log.info("Choices: {}", firstChoiceMap.toString());
+                // log.info("Choices: {}", firstChoiceMap.toString());
                 Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
+                /*
                 log
                     .info(
                         "role: {}, content: {}",
                         message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE),
                         message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT)
-                    );
+                    );*/
                 answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
             }
         } else if (provider == ModelProvider.BEDROCK) {
