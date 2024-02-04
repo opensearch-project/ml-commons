@@ -12,6 +12,8 @@ import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.tools.MLModelTool.DEFAULT_DESCRIPTION;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +55,51 @@ public class MLModelToolTests {
     }
 
     @Test
-    public void testMLModelsWithOutputParser() {
+    public void testMLModelsWithDefaultOutputParserAndDefaultResponseField() throws ExecutionException, InterruptedException {
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "response 1", "action", "action1")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        doAnswer(invocation -> {
+
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        Tool tool = MLModelTool.Factory.getInstance().create(Map.of("model_id", "modelId"));
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+        tool.run(null, listener);
+
+        future.join();
+        assertEquals("response 1", future.get());
+    }
+
+    @Test
+    public void testMLModelsWithDefaultOutputParserAndCustomizedResponseField() throws ExecutionException, InterruptedException {
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "response 1", "action", "action1")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        doAnswer(invocation -> {
+
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        Tool tool = MLModelTool.Factory.getInstance().create(Map.of("model_id", "modelId", "response_field", "action"));
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+        tool.run(null, listener);
+
+        future.join();
+        assertEquals("action1", future.get());
+    }
+
+    @Test
+    public void testMLModelsWithCustomizedOutputParser() {
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
