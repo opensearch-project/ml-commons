@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
@@ -20,6 +21,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -29,6 +31,13 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
 import com.google.common.collect.ImmutableMap;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.spy;
+import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
 public class HttpJsonConnectorExecutorTest {
     @Rule
@@ -62,6 +71,39 @@ public class HttpJsonConnectorExecutorTest {
         executor.invokeRemoteModel(null, null, null, null, null, actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, Mockito.times(1)).onFailure(captor.capture());
+        assertEquals("unsupported http method", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void invokeRemoteModel_invalidIpAddress() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://127.0.0.1/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor
+            .invokeRemoteModel(
+                createMLInput(),
+                new HashMap<>(),
+                "{\"input\": \"hello world\"}",
+                new HashMap<>(),
+                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                actionListener
+            );
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        Mockito.verify(actionListener, Mockito.times(1)).onFailure(captor.capture());
+        assert captor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Remote inference host name has private ip address: 127.0.0.1", captor.getValue().getMessage());
     }
 
     @Test
@@ -90,6 +132,10 @@ public class HttpJsonConnectorExecutorTest {
                 new WrappedCountDownLatch(0, new CountDownLatch(1)),
                 actionListener
             );
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        Mockito.verify(actionListener, Mockito.times(1)).onFailure(captor.capture());
+        assert captor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Content length is 0. Aborting request to remote model", captor.getValue().getMessage());
     }
 
     @Test

@@ -35,7 +35,7 @@ public class MLHttpClientFactory {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if (hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: " + hostName);
-            throw new IllegalArgumentException(hostName);
+            throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
     }
 

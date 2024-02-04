@@ -271,9 +271,9 @@ public class ConnectorUtils {
         } else {
             requestBody = RequestBody.empty();
         }
-        if (requestBody.optionalContentLength().isEmpty()) {
-            log.error("Content length is empty. Aborting request to remote model");
-            throw new IllegalArgumentException("Content length is empty. Aborting request to remote model");
+        if (SdkHttpMethod.POST == method && "0".equals(requestBody.optionalContentLength().get().toString())) {
+            log.error("Content length is 0. Aborting request to remote model");
+            throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()

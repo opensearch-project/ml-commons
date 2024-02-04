@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -21,6 +21,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -41,7 +42,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
@@ -61,9 +61,6 @@ public class AwsConnectorExecutorTest {
     Settings settings;
 
     ThreadContext threadContext;
-
-    @Mock
-    ScriptService scriptService;
 
     @Mock
     ActionListener<MLTaskResponse> actionListener;
@@ -127,7 +124,10 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
-        Mockito.verify(actionListener, times(1)).onFailure(any(MLException.class));
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof MLException;
+        assertEquals("Fail to execute predict in aws connector", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -136,7 +136,7 @@ public class AwsConnectorExecutorTest {
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url("http://localhost/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
@@ -161,6 +161,10 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Remote inference host name has private ip address: localhost", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
