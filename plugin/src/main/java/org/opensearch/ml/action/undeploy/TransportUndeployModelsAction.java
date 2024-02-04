@@ -107,6 +107,10 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         String[] modelIds = undeployModelsRequest.getModelIds();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
 
+        if (modelIds == null) {
+            listener.onFailure(new IllegalArgumentException("Must set specific model ids to undeploy"));
+            return;
+        }
         if (modelIds.length == 1) {
             String modelId = modelIds[0];
             validateAccess(modelId, ActionListener.wrap(hasPermissionToUndeploy -> {
