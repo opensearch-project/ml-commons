@@ -84,11 +84,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
                     request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
-                    MLHttpClientFactory.validateIp(request.getUri().getHost());
                     break;
                 case "GET":
                     request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET);
-                    MLHttpClientFactory.validateIp(request.getUri().getHost());
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
