@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -47,6 +48,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.ScrollableHitSource;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -222,9 +224,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
-        }).when(client).execute(any(), any(), any());
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(), any());
 
-        GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -454,6 +456,11 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).delete(any(), any());
 
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mock(BulkByScrollResponse.class));
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(), any());
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
