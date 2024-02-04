@@ -214,7 +214,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     private void deleteModel(String modelId, FunctionName functionName, ActionListener<DeleteResponse> actionListener) {
         // Always delete model chunks and model controller first, because deleting metadata first user is not able clean up model chunks and model controller.
-        if (FunctionName.REMOTE == functionName) {
+        if (FunctionName.REMOTE != functionName) {
             CountDownLatch countDownLatch = new CountDownLatch(2);
             AtomicBoolean bothDeleted = new AtomicBoolean(true);
             ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
