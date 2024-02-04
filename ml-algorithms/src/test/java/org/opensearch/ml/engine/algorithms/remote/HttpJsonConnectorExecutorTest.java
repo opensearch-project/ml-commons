@@ -5,10 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.junit.Assert.assertEquals;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
@@ -21,7 +22,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -31,13 +31,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
 import com.google.common.collect.ImmutableMap;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.spy;
-import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
-import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
-import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
 public class HttpJsonConnectorExecutorTest {
     @Rule

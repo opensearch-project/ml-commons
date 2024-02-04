@@ -131,12 +131,12 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_unformattedIp() {
+    public void executePredict_RemoteInferenceInput_EmptyIpAddress() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://0177.1/mock")
+            .url("http:///mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap

@@ -326,7 +326,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             mlModelManager.trackPredictDuration(modelId, startTime);
                             internalListener.onResponse(output);
                         }, internalListener::onFailure);
-                        predictor.predict(mlInput, mlTask, trackPredictDurationListener);
+                        predictor.asyncPredict(mlInput, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
                         if (output instanceof MLPredictionOutput) {

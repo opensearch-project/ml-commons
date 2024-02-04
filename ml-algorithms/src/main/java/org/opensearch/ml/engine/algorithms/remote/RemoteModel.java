@@ -14,7 +14,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
@@ -58,12 +57,13 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void predict(MLInput mlInput, MLTask mlTask, ActionListener<MLTaskResponse> actionListener) {
+    public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         if (!isModelReady()) {
             actionListener
                 .onFailure(
                     new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy")
                 );
+            return;
         }
         try {
             connectorExecutor.executePredict(mlInput, actionListener);

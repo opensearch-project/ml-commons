@@ -9,7 +9,6 @@ import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -38,8 +37,8 @@ public interface Predictable {
         throw new IllegalStateException("Method is not implemented");
     }
 
-    default void predict(MLInput mlInput, MLTask mlTask, ActionListener<MLTaskResponse> actionListener) {
-
+    default void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        throw new IllegalStateException("Method is not implemented");
     }
 
     /**

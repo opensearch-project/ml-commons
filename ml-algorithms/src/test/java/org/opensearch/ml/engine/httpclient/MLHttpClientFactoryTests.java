@@ -7,24 +7,19 @@ package org.opensearch.ml.engine.httpclient;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.net.URI;
 import java.net.UnknownHostException;
-import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
-import software.amazon.awssdk.core.sync.RequestBody;
+
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
