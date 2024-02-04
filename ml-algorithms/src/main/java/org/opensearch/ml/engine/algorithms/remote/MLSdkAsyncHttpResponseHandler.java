@@ -113,7 +113,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         } else {
             if (statusCode < 200 || statusCode > 300) {
                 log.error("Remote server returned error code: {}", statusCode);
-                throw new OpenSearchStatusException("Remote server returned error code: " + statusCode + "remote server response body: " + body, RestStatus.fromCode(statusCode));
+                throw new OpenSearchStatusException(
+                    "Remote server returned error code: " + statusCode + "remote server response body: " + body,
+                    RestStatus.fromCode(statusCode)
+                );
             } else {
                 ModelTensors tensors = processOutput(body, connector, scriptService, parameters);
                 tensors.setStatusCode(statusCode);
