@@ -14,6 +14,9 @@ import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
@@ -55,9 +58,6 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -213,7 +213,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void deleteModel(String modelId, FunctionName functionName, ActionListener<DeleteResponse> actionListener) {
-        // Always delete model chunks and model controller first, because deleting metadata first user is not able clean up model chunks and model controller.
+        // Always delete model chunks and model controller first, because deleting metadata first user is not able clean up model chunks and
+        // model controller.
         if (FunctionName.REMOTE != functionName) {
             CountDownLatch countDownLatch = new CountDownLatch(2);
             AtomicBoolean bothDeleted = new AtomicBoolean(true);
@@ -222,17 +223,27 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 bothDeleted.compareAndSet(true, b);
                 if (countDownLatch.getCount() == 0) {
                     if (bothDeleted.get()) {
-                        log.debug("model chunks and model controller for model {} deleted successfully, starting to delete model meta data", modelId);
+                        log
+                            .debug(
+                                "model chunks and model controller for model {} deleted successfully, starting to delete model meta data",
+                                modelId
+                            );
                         deleteModelMetadata(modelId, actionListener);
                     } else {
-                        actionListener.onFailure(new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId));
+                        actionListener
+                            .onFailure(
+                                new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId)
+                            );
                     }
                 }
             }, e -> {
                 countDownLatch.countDown();
                 bothDeleted.compareAndSet(true, false);
                 if (countDownLatch.getCount() == 0) {
-                    actionListener.onFailure(new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId, e));
+                    actionListener
+                        .onFailure(
+                            new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId, e)
+                        );
                 }
             });
             deleteModelChunks(modelId, countDownActionListener);
@@ -243,7 +254,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 deleteModelMetadata(modelId, actionListener);
             }, e -> {
                 log.error("Failed to delete model chunks or model controller, please try again: " + modelId, e);
-                actionListener.onFailure(new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId, e));
+                actionListener
+                    .onFailure(
+                        new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId, e)
+                    );
             });
             deleteController(modelId, deleteControllerListener);
         }
@@ -292,7 +306,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             }
         });
     }
-
 
     private Boolean isModelNotDeployed(MLModelState mlModelState) {
         return !mlModelState.equals(MLModelState.LOADED)

@@ -205,7 +205,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to delete model chunks or model controller, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to delete model chunks or model controller, please try again: test_id",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void testDeleteRemoteModel_deleteModelChunks_failed() throws IOException {
@@ -231,7 +234,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to delete model chunks or model controller, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to delete model chunks or model controller, please try again: test_id",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void testDeleteHiddenModel_Success() throws IOException {
@@ -451,7 +457,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to delete model chunks or model controller, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to delete model chunks or model controller, please try again: test_id",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Ignore
@@ -530,12 +539,26 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID, boolean isHidden) throws IOException {
-        MLModel mlModel = MLModel.builder().modelId("test_id").modelState(mlModelState).modelGroupId(modelGroupID).isHidden(isHidden).build();
+        MLModel mlModel = MLModel
+            .builder()
+            .modelId("test_id")
+            .modelState(mlModelState)
+            .modelGroupId(modelGroupID)
+            .isHidden(isHidden)
+            .build();
         return buildResponse(mlModel);
     }
 
-    public GetResponse prepareModelWithFunction(MLModelState mlModelState, String modelGroupID, boolean isHidden, FunctionName functionName) throws IOException {
-        MLModel mlModel = MLModel.builder().modelId("test_id").algorithm(functionName).modelState(mlModelState).modelGroupId(modelGroupID).isHidden(isHidden).build();
+    public GetResponse prepareModelWithFunction(MLModelState mlModelState, String modelGroupID, boolean isHidden, FunctionName functionName)
+        throws IOException {
+        MLModel mlModel = MLModel
+            .builder()
+            .modelId("test_id")
+            .algorithm(functionName)
+            .modelState(mlModelState)
+            .modelGroupId(modelGroupID)
+            .isHidden(isHidden)
+            .build();
         return buildResponse(mlModel);
     }
 
