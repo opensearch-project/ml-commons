@@ -1,30 +1,14 @@
 ### Cohere Chat Connector Blueprint:
 
-This blueprint will show you how to connect a Cohere chat model to your Opensearch instance. You will require a Cohere API key.
+This blueprint will show you how to connect a Cohere chat model to your Opensearch cluster. You will require a Cohere API key to create a connector.
 
 It is suggested to use the default `command` model for using Chat. Cohere's Chat endpoint also features Retrievel Augmented Generation (or RAG) parameters, by adding `connectors` or `documents` in your request body, in addition to allowing you to pass a `conversation_id` to provide context to Cohere's model. 
 
 See [Cohere's /chat API docs](https://docs.cohere.com/reference/chat) for more details.
 
-#### 1; Update your Opensearch cluster settings
+#### 1. Create your Model connector and Model group
 
-```json
-PUT /_cluster/settings
-
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-          "^https://api\\.cohere\\.ai/.*$",
-        ]
-    }
-}
-```
-
-If you have existing cluster settings, make sure to add them inside the array of endpoints.
-
-#### 2. Create your Model connector and Model group
-
-##### 2a. Register your Model group
+##### 1a. Register Model group
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -37,7 +21,7 @@ POST /_plugins/_ml/model_groups/_register
 
 This request response will return the `model_group_id`, note it down.
 
-##### 2b. Create your Model connector
+##### 1b. Create Connector
 
 Refer to the [/chat API docs](https://docs.cohere.com/reference/chat) for more parameters. The below API request will create a connector that sets `connectors=[{"id": "web-search"}]`, by default, this will enable Web Search. You can restrict domains to search from, or add custom Cohere connectors as well. 
 
@@ -74,7 +58,7 @@ POST /_plugins/_ml/connectors/_create
 
 This request response will return the `connector_id`, note it down.
 
-##### 2c. Register your Model connector
+##### 1c. Register your model with the connector
 
 You will now register the model you created using the `model_group_id` and `connector_id` from the previous requests.
 
@@ -100,28 +84,7 @@ This will create a registration task, the response should look like:
 }
 ```
 
-You can then check whether the registration task has completed with a GET request:
-
-```json
-GET /_plugins/_ml/tasks/<TASK_ID>
-```
-
-Once the response looks like the below example, where `state` is `COMPLETED`, your model will be ready for deployment.
-
-```json
-{
-  "model_id": "9rXpRY0BRil1qhQaUK_8",
-  "task_type": "REGISTER_MODEL",
-  "function_name": "REMOTE",
-  "state": "COMPLETED",
-  "worker_node": ["ZYMBMV5RRbutADZtlk0c8w"],
-  "create_time": 1706274934888,
-  "last_update_time": 1706274935060,
-  "is_async": false
-}
-```
-
-##### 2d. Deploy your Model connector
+##### 1d. Deploy model
 
 The last step is to deploy the Model. Use the `model_id` returned by the registration request, and run:
 
@@ -147,7 +110,7 @@ GET /_plugins/_ml/tasks/<TASK_ID>
 
 Once this is complete, your Model is deployed and ready!
 
-##### 2e. Testing your Model
+##### 1e. Test model
 
 You can try this request to test that the Model behaves correctly:
 
