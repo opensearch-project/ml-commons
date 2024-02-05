@@ -227,6 +227,10 @@ public class ConnectorUtils {
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
     }
 
+    public static ModelTensors processErrorResponse(String errorResponse) {
+        return ModelTensors.builder().mlModelTensors(List.of(ModelTensor.builder().dataAsMap(Map.of("remote_response", errorResponse)).build())).build();
+    }
+
     private static String fillProcessFunctionParameter(Map<String, String> parameters, String processFunction) {
         if (processFunction != null && processFunction.contains("${parameters.")) {
             Map<String, String> tmpParameters = new HashMap<>();

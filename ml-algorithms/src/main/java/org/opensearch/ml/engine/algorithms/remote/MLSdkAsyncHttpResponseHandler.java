@@ -7,22 +7,30 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processErrorResponse;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 
+import com.google.gson.Gson;
+import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
@@ -53,7 +61,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private ScriptService scriptService;
 
-    private final List<String> errorMsg = new ArrayList<>();
+    private Gson gson = StringUtils.gson;
 
     public MLSdkAsyncHttpResponseHandler(
         WrappedCountDownLatch countDownLatch,
@@ -105,34 +113,52 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
     }
 
-    private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Map<Integer, ModelTensors> tensorOutputs)
-        throws IOException {
+    private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Map<Integer, ModelTensors> tensorOutputs) {
+        ModelTensors tensors;
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            throw new OpenSearchStatusException("Remote model response is empty", RestStatus.fromCode(statusCode));
+            tensors = processErrorResponse("null");
         } else {
-            if (statusCode < 200 || statusCode > 300) {
+            if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
-                throw new OpenSearchStatusException(
-                    "Remote server returned error code: " + statusCode + "remote server response body: " + body,
-                    RestStatus.fromCode(statusCode)
-                );
+                tensors = processErrorResponse(body);
             } else {
-                ModelTensors tensors = processOutput(body, connector, scriptService, parameters);
-                tensors.setStatusCode(statusCode);
-                tensorOutputs.put(countDownLatch.getSequence(), tensors);
+                try {
+                    tensors = processOutput(body, connector, scriptService, parameters);
+                } catch (Exception e) {
+                    log.error("Failed to process response body: {}", body, e);
+                    tensors = processErrorResponse(body);
+                }
             }
         }
+        tensors.setStatusCode(statusCode);
+        tensorOutputs.put(countDownLatch.getSequence(), tensors);
     }
 
-    private List<ModelTensors> reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
+    private void reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         TreeMap<Integer, ModelTensors> sortedMap = new TreeMap<>(tensorOutputs);
-        log.info("Reordered tensor outputs size is {}", sortedMap.size());
-        for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
-            modelTensors.add(entry.getKey(), entry.getValue());
+        log.debug("Reordered tensor outputs size is {}", sortedMap.size());
+        if (tensorOutputs.size() == 1) {
+            //batch API case
+            int status = tensorOutputs.get(0).getStatusCode();
+            if (status == HttpStatus.SC_OK) {
+                modelTensors.add(tensorOutputs.get(0));
+                actionListener.onResponse(modelTensors);
+            } else {
+                try {
+                    actionListener.onFailure(new OpenSearchStatusException(AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(tensorOutputs.get(0).getMlModelTensors().get(0).getDataAsMap())), RestStatus.fromCode(status)));
+                } catch (PrivilegedActionException e) {
+                    actionListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.fromCode(statusCode)));
+                }
+            }
+        } else {
+            // non batch API.
+            for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
+                modelTensors.add(entry.getKey(), entry.getValue());
+            }
+            actionListener.onResponse(modelTensors);
         }
-        return modelTensors;
     }
 
     protected class MLResponseSubscriber implements Subscriber<ByteBuffer> {
@@ -152,74 +178,30 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
         @Override
         public void onError(Throwable t) {
-            countDownLatch.getCountDownLatch().countDown();
             log
                 .error(
                     "Error on receiving response body from remote: {}",
                     t instanceof NullPointerException ? "NullPointerException" : t.getMessage(),
                     t
                 );
-            errorMsg
-                .add(
-                    "Error on receiving response body from remote: "
-                        + (t instanceof NullPointerException ? "NullPointerException" : t.getMessage())
-                );
-            if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                if (t instanceof OpenSearchStatusException) {
-                    actionListener.onFailure((OpenSearchStatusException) t);
-                } else {
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "Error on receiving response body from remote: " + String.join(",", errorMsg),
-                                RestStatus.INTERNAL_SERVER_ERROR
-                            )
-                        );
-                }
-            } else {
-                log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
-            }
+            processResponse(statusCode, responseBody.toString(), parameters, tensorOutputs);
+            countDownLatch.getCountDownLatch().countDown();
+            response(tensorOutputs);
         }
 
         @Override
         public void onComplete() {
-            try {
-                String fullResponseBody = responseBody.toString();
-                processResponse(statusCode, fullResponseBody, parameters, tensorOutputs);
-                countDownLatch.getCountDownLatch().countDown();
-                if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                    log.debug("All responses received, calling action listener to return final results.");
-                    actionListener.onResponse(reOrderTensorResponses(tensorOutputs));
-                }
-            } catch (Throwable e) {
-                countDownLatch.getCountDownLatch().countDown();
-                log
-                    .error(
-                        "Error on processing response from remote: {}",
-                        e instanceof NullPointerException ? "NullPointerException" : e.getMessage(),
-                        e
-                    );
-                errorMsg
-                    .add(
-                        "Error on receiving response from remote: "
-                            + (e instanceof NullPointerException ? "NullPointerException" : e.getMessage())
-                    );
-                if (countDownLatch.getCountDownLatch().getCount() == 0) {
-                    if (e instanceof OpenSearchStatusException) {
-                        actionListener.onFailure((OpenSearchStatusException) e);
-                    } else {
-                        actionListener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "Error on receiving response from remote: " + String.join(",", errorMsg),
-                                    RestStatus.INTERNAL_SERVER_ERROR
-                                )
-                            );
-                    }
-                } else {
-                    log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
-                }
-            }
+            processResponse(statusCode, responseBody.toString(), parameters, tensorOutputs);
+            countDownLatch.getCountDownLatch().countDown();
+            response(tensorOutputs);
+        }
+    }
+
+    private void response(Map<Integer, ModelTensors> tensors) {
+        if (countDownLatch.getCountDownLatch().getCount() == 0) {
+            reOrderTensorResponses(tensors);
+        } else {
+            log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
         }
     }
 }
