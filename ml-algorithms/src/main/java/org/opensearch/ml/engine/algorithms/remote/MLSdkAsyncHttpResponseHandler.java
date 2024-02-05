@@ -10,7 +10,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processErrorResponse;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -20,9 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
 
-import com.google.gson.Gson;
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
@@ -35,6 +32,8 @@ import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+
+import com.google.gson.Gson;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -113,7 +112,12 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
     }
 
-    private void processResponse(Integer statusCode, String body, Map<String, String> parameters, Map<Integer, ModelTensors> tensorOutputs) {
+    private void processResponse(
+        Integer statusCode,
+        String body,
+        Map<String, String> parameters,
+        Map<Integer, ModelTensors> tensorOutputs
+    ) {
         ModelTensors tensors;
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
@@ -140,14 +144,24 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         TreeMap<Integer, ModelTensors> sortedMap = new TreeMap<>(tensorOutputs);
         log.debug("Reordered tensor outputs size is {}", sortedMap.size());
         if (tensorOutputs.size() == 1) {
-            //batch API case
+            // batch API case
             int status = tensorOutputs.get(0).getStatusCode();
             if (status == HttpStatus.SC_OK) {
                 modelTensors.add(tensorOutputs.get(0));
                 actionListener.onResponse(modelTensors);
             } else {
                 try {
-                    actionListener.onFailure(new OpenSearchStatusException(AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(tensorOutputs.get(0).getMlModelTensors().get(0).getDataAsMap())), RestStatus.fromCode(status)));
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                AccessController
+                                    .doPrivileged(
+                                        (PrivilegedExceptionAction<String>) () -> gson
+                                            .toJson(tensorOutputs.get(0).getMlModelTensors().get(0).getDataAsMap())
+                                    ),
+                                RestStatus.fromCode(status)
+                            )
+                        );
                 } catch (PrivilegedActionException e) {
                     actionListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.fromCode(statusCode)));
                 }
