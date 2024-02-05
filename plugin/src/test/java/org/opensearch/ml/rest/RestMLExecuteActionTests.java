@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
@@ -31,6 +32,7 @@ import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -48,10 +50,14 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLExecuteAction = new RestMLExecuteAction();
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -70,7 +76,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         assertNotNull(restMLExecuteAction);
     }
 
@@ -124,5 +130,12 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
         Input input = argumentCaptor.getValue().getInput();
         assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
+
+    public void testPrepareRequest_disabled() {
+        RestRequest request = getExecuteAgentRestRequest();
+
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+        assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
     }
 }

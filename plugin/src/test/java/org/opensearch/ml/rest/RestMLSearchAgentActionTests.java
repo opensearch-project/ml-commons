@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.utils.TestHelper.getSearchAllRestRequest;
 
@@ -36,6 +37,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -57,10 +59,14 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        restMLSearchAgentAction = new RestMLSearchAgentAction();
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        restMLSearchAgentAction = new RestMLSearchAgentAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
@@ -106,7 +112,7 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchAgentAction mlSearchAgentAction = new RestMLSearchAgentAction();
+        RestMLSearchAgentAction mlSearchAgentAction = new RestMLSearchAgentAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchAgentAction);
     }
 
@@ -143,6 +149,13 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
         );
         RestResponse agentResponse = responseCaptor.getValue();
         assertEquals(RestStatus.OK, agentResponse.status());
+    }
+
+    public void testPrepareRequest_disabled() throws Exception {
+        RestRequest request = getSearchAllRestRequest();
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+
+        assertThrows(IllegalStateException.class, () -> restMLSearchAgentAction.handleRequest(request, channel, client));
     }
 
     public void testPrepareRequest_timeout() throws Exception {

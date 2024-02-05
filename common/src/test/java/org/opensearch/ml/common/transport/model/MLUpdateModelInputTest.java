@@ -61,6 +61,23 @@ public class MLUpdateModelInputTest {
             +
             "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1}";
 
+    private final String expectedOutputStrForUpdateRequestDoc = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":"
+            +
+            "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":" +
+            "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":" +
+            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
+            +
+            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":" +
+            "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":"
+            +
+            "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":"
+            +
+            "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":"
+            +
+            "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":"
+            +
+            "\"test-connector_id\",\"last_updated_time\":1}";
+
     private final String expectedOutputStr = "{\"model_id\":null,\"name\":\"name\",\"description\":\"description\",\"model_group_id\":"
             +
             "\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":" +
@@ -154,6 +171,21 @@ public class MLUpdateModelInputTest {
     }
 
     @Test
+    public void testToXContentForUpdateRequestDoc() throws Exception {
+        String jsonStr = serializationWithToXContentForUpdateRequestDoc(updateModelInput);
+        assertEquals(expectedOutputStrForUpdateRequestDoc, jsonStr);
+    }
+
+    @Test
+    public void testToXContenttForUpdateRequestDocIncomplete() throws Exception {
+        String expectedIncompleteInputStr = "{\"model_id\":\"test-model_id\"}";
+        updateModelInput = MLUpdateModelInput.builder()
+                .modelId("test-model_id").build();
+        String jsonStr = serializationWithToXContentForUpdateRequestDoc(updateModelInput);
+        assertEquals(expectedIncompleteInputStr, jsonStr);
+    }
+
+    @Test
     public void testToXContentIncomplete() throws Exception {
         String expectedIncompleteInputStr = "{\"model_id\":\"test-model_id\"}";
         updateModelInput = MLUpdateModelInput.builder()
@@ -234,6 +266,13 @@ public class MLUpdateModelInputTest {
     private String serializationWithToXContent(MLUpdateModelInput input) throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+        return builder.toString();
+    }
+
+    private String serializationWithToXContentForUpdateRequestDoc(MLUpdateModelInput input) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContentForUpdateRequestDoc(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         return builder.toString();
     }

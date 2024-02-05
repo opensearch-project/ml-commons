@@ -9,9 +9,9 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelResponseJson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseInputFromLLMReturn;
 
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -329,7 +329,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                     String thought = String.valueOf(dataAsMap.get("thought"));
                     String action = String.valueOf(dataAsMap.get("action"));
-                    String actionInput = String.valueOf(dataAsMap.get("action_input"));
+                    String actionInput = parseInputFromLLMReturn(dataAsMap);
                     String finalAnswer = (String) dataAsMap.get("final_answer");
                     if (!dataAsMap.containsKey("thought")) {
                         String response = (String) dataAsMap.get("response");
@@ -340,7 +340,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             Map map = gson.fromJson(jsonBlock, Map.class);
                             thought = String.valueOf(map.get("thought"));
                             action = String.valueOf(map.get("action"));
-                            actionInput = String.valueOf(map.get("action_input"));
+                            actionInput = parseInputFromLLMReturn(map);
                             finalAnswer = (String) map.get("final_answer");
                         } else {
                             finalAnswer = response;
@@ -394,6 +394,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 );
 
                             List<ModelTensors> finalModelTensors = new ArrayList<>();
+                            finalModelTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(
+                                        List
+                                            .of(
+                                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                                ModelTensor
+                                                    .builder()
+                                                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                                                    .result(parentInteractionId)
+                                                    .build()
+                                            )
+                                    )
+                                    .build()
+                            );
                             finalModelTensors
                                 .add(
                                     ModelTensors
@@ -527,9 +544,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 } else {
                     MLToolSpec toolSpec = toolSpecMap.get(lastAction.get());
                     if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
-                        String outputString = output instanceof String
-                            ? (String) output
-                            : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                        String outputString = outputToOutputString(output);
 
                         String toolOutputKey = String.format("%s.output", toolSpec.getType());
                         if (additionalInfo.get(toolOutputKey) != null) {
@@ -549,7 +564,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         .singletonList(
                                             ModelTensor
                                                 .builder()
-                                                .dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + output))
+                                                .dataAsMap(
+                                                    ImmutableMap
+                                                        .of(
+                                                            "response",
+                                                            lastThought.get() + "\nObservation: " + outputToOutputString(output)
+                                                        )
+                                                )
                                                 .build()
                                         )
                                 )
@@ -558,7 +579,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     String toolResponse = tmpParameters.get("prompt.tool_response");
                     StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(
-                        ImmutableMap.of("observation", output),
+                        ImmutableMap.of("observation", outputToOutputString(output)),
                         "${parameters.",
                         "}"
                     );
@@ -570,7 +591,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             .conversationIndexMessageBuilder()
                             .type("ReAct")
                             .question(lastActionInput.get())
-                            .response((String) output)
+                            .response(outputToOutputString(output))
                             .finalAnswer(false)
                             .sessionId(sessionId)
                             .build();
@@ -585,7 +606,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
 
-                    sessionMsgAnswerBuilder.append("\nObservation: ").append(output);
+                    sessionMsgAnswerBuilder.append("\nObservation: ").append(outputToOutputString(output));
                     cotModelTensors
                         .add(
                             ModelTensors
@@ -613,6 +634,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
                         } else {
                             List<ModelTensors> finalModelTensors = new ArrayList<>();
+                            finalModelTensors
+                                .add(
+                                    ModelTensors
+                                        .builder()
+                                        .mlModelTensors(
+                                            List
+                                                .of(
+                                                    ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                                    ModelTensor
+                                                        .builder()
+                                                        .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                                                        .result(parentInteractionId)
+                                                        .build()
+                                                )
+                                        )
+                                        .build()
+                                );
                             finalModelTensors
                                 .add(
                                     ModelTensors

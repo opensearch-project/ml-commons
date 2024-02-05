@@ -16,6 +16,7 @@ import java.util.Map;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -24,6 +25,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -39,9 +41,14 @@ public class RestMLGetAgentActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
-        restMLGetAgentAction = new RestMLGetAgentAction();
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -60,7 +67,7 @@ public class RestMLGetAgentActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLGetAgentAction mLGetAgentAction = new RestMLGetAgentAction();
+        RestMLGetAgentAction mLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
         assertNotNull(mLGetAgentAction);
     }
 
@@ -87,6 +94,13 @@ public class RestMLGetAgentActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLAgentGetAction.INSTANCE), argumentCaptor.capture(), any());
         String agentId = argumentCaptor.getValue().getAgentId();
         assertEquals(agentId, "agent_id");
+    }
+
+    public void test_PrepareRequest_disabled() {
+        RestRequest request = getRestRequest();
+
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+        assertThrows(IllegalStateException.class, () -> restMLGetAgentAction.handleRequest(request, channel, client));
     }
 
     private RestRequest getRestRequest() {

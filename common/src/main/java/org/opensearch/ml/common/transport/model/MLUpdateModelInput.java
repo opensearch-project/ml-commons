@@ -140,6 +140,44 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         return builder;
     }
 
+    public XContentBuilder toXContentForUpdateRequestDoc(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
+        builder.field(MODEL_ID_FIELD, modelId);
+        if (name != null) {
+            builder.field(MODEL_NAME_FIELD, name);
+        }
+        if (description != null) {
+            builder.field(DESCRIPTION_FIELD, description);
+        }
+        if (version != null) {
+            builder.field(MODEL_VERSION_FIELD, version);
+        }
+        if (modelGroupId != null) {
+            builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
+        }
+        if (isEnabled != null) {
+            builder.field(IS_ENABLED_FIELD, isEnabled);
+        }
+        if (rateLimiter != null) {
+            builder.field(RATE_LIMITER_FIELD, rateLimiter);
+        }
+        if (modelConfig != null) {
+            builder.field(MODEL_CONFIG_FIELD, modelConfig);
+        }
+        // Notice that we serialize the updatedConnector to the connector field, in order to be compatible with original internal connector field format.
+        if (updatedConnector != null) {
+            builder.field(CONNECTOR_FIELD, updatedConnector);
+        }
+        if (connectorId != null) {
+            builder.field(CONNECTOR_ID_FIELD, connectorId);
+        }
+        if (lastUpdateTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
+        builder.endObject();
+        return builder;
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(modelId);
