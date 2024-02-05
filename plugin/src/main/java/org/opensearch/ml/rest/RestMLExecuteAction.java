@@ -125,7 +125,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
         channel.sendResponse(new BytesRestResponse(status, ErrorMessageFactory.createErrorMessage(e, status.getStatus()).toString()));
     }
 
-    private static boolean isClientError(Exception e) {
+    private boolean isClientError(Exception e) {
         return e instanceof IllegalArgumentException || e instanceof IllegalAccessException;
     }
 }
