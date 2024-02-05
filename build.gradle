@@ -67,6 +67,11 @@ subprojects {
     configurations {
         testImplementation.extendsFrom compileOnly
     }
+
+    configurations.all {
+        // Force spotless depending on newer version of guava due to CVE-2023-2976. Remove after spotless upgrades.
+        resolutionStrategy.force "com.google.guava:guava:32.1.2-jre"
+    }
 }
 
 ext {
