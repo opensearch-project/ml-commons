@@ -1,6 +1,6 @@
 ### Cohere Embedding Connector Blueprint:
 
-This blueprint will show you how to connect a Cohere embedding model to your Opensearch instance, including creating a k-nn index and your own Embedding pipeline. You will require a Cohere API key.
+This blueprint will show you how to connect a Cohere embedding model to your Opensearch cluster, including creating a k-nn index and your own Embedding pipeline. You will require a Cohere API key to create a connector.
 
 Cohere currently offers the following Embedding models (with model name and embedding dimensions). Note that only the following have been tested with the blueprint guide.
 
@@ -9,25 +9,9 @@ Cohere currently offers the following Embedding models (with model name and embe
 
 See [Cohere's /embed API docs](https://docs.cohere.com/reference/embed) for more details.
 
-#### 1; Update your Opensearch cluster settings
+#### 1. Create a connector and model group
 
-```json
-PUT /_cluster/settings
-
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-          "^https://api\\.cohere\\ai/.*$",
-        ]
-    }
-}
-```
-
-If you have existing cluster settings, make sure to add them inside the array of endpoints.
-
-#### 2. Create your Model connector and Model group
-
-##### 2a. Register your Model group
+##### 1a. Register model group
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -40,7 +24,7 @@ POST /_plugins/_ml/model_groups/_register
 
 This request response will return the `model_group_id`, note it down.
 
-##### 2b. Create your Model connector
+##### 1b. Create a connector
 
 See above for all the values the `parameters > model` parameter can take.
 
@@ -78,9 +62,9 @@ POST /_plugins/_ml/connectors/_create
 
 This request response will return the `connector_id`, note it down.
 
-##### 2c. Register your Model connector
+##### 1c. Register a model with your connector
 
-You will now register the model you created using the `model_group_id` and `connector_id` from the previous requests.
+You can now register your model with the `model_group_id` and `connector_id` created from the previous steps.
 
 ```json
 POST /_plugins/_ml/models/_register
@@ -105,33 +89,12 @@ This will create a registration task, the response should look like:
 }
 ```
 
-You can then check whether the registration task has completed with a GET request:
+##### 1d. Deploy model
+
+The last step is to deploy your model. Use the `model_id` returned by the registration request, and run:
 
 ```json
-GET /_plugins/_ml/tasks/<TASK_ID>
-```
-
-Once the response looks like the below example, where `state` is `COMPLETED`, your model will be ready for deployment.
-
-```json
-{
-  "model_id": "9rXpRY0BRil1qhQaUK_8",
-  "task_type": "REGISTER_MODEL",
-  "function_name": "REMOTE",
-  "state": "COMPLETED",
-  "worker_node": ["ZYMBMV5RRbutADZtlk0c8w"],
-  "create_time": 1706274934888,
-  "last_update_time": 1706274935060,
-  "is_async": false
-}
-```
-
-##### 2d. Deploy your Model connector
-
-The last step is to deploy the Model. Use the `model_id` returned by the registration request, and run:
-
-```json
-POST /_plugins/_ml/models/9rXpRY0BRil1qhQaUK_8/_deploy
+POST /_plugins/_ml/models/<MODEL_ID>/_deploy
 ```
 
 This will once again spawn a task to deploy your Model, with a response that will look like:
@@ -152,7 +115,7 @@ GET /_plugins/_ml/tasks/<TASK_ID>
 
 Once this is complete, your Model is deployed and ready!
 
-##### 2e. Testing your Model
+##### 1e. Test model
 
 You can try this request to test that the Model behaves correctly:
 
@@ -195,9 +158,9 @@ It should return a response similar to this:
 }
 ```
 
-#### (Optional) 3. Setup your k-NN index and ingestion pipeline
+#### (Optional) 2. Setup k-NN index and ingestion pipeline
 
-##### 3a. Create your pipeline
+##### 2a. Create your pipeline
 
 It is important that the `field_map` parameter contains all the document fields you'd like to embed as a vector. The key value is the document field name, and the value will be the field containing the embedding.
 
@@ -226,7 +189,7 @@ Sample response:
 }
 ```
 
-##### 3b. Create a k-NN index
+##### 2b. Create a k-NN index
 
 Here `cohere-nlp-index` is the name of your index, you can change it as needed.
 
@@ -270,7 +233,7 @@ Sample response:
 }
 ````
 
-##### 3c. Testing the index and pipeline
+##### 2c. Testing the index and pipeline
 
 First, you can insert a record:
 
