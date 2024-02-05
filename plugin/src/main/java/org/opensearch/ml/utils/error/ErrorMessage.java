@@ -5,10 +5,15 @@
 
 package org.opensearch.ml.utils.error;
 
-import org.json.JSONObject;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.opensearch.core.rest.RestStatus;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.Getter;
+import lombok.SneakyThrows;
 
 /** Error Message. */
 public class ErrorMessage {
@@ -53,23 +58,18 @@ public class ErrorMessage {
         return str != null ? str : "";
     }
 
+    @SneakyThrows
     @Override
     public String toString() {
-        JSONObject output = new JSONObject();
+        ObjectMapper objectMapper = new ObjectMapper();
+        Map<String, Object> errorContent = new HashMap<>();
+        errorContent.put("type", type);
+        errorContent.put("reason", reason);
+        errorContent.put("details", details);
+        Map<String, Object> errMessage = new HashMap<>();
+        errMessage.put("status", status);
+        errMessage.put("error", errorContent);
 
-        output.put("status", status);
-        output.put("error", getErrorAsJson());
-
-        return output.toString(2);
-    }
-
-    private JSONObject getErrorAsJson() {
-        JSONObject errorJson = new JSONObject();
-
-        errorJson.put("type", type);
-        errorJson.put("reason", reason);
-        errorJson.put("details", details);
-
-        return errorJson;
+        return objectMapper.writeValueAsString(errMessage);
     }
 }

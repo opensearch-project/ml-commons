@@ -32,14 +32,7 @@ public class ErrorMessageTests {
     public void testToString() {
         ErrorMessage errorMessage = new ErrorMessage(new IllegalStateException("illegal state"), SERVICE_UNAVAILABLE.getStatus());
         assertEquals(
-            "{\n"
-                + "  \"error\": {\n"
-                + "    \"reason\": \"System Error\",\n"
-                + "    \"details\": \"illegal state\",\n"
-                + "    \"type\": \"IllegalStateException\"\n"
-                + "  },\n"
-                + "  \"status\": 503\n"
-                + "}",
+            "{\"error\":{\"reason\":\"System Error\",\"details\":\"illegal state\",\"type\":\"IllegalStateException\"},\"status\":503}",
             errorMessage.toString()
         );
     }
@@ -48,14 +41,7 @@ public class ErrorMessageTests {
     public void testBadRequestToString() {
         ErrorMessage errorMessage = new ErrorMessage(new IllegalStateException(), BAD_REQUEST.getStatus());
         assertEquals(
-            "{\n"
-                + "  \"error\": {\n"
-                + "    \"reason\": \"Invalid Request\",\n"
-                + "    \"details\": \"\",\n"
-                + "    \"type\": \"IllegalStateException\"\n"
-                + "  },\n"
-                + "  \"status\": 400\n"
-                + "}",
+            "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"\",\"type\":\"IllegalStateException\"},\"status\":400}",
             errorMessage.toString()
         );
     }
@@ -64,14 +50,7 @@ public class ErrorMessageTests {
     public void testToStringWithEmptyErrorMessage() {
         ErrorMessage errorMessage = new ErrorMessage(new IllegalStateException(), SERVICE_UNAVAILABLE.getStatus());
         assertEquals(
-            "{\n"
-                + "  \"error\": {\n"
-                + "    \"reason\": \"System Error\",\n"
-                + "    \"details\": \"\",\n"
-                + "    \"type\": \"IllegalStateException\"\n"
-                + "  },\n"
-                + "  \"status\": 503\n"
-                + "}",
+            "{\"error\":{\"reason\":\"System Error\",\"details\":\"\",\"type\":\"IllegalStateException\"},\"status\":503}",
             errorMessage.toString()
         );
     }
