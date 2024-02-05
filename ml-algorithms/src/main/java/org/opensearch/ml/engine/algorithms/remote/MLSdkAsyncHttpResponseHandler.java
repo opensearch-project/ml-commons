@@ -27,13 +27,13 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -60,7 +60,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private ScriptService scriptService;
 
-    private Gson gson = StringUtils.gson;
+    private Gson gson = new GsonBuilder().disableHtmlEscaping().create();
 
     public MLSdkAsyncHttpResponseHandler(
         WrappedCountDownLatch countDownLatch,
