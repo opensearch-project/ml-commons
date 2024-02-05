@@ -60,7 +60,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private ScriptService scriptService;
 
-    private Gson gson = new GsonBuilder().disableHtmlEscaping().create();
+    private final static Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     public MLSdkAsyncHttpResponseHandler(
         WrappedCountDownLatch countDownLatch,
@@ -156,7 +156,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                             new OpenSearchStatusException(
                                 AccessController
                                     .doPrivileged(
-                                        (PrivilegedExceptionAction<String>) () -> gson
+                                        (PrivilegedExceptionAction<String>) () -> GSON
                                             .toJson(tensorOutputs.get(0).getMlModelTensors().get(0).getDataAsMap())
                                     ),
                                 RestStatus.fromCode(status)

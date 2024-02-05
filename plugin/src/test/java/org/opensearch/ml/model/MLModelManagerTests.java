@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Supplier;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -1138,6 +1139,35 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerModelMeta(mlUploadInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    public void test_trackPredictDuration_sync() {
+        Supplier<String> mockResult = () -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return "test";
+        };
+        String modelId = "test_model";
+        modelManager.trackPredictDuration(modelId, mockResult);
+        ArgumentCaptor<String> modelIdCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Double> durationCaptor = ArgumentCaptor.forClass(Double.class);
+        verify(modelCacheHelper).addModelInferenceDuration(modelIdCaptor.capture(), durationCaptor.capture());
+        assert modelIdCaptor.getValue().equals(modelId);
+        assert durationCaptor.getValue() > 0;
+    }
+
+    public void test_trackPredictDuration_async() {
+        String modelId = "test_model";
+        long startTime = System.nanoTime();
+        modelManager.trackPredictDuration(modelId, startTime);
+        ArgumentCaptor<String> modelIdCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Double> durationCaptor = ArgumentCaptor.forClass(Double.class);
+        verify(modelCacheHelper).addModelInferenceDuration(modelIdCaptor.capture(), durationCaptor.capture());
+        assert modelIdCaptor.getValue().equals(modelId);
+        assert durationCaptor.getValue() > 0;
     }
 
     private void setupForModelMeta() {
