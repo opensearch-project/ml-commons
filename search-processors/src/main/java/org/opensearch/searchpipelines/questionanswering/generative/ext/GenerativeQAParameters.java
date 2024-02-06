@@ -48,7 +48,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     // Optional parameter; if provided, conversational memory will be used for RAG
     // and the current interaction will be saved in the conversation referenced by this id.
-    private static final ParseField CONVERSATION_ID = new ParseField("conversation_id");
+    private static final ParseField CONVERSATION_ID = new ParseField("memory_id");
 
     // Optional parameter; if an LLM model is not set at the search pipeline level, one must be
     // provided at the search request level.
@@ -64,7 +64,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     // Optional parameter; this parameter controls the number of the interactions to include
     // in the user prompt.
-    private static final ParseField INTERACTION_SIZE = new ParseField("interaction_size");
+    private static final ParseField INTERACTION_SIZE = new ParseField("message_size");
 
     // Optional parameter; this parameter controls how long the search pipeline waits for a response
     // from a remote inference endpoint before timing out the request.
