@@ -23,9 +23,16 @@ This request response will return the `model_group_id`, note it down.
 
 ##### 1b. Create Connector
 
-Refer to the [/chat API docs](https://docs.cohere.com/reference/chat) for more parameters. The below API request will create a connector that sets `connectors=[{"id": "web-search"}]`, by default, this will enable Web Search. You can restrict domains to search from, or add custom Cohere connectors as well. 
+Refer to the [/chat API docs](https://docs.cohere.com/reference/chat) for more parameters. This API request will create a connector pointing to Cohere's /chat API using the default `command` model.
 
-Later, when calling the newly created Predict action, you will pass in a `message` and `conversation_id` to the request. The `conversation_id` can be any string value.
+To enable Retrieval Augmented Generation (RAG) features, you can add any of these optional parameters:
+- `connectors`: Specifies extra Cohere connectors to query prior to generation. Important note that these [connectors](https://docs.cohere.com/docs/connectors) differ from Opensearch connectors. These are connectors that are configurable and deployable within the Cohere ecosystem. You can enable Web search to start by passing in `[{"id": "web-search"}]` to this parameter. 
+- `documents`: List of [documents](https://docs.cohere.com/docs/retrieval-augmented-generation-rag#document-mode) used to augment generation.
+- `chat_history`: List of previous messages between the user and model. 
+
+For more details on these, please refer to the [Cohere docs](https://docs.cohere.com/reference/chat).
+
+Later, when calling the newly created Predict action, you will pass `message` and any extra parameters you've included to the request.
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -38,8 +45,7 @@ POST /_plugins/_ml/connectors/_create
     "cohere_key": "<ENTER_COHERE_API_KEY_HERE>"
   },
   "parameters": {
-    "model": "command",
-    "connectors": [{"id": "web-search"}]
+    "model": "command"
   },
   "actions": [
     {
@@ -50,7 +56,7 @@ POST /_plugins/_ml/connectors/_create
         "Authorization": "Bearer ${credential.cohere_key}",
         "Request-Source": "unspecified:opensearch"
       },
-      "request_body": "{ \"message\": ${parameters.message}, \"model\": \"${parameters.model}\", \"connectors\": \"${parameters.connectors}\", \"conversation_id\": \"${parameters.conversation_id}\" }"
+      "request_body": "{ \"message\": ${parameters.message}, \"model\": \"${parameters.model}\" }"
     }
   ]
 }
@@ -121,7 +127,6 @@ POST /_plugins/_ml/models/<MODEL_ID_HERE>/_predict
 {
   "parameters": {
     "message": "What is the weather like in London?",
-    "conversation_id": "1"
   }
 }
 ```
@@ -135,7 +140,6 @@ It should return a response similar to this:
       "output": [
         {
             "response_id": "f92fdef6-e43c-465f-a2b8-45772b9ef39d",
-            "conversation_id": "1",
             "text": "The weather on Thursday, February 1, 2018, in London will be an overcast high of 13°C and a low of 10°C. Unfortunately, I cannot give you a detailed weather forecast for the next ten days in London, as it varies considerably across different sources. Would you like to know more about the weather on any particular day within the next ten?",
             "generation_id": "76e5c68c-a3ca-40a0-91a9-20315f52b4c4",
             "token_count": {
