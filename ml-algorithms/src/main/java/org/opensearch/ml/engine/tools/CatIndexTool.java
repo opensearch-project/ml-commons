@@ -53,7 +53,14 @@ import lombok.Setter;
 @ToolAnnotation(CatIndexTool.TYPE)
 public class CatIndexTool implements Tool {
     public static final String TYPE = "CatIndexTool";
-    private static final String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
+    private static final String DEFAULT_DESCRIPTION = String
+        .join(
+            " ",
+            "This tool gets index information from the OpenSearch cluster.",
+            "It takes 2 optional arguments named `index` which is a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices),",
+            "and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false).",
+            "The tool returns the indices information, including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`."
+        );
 
     @Setter
     @Getter
