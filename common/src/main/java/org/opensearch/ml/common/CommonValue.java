@@ -355,6 +355,7 @@ public class CommonValue {
                         + "    \"_meta\": {\"schema_version\": "
                         + ML_CONFIG_INDEX_SCHEMA_VERSION
                         + "},\n"
+                        + "    \"dynamic\": \"strict\",\n"
                         + "    \"properties\": {\n"
                         + "      \""
                         + MASTER_KEY
