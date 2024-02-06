@@ -198,6 +198,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
         Input input = argumentCaptor.getValue().getInput();
         assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
 
     public void testPrepareRequest_disabled() {
         RestRequest request = getExecuteAgentRestRequest();
