@@ -280,7 +280,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find model", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModel_ResourceNotFoundException() throws IOException {
