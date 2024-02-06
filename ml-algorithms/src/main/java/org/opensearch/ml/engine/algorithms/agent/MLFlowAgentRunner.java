@@ -125,8 +125,18 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     if (finalI == toolSpecs.size()) {
-                        updateMemory(additionalInfo, memorySpec, memoryId, parentInteractionId);
-                        listener.onResponse(flowAgentOutput);
+                        if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
+                            listener.onResponse(flowAgentOutput);
+                        } else {
+                            ActionListener updateListener = ActionListener.<UpdateResponse>wrap(updateResponse -> {
+                                log.info("Updated additional info for interaction ID: " + updateResponse.getId() + " in the flow agent.");
+                                listener.onResponse(flowAgentOutput);
+                            }, e -> {
+                                log.error("Failed to update root interaction", e);
+                                listener.onResponse(flowAgentOutput);
+                            });
+                            updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
+                        }
                         return;
                     }
 
@@ -169,6 +179,30 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
+    void updateMemoryWithListener(
+        Map<String, Object> additionalInfo,
+        MLMemorySpec memorySpec,
+        String memoryId,
+        String interactionId,
+        ActionListener listener
+    ) {
+        if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
+            return;
+        }
+        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
+            .get(memorySpec.getType());
+        conversationIndexMemoryFactory
+            .create(
+                memoryId,
+                ActionListener
+                    .wrap(
+                        memory -> updateInteractionWithListener(additionalInfo, interactionId, memory, listener),
+                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                    )
+            );
+    }
+
+    @VisibleForTesting
     void updateInteraction(Map<String, Object> additionalInfo, String interactionId, ConversationIndexMemory memory) {
         memory
             .getMemoryManager()
@@ -179,6 +213,18 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     log.info("Updated additional info for interaction ID: " + interactionId);
                 }, e -> { log.error("Failed to update root interaction", e); })
             );
+    }
+
+    @VisibleForTesting
+    void updateInteractionWithListener(
+        Map<String, Object> additionalInfo,
+        String interactionId,
+        ConversationIndexMemory memory,
+        ActionListener listener
+    ) {
+        memory
+            .getMemoryManager()
+            .updateInteraction(interactionId, ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo), listener);
     }
 
     @VisibleForTesting
