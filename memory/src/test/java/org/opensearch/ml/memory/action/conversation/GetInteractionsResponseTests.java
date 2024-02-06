@@ -100,14 +100,11 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"memory_id\":\"cid\",\"message_id\":\"id0\",\"create_time\":\""
+        String expected = "{\"messages\":[{\"memory_id\":\"cid\",\"message_id\":\"id0\",\"create_time\":\""
             + interaction.getCreateTime()
             + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"}}],\"next_token\":2}";
-        log.info(result);
-        log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
-        log.info(ld.getDistance(result, expected));
         assert (ld.getDistance(result, expected) > 0.95);
     }
 
@@ -117,14 +114,11 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"memory_id\":\"cid\",\"message_id\":\"id0\",\"create_time\":\""
+        String expected = "{\"messages\":[{\"memory_id\":\"cid\",\"message_id\":\"id0\",\"create_time\":\""
             + interaction.getCreateTime()
             + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":{\"metadata\":\"some meta\"}}]}";
-        log.info(result);
-        log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
-        log.info(ld.getDistance(result, expected));
         assert (ld.getDistance(result, expected) > 0.95);
     }
 

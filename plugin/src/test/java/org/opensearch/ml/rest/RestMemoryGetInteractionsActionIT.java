@@ -62,9 +62,9 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("interactions"));
+        assert (map.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (!map.containsKey("next_token"));
-        assert (((ArrayList) map.get("interactions")).size() == 0);
+        assert (((ArrayList) map.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 0);
     }
 
     public void testGetInteractions_NoInteractions() throws IOException {
