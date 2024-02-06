@@ -26,9 +26,9 @@ public class ActionConstants {
     public final static String CONVERSATION_ID_FIELD = "memory_id";
 
     /** name of list of conversations in all responses */
-    public final static String RESPONSE_CONVERSATION_LIST_FIELD = "conversations";
+    public final static String RESPONSE_CONVERSATION_LIST_FIELD = "memories";
     /** name of list on interactions in all responses */
-    public final static String RESPONSE_INTERACTION_LIST_FIELD = "interactions";
+    public final static String RESPONSE_INTERACTION_LIST_FIELD = "messages";
     /** name of list on traces in all responses */
     public final static String RESPONSE_TRACES_LIST_FIELD = "traces";
     /** name of interaction Id field in all responses */
