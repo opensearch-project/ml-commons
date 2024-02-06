@@ -488,6 +488,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
                         if (tools.get(action).useOriginalInput()) {
                             toolParams.put("input", question);
+                            lastActionInput.set(question);
                         } else {
                             toolParams.put("input", actionInput);
                         }
