@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
@@ -16,6 +17,7 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -25,11 +27,14 @@ import com.google.common.collect.ImmutableList;
 
 public class RestMLGetAgentAction extends BaseRestHandler {
     private static final String ML_GET_Agent_ACTION = "ml_get_agent_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLGetAgentAction() {}
+    public RestMLGetAgentAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -56,6 +61,9 @@ public class RestMLGetAgentAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLAgentGetRequest getRequest(RestRequest request) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
+            throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
+        }
         String agentId = getParameterId(request, PARAMETER_AGENT_ID);
 
         return new MLAgentGetRequest(agentId);

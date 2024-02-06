@@ -126,7 +126,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             throw new IllegalArgumentException("llm_model cannot be null.");
         }
         String conversationId = params.getConversationId();
-        log.info("LLM question: {}, LLM model {}, conversation id: {}", llmQuestion, llmModel, conversationId);
+
+        log.info("LLM model {}, conversation id: {}", llmModel, conversationId);
         Instant start = Instant.now();
         Integer interactionSize = params.getInteractionSize();
         if (interactionSize == null || interactionSize == GenerativeQAParameters.SIZE_NULL_VALUE) {

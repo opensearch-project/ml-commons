@@ -300,7 +300,7 @@ public class MLModelManager {
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
 
-                if (mlRegisterModelMetaInput.getIsHidden()) {
+                if (mlRegisterModelMetaInput.getIsHidden() != null && mlRegisterModelMetaInput.getIsHidden()) {
                     indexRequest.id(modelName);
                 }
                 indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -530,7 +530,7 @@ public class MLModelManager {
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
-                if (registerModelInput.getIsHidden()) {
+                if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
                     indexModelMetaRequest.id(modelName);
                 }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -593,7 +593,7 @@ public class MLModelManager {
                     .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
-                if (registerModelInput.getIsHidden()) {
+                if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
                     indexModelMetaRequest.id(modelName);
                 }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -660,7 +660,7 @@ public class MLModelManager {
                 if (functionName == FunctionName.METRICS_CORRELATION) {
                     indexModelMetaRequest.id(functionName.name());
                 }
-                if (registerModelInput.getIsHidden()) {
+                if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
                     indexModelMetaRequest.id(modelName);
                 }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -740,7 +740,7 @@ public class MLModelManager {
                             .isHidden(registerModelInput.getIsHidden())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                        if (registerModelInput.getIsHidden()) {
+                        if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
                             indexRequest.id(modelName);
                         }
                         String chunkId = getModelChunkId(modelId, chunkNum);

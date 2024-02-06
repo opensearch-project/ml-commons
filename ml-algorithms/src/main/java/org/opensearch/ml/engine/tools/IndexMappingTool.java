@@ -37,9 +37,11 @@ public class IndexMappingTool implements Tool {
         .join(
             " ",
             "This tool gets index mapping information from a certain index.",
-            "It takes 1 required argument named `index` which is a comma-delimited list of one or more indices to get mapping information from, which expands wildcards.",
-            "It takes 1 optional argument named `local` which means whether to return information from the local node only instead of the cluster manager node (Default is false).",
-            "The tool returns the index mapping information, which is about how documents and their fields are stored and indexed, and also returns the index settings."
+            "It takes 1 required argument named 'index' which is a comma-delimited list of one or more indices to get mapping information from, which expands wildcards.",
+            "It takes 1 optional argument named 'local' which means whether to return information from the local node only instead of the cluster manager node (Default is false).",
+            "The tool returns a list of index mappings and settings for each index.",
+            "The mappings are in JSON format under the key 'properties' which includes the field name as a key and a JSON object with field type under the key 'type'.",
+            "The settings are in flattened map with 'index' as the top element and key-value pairs for each setting."
         );
 
     @Setter

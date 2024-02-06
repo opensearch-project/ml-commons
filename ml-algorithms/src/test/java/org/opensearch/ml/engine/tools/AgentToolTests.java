@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.AgentTool.DEFAULT_DESCRIPTION;
 
 import java.util.Arrays;
@@ -24,8 +25,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -67,13 +66,28 @@ public class AgentToolTests {
     public void testAgenttestRunMethod() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("testKey", "testValue");
-        AgentMLInput agentMLInput = AgentMLInput
-            .AgentMLInputBuilder()
-            .agentId("agentId")
-            .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
-            .build();
+        doTestRunMethod(parameters);
+    }
 
+    @Test
+    public void testAgentWithChatAgentInput() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("testKey", "testValue");
+        Map<String, String> chatAgentInput = new HashMap<>();
+        chatAgentInput.put("input", gson.toJson(parameters));
+        doTestRunMethod(chatAgentInput);
+        assertEquals(chatAgentInput.size(), 1);
+        assertEquals(chatAgentInput.get("input"), gson.toJson(parameters)); // assert no influence on original parameters
+    }
+
+    @Test
+    public void testAgentWithChatAgentInputWrongFormat() {
+        Map<String, String> chatAgentInput = new HashMap<>();
+        chatAgentInput.put("input", "wrong format");
+        doTestRunMethod(chatAgentInput);
+    }
+
+    private void doTestRunMethod(Map<String, String> parameters) {
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
