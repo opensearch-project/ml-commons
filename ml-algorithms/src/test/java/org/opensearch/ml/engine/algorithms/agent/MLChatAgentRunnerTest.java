@@ -336,8 +336,18 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputNotSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
+        MLToolSpec secondToolSpec = MLToolSpec
+            .builder()
+            .name(SECOND_TOOL)
+            .type(SECOND_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -386,8 +396,20 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(false).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .includeOutputInAgentResponse(false)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
+        MLToolSpec secondToolSpec = MLToolSpec
+            .builder()
+            .name(SECOND_TOOL)
+            .type(SECOND_TOOL)
+            .includeOutputInAgentResponse(true)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -728,7 +750,12 @@ public class MLChatAgentRunnerTest {
     // Helper methods to create MLAgent and parameters
     private MLAgent createMLAgentWithTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
         return MLAgent.builder().name("TestAgent").tools(Arrays.asList(firstToolSpec)).memory(mlMemorySpec).llm(llmSpec).build();
     }
 
