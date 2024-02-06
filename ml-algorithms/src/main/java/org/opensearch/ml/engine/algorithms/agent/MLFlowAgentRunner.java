@@ -106,6 +106,9 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                         ? previousToolSpec.getName() + ".output"
                         : previousToolSpec.getType() + ".output";
 
+                    String outputResponse = parseResponse(output);
+                    params.put(outputKey, escapeJson(outputResponse));
+
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
                         if (output instanceof ModelTensorOutput) {
                             flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
@@ -117,11 +120,9 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                             ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
                             flowAgentOutput.add(stepOutput);
                         }
-                    }
 
-                    String outputResponse = parseResponse(output);
-                    params.put(outputKey, escapeJson(outputResponse));
-                    additionalInfo.put(outputKey, outputResponse);
+                        additionalInfo.put(outputKey, outputResponse);
+                    }
 
                     if (finalI == toolSpecs.size()) {
                         updateMemory(additionalInfo, memorySpec, memoryId, parentInteractionId);
