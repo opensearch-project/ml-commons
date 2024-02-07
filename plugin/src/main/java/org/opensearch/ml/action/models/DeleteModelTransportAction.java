@@ -171,7 +171,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         wrappedListener.onFailure(e);
                     }
                 } else {
-                    // when model metadata is not found, model chunk and controller might still there, delete them here and return success response
+                    // when model metadata is not found, model chunk and controller might still there, delete them here and return success
+                    // response
                     deleteModelChunksAndController(null, wrappedListener, modelId, null);
                 }
             }, e -> { wrappedListener.onFailure((new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND))); }));
@@ -233,7 +234,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         });
     }
 
-    private void deleteModelChunksAndController(FunctionName functionName, ActionListener<DeleteResponse> actionListener, String modelId, DeleteResponse deleteResponse) {
+    private void deleteModelChunksAndController(
+        FunctionName functionName,
+        ActionListener<DeleteResponse> actionListener,
+        String modelId,
+        DeleteResponse deleteResponse
+    ) {
         if (FunctionName.REMOTE != functionName) {
             CountDownLatch countDownLatch = new CountDownLatch(2);
             AtomicBoolean bothDeleted = new AtomicBoolean(true);
@@ -242,11 +248,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 bothDeleted.compareAndSet(true, b);
                 if (countDownLatch.getCount() == 0) {
                     if (bothDeleted.get()) {
-                        log
-                            .debug(
-                                "model chunks and model controller for model {} deleted successfully",
-                                modelId
-                            );
+                        log.debug("model chunks and model controller for model {} deleted successfully", modelId);
                         if (deleteResponse != null) {
                             actionListener.onResponse(deleteResponse);
                         } else {
@@ -281,10 +283,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 }
             }, e -> {
                 log.error("Failed to delete model controller, please try again: " + modelId, e);
-                actionListener
-                    .onFailure(
-                        new IllegalStateException("Failed to delete model controller, please try again: " + modelId, e)
-                    );
+                actionListener.onFailure(new IllegalStateException("Failed to delete model controller, please try again: " + modelId, e));
             });
             deleteController(modelId, deleteControllerListener);
         }
