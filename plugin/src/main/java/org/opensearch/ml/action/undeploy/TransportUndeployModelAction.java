@@ -20,6 +20,7 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
@@ -174,7 +175,7 @@ public class TransportUndeployModelAction extends
                             deployToAllNodes.put(modelId, false);
                         }
                         updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
-                        bulkRequest.add(updateRequest);
+                        bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     }
                     syncUpInput.setDeployToAllNodes(deployToAllNodes);
                     ActionListener<BulkResponse> actionListener = ActionListener.wrap(r -> {
