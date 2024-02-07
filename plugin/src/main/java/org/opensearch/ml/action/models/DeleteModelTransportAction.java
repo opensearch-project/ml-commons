@@ -171,7 +171,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         wrappedListener.onFailure(e);
                     }
                 } else {
-                    wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                    // when model metadata is not found, model chunk and controller might still there, delete them here and return success response
+                    deleteModelChunksAndController(null, wrappedListener, modelId, null);
                 }
             }, e -> { wrappedListener.onFailure((new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND))); }));
         } catch (Exception e) {
@@ -213,8 +214,26 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void deleteModel(String modelId, FunctionName functionName, ActionListener<DeleteResponse> actionListener) {
-        // Always delete model chunks and model controller first, because deleting metadata first user is not able clean up model chunks and
-        // model controller.
+        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        client.delete(deleteRequest, new ActionListener<>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                deleteModelChunksAndController(functionName, actionListener, modelId, deleteResponse);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                if (e instanceof ResourceNotFoundException) {
+                    deleteModelChunksAndController(functionName, actionListener, modelId, null);
+                } else {
+                    log.error("Failed to delete model meta data for model, please try again: " + modelId, e);
+                    actionListener.onFailure(e);
+                }
+            }
+        });
+    }
+
+    private void deleteModelChunksAndController(FunctionName functionName, ActionListener<DeleteResponse> actionListener, String modelId, DeleteResponse deleteResponse) {
         if (FunctionName.REMOTE != functionName) {
             CountDownLatch countDownLatch = new CountDownLatch(2);
             AtomicBoolean bothDeleted = new AtomicBoolean(true);
@@ -225,10 +244,14 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                     if (bothDeleted.get()) {
                         log
                             .debug(
-                                "model chunks and model controller for model {} deleted successfully, starting to delete model meta data",
+                                "model chunks and model controller for model {} deleted successfully",
                                 modelId
                             );
-                        deleteModelMetadata(modelId, actionListener);
+                        if (deleteResponse != null) {
+                            actionListener.onResponse(deleteResponse);
+                        } else {
+                            actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                        }
                     } else {
                         actionListener
                             .onFailure(
@@ -250,33 +273,21 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             deleteController(modelId, countDownActionListener);
         } else {
             ActionListener<Boolean> deleteControllerListener = ActionListener.wrap(b -> {
-                log.debug("model controller for model {} deleted successfully, starting to delete model meta data", modelId);
-                deleteModelMetadata(modelId, actionListener);
+                log.debug("model controller for model {} deleted successfully", modelId);
+                if (deleteResponse != null) {
+                    actionListener.onResponse(deleteResponse);
+                } else {
+                    actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                }
             }, e -> {
-                log.error("Failed to delete model chunks or model controller, please try again: " + modelId, e);
+                log.error("Failed to delete model controller, please try again: " + modelId, e);
                 actionListener
                     .onFailure(
-                        new IllegalStateException("Failed to delete model chunks or model controller, please try again: " + modelId, e)
+                        new IllegalStateException("Failed to delete model controller, please try again: " + modelId, e)
                     );
             });
             deleteController(modelId, deleteControllerListener);
         }
-    }
-
-    private void deleteModelMetadata(String modelId, ActionListener<DeleteResponse> actionListener) {
-        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        client.delete(deleteRequest, new ActionListener<>() {
-            @Override
-            public void onResponse(DeleteResponse deleteResponse) {
-                actionListener.onResponse(deleteResponse);
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                log.error("Failed to delete model meta data for model, please try again: " + modelId, e);
-                actionListener.onFailure(e);
-            }
-        });
     }
 
     /**
