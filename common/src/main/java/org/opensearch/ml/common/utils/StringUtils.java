@@ -8,6 +8,7 @@ package org.opensearch.ml.common.utils;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 import lombok.extern.log4j.Log4j2;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -32,7 +33,7 @@ public class StringUtils {
         gson = new Gson();
     }
 
-    public static boolean isJson(String Json) {
+    public static boolean isValidJsonString(String Json) {
         try {
             new JSONObject(Json);
         } catch (JSONException ex) {
@@ -43,6 +44,19 @@ public class StringUtils {
             }
         }
         return true;
+    }
+
+    public static boolean isJson(String json) {
+        try {
+            if (!isValidJsonString(json)) {
+                return false;
+            }
+            //This is to cover such edge case "[]\""
+            gson.fromJson(json, Object.class);
+            return true;
+        } catch(JsonSyntaxException ex) {
+            return false;
+        }
     }
 
     public static String toUTF8(String rawString) {
