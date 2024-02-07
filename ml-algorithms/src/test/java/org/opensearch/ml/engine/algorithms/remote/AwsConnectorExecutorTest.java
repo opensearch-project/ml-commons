@@ -6,9 +6,6 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import com.google.common.collect.ImmutableMap;
-import org.apache.http.ProtocolVersion;
-import org.apache.http.StatusLine;
-import org.apache.http.message.BasicStatusLine;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -141,40 +138,6 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
-        Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("value", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("key"));
-    }
-
-    @Test
-    public void executePredict_TextDocsInferenceInput() throws IOException {
-        String jsonString = "{\"key\":\"value\"}";
-        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
-        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
-        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
-        when(httpRequest.call()).thenReturn(response);
-        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
-        when(httpResponse.statusCode()).thenReturn(200);
-        when(response.httpResponse()).thenReturn(httpResponse);
-        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
-
-        ConnectorAction predictAction = ConnectorAction.builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": ${parameters.input}}")
-            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
-            .build();
-        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-        Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
-
-        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input", "test input data")).build();
-        ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());

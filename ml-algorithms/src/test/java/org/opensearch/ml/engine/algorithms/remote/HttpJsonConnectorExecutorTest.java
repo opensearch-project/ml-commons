@@ -36,6 +36,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -100,7 +101,7 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInput_NoPreprocessFunction() {
+    public void executePredict_TextDocsInput_NoPreprocessFunction() throws IOException {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Must provide pre_process_function for predict action to process text docs input.");
         ConnectorAction predictAction = ConnectorAction.builder()
@@ -154,7 +155,6 @@ public class HttpJsonConnectorExecutorTest {
             + "        \"total_tokens\": 5\n" + "    }\n" + "}";
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
-        String modelResponse = "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         HttpEntity entity = new StringEntity(modelResponse);
         when(response.getEntity()).thenReturn(entity);
         when(executor.getHttpClient()).thenReturn(httpClient);
