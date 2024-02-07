@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.conversation.ConversationalIndexConstants
 import java.io.IOException;
 import java.util.Map;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -100,15 +101,18 @@ public class CreateConversationRequest extends ActionRequest {
         if (!restRequest.hasContent()) {
             return new CreateConversationRequest();
         }
-        Map<String, String> body = restRequest.contentParser().mapStrings();
-        if (body.containsKey(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
-            return new CreateConversationRequest(
-                body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD),
-                body.get(APPLICATION_TYPE_FIELD)
-            );
-        } else {
-            return new CreateConversationRequest();
+        try {
+            Map<String, String> body = restRequest.contentParser().mapStrings();
+            if (body.containsKey(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
+                return new CreateConversationRequest(
+                    body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD),
+                    body.get(APPLICATION_TYPE_FIELD)
+                );
+            } else {
+                return new CreateConversationRequest();
+            }
+        } catch (Exception exception) {
+            throw new OpenSearchParseException(exception.getMessage());
         }
     }
-
 }
