@@ -128,8 +128,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                 } else {
                                     wrappedListener
                                         .onFailure(
-                                            new Exception(
-                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
+                                            new OpenSearchStatusException(
+                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                RestStatus.BAD_REQUEST
                                             )
                                         );
                                 }
@@ -150,8 +151,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     } else {
                                         wrappedListener
                                             .onFailure(
-                                                new Exception(
-                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
+                                                new OpenSearchStatusException(
+                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                    RestStatus.BAD_REQUEST
                                                 )
                                             );
                                     }
@@ -167,7 +169,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 } else {
                     wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                 }
-            }, e -> { wrappedListener.onFailure(e); }));
+            }, e -> { wrappedListener.onFailure((new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND))); }));
         } catch (Exception e) {
             log.error("Failed to delete ML model " + modelId, e);
             actionListener.onFailure(e);
