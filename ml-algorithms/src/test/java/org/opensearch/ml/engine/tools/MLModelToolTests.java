@@ -99,6 +99,28 @@ public class MLModelToolTests {
     }
 
     @Test
+    public void testMLModelsWithDefaultOutputParserAndMalformedResponseField() throws ExecutionException, InterruptedException {
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "response 1", "action", "action1")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        doAnswer(invocation -> {
+
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        Tool tool = MLModelTool.Factory.getInstance().create(Map.of("model_id", "modelId", "response_field", "malformed field"));
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+        tool.run(null, listener);
+
+        future.join();
+        assertEquals(null, future.get());
+    }
+
+    @Test
     public void testMLModelsWithCustomizedOutputParser() {
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("thought", "thought 1", "action", "action1")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
