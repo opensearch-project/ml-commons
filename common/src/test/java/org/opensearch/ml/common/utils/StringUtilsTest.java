@@ -1,8 +1,14 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common.utils;
 
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +24,13 @@ public class StringUtilsTest {
         Assert.assertTrue(StringUtils.isJson("[1, 2, 3]"));
         Assert.assertTrue(StringUtils.isJson("[\"a\", \"b\"]"));
         Assert.assertTrue(StringUtils.isJson("[1, \"a\"]"));
+        Assert.assertTrue(StringUtils.isJson("{\"key1\": \"value\", \"key2\": 123}"));
+        Assert.assertTrue(StringUtils.isJson("{}"));
+        Assert.assertTrue(StringUtils.isJson("[]"));
+        Assert.assertTrue(StringUtils.isJson("[ ]"));
+        Assert.assertTrue(StringUtils.isJson("[,]"));
+        Assert.assertTrue(StringUtils.isJson("[abc]"));
+        Assert.assertTrue(StringUtils.isJson("[\"abc\", 123]"));
     }
 
     @Test
@@ -27,6 +40,13 @@ public class StringUtilsTest {
         Assert.assertFalse(StringUtils.isJson("{\"key\": \"value}"));
         Assert.assertFalse(StringUtils.isJson("{\"key\": \"value\", \"key\": 123}"));
         Assert.assertFalse(StringUtils.isJson("[1, \"a]"));
+        Assert.assertFalse(StringUtils.isJson("[]\""));
+        Assert.assertFalse(StringUtils.isJson("[ ]\""));
+        Assert.assertFalse(StringUtils.isJson("[,]\""));
+        Assert.assertFalse(StringUtils.isJson("[,\"]"));
+        Assert.assertFalse(StringUtils.isJson("[]\"123\""));
+        Assert.assertFalse(StringUtils.isJson("[abc\"]"));
+        Assert.assertFalse(StringUtils.isJson("[abc\n123]"));
     }
 
     @Test
@@ -87,12 +107,20 @@ public class StringUtilsTest {
         parameters.put("key4", new int[]{10, 20});
         parameters.put("key5", new Object[]{1.01, "abc"});
         Map<String, String> parameterMap = StringUtils.getParameterMap(parameters);
-        System.out.println(parameterMap);
         Assert.assertEquals(5, parameterMap.size());
         Assert.assertEquals("value1", parameterMap.get("key1"));
         Assert.assertEquals("2", parameterMap.get("key2"));
         Assert.assertEquals("2.1", parameterMap.get("key3"));
         Assert.assertEquals("[10,20]", parameterMap.get("key4"));
         Assert.assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
+    }
+
+    @Test
+    public void processTextDocs() {
+        List<String> processedDocs = StringUtils.processTextDocs(Arrays.asList("abc \n\n123\"4", null, "[1.01,\"abc\"]"));
+        Assert.assertEquals(3, processedDocs.size());
+        Assert.assertEquals("abc \\n\\n123\\\"4", processedDocs.get(0));
+        Assert.assertNull(processedDocs.get(1));
+        Assert.assertEquals("[1.01,\\\"abc\\\"]", processedDocs.get(2));
     }
 }

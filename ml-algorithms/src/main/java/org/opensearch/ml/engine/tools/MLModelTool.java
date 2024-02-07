@@ -34,6 +34,9 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(MLModelTool.TYPE)
 public class MLModelTool implements Tool {
     public static final String TYPE = "MLModelTool";
+    public static final String RESPONSE_FIELD = "response_field";
+    public static final String MODEL_ID_FIELD = "model_id";
+    public static final String DEFAULT_RESPONSE_FIELD = "response";
 
     @Setter
     @Getter
@@ -52,14 +55,18 @@ public class MLModelTool implements Tool {
     @Setter
     @Getter
     private Parser outputParser;
+    @Setter
+    @Getter
+    private String responseField;
 
-    public MLModelTool(Client client, String modelId) {
+    public MLModelTool(Client client, String modelId, String responseField) {
         this.client = client;
         this.modelId = modelId;
+        this.responseField = responseField;
 
         outputParser = o -> {
             List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
+            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get(responseField);
         };
     }
 
@@ -132,7 +139,11 @@ public class MLModelTool implements Tool {
 
         @Override
         public MLModelTool create(Map<String, Object> map) {
-            return new MLModelTool(client, (String) map.get("model_id"));
+            return new MLModelTool(
+                client,
+                (String) map.get(MODEL_ID_FIELD),
+                (String) map.getOrDefault(RESPONSE_FIELD, DEFAULT_RESPONSE_FIELD)
+            );
         }
 
         @Override

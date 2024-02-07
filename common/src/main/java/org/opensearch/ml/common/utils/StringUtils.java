@@ -8,6 +8,8 @@ package org.opensearch.ml.common.utils;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
+import lombok.extern.log4j.Log4j2;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -17,10 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Log4j2
 public class StringUtils {
 
     public static final Gson gson;
@@ -29,7 +33,7 @@ public class StringUtils {
         gson = new Gson();
     }
 
-    public static boolean isJson(String Json) {
+    public static boolean isValidJsonString(String Json) {
         try {
             new JSONObject(Json);
         } catch (JSONException ex) {
@@ -40,6 +44,19 @@ public class StringUtils {
             }
         }
         return true;
+    }
+
+    public static boolean isJson(String json) {
+        try {
+            if (!isValidJsonString(json)) {
+                return false;
+            }
+            //This is to cover such edge case "[]\""
+            gson.fromJson(json, Object.class);
+            return true;
+        } catch(JsonSyntaxException ex) {
+            return false;
+        }
     }
 
     public static String toUTF8(String rawString) {
@@ -95,6 +112,46 @@ public class StringUtils {
             });
         } catch (PrivilegedActionException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public static Map<String, String> convertScriptStringToJsonString(Map<String, Object> processedInput) {
+        Map<String, String> parameterStringMap = new HashMap<>();
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                Map<String, Object> parametersMap = (Map<String, Object>) processedInput.get("parameters");
+                for (String key : parametersMap.keySet()) {
+                    if (parametersMap.get(key) instanceof String) {
+                        parameterStringMap.put(key, (String) parametersMap.get(key));
+                    } else {
+                        parameterStringMap.put(key, gson.toJson(parametersMap.get(key)));
+                    }
+                }
+                return null;
+            });
+        } catch (PrivilegedActionException e) {
+            log.error("Error processing parameters", e);
+            throw new RuntimeException(e);
+        }
+        return parameterStringMap;
+    }
+
+    public static List<String> processTextDocs(List<String> inputDocs) {
+        List<String> docs = new ArrayList<>();
+        for (String doc : inputDocs) {
+            docs.add(processTextDoc(doc));
+        }
+        return docs;
+    }
+
+    public static String processTextDoc(String doc) {
+        if (doc != null) {
+            String gsonString = gson.toJson(doc);
+            // in 2.9, user will add " before and after string
+            // gson.toString(string) will add extra " before after string, so need to remove
+            return gsonString.substring(1, gsonString.length() - 1);
+        } else {
+            return null;
         }
     }
 }

@@ -7,10 +7,14 @@ package org.opensearch.ml.rest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
@@ -31,9 +35,12 @@ import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestResponse;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
@@ -48,10 +55,14 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLExecuteAction = new RestMLExecuteAction();
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -70,7 +81,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         assertNotNull(restMLExecuteAction);
     }
 
@@ -124,5 +135,75 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
         Input input = argumentCaptor.getValue().getInput();
         assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
+
+    public void testPrepareRequest1() throws Exception {
+        doNothing().when(channel).sendResponse(isA(RestResponse.class));
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(new MLExecuteTaskResponse(FunctionName.LOCAL_SAMPLE_CALCULATOR, null));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
+
+    public void testPrepareRequest2() throws Exception {
+        doThrow(new IllegalArgumentException("input error")).when(channel).sendResponse(isA(RestResponse.class));
+        doNothing().when(channel).sendResponse(isA(BytesRestResponse.class));
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(new MLExecuteTaskResponse(FunctionName.LOCAL_SAMPLE_CALCULATOR, null));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
+
+    public void testPrepareRequestClientError() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new IllegalArgumentException("input error"));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
+
+    public void testPrepareRequestSystemError() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("system error"));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+    }
+
+    public void testPrepareRequest_disabled() {
+        RestRequest request = getExecuteAgentRestRequest();
+
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+        assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
     }
 }

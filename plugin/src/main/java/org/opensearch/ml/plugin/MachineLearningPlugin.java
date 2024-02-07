@@ -41,6 +41,7 @@ import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
 import org.opensearch.ml.action.agents.TransportSearchAgentAction;
+import org.opensearch.ml.action.config.GetConfigTransportAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
@@ -110,6 +111,7 @@ import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
+import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -209,6 +211,7 @@ import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
+import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetControllerAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
@@ -403,7 +406,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
                 new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class),
                 new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
-                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class)
+                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class),
+                new ActionHandler<>(MLConfigGetAction.INSTANCE, GetConfigTransportAction.class)
             );
     }
 
@@ -662,7 +666,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
@@ -675,7 +679,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             settings,
             mlFeatureEnabledSetting
         );
-        RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction();
+        RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction(mlFeatureEnabledSetting);
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
@@ -704,14 +708,15 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction();
         RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction();
         RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction();
-        RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction();
-        RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction();
+        RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
+        RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
-        RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction();
+        RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction(mlFeatureEnabledSetting);
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
+        RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -763,7 +768,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMemoryGetTracesAction,
                 restMLSearchAgentAction,
                 restMLListToolsAction,
-                restMLGetToolAction
+                restMLGetToolAction,
+                restMLGetConfigAction
             );
     }
 
@@ -872,7 +878,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
+                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED
             );
         return settings;
     }

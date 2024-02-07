@@ -7,7 +7,6 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_DEPLOY_MODEL;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
@@ -35,7 +34,6 @@ import com.google.common.collect.ImmutableList;
 
 public class RestMLRegisterModelAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";
-    private volatile boolean isModelUrlAllowed;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
@@ -51,8 +49,6 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
      * @param settings settings
      */
     public RestMLRegisterModelAction(ClusterService clusterService, Settings settings, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
-        isModelUrlAllowed = ML_COMMONS_ALLOW_MODEL_URL.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ALLOW_MODEL_URL, it -> isModelUrlAllowed = it);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -102,11 +98,6 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        }
-        if (mlInput.getUrl() != null && !isModelUrlAllowed) {
-            throw new IllegalArgumentException(
-                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."
-            );
         }
         return new MLRegisterModelRequest(mlInput);
     }

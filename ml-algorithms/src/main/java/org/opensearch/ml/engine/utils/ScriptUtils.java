@@ -9,9 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 
-import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptService;
@@ -28,10 +26,6 @@ public class ScriptUtils {
         List<String> inputSentences
     ) {
         return Optional.ofNullable(executeScript(scriptService, preProcessFunction, ImmutableMap.of("text_docs", inputSentences)));
-    }
-
-    public static List<ModelTensor> executeBuildInPostProcessFunction(List<?> vectors, Function<List<?>, List<ModelTensor>> function) {
-        return function.apply(vectors);
     }
 
     public static Optional<String> executePostProcessFunction(ScriptService scriptService, String postProcessFunction, String resultJson) {

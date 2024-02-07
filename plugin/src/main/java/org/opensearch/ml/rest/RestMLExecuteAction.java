@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
+import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
@@ -16,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
@@ -23,9 +28,14 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.error.ErrorMessageFactory;
 import org.opensearch.rest.BaseRestHandler;
+import org.opensearch.rest.BytesRestResponse;
+import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
@@ -34,11 +44,14 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RestMLExecuteAction extends BaseRestHandler {
     private static final String ML_EXECUTE_ACTION = "ml_execute_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLExecuteAction() {}
+    public RestMLExecuteAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -57,7 +70,28 @@ public class RestMLExecuteAction extends BaseRestHandler {
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(request);
-        return channel -> client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, new RestToXContentListener<>(channel));
+
+        return channel -> client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, new ActionListener<>() {
+            @Override
+            public void onResponse(MLExecuteTaskResponse response) {
+                try {
+                    sendResponse(channel, response);
+                } catch (Exception e) {
+                    reportError(channel, e, INTERNAL_SERVER_ERROR);
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                RestStatus status;
+                if (isClientError(e)) {
+                    status = BAD_REQUEST;
+                } else {
+                    status = INTERNAL_SERVER_ERROR;
+                }
+                reportError(channel, e, status);
+            }
+        });
     }
 
     /**
@@ -75,6 +109,9 @@ public class RestMLExecuteAction extends BaseRestHandler {
         FunctionName functionName = null;
         Input input = null;
         if (uri.startsWith(ML_BASE_URI + "/agents/")) {
+            if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
+                throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
+            }
             String agentId = request.param(PARAMETER_AGENT_ID);
             functionName = FunctionName.AGENT;
             input = MLInput.parse(parser, functionName.name());
@@ -86,5 +123,17 @@ public class RestMLExecuteAction extends BaseRestHandler {
         }
 
         return new MLExecuteTaskRequest(functionName, input);
+    }
+
+    private void sendResponse(RestChannel channel, MLExecuteTaskResponse response) throws Exception {
+        channel.sendResponse(new RestToXContentListener<MLExecuteTaskResponse>(channel).buildResponse(response));
+    }
+
+    private void reportError(final RestChannel channel, final Exception e, final RestStatus status) {
+        channel.sendResponse(new BytesRestResponse(status, ErrorMessageFactory.createErrorMessage(e, status.getStatus()).toString()));
+    }
+
+    private boolean isClientError(Exception e) {
+        return e instanceof IllegalArgumentException || e instanceof IllegalAccessException;
     }
 }

@@ -20,6 +20,7 @@ dependencies {
     compileOnly "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     compileOnly "org.opensearch:common-utils:${common_utils_version}"
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
+    testImplementation "org.opensearch.test:framework:${opensearch_version}"
 
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: '2.10.1'

@@ -61,9 +61,9 @@ public class RestMemoryGetConversationsActionIT extends MLCommonsRestTestCase {
         HttpEntity httpEntity = response.getEntity();
         String entityString = TestHelper.httpEntityToString(httpEntity);
         Map map = gson.fromJson(entityString, Map.class);
-        assert (map.containsKey("conversations"));
+        assert (map.containsKey(RESPONSE_CONVERSATION_LIST_FIELD));
         assert (!map.containsKey("next_token"));
-        assert (((ArrayList) map.get("conversations")).size() == 0);
+        assert (((ArrayList) map.get(RESPONSE_CONVERSATION_LIST_FIELD)).size() == 0);
     }
 
     public void testGetConversations_LastPage() throws IOException {

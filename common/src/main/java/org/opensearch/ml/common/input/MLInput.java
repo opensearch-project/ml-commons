@@ -17,6 +17,7 @@ import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -59,6 +61,7 @@ public class MLInput implements Input {
     public static final String TEXT_DOCS_FIELD = "text_docs";
     // Input query text to compare against for text similarity model
     public static final String QUERY_TEXT_FIELD = "query_text";
+    public static final String PARAMETERS_FIELD = "parameters";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -163,17 +166,22 @@ public class MLInput implements Input {
                     }
                     break;
                 case TEXT_SIMILARITY:
-                    TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
-                    List<String> tdocs = ds.getTextDocs();
-                    String queryText = ds.getQueryText();
+                    TextSimilarityInputDataSet inputDataSet = (TextSimilarityInputDataSet) this.inputDataset;
+                    List<String> documents = inputDataSet.getTextDocs();
+                    String queryText = inputDataSet.getQueryText();
                     builder.field(QUERY_TEXT_FIELD, queryText);
-                    if (tdocs != null && !tdocs.isEmpty()) {
+                    if (documents != null && !documents.isEmpty()) {
                         builder.startArray(TEXT_DOCS_FIELD);
-                        for(String d : tdocs) {
+                        for(String d : documents) {
                             builder.value(d);
                         }
                         builder.endArray();
                     }
+                    break;
+                case REMOTE:
+                    RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) this.inputDataset;
+                    Map<String, String> parameters = remoteInferenceInputDataSet.getParameters();
+                    builder.field(PARAMETERS_FIELD, parameters);
                     break;
                 default:
                     break;

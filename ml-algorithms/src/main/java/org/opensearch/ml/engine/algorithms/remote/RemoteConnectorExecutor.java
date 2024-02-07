@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 import java.util.ArrayList;
@@ -106,14 +107,18 @@ public interface RemoteConnectorExecutor {
             parameters.putAll(connector.getParameters());
         }
         MLInputDataset inputDataset = mlInput.getInputDataset();
+        Map<String, String> inputParameters = new HashMap<>();
         if (inputDataset instanceof RemoteInferenceInputDataSet && ((RemoteInferenceInputDataSet) inputDataset).getParameters() != null) {
-            parameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
+            escapeRemoteInferenceInputData((RemoteInferenceInputDataSet) inputDataset);
+            inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
-
+        parameters.putAll(inputParameters);
         RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
         }
+        // override again to always prioritize the input parameter
+        parameters.putAll(inputParameters);
         String payload = connector.createPredictPayload(parameters);
         connector.validatePayload(payload);
         String userStr = getClient()

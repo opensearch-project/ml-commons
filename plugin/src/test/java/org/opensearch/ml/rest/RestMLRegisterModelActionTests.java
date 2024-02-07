@@ -147,20 +147,6 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         restMLRegisterModelAction.handleRequest(request, channel, client);
     }
 
-    public void testRegisterModelUrlNotAllowed() throws Exception {
-        settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false).build();
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
-        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings, mlFeatureEnabledSetting);
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule
-            .expectMessage(
-                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."
-            );
-        RestRequest request = getRestRequest();
-        restMLRegisterModelAction.handleRequest(request, channel, client);
-    }
-
     public void testRegisterModelRequestWithNullUrlAndUrlNotAllowed() throws Exception {
         settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);

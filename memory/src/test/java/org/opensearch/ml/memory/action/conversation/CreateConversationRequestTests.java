@@ -23,6 +23,9 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -41,6 +44,8 @@ import com.google.gson.Gson;
 
 public class CreateConversationRequestTests extends OpenSearchTestCase {
 
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
     Gson gson;
 
     @Before
@@ -99,5 +104,14 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
         CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
         assert (request.getName().equals(name));
         assert (request.getApplicationType().equals(appType));
+    }
+
+    public void testRestRequest_NullName() throws IOException {
+        exceptionRule.expect(OpenSearchParseException.class);
+        exceptionRule.expectMessage("Can't get text on a VALUE_NULL");
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(new BytesArray("{\"name\":null}"), MediaTypeRegistry.JSON)
+            .build();
+        CreateConversationRequest.fromRestRequest(req);
     }
 }
