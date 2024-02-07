@@ -24,6 +24,13 @@ public class StringUtilsTest {
         Assert.assertTrue(StringUtils.isJson("[1, 2, 3]"));
         Assert.assertTrue(StringUtils.isJson("[\"a\", \"b\"]"));
         Assert.assertTrue(StringUtils.isJson("[1, \"a\"]"));
+        Assert.assertTrue(StringUtils.isJson("{\"key1\": \"value\", \"key2\": 123}"));
+        Assert.assertTrue(StringUtils.isJson("{}"));
+        Assert.assertTrue(StringUtils.isJson("[]"));
+        Assert.assertTrue(StringUtils.isJson("[ ]"));
+        Assert.assertTrue(StringUtils.isJson("[,]"));
+        Assert.assertTrue(StringUtils.isJson("[abc]"));
+        Assert.assertTrue(StringUtils.isJson("[\"abc\", 123]"));
     }
 
     @Test
@@ -33,6 +40,13 @@ public class StringUtilsTest {
         Assert.assertFalse(StringUtils.isJson("{\"key\": \"value}"));
         Assert.assertFalse(StringUtils.isJson("{\"key\": \"value\", \"key\": 123}"));
         Assert.assertFalse(StringUtils.isJson("[1, \"a]"));
+        Assert.assertFalse(StringUtils.isJson("[]\""));
+        Assert.assertFalse(StringUtils.isJson("[ ]\""));
+        Assert.assertFalse(StringUtils.isJson("[,]\""));
+        Assert.assertFalse(StringUtils.isJson("[,\"]"));
+        Assert.assertFalse(StringUtils.isJson("[]\"123\""));
+        Assert.assertFalse(StringUtils.isJson("[abc\"]"));
+        Assert.assertFalse(StringUtils.isJson("[abc\n123]"));
     }
 
     @Test
