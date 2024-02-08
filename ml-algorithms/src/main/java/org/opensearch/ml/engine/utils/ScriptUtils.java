@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.utils;
 
+import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,7 @@ public class ScriptUtils {
     public static Optional<String> executePostProcessFunction(ScriptService scriptService, String postProcessFunction, String resultJson) {
         Map<String, Object> result = StringUtils.fromJson(resultJson, "result");
         if (postProcessFunction != null) {
-            return Optional.ofNullable(executeScript(scriptService, postProcessFunction, result));
+            return Optional.ofNullable(executeScript(scriptService, addDefaultMethod(postProcessFunction), result));
         }
         return Optional.empty();
     }

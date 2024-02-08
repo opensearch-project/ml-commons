@@ -14,12 +14,12 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.script.ScriptService;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -39,12 +39,14 @@ public class RemoteInferencePreProcessFunctionTest {
 
     RemoteInferenceInputDataSet remoteInferenceInputDataSet;
     TextDocsInputDataSet textDocsInputDataSet;
+    Map<String, String> predictParameter;
 
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         preProcessFunction = "";
-        function = new RemoteInferencePreProcessFunction(scriptService, preProcessFunction);
+        predictParameter = new HashMap<>();
+        function = new RemoteInferencePreProcessFunction(scriptService, preProcessFunction, predictParameter);
         remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("key1", "value1", "key2", "value2")).build();
         textDocsInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("hello", "world")).build();
     }

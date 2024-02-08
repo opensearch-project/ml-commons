@@ -23,9 +23,22 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Log4j2
 public class StringUtils {
+
+    public static final String DEFAULT_ESCAPE_FUNCTION = "\n    String escape(def input) { \n" +
+            "      if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n" +
+            "      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n" +
+            "      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n" +
+            "      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n" +
+            "      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n" +
+            "      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n" +
+            "      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n" +
+            "      return input;" +
+            "\n    }\n";
 
     public static final Gson gson;
 
@@ -153,5 +166,26 @@ public class StringUtils {
         } else {
             return null;
         }
+    }
+
+    public static String addDefaultMethod(String functionScript) {
+        if (!containsEscapeMethod(functionScript) && isEscapeUsed(functionScript)) {
+            return DEFAULT_ESCAPE_FUNCTION + functionScript;
+        }
+        return functionScript;
+    }
+
+    public static boolean patternExist(String input, String patternString) {
+        Pattern pattern = Pattern.compile(patternString);
+        Matcher matcher = pattern.matcher(input);
+        return matcher.find();
+    }
+
+    public static boolean isEscapeUsed(String input) {
+        return patternExist(input,"(?<!\\bString\\s+)\\bescape\\s*\\(");
+    }
+
+    public static boolean containsEscapeMethod(String input) {
+        return patternExist(input, "String\\s+escape\\s*\\(\\s*(def|String)\\s+.*?\\)\\s*\\{?");
     }
 }
