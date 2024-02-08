@@ -123,4 +123,34 @@ public class StringUtilsTest {
         Assert.assertNull(processedDocs.get(1));
         Assert.assertEquals("[1.01,\\\"abc\\\"]", processedDocs.get(2));
     }
+
+    @Test
+    public void isEscapeUsed() {
+        Assert.assertFalse(StringUtils.isEscapeUsed("String escape"));
+        Assert.assertTrue(StringUtils.isEscapeUsed(" escape(\"abc\n123\")"));
+    }
+
+    @Test
+    public void containsEscapeMethod() {
+        Assert.assertFalse(StringUtils.containsEscapeMethod("String escape"));
+        Assert.assertFalse(StringUtils.containsEscapeMethod("String escape()"));
+        Assert.assertFalse(StringUtils.containsEscapeMethod(" escape(\"abc\n123\")"));
+        Assert.assertTrue(StringUtils.containsEscapeMethod("String escape(def abc)"));
+        Assert.assertTrue(StringUtils.containsEscapeMethod("String escape(String input)"));
+    }
+
+    @Test
+    public void addDefaultMethod_NoEscape() {
+        String input = "return 123;";
+        String result = StringUtils.addDefaultMethod(input);
+        Assert.assertEquals(input, result);
+    }
+
+    @Test
+    public void addDefaultMethod_Escape() {
+        String input = "return escape(\"abc\n123\");";
+        String result = StringUtils.addDefaultMethod(input);
+        Assert.assertNotEquals(input, result);
+        Assert.assertTrue(result.startsWith(StringUtils.DEFAULT_ESCAPE_FUNCTION));
+    }
 }
