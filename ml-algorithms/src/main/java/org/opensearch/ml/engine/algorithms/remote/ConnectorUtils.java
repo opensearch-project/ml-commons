@@ -96,7 +96,14 @@ public class ConnectorUtils {
             } else if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
                 if (parameters.containsKey(PROCESS_REMOTE_INFERENCE_INPUT)
                     && Boolean.parseBoolean(parameters.get(PROCESS_REMOTE_INFERENCE_INPUT))) {
-                    RemoteInferencePreProcessFunction function = new RemoteInferencePreProcessFunction(scriptService, preProcessFunction);
+                    Map<String, String> params = new HashMap<>();
+                    params.putAll(connector.getParameters());
+                    params.putAll(parameters);
+                    RemoteInferencePreProcessFunction function = new RemoteInferencePreProcessFunction(
+                        scriptService,
+                        preProcessFunction,
+                        params
+                    );
                     return function.apply(mlInput);
                 } else {
                     return (RemoteInferenceInputDataSet) mlInput.getInputDataset();

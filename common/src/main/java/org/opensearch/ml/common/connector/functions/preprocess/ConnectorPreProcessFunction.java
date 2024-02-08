@@ -9,8 +9,16 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.script.Script;
+import org.opensearch.script.ScriptService;
+import org.opensearch.script.ScriptType;
+import org.opensearch.script.TemplateScript;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.function.Function;
+
+import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
 
 @Log4j2
 public abstract class ConnectorPreProcessFunction implements Function<MLInput, RemoteInferenceInputDataSet> {
@@ -39,4 +47,11 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
             throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet");
         }
     }
+
+    protected String executeScript(ScriptService scriptService, String painlessScript, Map<String, Object> params) {
+        Script script = new Script(ScriptType.INLINE, "painless", addDefaultMethod(painlessScript), Collections.emptyMap());
+        TemplateScript templateScript = scriptService.compile(script, TemplateScript.CONTEXT).newInstance(params);
+        return templateScript.execute();
+    }
+
 }

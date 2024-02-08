@@ -12,13 +12,9 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.script.Script;
 import org.opensearch.script.ScriptService;
-import org.opensearch.script.ScriptType;
-import org.opensearch.script.TemplateScript;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
@@ -64,9 +60,4 @@ public class DefaultPreProcessFunction extends ConnectorPreProcessFunction {
         }
     }
 
-    private String executeScript(ScriptService scriptService, String painlessScript, Map<String, Object> params) {
-        Script script = new Script(ScriptType.INLINE, "painless", painlessScript, Collections.emptyMap());
-        TemplateScript templateScript = scriptService.compile(script, TemplateScript.CONTEXT).newInstance(params);
-        return templateScript.execute();
-    }
 }
