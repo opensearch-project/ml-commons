@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -140,6 +141,10 @@ public class ConversationIndexMemory implements Memory {
         memoryManager.getFinalInteractions(conversationId, LAST_N_INTERACTIONS, listener);
     }
 
+    public void getMessages(ActionListener listener, int size) {
+        memoryManager.getFinalInteractions(conversationId, size, listener);
+    }
+
     @Override
     public void clear() {
         throw new RuntimeException("clear method is not supported in ConversationIndexMemory");
@@ -148,6 +153,10 @@ public class ConversationIndexMemory implements Memory {
     @Override
     public void remove(String id) {
         throw new RuntimeException("remove method is not supported in ConversationIndexMemory");
+    }
+
+    public void update(String messageId, Map<String, Object> updateContent, ActionListener<UpdateResponse> updateListener) {
+        getMemoryManager().updateInteraction(messageId, updateContent, updateListener);
     }
 
     public static class Factory implements Memory.Factory<ConversationIndexMemory> {
