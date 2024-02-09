@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -114,6 +115,8 @@ public class MLChatAgentRunnerTest {
     private ArgumentCaptor<ActionListener<CreateInteractionResponse>> conversationIndexMemoryCapture;
     @Captor
     private ArgumentCaptor<ActionListener<UpdateResponse>> mlMemoryManagerCapture;
+    @Captor
+    private ArgumentCaptor<Map<String, String>> ToolParamsCapture;
 
     @Before
     @SuppressWarnings("unchecked")
@@ -684,6 +687,35 @@ public class MLChatAgentRunnerTest {
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
         assertEquals(3, ((Map) argumentCaptor.getValue()).size());
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testToolUseOriginalInput() {
+        // Mock tool validation to return false.
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with a tool including two parameters.
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent.
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+        params.put("question", "raw input");
+        doReturn(true).when(firstTool).useOriginalInput();
+
+        // Run the MLChatAgentRunner.
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called.
+        verify(firstTool).run(any(), any());
+        // Verify the size of parameters passed in the tool run method.
+        ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
+        assertEquals(3, ((Map) argumentCaptor.getValue()).size());
+        assertEquals("raw input", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
