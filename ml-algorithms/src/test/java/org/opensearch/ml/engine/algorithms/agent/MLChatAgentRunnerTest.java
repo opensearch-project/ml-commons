@@ -16,6 +16,8 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -112,6 +114,8 @@ public class MLChatAgentRunnerTest {
     @Captor
     private ArgumentCaptor<ActionListener<List<Interaction>>> memoryInteractionCapture;
     @Captor
+    private ArgumentCaptor<Integer> messageHistoryLimitCapture;
+    @Captor
     private ArgumentCaptor<ActionListener<CreateInteractionResponse>> conversationIndexMemoryCapture;
     @Captor
     private ArgumentCaptor<ActionListener<UpdateResponse>> mlMemoryManagerCapture;
@@ -132,7 +136,7 @@ public class MLChatAgentRunnerTest {
             ActionListener<List<Interaction>> listener = invocation.getArgument(0);
             listener.onResponse(generateInteractions(2));
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
+        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), messageHistoryLimitCapture.capture());
         when(conversationIndexMemory.getConversationId()).thenReturn("conversation_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
         doAnswer(invocation -> {
@@ -464,13 +468,15 @@ public class MLChatAgentRunnerTest {
             interactionList.add(inProgressInteraction);
             listener.onResponse(interactionList);
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
+        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), messageHistoryLimitCapture.capture());
 
         HashMap<String, String> params = new HashMap<>();
+        params.put(MESSAGE_HISTORY_LIMIT, "5");
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
+        Assert.assertEquals(5, messageHistoryLimitCapture.getValue().intValue());
     }
 
     @Test
@@ -517,7 +523,7 @@ public class MLChatAgentRunnerTest {
             interactionList.add(inProgressInteraction);
             listener.onResponse(interactionList);
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
+        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), messageHistoryLimitCapture.capture());
 
         HashMap<String, String> params = new HashMap<>();
         params.put("verbose", "true");
@@ -525,6 +531,7 @@ public class MLChatAgentRunnerTest {
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
+        Assert.assertEquals(LAST_N_INTERACTIONS, messageHistoryLimitCapture.getValue().intValue());
     }
 
     @Test
@@ -545,7 +552,7 @@ public class MLChatAgentRunnerTest {
             ActionListener<List<Interaction>> listener = invocation.getArgument(0);
             listener.onFailure(new RuntimeException("Test Exception"));
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture());
+        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), messageHistoryLimitCapture.capture());
 
         HashMap<String, String> params = new HashMap<>();
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
