@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.extractModelResponseJson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseInputFromLLMReturn;
 
@@ -110,11 +111,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
     }
 
+    @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
         String title = params.get(MLAgentExecutor.QUESTION);
+        int messageHistoryLimit = getMessageHistoryLimit(params);
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
@@ -152,7 +155,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }, e -> {
                 log.error("Failed to get chat history", e);
                 listener.onFailure(e);
-            }));
+            }), messageHistoryLimit);
         }, listener::onFailure));
     }
 
@@ -370,7 +373,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     if (conversationIndexMemory != null) {
                         ConversationIndexMessage msgTemp = ConversationIndexMessage
                             .conversationIndexMessageBuilder()
-                            .type("ReAct")
+                            .type(memory.getType())
                             .question(question)
                             .response(thought)
                             .finalAnswer(false)
@@ -443,7 +446,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             // Create final trace message.
                             ConversationIndexMessage msgTemp = ConversationIndexMessage
                                 .conversationIndexMessageBuilder()
-                                .type("ReAct")
+                                .type(memory.getType())
                                 .question(question)
                                 .response(finalAnswer1)
                                 .finalAnswer(true)
