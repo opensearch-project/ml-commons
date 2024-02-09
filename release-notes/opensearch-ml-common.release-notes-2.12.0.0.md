@@ -42,6 +42,8 @@ Compatible with OpenSearch 2.12.0
 * AI connector blueprint for the Aleph Alpha Luminous-Base Embedding Model (#2003)
 * Add tutorial doc for semantic search on amazon opensearch (#1928)
 * Add tutorial doc for semantic search with OpenAI embedding model (#1936)
+* Add connector blueprint for Azure OpenAI Embedding and Chat model (#2062)
+* Add updated Cohere Embedding blueprint (#2063)
 
 ### Bug Fixes
 * Fix missing lombok version compilation failure issue (#1278)
@@ -78,6 +80,10 @@ Compatible with OpenSearch 2.12.0
 * Adjust ListTool response format (#1912)
 * Issue #844: Add accessUserInformation to the plugin security policy (#1959)
 * Escape input data (#1974)
+* flow agent suggestions missing (#2064)
+* bug fix - tool parameters missing (#2065)
+* fix empty tool parameter issue (#2067)
+* tool uses original input (#2068)
 
 ### Experimental Feature
 * Update Model API (#1350)
@@ -142,6 +148,8 @@ Compatible with OpenSearch 2.12.0
 * Refine the error message on cluster status not ready scenario (#1931)
 * Add Request-Source header (#1892)
 * Add process function for bedrock (#1554)
+* send agent execution response after saving memory (#2066)
+* add conversational flow agent (#2069)
 
 ### REFACTOR
 * Rename memory field names in responses (#2020)
