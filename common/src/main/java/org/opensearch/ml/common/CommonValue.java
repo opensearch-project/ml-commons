@@ -156,6 +156,9 @@ public class CommonValue {
                         + AbstractConnector.CREDENTIAL_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
+                        + AbstractConnector.HTTP_CLIENT_CONFIG_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + AbstractConnector.ACTIONS_FIELD
                         + "\" : {\"type\": \"flat_object\"}\n";
 
