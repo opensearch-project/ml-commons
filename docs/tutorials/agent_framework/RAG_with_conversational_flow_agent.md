@@ -40,7 +40,7 @@ PUT _cluster/settings
 
 ### 1.1 register text embedding model
 
-Find more details on [pretrained model](https://opensearch.org/docs/latest/ml-commons-plugin/pretrained-models/)
+Find more details: [pretrained model](https://opensearch.org/docs/latest/ml-commons-plugin/pretrained-models/)
 
 1. Upload model:
 ```
@@ -75,6 +75,8 @@ POST /_plugins/_ml/models/your_text_embedding_model_id/_predict
 
 1. Create ingest pipeline 
 
+Find more details: [ingest pipline](https://opensearch.org/docs/latest/ingest-pipelines/)
+
 Create pipeline with text embedding processor which can invoke model created in step1.1 to translate text
 field to embedding.
 
@@ -96,6 +98,8 @@ PUT /_ingest/pipeline/test_population_data_pipeline
 ```
 
 2. create k-NN index with the ingest pipeline.
+
+Find more details: [k-NN index](https://opensearch.org/docs/latest/search-plugins/knn/knn-index/).
 ```
 PUT test_population_data
 {
@@ -140,7 +144,7 @@ POST _bulk
 
 ## 2. Prepare LLM
 
-Find more details on [Remote model](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/index/)
+Find more details: [Remote model](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/index/)
 
 We use [Bedrock Claude model](https://aws.amazon.com/bedrock/claude/) in this tutorial. You can also use other LLM.
 
