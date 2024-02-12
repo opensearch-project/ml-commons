@@ -1,4 +1,19 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.prediction;
+
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Collections;
+import java.util.HashMap;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -33,16 +48,6 @@ import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.util.Collections;
-import java.util.HashMap;
-
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyString;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     @Mock
@@ -98,19 +103,23 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
         User user = User.parse("admin|role-1|all_access");
 
-        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-            put("key1", 2.0D);
-        }}));
-        mlInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .parameters(KMeansParams.builder().centroids(1).build())
-                .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
-                .build();
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
+        mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.KMEANS)
+            .parameters(KMeansParams.builder().centroids(1).build())
+            .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
+            .build();
 
         mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).user(user).build();
 
         Settings settings = Settings.builder().build();
-        transportPredictionTaskAction = spy(new TransportPredictionTaskAction(
+        transportPredictionTaskAction = spy(
+            new TransportPredictionTaskAction(
                 transportService,
                 actionFilters,
                 modelCacheHelper,
@@ -120,7 +129,8 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 mlModelManager,
                 modelAccessControlHelper
-        ));
+            )
+        );
 
         threadContext = new ThreadContext(settings);
         when(clusterService.getSettings()).thenReturn(settings);
