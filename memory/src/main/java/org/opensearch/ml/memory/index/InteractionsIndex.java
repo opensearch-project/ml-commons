@@ -26,7 +26,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.OpenSearchSecurityException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.ResourceNotFoundException;
@@ -195,7 +195,10 @@ public class InteractionsIndex {
                             listener.onFailure(e);
                         }
                     } else {
-                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                        throw new OpenSearchStatusException(
+                            "User [" + user + "] does not have access to conversation " + conversationId,
+                            RestStatus.UNAUTHORIZED
+                        );
                     }
                 }, e -> { listener.onFailure(e); }));
             } else {
@@ -271,7 +274,10 @@ public class InteractionsIndex {
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                throw new OpenSearchStatusException(
+                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    RestStatus.UNAUTHORIZED
+                );
             }
         }, e -> { listener.onFailure(e); });
         conversationMetaIndex.checkAccess(conversationId, accessListener);
@@ -355,7 +361,10 @@ public class InteractionsIndex {
                         String user = User.parse(userstr) == null
                             ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
                             : User.parse(userstr).getName();
-                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + interactionId);
+                        throw new OpenSearchStatusException(
+                            "User [" + user + "] does not have access to interaction " + interactionId,
+                            RestStatus.UNAUTHORIZED
+                        );
                     }
                 }, e -> { listener.onFailure(e); });
                 conversationMetaIndex.checkAccess(conversationId, accessListener);
@@ -485,7 +494,10 @@ public class InteractionsIndex {
                 if (access) {
                     getAllInteractions(conversationId, resultsAtATime, searchListener);
                 } else {
-                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                    throw new OpenSearchStatusException(
+                        "User [" + user + "] does not have access to conversation " + conversationId,
+                        RestStatus.UNAUTHORIZED
+                    );
                 }
             }, e -> { listener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
@@ -531,7 +543,10 @@ public class InteractionsIndex {
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                throw new OpenSearchStatusException(
+                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    RestStatus.UNAUTHORIZED
+                );
             }
         }, e -> { listener.onFailure(e); }));
     }
@@ -615,7 +630,10 @@ public class InteractionsIndex {
                         String user = User.parse(userstr) == null
                             ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
                             : User.parse(userstr).getName();
-                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + interactionId);
+                        throw new OpenSearchStatusException(
+                            "User [" + user + "] does not have access to interaction " + interactionId,
+                            RestStatus.UNAUTHORIZED
+                        );
                     }
                 }, e -> { listener.onFailure(e); });
                 conversationMetaIndex.checkAccess(conversationId, accessListener);
@@ -652,7 +670,10 @@ public class InteractionsIndex {
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + interactionId);
+                throw new OpenSearchStatusException(
+                    "User [" + user + "] does not have access to interaction " + interactionId,
+                    RestStatus.UNAUTHORIZED
+                );
             }
         }, e -> { internalListener.onFailure(e); });
         conversationMetaIndex.checkAccess(conversationId, accessListener);
