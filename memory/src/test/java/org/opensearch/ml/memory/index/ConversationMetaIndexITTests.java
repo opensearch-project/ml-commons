@@ -27,7 +27,7 @@ import java.util.function.Consumer;
 
 import org.junit.Before;
 import org.junit.Ignore;
-import org.opensearch.OpenSearchSecurityException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.search.SearchRequest;
@@ -39,6 +39,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
@@ -388,8 +389,9 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             }, onFail);
 
             delListener.whenComplete(success -> {
-                Exception e = new OpenSearchSecurityException(
-                    "Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result()
+                Exception e = new OpenSearchStatusException(
+                    "Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result(),
+                    RestStatus.UNAUTHORIZED
                 );
                 while (!contextStack.empty()) {
                     contextStack.pop().close();
@@ -398,7 +400,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
                 log.error(e);
                 assert (false);
             }, e -> {
-                if (e instanceof OpenSearchSecurityException
+                if (e instanceof OpenSearchStatusException
                     && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
                     contextStack.pop().restore();
                     contextStack.pop().restore();
