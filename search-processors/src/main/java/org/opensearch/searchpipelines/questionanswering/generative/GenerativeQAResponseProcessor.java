@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
@@ -58,7 +59,8 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class GenerativeQAResponseProcessor extends AbstractProcessor implements SearchResponseProcessor {
-
+    public static String IllegalArgumentMessage =
+        "Please check the provided generative_qa_parameters are complete and non-null(https://opensearch.org/docs/latest/search-plugins/conversational-search/#rag-pipeline). Messages in the memory can not have Null value for input and response";
     private static final int DEFAULT_CHAT_HISTORY_WINDOW = 10;
 
     private static final int DEFAULT_PROCESSOR_TIME_IN_SECONDS = 30;
@@ -148,37 +150,51 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         log.info("system_prompt: {}", systemPrompt);
         log.info("user_instructions: {}", userInstructions);
         start = Instant.now();
-        ChatCompletionOutput output = llm
-            .doChatCompletion(
-                LlmIOUtil
-                    .createChatCompletionInput(systemPrompt, userInstructions, llmModel, llmQuestion, chatHistory, searchResults, timeout)
-            );
-        log.info("doChatCompletion complete. ({})", getDuration(start));
+        try {
+            ChatCompletionOutput output = llm
+                .doChatCompletion(
+                    LlmIOUtil
+                        .createChatCompletionInput(
+                            systemPrompt,
+                            userInstructions,
+                            llmModel,
+                            llmQuestion,
+                            chatHistory,
+                            searchResults,
+                            timeout
+                        )
+                );
+            log.info("doChatCompletion complete. ({})", getDuration(start));
 
-        String answer = null;
-        String errorMessage = null;
-        String interactionId = null;
-        if (output.isErrorOccurred()) {
-            errorMessage = output.getErrors().get(0);
-        } else {
-            answer = (String) output.getAnswers().get(0);
+            String answer = null;
+            String errorMessage = null;
+            String interactionId = null;
+            if (output.isErrorOccurred()) {
+                errorMessage = output.getErrors().get(0);
+            } else {
+                answer = (String) output.getAnswers().get(0);
 
-            if (conversationId != null) {
-                start = Instant.now();
-                interactionId = memoryClient
-                    .createInteraction(
-                        conversationId,
-                        llmQuestion,
-                        PromptUtil.getPromptTemplate(systemPrompt, userInstructions),
-                        answer,
-                        GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
-                        Collections.singletonMap("metadata", jsonArrayToString(searchResults))
-                    );
-                log.info("Created a new interaction: {} ({})", interactionId, getDuration(start));
+                if (conversationId != null) {
+                    start = Instant.now();
+                    interactionId = memoryClient
+                        .createInteraction(
+                            conversationId,
+                            llmQuestion,
+                            PromptUtil.getPromptTemplate(systemPrompt, userInstructions),
+                            answer,
+                            GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                            Collections.singletonMap("metadata", jsonArrayToString(searchResults))
+                        );
+                    log.info("Created a new interaction: {} ({})", interactionId, getDuration(start));
+                }
             }
-        }
 
-        return insertAnswer(response, answer, errorMessage, interactionId);
+            return insertAnswer(response, answer, errorMessage, interactionId);
+        } catch (NullPointerException nullPointerException) {
+            throw new IllegalArgumentException(IllegalArgumentMessage);
+        } catch (Exception e) {
+            throw new OpenSearchException("GenerativeQAResponseProcessor failed in precessing response");
+        }
     }
 
     long getDuration(Instant start) {
