@@ -25,7 +25,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.OpenSearchSecurityException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.ResourceNotFoundException;
@@ -279,7 +279,10 @@ public class ConversationMetaIndex {
                     listener.onFailure(e);
                 }
             } else {
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                throw new OpenSearchStatusException(
+                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    RestStatus.UNAUTHORIZED
+                );
             }
         }, e -> { listener.onFailure(e); }));
     }
@@ -383,7 +386,10 @@ public class ConversationMetaIndex {
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                throw new OpenSearchStatusException(
+                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    RestStatus.UNAUTHORIZED
+                );
             }
         }, e -> { listener.onFailure(e); }));
     }
@@ -435,7 +441,10 @@ public class ConversationMetaIndex {
                 // Otherwise you don't have permission
                 internalListener
                     .onFailure(
-                        new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId)
+                        new OpenSearchStatusException(
+                            "User [" + user + "] does not have access to conversation " + conversationId,
+                            RestStatus.UNAUTHORIZED
+                        )
                     );
             }, e -> { internalListener.onFailure(e); });
             client.admin().indices().refresh(Requests.refreshRequest(META_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
