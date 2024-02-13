@@ -309,7 +309,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                        ((ActionListener<Object>) nextStepListener).onResponse(res);
                         StringSubstitutor substitutor = new StringSubstitutor(
                             Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
                             "${parameters.",
@@ -317,6 +316,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                         newPrompt.set(substitutor.replace(finalPrompt));
                         tmpParameters.put(PROMPT, newPrompt.get());
+                        ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
