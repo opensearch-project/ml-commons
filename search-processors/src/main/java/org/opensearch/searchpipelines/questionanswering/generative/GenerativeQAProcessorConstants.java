@@ -40,7 +40,7 @@ public class GenerativeQAProcessorConstants {
     public static final String CONFIG_NAME_USER_INSTRUCTIONS = "user_instructions";
 
     public static final Setting<Boolean> RAG_PIPELINE_FEATURE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final String FEATURE_NOT_ENABLED_ERROR_MSG = RAG_PIPELINE_FEATURE_ENABLED.getKey() + " is not enabled.";
 }
