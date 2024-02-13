@@ -111,7 +111,8 @@ public class SearchInteractionsTransportActionsTests extends OpenSearchTestCase 
     public void testDisabled_ThenFail() {
         Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), false).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
         this.action = spy(new SearchInteractionsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
         action.doExecute(null, request, actionListener);
