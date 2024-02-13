@@ -8,6 +8,9 @@ package org.opensearch.ml.common;
 import java.util.HashSet;
 import java.util.Set;
 
+// Please strictly add new FunctionName to the last line
+// and avoid altering the order of the existing FunctionName,
+// or it will break the backward compatibility!
 public enum FunctionName {
     LINEAR_REGRESSION,
     KMEANS,
@@ -20,11 +23,11 @@ public enum FunctionName {
     RCF_SUMMARIZE,
     LOGISTIC_REGRESSION,
     TEXT_EMBEDDING,
-    TEXT_SIMILARITY,
-    SPARSE_ENCODING,
-    SPARSE_TOKENIZE,
     METRICS_CORRELATION,
     REMOTE,
+    SPARSE_ENCODING,
+    SPARSE_TOKENIZE,
+    TEXT_SIMILARITY,
     AGENT;
 
     public static FunctionName from(String value) {
