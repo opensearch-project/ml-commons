@@ -19,7 +19,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -103,7 +103,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             if (!access) {
                                 wrappedListener
                                     .onFailure(
-                                        new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                        new OpenSearchStatusException(
+                                            "User Doesn't have privilege to perform this operation on this model",
+                                            RestStatus.FORBIDDEN
+                                        )
                                     );
                             } else {
                                 if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
@@ -139,7 +142,25 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             }
                         }, e -> {
                             log.error("Failed to Validate Access for ModelId " + modelId, e);
-                            wrappedListener.onFailure(e);
+                            if (e instanceof OpenSearchStatusException) {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            e.getMessage(),
+                                            RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
+                                        )
+                                    );
+                            } else if (e instanceof MLResourceNotFoundException) {
+                                wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Failed to Validate Access for ModelId " + modelId,
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            }
                         }));
                 }
 

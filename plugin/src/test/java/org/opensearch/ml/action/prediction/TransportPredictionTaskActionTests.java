@@ -1,0 +1,207 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.action.prediction;
+
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Collections;
+import java.util.HashMap;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.support.ActionFilters;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelCacheHelper;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.task.MLPredictTaskRunner;
+import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportService;
+
+public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
+    @Mock
+    private MLPredictTaskRunner mlPredictTaskRunner;
+
+    @Mock
+    private TransportService transportService;
+
+    @Mock
+    private MLModelCacheHelper modelCacheHelper;
+
+    @Mock
+    private Client client;
+
+    @Mock
+    private ClusterService clusterService;
+
+    @Mock
+    private NamedXContentRegistry xContentRegistry;
+
+    @Mock
+    private MLModelManager mlModelManager;
+
+    @Mock
+    private ActionListener<MLTaskResponse> actionListener;
+
+    @Mock
+    private MLModel model;
+
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
+    @Mock
+    ActionFilters actionFilters;
+
+    MLPredictionTaskRequest mlPredictionTaskRequest;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
+    private TransportPredictionTaskAction transportPredictionTaskAction;
+
+    ThreadContext threadContext;
+
+    @Mock
+    ThreadPool threadPool;
+
+    private MLInput mlInput;
+
+    @Before
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
+
+        User user = User.parse("admin|role-1|all_access");
+
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
+        mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.KMEANS)
+            .parameters(KMeansParams.builder().centroids(1).build())
+            .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
+            .build();
+
+        mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).user(user).build();
+
+        Settings settings = Settings.builder().build();
+        transportPredictionTaskAction = spy(
+            new TransportPredictionTaskAction(
+                transportService,
+                actionFilters,
+                modelCacheHelper,
+                mlPredictTaskRunner,
+                clusterService,
+                client,
+                xContentRegistry,
+                mlModelManager,
+                modelAccessControlHelper
+            )
+        );
+
+        threadContext = new ThreadContext(settings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+    }
+
+    public void testPrediction_default_exception() {
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
+            return null;
+        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+
+        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to Validate Access for ModelId test_id", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testPrediction_OpenSearchStatusException() {
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
+            return null;
+        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+
+        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Testing OpenSearchStatusException", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testPrediction_MLResourceNotFoundException() {
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
+            return null;
+        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+
+        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Testing MLResourceNotFoundException", argumentCaptor.getValue().getMessage());
+    }
+
+}
