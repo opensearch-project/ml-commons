@@ -397,3 +397,219 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
+
+## 5. Advanced Topics
+### 5.1 Configure multiple knowledge bases
+You can configure multiple knowledge bases in agent. For example, if you have product description and comments data,
+you can configure like this 
+```
+{
+    "name": "My product agent",
+    "type": "conversational_flow",
+    "description": "This is an agent with product description and comments knowledge bases.",
+    "memory": {
+        "type": "conversation_index"
+    },
+    "app_type": "rag",
+    "tools": [
+        {
+            "type": "VectorDBTool",
+            "name": "product_description_vectordb",
+            "parameters": {
+                "model_id": "your_embedding_model_id",
+                "index": "product_description_data",
+                "embedding_field": "product_description_embedding",
+                "source_field": [
+                    "product_description"
+                ],
+                "input": "${parameters.question}"
+            }
+        },
+        {
+            "type": "VectorDBTool",
+            "name": "product_comments_vectordb",
+            "parameters": {
+                "model_id": "your_embedding_model_id",
+                "index": "product_comments_data",
+                "embedding_field": "product_comment_embedding",
+                "source_field": [
+                    "product_comment"
+                ],
+                "input": "${parameters.question}"
+            }
+        },
+        {
+            "type": "MLModelTool",
+            "description": "A general tool to answer any question",
+            "parameters": {
+                "model_id": "{{llm_model_id}}",
+                "prompt": "\n\nHuman:You are a professional product recommendation engine. You will always recommend product based on the given context. If you don't have enough context, you will ask Human to provide more information. If you don't see any related product to recommend, just say we don't have such product. \n\n Context:\n${parameters.product_description_vectordb.output}\n\n${parameters.product_comments_vectordb.output}\n\nHuman:${parameters.question}\n\nAssistant:"
+            }
+        }
+    ]
+}
+```
+When you run agent, it will query product description and comments data, then send query result and question to LLM.
+
+You can use `selected_tools` to query specific knowledge base.
+
+For example, you can just retrieve `product_comments_vectordb` if the question only related to product comments.
+
+```
+POST /_plugins/_ml/agents/your_agent_id/_execute
+{
+  "parameters": {
+    "question": "What feature people like the most for Amazon Echo Dot",
+    "selected_tools": ["product_comments_vectordb", "MLModelTool"]
+  }
+}
+```
+
+### 5.2 Support any search query
+
+You can use `SearchIndexTool` to run arbitrary query on any index.
+
+#### 5.2.1 Register agent
+```
+POST /_plugins/_ml/agents/_register
+{
+    "name": "Test_Agent_For_RagTool",
+    "type": "conversational_flow",
+    "description": "this is a test flow agent in flow",
+    "memory": {
+        "type": "conversation_index"
+    },
+    "app_type": "rag",
+    "tools": [
+        {
+            "type": "SearchIndexTool",
+            "parameters": {
+                "input": "{\"index\": \"${parameters.index}\", \"query\": ${parameters.query} }"
+            }
+        },
+        {
+            "type": "MLModelTool",
+            "description": "A general tool to answer any question",
+            "parameters": {
+                "model_id": "your_llm_model_id",
+                "prompt": "\n\nHuman:You are a professional data analysist. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say don't know. \n\n Context:\n${parameters.SearchIndexTool.output:-}\n\nHuman:${parameters.question}\n\nAssistant:"
+            }
+        }
+    ]
+}
+```
+#### 5.2.2 Execute agent with BM25 query
+
+```
+POST /_plugins/_ml/agents/your_agent_id/_execute
+{
+    "parameters": {
+        "question": "what's the population increase of Seattle from 2021 to 2023??",
+        "index": "test_population_data",
+        "query": {
+            "query": {
+                "match": {
+                    "population_description": "${parameters.question}"
+                }
+            },
+            "size": 2,
+            "_source": "population_description"
+        }
+    }
+}
+```
+
+#### 5.2.3 Execute agent with neural search query
+
+```
+POST /_plugins/_ml/agents/your_agent_id/_execute
+{
+    "parameters": {
+        "question": "what's the population increase of Seattle from 2021 to 2023??",
+        "index": "test_population_data",
+        "query": {
+            "query": {
+                "neural": {
+                    "population_description_embedding": {
+                        "query_text": "${parameters.question}",
+                        "model_id": "your_embedding_model_id",
+                        "k": 10
+                    }
+                }
+            },
+            "size": 2,
+            "_source": ["population_description"]
+        }
+    }
+}
+```
+
+#### 5.2.4 Execute agent with hybrid search query
+Find more details: [Hybrid Search](https://opensearch.org/docs/latest/search-plugins/hybrid-search),
+
+Configure search pipeline
+```
+PUT /_search/pipeline/nlp-search-pipeline
+{
+    "description": "Post processor for hybrid search",
+    "phase_results_processors": [
+      {
+        "normalization-processor": {
+          "normalization": {
+            "technique": "min_max"
+          },
+          "combination": {
+            "technique": "arithmetic_mean",
+            "parameters": {
+              "weights": [
+                0.3,
+                0.7
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+```
+
+Run agent with hybrid search
+```
+POST /_plugins/_ml/agents/your_agent_id/_execute
+{
+    "parameters": {
+        "question": "what's the population increase of Seattle from 2021 to 2023??",
+        "index": "test_population_data",
+        "query": {
+            "_source": {
+                "exclude": [
+                    "population_description_embedding"
+                ]
+            },
+            "size": 2,
+            "query": {
+                "hybrid": {
+                    "queries": [
+                        {
+                            "match": {
+                                "population_description": {
+                                    "query": "${parameters.question}"
+                                }
+                            }
+                        },
+                        {
+                            "neural": {
+                                "population_description_embedding": {
+                                    "query_text": "${parameters.question}",
+                                    "model_id": "your_embedding_model_id",
+                                    "k": 10
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}
+```
