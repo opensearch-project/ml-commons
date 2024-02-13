@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.common.dataset;
 
-// Please strictly added new MLInputDataType to the last line
+// Please strictly add new MLInputDataType to the last line
 // and avoid altering the order of the existing MLInputDataType,
 // or it will break the backward compatibility!
 public enum MLInputDataType {

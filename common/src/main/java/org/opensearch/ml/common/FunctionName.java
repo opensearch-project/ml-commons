@@ -8,7 +8,7 @@ package org.opensearch.ml.common;
 import java.util.HashSet;
 import java.util.Set;
 
-// Please strictly added new FunctionName to the last line
+// Please strictly add new FunctionName to the last line
 // and avoid altering the order of the existing FunctionName,
 // or it will break the backward compatibility!
 public enum FunctionName {
