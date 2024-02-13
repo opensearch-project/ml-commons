@@ -131,6 +131,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
+        Boolean isUserInitiatedDeployRequest = deployModelRequest.isUserInitiatedDeployRequest();
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
@@ -144,7 +145,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
                 }
                 if (isHidden != null && isHidden) {
-                    if (isSuperAdmin) {
+                    if (isSuperAdmin || !isUserInitiatedDeployRequest) {
                         deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
                     } else {
                         wrappedListener

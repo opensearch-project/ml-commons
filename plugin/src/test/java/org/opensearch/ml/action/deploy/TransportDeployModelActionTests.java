@@ -286,6 +286,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         when(mlModel.getIsHidden()).thenReturn(true);
+        when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(true);
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(mlModel);
