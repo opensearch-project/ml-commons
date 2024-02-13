@@ -5,10 +5,13 @@
 
 package org.opensearch.ml.common.dataset;
 
+// Please strictly add new MLInputDataType to the last line
+// and avoid altering the order of the existing MLInputDataType,
+// or it will break the backward compatibility!
 public enum MLInputDataType {
     SEARCH_QUERY,
     DATA_FRAME,
     TEXT_DOCS,
-    TEXT_SIMILARITY,
-    REMOTE
+    REMOTE,
+    TEXT_SIMILARITY
 }
