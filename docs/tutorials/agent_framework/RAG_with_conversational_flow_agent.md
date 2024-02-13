@@ -314,20 +314,20 @@ Sample response:
 }
 ```
 Explanation of the output:
-1. `memory_id` is the conversation ID. Note this ID; you will use it in Step 4.2.
-2. `parent_message_id` is the current interaction (one round of question/answer). One conversation can have multiple interactions.
+1. `memory_id` is the identifier for the memory that groups all messages within a single conversation. Note this ID; you will use it in Step 4.2.
+2. `parent_message_id` is the identifier for current message (one round of question/answer) between human and AI. One memory can have multiple messages.
 
-To get the details of the conversation, call the Get Memory API:
+To get the details of the memory, call the Get Memory API:
 ```
 GET /_plugins/_ml/memory/gQ75lI0BHcHmo_cz2acL
 
 GET /_plugins/_ml/memory/gQ75lI0BHcHmo_cz2acL/messages
 ```
-To get the details of an interaction, call the Get Message API:
+To get the details of a message, call the Get Message API:
 ```
 GET /_plugins/_ml/memory/message/gg75lI0BHcHmo_cz2acZ
 ```
-For debugging purposes, each interaction and message has its own trace data. To get trace data, call the Get Traces API:
+For debugging purposes, each message has its own trace data. To get trace data, call the Get Traces API:
 ```
 GET /_plugins/_ml/memory/message/gg75lI0BHcHmo_cz2acZ/traces
 ```
@@ -337,7 +337,7 @@ GET /_plugins/_ml/memory/message/gg75lI0BHcHmo_cz2acZ/traces
 To continue the same conversation, provide its memory ID from step 4.1.
 
 Explanation of the input:
-1. `message_history_limit`: Specify how many historical messages you want included in this interaction.
+1. `message_history_limit`: Specify how many historical messages you want included in the new round of question/answering with Agent.
 2. `prompt`: Used to customize the LLM prompt. For example, this example adds a new instruction `always learn useful information from chat history` 
 and a new parameter `next_action`:
 
