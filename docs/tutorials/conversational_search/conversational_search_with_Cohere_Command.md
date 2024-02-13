@@ -8,18 +8,7 @@ Note: Replace the placeholders that start with `your_` with your own values.
 
 ## 0. Preparation
 
-1. Enable conversational search and memory features:
-```
-PUT _cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.memory_feature_enabled": true,
-        "plugins.ml_commons.rag_pipeline_feature_enabled": true
-    }
-}
-```
-
-2. Ingest test data:
+Ingest test data:
 ```
 POST _bulk
 {"index": {"_index": "qa_demo", "_id": "1"}}

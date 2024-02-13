@@ -30,8 +30,7 @@ PUT _cluster/settings
     "persistent": {
         "plugins.ml_commons.only_run_on_ml_node": false,
         "plugins.ml_commons.native_memory_threshold": 100,
-        "plugins.ml_commons.agent_framework_enabled": true,
-        "plugins.ml_commons.memory_feature_enabled": true
+        "plugins.ml_commons.agent_framework_enabled": true
     }
 }
 ```
