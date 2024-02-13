@@ -147,8 +147,9 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testFeatureDisabled_ThenFail() {
-        when(this.clusterService.getSettings()).thenReturn(Settings.EMPTY);
-        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(Settings.EMPTY, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+        Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), false).build();
+        when(this.clusterService.getSettings()).thenReturn(settings);
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
         this.action = spy(new GetInteractionTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
         action.doExecute(null, request, actionListener);
