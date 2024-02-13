@@ -44,6 +44,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.memory.MemoryTestUtil;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -193,8 +194,7 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testFeatureDisabled_ThenFail() {
-        when(this.clusterService.getSettings()).thenReturn(Settings.EMPTY);
-        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(Settings.EMPTY, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+        clusterService = MemoryTestUtil.clusterServiceWithMemoryFeatureDisabled();
         this.action = spy(new GetConversationsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
         action.doExecute(null, request, actionListener);
