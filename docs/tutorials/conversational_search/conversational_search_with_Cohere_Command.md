@@ -1,14 +1,14 @@
 # Topic
 
-This tutorial explains how to use conversational search with Cohere Command model. Read this doc [Conversational search](https://opensearch.org/docs/latest/search-plugins/conversational-search/) for more details.
+This tutorial explains how to use conversational search with the Cohere Command model. For more information, see [Conversational search](https://opensearch.org/docs/latest/search-plugins/conversational-search/).
 
-Note: You should replace the placeholders with prefix `your_` with your own value
+Note: Replace the placeholders that start with `your_` with your own values.
 
 # Steps
 
 ## 0. Preparation
 
-1. Enable conversational search and memory feature
+1. Enable conversational search and memory features:
 ```
 PUT _cluster/settings
 {
@@ -19,7 +19,7 @@ PUT _cluster/settings
 }
 ```
 
-2. Ingest test data
+2. Ingest test data:
 ```
 POST _bulk
 {"index": {"_index": "qa_demo", "_id": "1"}}
@@ -39,14 +39,14 @@ POST _bulk
 
 ## 1. Create connector and model
 
-1. Create connector for Cohere Command model
+1. Create connector for Cohere Command model:
 
-Conversational search has some limitation now. It only supports [OpenAI](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/open_ai_connector_chat_blueprint.md) 
+Limitation: Conversational search only supports [OpenAI](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/open_ai_connector_chat_blueprint.md) 
 and [Bedrock Claude](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/bedrock_connector_anthropic_claude_blueprint.md) style of input/output.
 
-Here we follow the Bedrock Claude model style of input/output by
-- Mapping Cohere command model input parameters `message` to parameter `inputs` to match Cohere Claude model style.
-- Use post process function to transform Cohere command model output to Claude model style.
+This tutorial follows the Bedrock Claude model style of input/output by:
+- Mapping the Cohere Command input parameter `message` to parameter `inputs` to match Cohere Claude model style.
+- Using a post-processing function to transform Cohere Command model output to Claude model style.
 ```
 POST _plugins/_ml/connectors/_create
 {
@@ -76,15 +76,15 @@ POST _plugins/_ml/connectors/_create
 }
 ```
 
-`escape` function added as default function in 2.12, so you use it in `post_process_function` directly. 
+The `escape` function was added as a default function in 2.12, so you can use it in  the `post_process_function` directly:
 
 ```
 "post_process_function": "    \n    def name = 'response';\n    def result = params.text;\n    def json = '{ \"name\": \"' + name + '\",' +\n                 '\"dataAsMap\": { \"completion\":  \"' + escape(result) +\n               '\"}}';\n    return json;"
 ```
 
-Copy the connector id from response, will use it to create model
+Note the connector ID; you will use it to create the model.
 
-2. Create model
+2. Create model:
 ```
 POST /_plugins/_ml/models/_register?deploy=true
 {
@@ -95,9 +95,9 @@ POST /_plugins/_ml/models/_register?deploy=true
 }
 ```
 
-Copy the model id from response, it will be used in following steps.
+Note the model ID; you will use it in the following steps.
 
-3. Predict
+3. Test the model:
 ```
 POST /_plugins/_ml/models/your_model_id/_predict
 {
@@ -106,7 +106,7 @@ POST /_plugins/_ml/models/your_model_id/_predict
   }
 }
 ```
-Sample response
+Sample response:
 ```
 {
   "inference_results": [
@@ -156,7 +156,7 @@ PUT /_search/pipeline/my-conversation-search-pipeline-cohere
 ```
 
 ### 2.2 Search
-Conversational search has some 
+Conversational search has some extra parameters you specify in `generative_qa_parameters`:
 ```
 GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-cohere
 {
@@ -179,7 +179,7 @@ GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-cohere
   }
 }
 ```
-Sample response
+Sample response:
 ```
 {
   "took": 1,

@@ -2,9 +2,9 @@
 
 > Agent Framework is an experimental feature released in OpenSearch 2.12 and not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
 
-> This tutorial doesn't explain what's retrieval-augmented generation(RAG).
+> This tutorial doesn't explain what retrieval-augmented generation(RAG) is.
 
-This tutorial explains how to use conversational flow agent to build RAG application by leveraging your 
+This tutorial explains how to use a conversational flow agent to build  a RAG application by using your 
 OpenSearch data as knowledge base.
 
 Note: You should replace the placeholders with prefix `your_` with your own value
@@ -13,17 +13,17 @@ Note: You should replace the placeholders with prefix `your_` with your own valu
 
 ## 0. Preparation
 
-To build RAG application, we need to have some OpenSearch index as knowledge base. In this tutorial, we
-are going to use [k-NN index](https://opensearch.org/docs/latest/search-plugins/knn/knn-index/) and 
-[semantic search](https://opensearch.org/docs/latest/search-plugins/semantic-search/). You can read more 
-details on their document and this [tutorial](https://opensearch.org/docs/latest/search-plugins/neural-search-tutorial/).
-It's totally fine to just follow below steps to quick start.
+To build a RAG application, you need to have an OpenSearch index as knowledge base. In this tutorial, you
+are going to use a [k-NN index](https://opensearch.org/docs/latest/search-plugins/knn/knn-index/) and 
+[semantic search](https://opensearch.org/docs/latest/search-plugins/semantic-search/). For 
+more information, see this [tutorial](https://opensearch.org/docs/latest/search-plugins/neural-search-tutorial/).
+For a quick start, follow the steps below.
 
-### update cluster setting
+### Update cluster settings
 
-If you have dedicated ML node, you don't need to set `"plugins.ml_commons.only_run_on_ml_node": false`.
+If you have a dedicated ML node, you don't need to set `"plugins.ml_commons.only_run_on_ml_node": false`.
 
-We set `"plugins.ml_commons.native_memory_threshold"` as 100% to avoid triggering native memory circuit breaker.
+To avoid triggering a native memory circuit breaker, set `"plugins.ml_commons.native_memory_threshold"` to 100%:
 ```
 PUT _cluster/settings
 {
@@ -38,9 +38,9 @@ PUT _cluster/settings
 
 ## 1. Prepare knowledge base
 
-### 1.1 register text embedding model
+### 1.1 Register text embedding model
 
-Find more details: [pretrained model](https://opensearch.org/docs/latest/ml-commons-plugin/pretrained-models/)
+For more information, see [Pretrained models](https://opensearch.org/docs/latest/ml-commons-plugin/pretrained-models/)
 
 1. Upload model:
 ```
@@ -51,17 +51,17 @@ POST /_plugins/_ml/models/_register
   "model_format": "TORCH_SCRIPT"
 }
 ```
-Find model id by calling get task API.
+Get the model ID by calling the Get Task API.
 
-Copy the text embedding model id, will use it in following steps.
+Note the text embedding model ID; you will use it in the following steps.
 ```
 GET /_plugins/_ml/tasks/your_task_id
 ```
-2. Deploy model
+2. Deploy model:
 ```
 POST /_plugins/_ml/models/your_text_embedding_model_id/_deploy
 ```
-3. Test predict
+3. Test model:
 ```
 POST /_plugins/_ml/models/your_text_embedding_model_id/_predict
 {
@@ -71,14 +71,14 @@ POST /_plugins/_ml/models/your_text_embedding_model_id/_predict
 }
 ```
 
-### 1.2 create ingest pipeline and k-NN index
+### 1.2 Create ingest pipeline and k-NN index
 
-1. Create ingest pipeline 
+1. Create ingest pipeline:
 
-Find more details: [ingest pipline](https://opensearch.org/docs/latest/ingest-pipelines/)
+For more information, see [Ingest piplines](https://opensearch.org/docs/latest/ingest-pipelines/)
 
-Create pipeline with text embedding processor which can invoke model created in step1.1 to translate text
-field to embedding.
+Create a pipeline with a text embedding processor, which can invoke the model created in Step 1.1 to translate text
+fields to embeddings:
 
 ```
 PUT /_ingest/pipeline/test_population_data_pipeline
@@ -99,7 +99,7 @@ PUT /_ingest/pipeline/test_population_data_pipeline
 
 2. create k-NN index with the ingest pipeline.
 
-Find more details: [k-NN index](https://opensearch.org/docs/latest/search-plugins/knn/knn-index/).
+For more information, see [k-NN index](https://opensearch.org/docs/latest/search-plugins/knn/knn-index/).
 ```
 PUT test_population_data
 {
@@ -124,7 +124,7 @@ PUT test_population_data
 }
 ```
 
-3. Ingest test data
+3. Ingest test data:
 ```
 POST _bulk
 {"index": {"_index": "test_population_data"}}
@@ -144,11 +144,11 @@ POST _bulk
 
 ## 2. Prepare LLM
 
-Find more details: [Remote model](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/index/)
+For more information, see [Remote models](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/index/).
 
-We use [Bedrock Claude model](https://aws.amazon.com/bedrock/claude/) in this tutorial. You can also use other LLM.
+This tutorial uses the [Bedrock Claude model](https://aws.amazon.com/bedrock/claude/). You can also use other LLMs.
 
-1. Create connector
+1. Create connector:
 ```
 POST /_plugins/_ml/connectors/_create
 {
@@ -184,9 +184,9 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-Copy the connector id from the response. 
+Note the connector ID ; you'll use it to register the model.
 
-2. register model
+2. Register model:
 
 ```
 POST /_plugins/_ml/models/_register
@@ -217,13 +217,13 @@ POST /_plugins/_ml/models/your_LLM_model_id/_predict
 ## 3. Create Agent
 Agent framework provides several agent types: `flow`, `conversational_flow` and `conversational`.
 
-We will use `conversational_flow` agent in this tutorial.
+You will use `conversational_flow` agent in this tutorial.
 
 The agent consists of:
 1. meta info: `name`, `type`, `description`
-2. `app_type`: this is to differentiate different application type
-3. `memory`: this is to store agent execution result, so user can retrieve memory later and continue one conversation.
-4. `tools`: define a list of tools to use. Agent will run tools sequentially.
+2. `app_type`: To differentiate different application types
+3. `memory`: To store user questions and LLM responses as a conversation so an agent can retrieve conversation history from memory and continue the same conversation.
+4. `tools`: Define a list of tools to use. The agent will run these tools sequentially.
 ```
 POST /_plugins/_ml/agents/_register
 {
@@ -261,23 +261,23 @@ POST /_plugins/_ml/agents/_register
 }
 ```
 
-Sample response
+Sample response:
 ```
 {
   "agent_id": "fQ75lI0BHcHmo_czdqcJ"
 }
 ```
 
-Copy the agent id, will use it in next step. 
+Note the agent ID; you will use it in the next step. 
 
 ## 4. Execute Agent
 
 ### 4.1 Start a new conversation
 
-Run the agent to analyze Seattle population increase.
+Run the agent to analyze the Seattle population increase.
 
-When run this agent, it will create a new conversation. 
-Later you can continue the conversation by asking other questions.
+When you run this agent, the agent will create a new conversation. 
+Later, you can continue this conversation by asking other questions.
 
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
@@ -288,7 +288,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 }
 ```
 
-Sample response
+Sample response:
 ```
 {
   "inference_results": [
@@ -315,32 +315,32 @@ Sample response
 }
 ```
 Explanation of the output:
-1. `memory_id` means the conversation id, copy it as we will use in Step4.2
-2. `parent_message_id` means the current interaction (one round of question/answer), one conversation can have multiple interactions
+1. `memory_id` is the conversation ID. Note this ID; you will use it in Step 4.2.
+2. `parent_message_id` is the current interaction (one round of question/answer). One conversation can have multiple interactions.
 
-Check more details of conversation by calling get memory API.
+To get the details of the conversation, call the Get Memory API:
 ```
 GET /_plugins/_ml/memory/gQ75lI0BHcHmo_cz2acL
 
 GET /_plugins/_ml/memory/gQ75lI0BHcHmo_cz2acL/messages
 ```
-Check more details of interaction by calling get message API.
+To get the details of an interaction, call the Get Message API:
 ```
 GET /_plugins/_ml/memory/message/gg75lI0BHcHmo_cz2acZ
 ```
-For debugging purpose, each interaction/message has its own trace data, you can find trace data by calling
+For debugging purposes, each interaction and message has its own trace data. To get trace data, call the Get Traces API:
 ```
 GET /_plugins/_ml/memory/message/gg75lI0BHcHmo_cz2acZ/traces
 ```
 
-### 4.2 Continue a conversation by asking new question
+### 4.2 Continue a conversation by asking new questions
 
-Continue last conversation by providing memory id from step4.1
+To continue the same conversation, provide its memory ID from step 4.1.
 
 Explanation of the input:
-1. `message_history_limit`: specify how many historical messages included in this interaction.
-2. `prompt`: use can customize prompt. For example, this example adds a new instruction `always learn useful information from chat history` 
-and a new parameter `next_action`.
+1. `message_history_limit`: Specify how many historical messages you want included in this interaction.
+2. `prompt`: Used to customize the LLM prompt. For example, this example adds a new instruction `always learn useful information from chat history` 
+and a new parameter `next_action`:
 
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
@@ -355,7 +355,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 }
 ```
 
-Sample response
+Sample response:
 ```
 {
   "inference_results": [
@@ -382,11 +382,11 @@ Sample response
 }
 ```
 
-You can also customize which tool to use in predict API.
-For example, if you want to translate last answer into Chinese, you don't need to retrieve data from knowledge base.
-Then you can use `selected_tools` to specify just run `bedrock_claude_model`.
+You can also customize which tool to use in  the Predict API.
+For example, if you want to translate the previous answer into Chinese, you don't need to retrieve data from knowledge base.
+Use `selected_tools` to just run `the bedrock_claude_model`.
 
-Note: Agent will run tools sequentially with the new order defined in `selected_tools`. 
+Note: The agent will run the tools sequentially in the new order defined in `selected_tools`. 
 
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
@@ -400,8 +400,8 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 
 ## 5. Advanced Topics
 ### 5.1 Configure multiple knowledge bases
-You can configure multiple knowledge bases in agent. For example, if you have product description and comments data,
-you can configure like this 
+You can configure multiple knowledge bases in an agent. For example, if you have product description and comments data,
+you can configure the agent as follows: 
 ```
 {
     "name": "My product agent",
@@ -449,11 +449,11 @@ you can configure like this
     ]
 }
 ```
-When you run agent, it will query product description and comments data, then send query result and question to LLM.
+When you run the agent, it will query product description and comments data and then send query results and the question to the LLM.
 
-You can use `selected_tools` to query specific knowledge base.
+To query a specific knowledge base, specify it in `selected_tools`.
 
-For example, you can just retrieve `product_comments_vectordb` if the question only related to product comments.
+For example, you can retrieve only `product_comments_vectordb` if the question only relates to product comments:
 
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
@@ -467,7 +467,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 
 ### 5.2 Support any search query
 
-You can use `SearchIndexTool` to run arbitrary query on any index.
+Use `SearchIndexTool` to run any OpenSearch query on any index.
 
 #### 5.2.1 Register agent
 ```
@@ -545,9 +545,9 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 ```
 
 #### 5.2.4 Execute agent with hybrid search query
-Find more details: [Hybrid Search](https://opensearch.org/docs/latest/search-plugins/hybrid-search),
+For more information, see [Hybrid Search](https://opensearch.org/docs/latest/search-plugins/hybrid-search),
 
-Configure search pipeline
+Configure search pipeline:
 ```
 PUT /_search/pipeline/nlp-search-pipeline
 {
@@ -573,7 +573,7 @@ PUT /_search/pipeline/nlp-search-pipeline
   }
 ```
 
-Run agent with hybrid search
+Run agent with hybrid search:
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
 {
@@ -614,19 +614,19 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 }
 ```
 
-### 5.3 Support natural language query (NLQ)
+### 5.3 Natural language query (NLQ)
 
-`PPLTool` can translate natural language to [PPL](https://opensearch.org/docs/latest/search-plugins/sql/ppl/index/)
+The `PPLTool` can translate natural language to [PPL](https://opensearch.org/docs/latest/search-plugins/sql/ppl/index/)
 and execute the generated PPL query.
 
 #### 5.3.1 Register agent with PPLTool
 
 PPLTool parameters:
-- `model_type`: enum type, support `CLAUDE`, `OPENAI` and `FINETUNE`
-- `execute`: boolean type, if set as `true`, it will execute the generated PPL query
-- `input`: string type, must provide `index` and `question`
+- `model_type` (Enum): `CLAUDE`, `OPENAI`, or `FINETUNE`.
+- `execute` (Boolean): If `true`, executes the generated PPL query.
+- `input` (String): You must provide the `index` and `question`.
 
-In this tutorial, we are using Bedrock Claude, so we set `model_type` as `CLAUDE`.
+In this tutorial, you'll use Bedrock Claude, so set `model_type` to `CLAUDE`:
 ```
 POST /_plugins/_ml/agents/_register
 {
@@ -660,8 +660,8 @@ POST /_plugins/_ml/agents/_register
 ```
 #### 5.3.2 Execute agent with NLQ
 
-1. Go to home page of OpenSearch Dashboard, click "Add sample data", then add "Sample eCommerce orders".
-2. Run agent
+1. Go to OpenSearch Dashboards home page, select "Add sample data", then add "Sample eCommerce orders".
+2. Run agent:
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
 {
@@ -671,7 +671,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
     }
 }
 ```
-Sample response
+Sample response:
 ```
 {
     "inference_results": [
@@ -694,7 +694,7 @@ Sample response
     ]
 }
 ```
-Check trace data for more details
+For more details, get trace data:
 ```
 GET _plugins/_ml/memory/message/s6IioI0BJhBwrVXYeYOW/traces
 ```
