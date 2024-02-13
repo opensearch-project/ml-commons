@@ -473,9 +473,9 @@ You can use `SearchIndexTool` to run arbitrary query on any index.
 ```
 POST /_plugins/_ml/agents/_register
 {
-    "name": "Test_Agent_For_RagTool",
+    "name": "Demo agent",
     "type": "conversational_flow",
-    "description": "this is a test flow agent in flow",
+    "description": "This is a test agent support running any search query",
     "memory": {
         "type": "conversation_index"
     },
@@ -612,4 +612,89 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
         }
     }
 }
+```
+
+### 5.3 Support natural language query (NLQ)
+
+`PPLTool` can translate natural language to [PPL](https://opensearch.org/docs/latest/search-plugins/sql/ppl/index/)
+and execute the generated PPL query.
+
+#### 5.3.1 Register agent with PPLTool
+
+PPLTool parameters:
+- `model_type`: enum type, support `CLAUDE`, `OPENAI` and `FINETUNE`
+- `execute`: boolean type, if set as `true`, it will execute the generated PPL query
+- `input`: string type, must provide `index` and `question`
+
+In this tutorial, we are using Bedrock Claude, so we set `model_type` as `CLAUDE`.
+```
+POST /_plugins/_ml/agents/_register
+{
+    "name": "Demo agent for NLQ",
+    "type": "conversational_flow",
+    "description": "This is a test flow agent for NLQ",
+    "memory": {
+        "type": "conversation_index"
+    },
+    "app_type": "rag",
+    "tools": [
+        {
+            "type": "PPLTool",
+            "parameters": {
+                "model_id": "your_ppl_model_id",
+                "model_type": "CLAUDE",
+                "execute": true,
+                "input": "{\"index\": \"${parameters.index}\", \"question\": ${parameters.question} }"
+            }
+        },
+        {
+            "type": "MLModelTool",
+            "description": "A general tool to answer any question",
+            "parameters": {
+                "model_id": "your_llm_model_id",
+                "prompt": "\n\nHuman:You are a professional data analysist. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say don't know. \n\n Context:\n${parameters.PPLTool.output:-}\n\nHuman:${parameters.question}\n\nAssistant:"
+            }
+        }
+    ]
+}
+```
+#### 5.3.2 Execute agent with NLQ
+
+1. Go to home page of OpenSearch Dashboard, click "Add sample data", then add "Sample eCommerce orders".
+2. Run agent
+```
+POST /_plugins/_ml/agents/your_agent_id/_execute
+{
+    "parameters": {
+        "question": "How many orders do I have in last week",
+        "index": "opensearch_dashboards_sample_data_ecommerce"
+    }
+}
+```
+Sample response
+```
+{
+    "inference_results": [
+        {
+            "output": [
+                {
+                    "name": "memory_id",
+                    "result": "sqIioI0BJhBwrVXYeYOM"
+                },
+                {
+                    "name": "parent_message_id",
+                    "result": "s6IioI0BJhBwrVXYeYOW"
+                },
+                {
+                    "name": "MLModelTool",
+                    "result": " Based on the given context, the number of orders in the last week is 3992. The data shows a query that counts the number of orders where the order date is greater than 1 week ago. The query result shows the count as 3992."
+                }
+            ]
+        }
+    ]
+}
+```
+Check trace data for more details
+```
+GET _plugins/_ml/memory/message/s6IioI0BJhBwrVXYeYOW/traces
 ```
