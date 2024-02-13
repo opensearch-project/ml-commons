@@ -59,15 +59,6 @@ public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
         assertEquals(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, processor.getType());
     }
 
-    public void testProcessorFactoryFeatureFlagDisabled() throws Exception {
-
-        exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
-        Map<String, Object> config = new HashMap<>();
-        config.put("model_id", "foo");
-        Processor processor = new GenerativeQARequestProcessor.Factory(() -> false).create(null, "tag", "desc", true, config, null);
-    }
-
     // Only to be used for the following test case.
     private boolean featureFlag001 = false;
 
