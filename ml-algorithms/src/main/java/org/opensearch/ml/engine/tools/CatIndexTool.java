@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -120,10 +121,10 @@ public class CatIndexTool implements Tool {
             StringBuilder sb = new StringBuilder(
                 // Currently using c.value which is short header matching _cat/indices
                 // May prefer to use c.attr.get("desc") for full description
-                table.getHeaders().stream().map(c -> c.value.toString()).collect(Collectors.joining("\t", "", "\n"))
+                table.getHeaders().stream().map(c -> c.value.toString()).collect(Collectors.joining(",", "", "\n"))
             );
             for (List<Cell> row : table.getRows()) {
-                sb.append(row.stream().map(c -> c.value == null ? null : c.value.toString()).collect(Collectors.joining("\t", "", "\n")));
+                sb.append(row.stream().map(c -> c.value == null ? null : c.value.toString()).collect(Collectors.joining(",", "", "\n")));
             }
             @SuppressWarnings("unchecked")
             T response = (T) sb.toString();
@@ -366,16 +367,29 @@ public class CatIndexTool implements Tool {
         table.startHeaders();
         // First param is cell.value which is currently returned
         // Second param is cell.attr we may want to use attr.desc in the future
+        table.addCell("row", "alias:r;desc:row number");
         table.addCell("health", "alias:h;desc:current health status");
         table.addCell("status", "alias:s;desc:open/close status");
         table.addCell("index", "alias:i,idx;desc:index name");
         table.addCell("uuid", "alias:id,uuid;desc:index uuid");
-        table.addCell("pri", "alias:p,shards.primary,shardsPrimary;text-align:right;desc:number of primary shards");
-        table.addCell("rep", "alias:r,shards.replica,shardsReplica;text-align:right;desc:number of replica shards");
-        table.addCell("docs.count", "alias:dc,docsCount;text-align:right;desc:available docs");
-        table.addCell("docs.deleted", "alias:dd,docsDeleted;text-align:right;desc:deleted docs");
-        table.addCell("store.size", "sibling:pri;alias:ss,storeSize;text-align:right;desc:store size of primaries & replicas");
-        table.addCell("pri.store.size", "text-align:right;desc:store size of primaries");
+        table
+            .addCell(
+                "pri(number of primary shards)",
+                "alias:p,shards.primary,shardsPrimary;text-align:right;desc:number of primary shards"
+            );
+        table
+            .addCell(
+                "rep(number of replica shards)",
+                "alias:r,shards.replica,shardsReplica;text-align:right;desc:number of replica shards"
+            );
+        table.addCell("docs.count(number of available documents)", "alias:dc,docsCount;text-align:right;desc:available docs");
+        table.addCell("docs.deleted(number of deleted documents)", "alias:dd,docsDeleted;text-align:right;desc:deleted docs");
+        table
+            .addCell(
+                "store.size(store size of primary and replica shards)",
+                "sibling:pri;alias:ss,storeSize;text-align:right;desc:store size of primaries & replicas"
+            );
+        table.addCell("pri.store.size(store size of primary shards)", "text-align:right;desc:store size of primaries");
         // Above includes all the default fields for cat indices. See RestIndicesAction for a lot more that could be included.
         table.endHeaders();
         return table;
@@ -388,7 +402,7 @@ public class CatIndexTool implements Tool {
         final Map<String, IndexMetadata> indicesMetadatas
     ) {
         final Table table = getTableWithHeader();
-
+        AtomicInteger rowNum = new AtomicInteger(0);
         indicesSettings.forEach((indexName, settings) -> {
             if (!indicesMetadatas.containsKey(indexName)) {
                 // the index exists in the Get Indices response but is not present in the cluster state:
@@ -421,6 +435,7 @@ public class CatIndexTool implements Tool {
                 totalStats = indexStats.getTotal();
             }
             table.startRow();
+            table.addCell(rowNum.addAndGet(1));
             table.addCell(health);
             table.addCell(indexState.toString().toLowerCase(Locale.ROOT));
             table.addCell(indexName);

@@ -10,8 +10,10 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
@@ -62,7 +64,7 @@ import lombok.extern.log4j.Log4j2;
 public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
     public static final String CHAT_HISTORY = "chat_history";
-    public static final String SELECTED_TOOLS = "selected_tools";
+
     private Client client;
     private Settings settings;
     private ClusterService clusterService;
@@ -156,8 +158,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        String selectedToolsStr = params.get(SELECTED_TOOLS);
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, selectedToolsStr);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
         if (toolSpecs == null || toolSpecs.size() == 0) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
@@ -173,7 +174,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolSpec);
+                Tool tool = createTool(toolFactories, params, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -231,25 +232,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
     }
 
-    private static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, String selectedToolsStr) {
-        List<MLToolSpec> toolSpecs = mlAgent.getTools();
-        if (selectedToolsStr != null) {
-            List<String> selectedTools = gson.fromJson(selectedToolsStr, List.class);
-            Map<String, MLToolSpec> toolNameSpecMap = new HashMap<>();
-            for (MLToolSpec toolSpec : toolSpecs) {
-                toolNameSpecMap.put(getToolName(toolSpec), toolSpec);
-            }
-            List<MLToolSpec> selectedToolSpecs = new ArrayList<>();
-            for (String tool : selectedTools) {
-                if (toolNameSpecMap.containsKey(tool)) {
-                    selectedToolSpecs.add(toolNameSpecMap.get(tool));
-                }
-            }
-            toolSpecs = selectedToolSpecs;
-        }
-        return toolSpecs;
-    }
-
     private void processOutput(
         Map<String, String> params,
         ActionListener<Object> listener,
@@ -271,6 +253,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String outputKey = toolName + ".output";
         String outputResponse = parseResponse(output);
         params.put(outputKey, escapeJson(outputResponse));
+        boolean traceDisabled = params.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(params.get(DISABLE_TRACE));
 
         if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
             if (output instanceof ModelTensorOutput) {
@@ -303,32 +286,53 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
                 }
             } else {
-                saveMessage(params, memory, outputResponse, memoryId, parentInteractionId, toolName, traceNumber, ActionListener.wrap(r -> {
-                    log.info("saved last trace for interaction " + parentInteractionId + " of flow agent");
-                    Map<String, Object> updateContent = Map.of(AI_RESPONSE_FIELD, outputResponse, ADDITIONAL_INFO_FIELD, additionalInfo);
-                    memory.update(parentInteractionId, updateContent, updateListener);
-                }, e -> {
-                    log.error("Failed to update root interaction ", e);
-                    listener.onFailure(e);
-                }));
+                saveMessage(
+                    params,
+                    memory,
+                    outputResponse,
+                    memoryId,
+                    parentInteractionId,
+                    toolName,
+                    traceNumber,
+                    traceDisabled,
+                    ActionListener.wrap(r -> {
+                        log.info("saved last trace for interaction " + parentInteractionId + " of flow agent");
+                        Map<String, Object> updateContent = Map
+                            .of(AI_RESPONSE_FIELD, outputResponse, ADDITIONAL_INFO_FIELD, additionalInfo);
+                        memory.update(parentInteractionId, updateContent, updateListener);
+                    }, e -> {
+                        log.error("Failed to update root interaction ", e);
+                        listener.onFailure(e);
+                    })
+                );
             }
         } else {
             if (memory == null) {
                 runNextStep(params, toolSpecs, finalI, nextStepListener);
             } else {
-                saveMessage(params, memory, outputResponse, memoryId, parentInteractionId, toolName, traceNumber, ActionListener.wrap(r -> {
-                    runNextStep(params, toolSpecs, finalI, nextStepListener);
-                }, e -> {
-                    log.error("Failed to update root interaction ", e);
-                    listener.onFailure(e);
-                }));
+                saveMessage(
+                    params,
+                    memory,
+                    outputResponse,
+                    memoryId,
+                    parentInteractionId,
+                    toolName,
+                    traceNumber,
+                    traceDisabled,
+                    ActionListener.wrap(r -> {
+                        runNextStep(params, toolSpecs, finalI, nextStepListener);
+                    }, e -> {
+                        log.error("Failed to update root interaction ", e);
+                        listener.onFailure(e);
+                    })
+                );
             }
         }
     }
 
     private void runNextStep(Map<String, String> params, List<MLToolSpec> toolSpecs, int finalI, StepListener<Object> nextStepListener) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
-        Tool tool = createTool(toolSpec);
+        Tool tool = createTool(toolFactories, params, toolSpec);
         if (finalI < toolSpecs.size()) {
             tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
         }
@@ -342,6 +346,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String parentInteractionId,
         String toolName,
         AtomicInteger traceNumber,
+        boolean traceDisabled,
         ActionListener listener
     ) {
         ConversationIndexMessage finalMessage = ConversationIndexMessage
@@ -352,7 +357,11 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             .finalAnswer(true)
             .sessionId(memoryId)
             .build();
-        memory.save(finalMessage, parentInteractionId, traceNumber.addAndGet(1), toolName, listener);
+        if (traceDisabled) {
+            listener.onResponse(true);
+        } else {
+            memory.save(finalMessage, parentInteractionId, traceNumber.addAndGet(1), toolName, listener);
+        }
     }
 
     @VisibleForTesting
@@ -395,26 +404,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 return StringUtils.toJson(output);
             }
         }
-    }
-
-    @VisibleForTesting
-    Tool createTool(MLToolSpec toolSpec) {
-        Map<String, String> toolParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            toolParams.putAll(toolSpec.getParameters());
-        }
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        if (toolSpec.getName() != null) {
-            tool.setName(toolSpec.getName());
-        }
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        return tool;
     }
 
     @VisibleForTesting

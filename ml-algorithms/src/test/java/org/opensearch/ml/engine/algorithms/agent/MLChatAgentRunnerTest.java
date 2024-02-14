@@ -208,12 +208,12 @@ public class MLChatAgentRunnerTest {
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
 
         ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(2).getMlModelTensors().get(0);
+        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
+        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
 
         // Verify that the parsed values from JSON block are correctly set
         assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("Thought: parsed thought", modelTensor1.getResult());
+        assertEquals("conversation_id", modelTensor1.getResult());
         assertEquals("parsed final answer", modelTensor2.getResult());
     }
 
@@ -248,12 +248,12 @@ public class MLChatAgentRunnerTest {
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
 
         ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(2).getMlModelTensors().get(0);
+        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
+        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
 
         // Verify that the parsed values from JSON block are correctly set
         assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("Thought: parsed thought", modelTensor1.getResult());
+        assertEquals("conversation_id", modelTensor1.getResult());
         assertEquals("parsed final answer", modelTensor2.getResult());
     }
 
@@ -288,12 +288,12 @@ public class MLChatAgentRunnerTest {
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
 
         ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(2).getMlModelTensors().get(0);
+        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
+        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
 
         // Verify that the parsed values from JSON block are correctly set
         assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("Thought: parsed thought", modelTensor1.getResult());
+        assertEquals("conversation_id", modelTensor1.getResult());
         assertEquals("parsed final answer", modelTensor2.getResult());
     }
 

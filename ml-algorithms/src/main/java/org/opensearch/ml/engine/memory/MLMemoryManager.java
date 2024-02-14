@@ -139,7 +139,7 @@ public class MLMemoryManager {
      * @param actionListener get all the final interactions that are not traces
      */
     public void getFinalInteractions(String conversationId, int lastNInteraction, ActionListener<List<Interaction>> actionListener) {
-        Preconditions.checkArgument(lastNInteraction > 0, "lastN must be at least 1.");
+        Preconditions.checkArgument(lastNInteraction > 0, "History message size must be at least 1.");
         log.debug("Getting Interactions, conversationId {}, lastN {}", conversationId, lastNInteraction);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {

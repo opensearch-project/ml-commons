@@ -30,7 +30,7 @@ public class ConversationIndexMessageTest {
 
     @Test
     public void testToString() {
-        Assert.assertEquals("Human:question\nAI:response", message.toString());
+        Assert.assertEquals("Human:question\nAssistant:response", message.toString());
     }
 
     @Test
