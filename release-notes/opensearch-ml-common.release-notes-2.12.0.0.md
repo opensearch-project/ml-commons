@@ -123,6 +123,7 @@ Compatible with OpenSearch 2.12.0
 * Update IndexMappingTool Description (#1998)
 * Add more user based permission check in Memory (#1935)
 * Update memory index name and add updated_time (#1793)
+* fine tune prompt;refactor conversational agent code (#2094)
 
 ### Feature
 * Add cross encoder support (#1739)
