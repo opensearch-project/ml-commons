@@ -27,6 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -226,7 +227,7 @@ public class AgentUtils {
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
-        if (selectedToolsStr != null) {
+        if (!Strings.isEmpty(selectedToolsStr)) {
             List<String> selectedTools = gson.fromJson(selectedToolsStr, List.class);
             Map<String, MLToolSpec> toolNameSpecMap = new HashMap<>();
             for (MLToolSpec toolSpec : toolSpecs) {
