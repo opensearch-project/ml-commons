@@ -17,6 +17,7 @@ Compatible with OpenSearch 2.12.0
 * Add kotlin stblib dependency for SearchAlertTool (#1861)
 * Update dependency com.jayway.jsonpath:json-path to v2.9.0 (#1956)
 * Update http package import for 2.x (#1957)
+* Update the lucene snapshot url (#2082)
 
 ### Infrastructure
 * Onboarding Jenkins prod docker images to github ci check (#1566)
@@ -44,6 +45,8 @@ Compatible with OpenSearch 2.12.0
 * Add tutorial doc for semantic search with OpenAI embedding model (#1936)
 * Add connector blueprint for Azure OpenAI Embedding and Chat model (#2062)
 * Add updated Cohere Embedding blueprint (#2063)
+* add tutorial for conversational search (#2075)
+* Add Cohere Chat blueprint with RAG (#1991)
 
 ### Bug Fixes
 * Fix missing lombok version compilation failure issue (#1278)
@@ -84,6 +87,10 @@ Compatible with OpenSearch 2.12.0
 * bug fix - tool parameters missing (#2065)
 * fix empty tool parameter issue (#2067)
 * tool uses original input (#2068)
+* update Unthrotized error code to 401 (#2076)
+* handle null value exceptions when arguments are missing or Null in caling RAG pipeline (#2079)
+* changing error message and error code (#2073) (#2086)
+* Fix bwc issue in remote prediction (#2085)
 
 ### Experimental Feature
 * Update Model API (#1350)
@@ -118,6 +125,7 @@ Compatible with OpenSearch 2.12.0
 
 ### Feature
 * Add cross encoder support (#1739)
+* Enable conversation memory feature flags (#2095)
 
 ### Enhancements
 * Add register and deploy api in client (#1502)
