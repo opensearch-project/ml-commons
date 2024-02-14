@@ -160,25 +160,22 @@ public class AgentUtils {
     }
 
     public static List<String> MODEL_RESPONSE_PATTERNS = List
-        .of(
-            "\\{\\s*\"thought\":.*?\\s*,\\s*\"action\":.*?\\s*,\\s*\"action_input\":.*?\\}",
-            "\\{\\s*\"thought\"\\s*:\\s*\".*?\"\\s*,\\s*\"action\"\\s*:\\s*\".*?\"\\s*,\\s*\"action_input\"\\s*:\\s*\".*?\"\\s*}",
-            "\\{\\s*\"thought\"\\s*:\\s*\".*?\"\\s*,\\s*\"final_answer\"\\s*:\\s*\".*?\"\\s*}"
-        );
+        .of("\\{\\s*(\"(thought|action|action_input|final_answer)\"\\s*:\\s*\".*?\"\\s*,?\\s*)+\\}");
 
     public static String extractModelResponseJson(String text) {
         return extractModelResponseJson(text, null);
     }
 
     public static String extractModelResponseJson(String text, List<String> llmResponsePatterns) {
-        Pattern pattern1 = Pattern.compile("```json\\s*([\\s\\S]+?)\\s*```");
-        Matcher matcher1 = pattern1.matcher(text);
+        Pattern jsonBlockPattern = Pattern.compile("```json\\s*([\\s\\S]+?)\\s*```");
+        Matcher jsonBlockMatcher = jsonBlockPattern.matcher(text);
 
-        if (matcher1.find()) {
-            return matcher1.group(1);
+        if (jsonBlockMatcher.find()) {
+            return jsonBlockMatcher.group(1);
         } else {
             String matchedPart = findMatchedPart(text, MODEL_RESPONSE_PATTERNS);
             if (matchedPart == null && llmResponsePatterns != null) {
+                // If no match is found, try additional patterns if provided
                 matchedPart = findMatchedPart(text, llmResponsePatterns);
             }
             if (matchedPart != null) {

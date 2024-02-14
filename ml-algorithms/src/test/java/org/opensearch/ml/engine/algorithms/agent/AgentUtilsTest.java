@@ -268,7 +268,7 @@ public class AgentUtilsTest {
     }
 
     @Test
-    public void test() {
+    public void testExtractModelResponseJson_ThoughtFinalAnswer() {
         String text =
             "---------------------\n{\n  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}";
         String result = AgentUtils.extractModelResponseJson(text);
@@ -281,7 +281,7 @@ public class AgentUtilsTest {
     }
 
     @Test
-    public void test2() {
+    public void testExtractModelResponseJson_ThoughtFinalAnswerJsonBlock() {
         String text =
             "---------------------```json\n{\n  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
         String result = AgentUtils.extractModelResponseJson(text);
@@ -294,7 +294,7 @@ public class AgentUtilsTest {
     }
 
     @Test
-    public void test3() {
+    public void testExtractModelResponseJson_ThoughtActionInput() {
         String text =
             "---------------------\n{\n  \"thought\": \"Let me search our index to find population projections\", \n  \"action\": \"VectorDBTool\",\n  \"action_input\": \"Seattle population projection 2023\"\n}";
         String result = AgentUtils.extractModelResponseJson(text);
