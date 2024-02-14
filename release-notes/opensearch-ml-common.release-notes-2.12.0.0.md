@@ -18,6 +18,7 @@ Compatible with OpenSearch 2.12.0
 * Update dependency com.jayway.jsonpath:json-path to v2.9.0 (#1956)
 * Update http package import for 2.x (#1957)
 * Update the lucene snapshot url (#2082)
+* removing skills first (#2089)
 
 ### Infrastructure
 * Onboarding Jenkins prod docker images to github ci check (#1566)
