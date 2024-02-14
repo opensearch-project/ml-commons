@@ -226,8 +226,11 @@ public class CatIndexToolTests {
         String header = responseRows[0];
         String fooRow = responseRows[1];
         assertEquals(header.split("\\t").length, fooRow.split("\\t").length);
-        assertEquals("health\tstatus\tindex\tuuid\tpri\trep\tdocs.count\tdocs.deleted\tstore.size\tpri.store.size", header);
-        assertEquals("red\topen\tfoo\tnull\t5\t1\t0\t0\t0b\t0b", fooRow);
+        assertEquals(
+            "row,health,status,index,uuid,pri(number of primary shards),rep(number of replica shards),docs.count(number of available documents),docs.deleted(number of deleted documents),store.size(store size of primary and replica shards),pri.store.size(store size of primary shards)",
+            header
+        );
+        assertEquals("1,red,open,foo,null,5,1,0,0,0b,0b", fooRow);
     }
 
     @Test
