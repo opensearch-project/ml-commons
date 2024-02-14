@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -73,7 +74,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
-        List<MLToolSpec> toolSpecs = mlAgent.getTools();
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();

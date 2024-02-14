@@ -8,18 +8,19 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT_SUFFIX;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -119,7 +120,7 @@ public class AgentUtilsTest {
     @Test
     public void testAddPrefixSuffixToPrompt_WithPrefixSuffix() {
         // Setup
-        String initialPrompt = "initial prompt ${parameters.prompt_prefix} main content ${parameters.prompt_suffix}";
+        String initialPrompt = "initial prompt ${parameters.prompt.prefix} main content ${parameters.prompt.suffix}";
         Map<String, String> parameters = new HashMap<>();
         parameters.put(PROMPT_PREFIX, "Prefix: ");
         parameters.put(PROMPT_SUFFIX, " :Suffix");
@@ -137,7 +138,7 @@ public class AgentUtilsTest {
     @Test
     public void testAddPrefixSuffixToPrompt_WithoutPrefixSuffix() {
         // Setup
-        String initialPrompt = "initial prompt ${parameters.prompt_prefix} main content ${parameters.prompt_suffix}";
+        String initialPrompt = "initial prompt ${parameters.prompt.prefix} main content ${parameters.prompt.suffix}";
         Map<String, String> parameters = new HashMap<>();
 
         // Expected output (should remain unchanged)
@@ -264,5 +265,45 @@ public class AgentUtilsTest {
             "This is the model response\n```json\n{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}```";
         String responseJson = AgentUtils.extractModelResponseJson(text);
         assertEquals("{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}", responseJson);
+    }
+
+    @Test
+    public void testExtractModelResponseJson_ThoughtFinalAnswer() {
+        String text =
+            "---------------------\n{\n  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}";
+        String result = AgentUtils.extractModelResponseJson(text);
+        String expectedResult = "{\n"
+            + "  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n"
+            + "  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n"
+            + "}";
+        System.out.println(result);
+        Assert.assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testExtractModelResponseJson_ThoughtFinalAnswerJsonBlock() {
+        String text =
+            "---------------------```json\n{\n  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
+        String result = AgentUtils.extractModelResponseJson(text);
+        String expectedResult = "{\n"
+            + "  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n"
+            + "  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n"
+            + "}";
+        System.out.println(result);
+        Assert.assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testExtractModelResponseJson_ThoughtActionInput() {
+        String text =
+            "---------------------\n{\n  \"thought\": \"Let me search our index to find population projections\", \n  \"action\": \"VectorDBTool\",\n  \"action_input\": \"Seattle population projection 2023\"\n}";
+        String result = AgentUtils.extractModelResponseJson(text);
+        String expectedResult = "{\n"
+            + "  \"thought\": \"Let me search our index to find population projections\", \n"
+            + "  \"action\": \"VectorDBTool\",\n"
+            + "  \"action_input\": \"Seattle population projection 2023\"\n"
+            + "}";
+        System.out.println(result);
+        Assert.assertEquals(expectedResult, result);
     }
 }

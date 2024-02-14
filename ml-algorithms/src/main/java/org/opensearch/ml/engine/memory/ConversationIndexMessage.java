@@ -34,7 +34,7 @@ public class ConversationIndexMessage extends BaseMessage {
 
     @Override
     public String toString() {
-        return "Human:" + question + "\nAI:" + response;
+        return "Human:" + question + "\nAssistant:" + response;
     }
 
     @Override
