@@ -133,6 +133,7 @@ jobs:
           if docker pull opensearchstaging/opensearch:$docker_version
           then
             echo "FROM opensearchstaging/opensearch:$docker_version" >> Dockerfile
+            echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-skills ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-skills; fi" >> Dockerfile
             echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
             echo "COPY $plugin /tmp/" >> Dockerfile
             echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/$plugin" >> Dockerfile
