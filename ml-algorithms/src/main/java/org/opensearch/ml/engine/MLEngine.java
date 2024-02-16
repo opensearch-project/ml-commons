@@ -33,17 +33,19 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class MLEngine {
-    public static final Setting<String> ML_COMMON_MODEL_REPO_ENDPOINT =
-            Setting.simpleString(
-                    "plugins.ml_commons.model_repo_endpoint",
-                    "https://artifacts.opensearch.org/models/ml-models",
-                    Setting.Property.NodeScope);
+    public static final Setting<String> ML_COMMON_MODEL_REPO_ENDPOINT = Setting
+        .simpleString(
+            "plugins.ml_commons.model_repo_endpoint",
+            "https://artifacts.opensearch.org/models/ml-models",
+            Setting.Property.NodeScope
+        );
 
-    public static final Setting<String> ML_COMMON_MODEL_METALIST_ENDPOINT =
-            Setting.simpleString(
-                    "plugins.ml_commons.model_metalist_endpoint",
-                    "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json",
-                    Setting.Property.NodeScope);
+    public static final Setting<String> ML_COMMON_MODEL_METALIST_ENDPOINT = Setting
+        .simpleString(
+            "plugins.ml_commons.model_metalist_endpoint",
+            "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json",
+            Setting.Property.NodeScope
+        );
 
     public static final String REGISTER_MODEL_FOLDER = "register";
     public static final String DEPLOY_MODEL_FOLDER = "deploy";
