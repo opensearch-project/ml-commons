@@ -569,7 +569,7 @@ public class InteractionsIndex {
         if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener
                 .onFailure(
-                    new IndexNotFoundException("cannot get interaction since the messages index does not exist", INTERACTIONS_INDEX_NAME)
+                    new IndexNotFoundException("cannot get message since the messages index does not exist", INTERACTIONS_INDEX_NAME)
                 );
             return;
         }
