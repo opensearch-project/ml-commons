@@ -30,7 +30,9 @@ public abstract class TextEmbeddingModel extends DLModel {
         MLAlgoParams mlParams = mlInput.getParameters();
         if (mlParams != null && mlParams instanceof AsymmetricTextEmbeddingParameters) {
             addPrefixesToData((AsymmetricTextEmbeddingParameters) mlParams, (TextDocsInputDataSet) inputDataSet);
-        } else if (((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() != null) {
+        } else if (modelConfig != null
+            && (((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() != null
+                || ((TextEmbeddingModelConfig) modelConfig).getQueryPrefix() != null)) {
             throw new IllegalArgumentException(
                 "The embedding model chosen is asymmetric. To use it, you must declare whether the input is a query or a passage."
             );
