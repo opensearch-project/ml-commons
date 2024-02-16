@@ -83,7 +83,7 @@ public class SearchInteractionsTransportAction extends HandledTransportAction<Se
                 ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
                 cmHandler.searchInteractions(request.getConversationId(), request, internalListener);
             } catch (Exception e) {
-                log.error("Failed to search conversations", e);
+                log.error("Failed to search memories", e);
                 actionListener.onFailure(e);
             }
         }
