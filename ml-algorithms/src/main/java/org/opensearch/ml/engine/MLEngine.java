@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -31,10 +33,20 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class MLEngine {
+    public static final Setting<String> ML_COMMON_MODEL_REPO_ENDPOINT =
+            Setting.simpleString(
+                    "plugins.ml_commons.model_repo_endpoint",
+                    "https://artifacts.opensearch.org/models/ml-models",
+                    Setting.Property.NodeScope);
+
+    public static final Setting<String> ML_COMMON_MODEL_METALIST_ENDPOINT =
+            Setting.simpleString(
+                    "plugins.ml_commons.model_metalist_endpoint",
+                    "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json",
+                    Setting.Property.NodeScope);
 
     public static final String REGISTER_MODEL_FOLDER = "register";
     public static final String DEPLOY_MODEL_FOLDER = "deploy";
-    private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
 
     @Getter
     private final Path mlConfigPath;
@@ -45,20 +57,26 @@ public class MLEngine {
 
     private Encryptor encryptor;
 
-    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
+    private final String modelRepoEndpoint;
+
+    private final String modelMetalistEndpoint;
+
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor, Settings settings) {
         this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
         this.mlModelsCachePath = mlCachePath.resolve("models_cache");
         this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
+        this.modelRepoEndpoint = ML_COMMON_MODEL_REPO_ENDPOINT.get(settings);
+        this.modelMetalistEndpoint = ML_COMMON_MODEL_METALIST_ENDPOINT.get(settings);
     }
 
     public String getPrebuiltModelMetaListPath() {
-        return "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json";
+        return this.modelMetalistEndpoint;
     }
 
     public String getPrebuiltModelConfigPath(String modelName, String version, MLModelFormat modelFormat) {
         String format = modelFormat.name().toLowerCase(Locale.ROOT);
-        return String.format(Locale.ROOT, "%s/%s/%s/%s/config.json", MODEL_REPO, modelName, version, format);
+        return String.format(Locale.ROOT, "%s/%s/%s/%s/config.json", this.modelRepoEndpoint, modelName, version, format);
     }
 
     public String getPrebuiltModelPath(String modelName, String version, MLModelFormat modelFormat) {
@@ -67,7 +85,7 @@ public class MLEngine {
         // /huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.0/onnx/config.json
         String format = modelFormat.name().toLowerCase(Locale.ROOT);
         String modelZipFileName = modelName.substring(index).replace("/", "_") + "-" + version + "-" + format;
-        return String.format(Locale.ROOT, "%s/%s/%s/%s/%s.zip", MODEL_REPO, modelName, version, format, modelZipFileName);
+        return String.format(Locale.ROOT, "%s/%s/%s/%s/%s.zip", this.modelRepoEndpoint, modelName, version, format, modelZipFileName);
     }
 
     public Path getRegisterModelPath(String modelId, String modelName, String version) {

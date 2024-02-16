@@ -42,6 +42,7 @@ import java.util.UUID;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
@@ -86,7 +87,7 @@ public class TextSimilarityCrossEncoderModelTest {
     public void setUp() throws URISyntaxException {
         mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
         encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(mlCachePath, encryptor);
+        mlEngine = new MLEngine(mlCachePath, encryptor, Settings.EMPTY);
         model = MLModel
             .builder()
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
