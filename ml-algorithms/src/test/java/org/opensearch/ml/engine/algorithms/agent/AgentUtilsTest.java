@@ -10,21 +10,29 @@ import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.FINAL_ANSWER;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 
 public class AgentUtilsTest {
@@ -32,9 +40,81 @@ public class AgentUtilsTest {
     @Mock
     private Tool tool1, tool2;
 
+    private Map<String, Map<String, String>> llmResponseExpectedParseResults;
+
+    private String responseForAction = "---------------------\n{\n  "
+        + "\"thought\": \"Let me search our index to find population projections\", \n  "
+        + "\"action\": \"VectorDBTool\",\n  "
+        + "\"action_input\": \"Seattle population projection 2023\"\n}";
+
+    private String responseForActionWrongAction = "---------------------\n{\n  "
+        + "\"thought\": \"Let me search our index to find population projections\", \n  "
+        + "\"action\": \"Let me run VectorDBTool to get more data\",\n  "
+        + "\"action_input\": \"Seattle population projection 2023\"\n}";
+
+    private String responseForActionNullAction = "---------------------\n{\n  "
+        + "\"thought\": \"Let me search our index to find population projections\" \n  }";
+
+    private String responseNotFollowJsonFormat = "Final answer is I don't know";
+    private String responseForActionInvalidJson = "---------------------\n{\n  "
+        + "\"thought\": \"Let me search our index to find population projections\", \n  "
+        + "\"action\": \"VectorDBTool\",\n  "
+        + "\"action_input\": \"Seattle population projection 2023\"";
+    private String responseForFinalAnswer = "---------------------```json\n{\n  "
+        + "\"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  "
+        + "\"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
+    private String responseForFinalAnswerInvalidJson =
+        "\"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  "
+            + "\"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
+
+    private String wrongResponseForAction = "---------------------```json\n{\n  "
+        + "\"thought\": \"Let's try VectorDBTool\",\n  "
+        + "\"action\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        llmResponseExpectedParseResults = new HashMap<>();
+        Map responseForActionExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Let me search our index to find population projections",
+                ACTION,
+                "VectorDBTool",
+                ACTION_INPUT,
+                "Seattle population projection 2023"
+            );
+        llmResponseExpectedParseResults.put(responseForAction, responseForActionExpectedResult);
+        llmResponseExpectedParseResults.put(responseForActionWrongAction, responseForActionExpectedResult);
+        llmResponseExpectedParseResults.put(responseForActionInvalidJson, responseForActionExpectedResult);
+        Map responseForActionNullActionExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Let me search our index to find population projections",
+                FINAL_ANSWER,
+                "{\n  \"thought\": \"Let me search our index to find population projections\" \n  }"
+            );
+        llmResponseExpectedParseResults.put(responseForActionNullAction, responseForActionNullActionExpectedResult);
+
+        Map responseNotFollowJsonFormatExpectedResult = Map.of(FINAL_ANSWER, responseNotFollowJsonFormat);
+        llmResponseExpectedParseResults.put(responseNotFollowJsonFormat, responseNotFollowJsonFormatExpectedResult);
+
+        Map responseForFinalAnswerExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:",
+                FINAL_ANSWER,
+                "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius."
+            );
+        llmResponseExpectedParseResults.put(responseForFinalAnswer, responseForFinalAnswerExpectedResult);
+        Map responseForFinalAnswerExpectedResultExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:",
+                FINAL_ANSWER,
+                "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```"
+            );
+        llmResponseExpectedParseResults.put(responseForFinalAnswerInvalidJson, responseForFinalAnswerExpectedResultExpectedResult);
 
     }
 
@@ -262,7 +342,7 @@ public class AgentUtilsTest {
     @Test
     public void testExtractModelResponseJsonWithValidModelOutput() {
         String text =
-            "This is the model response\n```json\n{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}```";
+            "This is the model response\n```json\n{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"} \n``` other content";
         String responseJson = AgentUtils.extractModelResponseJson(text);
         assertEquals("{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}", responseJson);
     }
@@ -276,34 +356,100 @@ public class AgentUtilsTest {
             + "  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n"
             + "  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n"
             + "}";
-        System.out.println(result);
         Assert.assertEquals(expectedResult, result);
     }
 
     @Test
     public void testExtractModelResponseJson_ThoughtFinalAnswerJsonBlock() {
-        String text =
-            "---------------------```json\n{\n  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
+        String text = responseForFinalAnswer;
         String result = AgentUtils.extractModelResponseJson(text);
         String expectedResult = "{\n"
             + "  \"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n"
             + "  \"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n"
             + "}";
-        System.out.println(result);
         Assert.assertEquals(expectedResult, result);
     }
 
     @Test
     public void testExtractModelResponseJson_ThoughtActionInput() {
-        String text =
-            "---------------------\n{\n  \"thought\": \"Let me search our index to find population projections\", \n  \"action\": \"VectorDBTool\",\n  \"action_input\": \"Seattle population projection 2023\"\n}";
+        String text = responseForAction;
         String result = AgentUtils.extractModelResponseJson(text);
         String expectedResult = "{\n"
             + "  \"thought\": \"Let me search our index to find population projections\", \n"
             + "  \"action\": \"VectorDBTool\",\n"
             + "  \"action_input\": \"Seattle population projection 2023\"\n"
             + "}";
-        System.out.println(result);
         Assert.assertEquals(expectedResult, result);
     }
+
+    @Test
+    public void testExtractMethods() {
+        List<String> textList = List.of(responseForAction, responseForActionInvalidJson);
+        for (String text : textList) {
+            String thought = AgentUtils.extractThought(text);
+            String action = AgentUtils.extractAction(text);
+            String actionInput = AgentUtils.extractActionInput(text);
+            String finalAnswer = AgentUtils.extractFinalAnswer(text);
+            Assert.assertEquals("Let me search our index to find population projections", thought);
+            Assert.assertEquals("VectorDBTool\",\n  ", action);
+            Assert.assertEquals("Seattle population projection 2023", actionInput);
+            Assert.assertNull(finalAnswer);
+        }
+    }
+
+    @Test
+    public void testExtractMethods_FinalAnswer() {
+        List<String> textList = List.of(responseForFinalAnswer, responseForFinalAnswerInvalidJson);
+        for (String text : textList) {
+            String thought = AgentUtils.extractThought(text);
+            String action = AgentUtils.extractAction(text);
+            String actionInput = AgentUtils.extractActionInput(text);
+            String finalAnswer = AgentUtils.extractFinalAnswer(text);
+            Assert
+                .assertEquals(
+                    "Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:",
+                    thought
+                );
+            Assert.assertNull(action);
+            Assert.assertNull(actionInput);
+            Assert
+                .assertEquals(
+                    "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```",
+                    finalAnswer
+                );
+        }
+    }
+
+    @Test
+    public void testParseLLMOutput() {
+        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        for (Map.Entry<String, Map<String, String>> entry : llmResponseExpectedParseResults.entrySet()) {
+            ModelTensorOutput modelTensoOutput = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(
+                    List
+                        .of(
+                            ModelTensors
+                                .builder()
+                                .mlModelTensors(
+                                    List.of(ModelTensor.builder().name("response").dataAsMap(Map.of("response", entry.getKey())).build())
+                                )
+                                .build()
+                        )
+                )
+                .build();
+            Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+            for (String key : entry.getValue().keySet()) {
+                Assert.assertEquals(entry.getValue().get(key), output.get(key));
+            }
+        }
+    }
+
+    @Test
+    public void testExtractThought_InvalidResult() {
+        String text = responseForActionInvalidJson;
+        String result = AgentUtils.extractThought(text);
+        Assert.assertEquals("Let me search our index to find population projections", result);
+    }
+
 }
