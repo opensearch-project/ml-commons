@@ -69,7 +69,7 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
 
             cmHandler.updateInteraction(interactionId, updateContent, getUpdateResponseListener(interactionId, listener, context));
         } catch (Exception e) {
-            log.error("Failed to update Message " + interactionId, e);
+            log.error("Failed to update Message with ID " + interactionId, e);
             listener.onFailure(e);
         }
     }

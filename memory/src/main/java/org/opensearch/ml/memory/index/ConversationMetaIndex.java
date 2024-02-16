@@ -272,7 +272,7 @@ public class ConversationMetaIndex {
                             internalListener.onResponse(false);
                         }
                     }, e -> {
-                        log.error("Failure deleting memory " + conversationId, e);
+                        log.error("Failure deleting memory with ID" + conversationId, e);
                         internalListener.onFailure(e);
                     });
                     client.delete(delRequest, al);

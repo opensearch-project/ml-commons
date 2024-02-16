@@ -71,7 +71,7 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
 
                 cmHandler.updateConversation(conversationId, updateContent, getUpdateResponseListener(conversationId, listener, context));
             } catch (Exception e) {
-                log.error("Failed to update Memory " + conversationId, e);
+                log.error("Failed to update Memory with ID " + conversationId, e);
                 listener.onFailure(e);
             }
         }
