@@ -36,6 +36,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -136,6 +137,8 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
+        assertEquals("query: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
+        assertEquals("passage: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
     }
 
     public void testRegisterModelRequestRemoteInferenceDisabled() throws Exception {
@@ -185,7 +188,20 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
-            .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
+            .of(
+                "model_type",
+                "bert",
+                "embedding_dimension",
+                384,
+                "framework_type",
+                "sentence_transformers",
+                "all_config",
+                "All Config",
+                "query_prefix",
+                "query: ",
+                "passage_prefix",
+                "passage: "
+            );
         final Map<String, Object> model = Map
             .of(
                 "name",

@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -43,6 +44,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.algorithms.text_embedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
@@ -237,6 +239,44 @@ public class TextEmbeddingDenseModelTest {
         }
         textEmbeddingDenseModel.close();
 
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts() throws URISyntaxException {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+        TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).queryPrefix("query >> ").build();
+        MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
+        textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
+        MLInput mlInputQueries = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+            )
+            .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY))
+            .build();
+        MLInput mlInputPassages = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("The meaning of life is 42", "I won this year's us open")).build()
+            )
+            .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.PASSAGE))
+            .build();
+
+        textEmbeddingDenseModel.predict(mlInputQueries);
+        textEmbeddingDenseModel.predict(mlInputPassages);
+        TextDocsInputDataSet queries = (TextDocsInputDataSet) mlInputQueries.getInputDataset();
+        TextDocsInputDataSet passages = (TextDocsInputDataSet) mlInputPassages.getInputDataset();
+
+        assertTrue("all docs should start with query prefix", queries.getDocs().stream().allMatch(doc -> doc.startsWith("query >> ")));
+        assertEquals("passage 0 should remain unchanged", passages.getDocs().get(0), "The meaning of life is 42");
+        assertEquals("passage 1 should remain unchanged", passages.getDocs().get(1), "I won this year's us open");
+
+        textEmbeddingDenseModel.close();
     }
 
     @Test

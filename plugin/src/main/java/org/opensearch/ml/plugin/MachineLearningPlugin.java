@@ -158,6 +158,7 @@ import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.engine.algorithms.text_embedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -843,7 +844,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
                 RCFSummarizeParams.XCONTENT_REGISTRY,
                 LogisticRegressionParams.XCONTENT_REGISTRY,
-                TextEmbeddingModelConfig.XCONTENT_REGISTRY
+                TextEmbeddingModelConfig.XCONTENT_REGISTRY,
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY
             );
     }
 

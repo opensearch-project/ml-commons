@@ -13,6 +13,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 import java.io.IOException;
@@ -22,7 +23,7 @@ import java.util.List;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
- * ML input class which supports a list fo text docs.
+ * ML input class which supports a list of text docs.
  * This class can be used for TEXT_EMBEDDING model.
  */
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_EMBEDDING, FunctionName.SPARSE_ENCODING, FunctionName.SPARSE_TOKENIZE})
@@ -123,6 +124,9 @@ public class TextDocsMLInput extends MLInput {
                     break;
                 case RESULT_FILTER_FIELD:
                     resultFilter = ModelResultFilter.parse(parser);
+                    break;
+                case ML_PARAMETERS_FIELD:
+                    this.parameters = parser.namedObject(MLAlgoParams.class, functionName.name(), null);
                     break;
                 default:
                     parser.skipChildren();
