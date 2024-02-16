@@ -38,8 +38,8 @@ public class MLDeployModelRequest extends MLTaskRequest {
     private String modelId;
     private String[] modelNodeIds;
     boolean async;
-    // This is to identify if the get request is initiated by user or not. During auto redeploy, we also perform deploy operation. This field is to distinguish between
-    // these two situations.
+    // This is to identify if the get request is initiated by user or not. During auto redeploy also, we perform deploy operation.
+    // This field is mainly to distinguish between these two situations.
     private final boolean isUserInitiatedDeployRequest;
 
     @Builder
@@ -51,6 +51,9 @@ public class MLDeployModelRequest extends MLTaskRequest {
         this.isUserInitiatedDeployRequest = isUserInitiatedDeployRequest;
     }
 
+    // In this constructor, isUserInitiatedDeployRequest to always set to true. So, it can be used only when
+    // deploy request is coming directly from the user. DO NOT use this when the
+    // deploy call is from the code or system initiated.
     public MLDeployModelRequest(String modelId, boolean async) {
         this(modelId, null, async, true, true);
     }
@@ -60,7 +63,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         this.modelId = in.readString();
         this.modelNodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
-        this.isUserInitiatedDeployRequest = in.readOptionalBoolean();
+        this.isUserInitiatedDeployRequest = in.readBoolean();
     }
 
     @Override
@@ -79,7 +82,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         out.writeString(modelId);
         out.writeOptionalStringArray(modelNodeIds);
         out.writeBoolean(async);
-        out.writeOptionalBoolean(isUserInitiatedDeployRequest);
+        out.writeBoolean(isUserInitiatedDeployRequest);
     }
 
     public static MLDeployModelRequest parse(XContentParser parser, String modelId) throws IOException {

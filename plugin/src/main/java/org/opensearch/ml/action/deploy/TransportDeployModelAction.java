@@ -144,8 +144,10 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
                 }
-                if (isHidden != null && isHidden) {
-                    if (isSuperAdmin || !isUserInitiatedDeployRequest) {
+                if (!isUserInitiatedDeployRequest) {
+                    deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
+                } else if (isHidden != null && isHidden) {
+                    if (isSuperAdmin) {
                         deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
                     } else {
                         wrappedListener
