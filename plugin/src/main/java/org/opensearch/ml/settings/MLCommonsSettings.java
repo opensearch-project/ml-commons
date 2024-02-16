@@ -170,11 +170,9 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final Setting<String> ML_COMMON_MODEL_REPO_ENDPOINT =
-            MLEngine.ML_COMMON_MODEL_REPO_ENDPOINT;
+    public static final Setting<String> ML_COMMON_MODEL_REPO_ENDPOINT = MLEngine.ML_COMMON_MODEL_REPO_ENDPOINT;
 
-    public static final Setting<String> ML_COMMON_MODEL_METALIST_ENDPOINT =
-            MLEngine.ML_COMMON_MODEL_METALIST_ENDPOINT;
+    public static final Setting<String> ML_COMMON_MODEL_METALIST_ENDPOINT = MLEngine.ML_COMMON_MODEL_METALIST_ENDPOINT;
 
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
 
