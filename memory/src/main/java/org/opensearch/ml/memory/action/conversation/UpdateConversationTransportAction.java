@@ -71,7 +71,7 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
 
                 cmHandler.updateConversation(conversationId, updateContent, getUpdateResponseListener(conversationId, listener, context));
             } catch (Exception e) {
-                log.error("Failed to update Conversation " + conversationId, e);
+                log.error("Failed to update Memory with ID " + conversationId, e);
                 listener.onFailure(e);
             }
         }
@@ -84,14 +84,14 @@ public class UpdateConversationTransportAction extends HandledTransportAction<Ac
     ) {
         return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                log.info("Successfully updated the Conversation with ID: {}", conversationId);
+                log.info("Successfully updated the Memory with ID: {}", conversationId);
                 actionListener.onResponse(updateResponse);
             } else {
-                log.info("Failed to update the Conversation with ID: {}", conversationId);
+                log.info("Failed to update the Memory with ID: {}", conversationId);
                 actionListener.onResponse(updateResponse);
             }
         }, exception -> {
-            log.error("Failed to update ML Conversation with ID " + conversationId, exception);
+            log.error("Failed to update ML Memory with ID " + conversationId, exception);
             actionListener.onFailure(exception);
         }), context::restore);
     }
