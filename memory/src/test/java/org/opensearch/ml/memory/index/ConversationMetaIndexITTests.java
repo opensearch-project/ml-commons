@@ -401,7 +401,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
                 assert (false);
             }, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to memory ")) {
                     contextStack.pop().restore();
                     contextStack.pop().restore();
                     cdl.countDown();
@@ -616,7 +616,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
                 assert (false);
             }, e -> {
                 cdl.countDown();
-                assert (e.getMessage().startsWith("User [Yaliang] does not have access to conversation"));
+                assert (e.getMessage().startsWith("User [Yaliang] does not have access to memory"));
                 assert (get2.result().getName().equals("Yaliang Convo"));
                 assert (get2.result().getId().equals(cid2.result()));
             });

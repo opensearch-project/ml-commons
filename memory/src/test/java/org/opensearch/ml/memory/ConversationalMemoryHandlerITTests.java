@@ -312,7 +312,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
             cdl.countDown();
             assert (false);
         }, e -> {
-            assert (e.getMessage().startsWith("Conversation ["));
+            assert (e.getMessage().startsWith("Memory ["));
             cmHandler.getInteractions(cid2.result(), 0, 10, inters2);
         });
 
@@ -475,7 +475,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             failiid1.whenComplete(shouldHaveFailedAsString, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to memory ")) {
                     cmHandler
                         .createInteraction(
                             cid1.result(),
@@ -493,7 +493,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             failiid2.whenComplete(shouldHaveFailedAsString, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to memory ")) {
                     cmHandler.getConversations(10, conversations2);
                 } else {
                     onFail.accept(e);
@@ -515,7 +515,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             failInter2.whenComplete(shouldHaveFailedAsInterList, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to memory ")) {
                     cmHandler.getInteractions(cid1.result(), 0, 10, failInter1);
                 } else {
                     onFail.accept(e);
@@ -524,7 +524,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             failInter1.whenComplete(shouldHaveFailedAsInterList, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to memory ")) {
                     contextStack.pop().restore();
                     cmHandler.getConversations(0, 10, conversations1);
                 } else {
@@ -554,7 +554,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             failInter3.whenComplete(shouldHaveFailedAsInterList, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user1 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user1 + "] does not have access to memory ")) {
                     cmHandler
                         .createInteraction(
                             cid3.result(),
@@ -572,7 +572,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             failiid3.whenComplete(shouldHaveFailedAsString, e -> {
                 if (e instanceof OpenSearchStatusException
-                    && e.getMessage().startsWith("User [" + user1 + "] does not have access to conversation ")) {
+                    && e.getMessage().startsWith("User [" + user1 + "] does not have access to memory ")) {
                     contextStack.pop().restore();
                     cdl.countDown();
                 } else {

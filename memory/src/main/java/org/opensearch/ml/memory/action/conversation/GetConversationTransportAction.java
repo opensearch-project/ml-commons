@@ -90,7 +90,7 @@ public class GetConversationTransportAction extends HandledTransportAction<GetCo
                 }, e -> { internalListener.onFailure(e); });
                 cmHandler.getConversation(conversationId, al);
             } catch (Exception e) {
-                log.error("Failed to get Conversation " + conversationId, e);
+                log.error("Failed to get memory " + conversationId, e);
                 actionListener.onFailure(e);
             }
 

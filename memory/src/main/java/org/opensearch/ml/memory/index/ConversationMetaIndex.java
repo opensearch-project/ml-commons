@@ -154,20 +154,21 @@ public class ConversationMetaIndex {
                     ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {
                         if (resp.status() == RestStatus.CREATED) {
                             internalListener.onResponse(resp.getId());
+                            log.info("Successfully created the memory with id : {}", resp.getId());
                         } else {
-                            internalListener.onFailure(new IOException("failed to create conversation"));
+                            internalListener.onFailure(new IOException("failed to create memory"));
                         }
                     }, e -> {
-                        log.error("Failed to create conversation", e);
+                        log.error("Failed to create memory", e);
                         internalListener.onFailure(e);
                     });
                     client.index(request, al);
                 } catch (Exception e) {
-                    log.error("Failed to create conversation", e);
+                    log.error("Failed to create memory", e);
                     listener.onFailure(e);
                 }
             } else {
-                listener.onFailure(new IOException("Failed to add conversation due to missing index"));
+                listener.onFailure(new IOException("Failed to add memory due to missing index"));
             }
         }, e -> { listener.onFailure(e); }));
     }
@@ -218,18 +219,19 @@ public class ConversationMetaIndex {
                     result.add(ConversationMeta.fromSearchHit(hit));
                 }
                 internalListener.onResponse(result);
+                log.info("Successfully retrieved memories");
             }, e -> {
-                log.error("Failed to retrieve conversations", e);
+                log.error("Failed to retrieve memories", e);
                 internalListener.onFailure(e);
             });
             client.admin().indices().refresh(Requests.refreshRequest(META_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.search(request, al);
             }, e -> {
-                log.error("Failed to retrieve conversations during refresh", e);
+                log.error("Failed to retrieve memories during refresh", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to retrieve conversations", e);
+            log.error("Failed to retrieve memories", e);
             listener.onFailure(e);
         }
     }
@@ -270,17 +272,17 @@ public class ConversationMetaIndex {
                             internalListener.onResponse(false);
                         }
                     }, e -> {
-                        log.error("Failure deleting conversation " + conversationId, e);
+                        log.error("Failure deleting memory with ID" + conversationId, e);
                         internalListener.onFailure(e);
                     });
                     client.delete(delRequest, al);
                 } catch (Exception e) {
-                    log.error("Failed deleting conversation with id=" + conversationId, e);
+                    log.error("Failed deleting memory with id=" + conversationId, e);
                     listener.onFailure(e);
                 }
             } else {
                 throw new OpenSearchStatusException(
-                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    "User [" + user + "] does not have access to memory " + conversationId,
                     RestStatus.UNAUTHORIZED
                 );
             }
@@ -305,7 +307,7 @@ public class ConversationMetaIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the conversation doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
-                    throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
+                    throw new ResourceNotFoundException("Memory [" + conversationId + "] not found");
                 }
                 // If security is off - User doesn't exist - you have permission
                 if (userstr == null || User.parse(userstr) == null) {
@@ -324,7 +326,7 @@ public class ConversationMetaIndex {
             client.admin().indices().refresh(Requests.refreshRequest(META_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.get(getRequest, al);
             }, e -> {
-                log.error("Failed to refresh conversations index during check access ", e);
+                log.error("Failed to refresh memory index during check access ", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
@@ -354,7 +356,7 @@ public class ConversationMetaIndex {
             client.admin().indices().refresh(Requests.refreshRequest(META_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.search(request, internalListener);
             }, e -> {
-                log.error("Failed to refresh conversations index during search conversations ", e);
+                log.error("Failed to refresh memory index during search memories ", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
@@ -370,10 +372,7 @@ public class ConversationMetaIndex {
      */
     public void updateConversation(String conversationId, UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
-            listener
-                .onFailure(
-                    new IndexNotFoundException("cannot update conversation since the conversation index does not exist", META_INDEX_NAME)
-                );
+            listener.onFailure(new IndexNotFoundException("cannot update memory since the memory index does not exist", META_INDEX_NAME));
             return;
         }
 
@@ -387,7 +386,7 @@ public class ConversationMetaIndex {
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                 throw new OpenSearchStatusException(
-                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    "User [" + user + "] does not have access to memory " + conversationId,
                     RestStatus.UNAUTHORIZED
                 );
             }
@@ -399,7 +398,7 @@ public class ConversationMetaIndex {
             ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             client.update(updateRequest, internalListener);
         } catch (Exception e) {
-            log.error("Failed to update Conversation. Details {}:", e);
+            log.error("Failed to update Memory. Details {}:", e);
             listener.onFailure(e);
         }
     }
@@ -411,10 +410,7 @@ public class ConversationMetaIndex {
      */
     public void getConversation(String conversationId, ActionListener<ConversationMeta> listener) {
         if (!clusterService.state().metadata().hasIndex(META_INDEX_NAME)) {
-            listener
-                .onFailure(
-                    new IndexNotFoundException("cannot get conversation since the conversation index does not exist", META_INDEX_NAME)
-                );
+            listener.onFailure(new IndexNotFoundException("cannot get memory since the memory index does not exist", META_INDEX_NAME));
             return;
         }
         String userstr = getUserStrFromThreadContext();
@@ -424,7 +420,7 @@ public class ConversationMetaIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the conversation doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
-                    throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
+                    throw new ResourceNotFoundException("Memory [" + conversationId + "] not found");
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(conversationId, getResponse.getSourceAsMap());
                 // If no security, return conversation
@@ -436,13 +432,14 @@ public class ConversationMetaIndex {
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                 if (user.equals(conversation.getUser())) {
                     internalListener.onResponse(conversation);
+                    log.info("Successfully get the memory for {}", conversationId);
                     return;
                 }
                 // Otherwise you don't have permission
                 internalListener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "User [" + user + "] does not have access to conversation " + conversationId,
+                            "User [" + user + "] does not have access to memory " + conversationId,
                             RestStatus.UNAUTHORIZED
                         )
                     );
@@ -450,7 +447,7 @@ public class ConversationMetaIndex {
             client.admin().indices().refresh(Requests.refreshRequest(META_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.get(request, al);
             }, e -> {
-                log.error("Failed to refresh conversations index during get conversation ", e);
+                log.error("Failed to refresh the memory index during get memory ", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {

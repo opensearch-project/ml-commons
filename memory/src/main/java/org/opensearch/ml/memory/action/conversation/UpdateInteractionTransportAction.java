@@ -69,7 +69,7 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
 
             cmHandler.updateInteraction(interactionId, updateContent, getUpdateResponseListener(interactionId, listener, context));
         } catch (Exception e) {
-            log.error("Failed to update Interaction " + interactionId, e);
+            log.error("Failed to update Message with ID " + interactionId, e);
             listener.onFailure(e);
         }
     }
@@ -81,14 +81,14 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
     ) {
         return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                log.info("Successfully updated the interaction with ID: {}", interactionId);
+                log.info("Successfully updated the Message with ID: {}", interactionId);
                 actionListener.onResponse(updateResponse);
             } else {
-                log.info("Failed to update the interaction with ID: {}", interactionId);
+                log.info("Failed to update the Message with ID: {}", interactionId);
                 actionListener.onResponse(updateResponse);
             }
         }, exception -> {
-            log.error("Failed to update ML interaction with ID " + interactionId, exception);
+            log.error("Failed to update ML Message with ID " + interactionId, exception);
             actionListener.onFailure(exception);
         }), context::restore);
     }

@@ -87,7 +87,7 @@ public class InteractionsIndex {
      */
     public void initInteractionsIndexIfAbsent(ActionListener<Boolean> listener) {
         if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
-            log.debug("No interactions index found. Adding it");
+            log.debug("No messages index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(INTERACTIONS_INDEX_NAME)
                 .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS)
@@ -186,8 +186,9 @@ public class InteractionsIndex {
                             ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {
                                 if (resp.status() == RestStatus.CREATED) {
                                     internalListener.onResponse(resp.getId());
+                                    log.info("Successfully created the message with id : {}", resp.getId());
                                 } else {
-                                    internalListener.onFailure(new IOException("Failed to create interaction"));
+                                    internalListener.onFailure(new IOException("Failed to create message"));
                                 }
                             }, e -> { internalListener.onFailure(e); });
                             client.index(request, al);
@@ -196,13 +197,13 @@ public class InteractionsIndex {
                         }
                     } else {
                         throw new OpenSearchStatusException(
-                            "User [" + user + "] does not have access to conversation " + conversationId,
+                            "User [" + user + "] does not have access to memory " + conversationId,
                             RestStatus.UNAUTHORIZED
                         );
                     }
                 }, e -> { listener.onFailure(e); }));
             } else {
-                listener.onFailure(new IOException("no index to add conversation to"));
+                listener.onFailure(new IOException("no index to add memory to"));
             }
         }, e -> { listener.onFailure(e); }));
     }
@@ -275,7 +276,7 @@ public class InteractionsIndex {
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                 throw new OpenSearchStatusException(
-                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    "User [" + user + "] does not have access to memory " + conversationId,
                     RestStatus.UNAUTHORIZED
                 );
             }
@@ -314,7 +315,11 @@ public class InteractionsIndex {
                     result.add(Interaction.fromSearchHit(hit));
                 }
                 internalListener.onResponse(result);
-            }, e -> { internalListener.onFailure(e); });
+                log.info("Successfully get the messages for memory {}", conversationId);
+            }, e -> {
+                internalListener.onFailure(e);
+                log.error("Failed to get the messages for memory {}", conversationId);
+            });
             client
                 .admin()
                 .indices()
@@ -345,7 +350,7 @@ public class InteractionsIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the interaction doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
-                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
+                    throw new ResourceNotFoundException("Message [" + interactionId + "] not found");
                 }
                 Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
                 // checks if the user has permission to access the conversation that the interaction belongs to
@@ -362,7 +367,7 @@ public class InteractionsIndex {
                             ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
                             : User.parse(userstr).getName();
                         throw new OpenSearchStatusException(
-                            "User [" + user + "] does not have access to interaction " + interactionId,
+                            "User [" + user + "] does not have access to message " + interactionId,
                             RestStatus.UNAUTHORIZED
                         );
                     }
@@ -372,7 +377,7 @@ public class InteractionsIndex {
             client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.get(request, ActionListener.runBefore(al, () -> threadContext.restore()));
             }, e -> {
-                log.error("Failed to refresh interactions index during get interaction ", e);
+                log.error("Failed to refresh message index during get message ", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
@@ -408,7 +413,11 @@ public class InteractionsIndex {
                     result.add(Interaction.fromSearchHit(hit));
                 }
                 internalListener.onResponse(result);
-            }, e -> { internalListener.onFailure(e); });
+                log.info("Successfully get traces for the message {}", interactionId);
+            }, e -> {
+                internalListener.onFailure(e);
+                log.error("Failed to get traces for the message {}", interactionId);
+            });
             client.search(request, al);
         } catch (Exception e) {
             listener.onFailure(e);
@@ -495,14 +504,14 @@ public class InteractionsIndex {
                     getAllInteractions(conversationId, resultsAtATime, searchListener);
                 } else {
                     throw new OpenSearchStatusException(
-                        "User [" + user + "] does not have access to conversation " + conversationId,
+                        "User [" + user + "] does not have access to memory " + conversationId,
                         RestStatus.UNAUTHORIZED
                     );
                 }
             }, e -> { listener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
         } catch (Exception e) {
-            log.error("Failure while deleting interactions associated with conversation id=" + conversationId, e);
+            log.error("Failure while deleting messages associated with memory id=" + conversationId, e);
             listener.onFailure(e);
         }
     }
@@ -531,7 +540,7 @@ public class InteractionsIndex {
                         .refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                             client.search(request, internalListener);
                         }, e -> {
-                            log.error("Failed to refresh interactions index during search interactions ", e);
+                            log.error("Failed to refresh messages index during search messages ", e);
                             internalListener.onFailure(e);
                         }));
                 } catch (Exception e) {
@@ -544,7 +553,7 @@ public class InteractionsIndex {
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                 throw new OpenSearchStatusException(
-                    "User [" + user + "] does not have access to conversation " + conversationId,
+                    "User [" + user + "] does not have access to memory " + conversationId,
                     RestStatus.UNAUTHORIZED
                 );
             }
@@ -560,10 +569,7 @@ public class InteractionsIndex {
         if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener
                 .onFailure(
-                    new IndexNotFoundException(
-                        "cannot get interaction since the interactions index does not exist",
-                        INTERACTIONS_INDEX_NAME
-                    )
+                    new IndexNotFoundException("cannot get message since the messages index does not exist", INTERACTIONS_INDEX_NAME)
                 );
             return;
         }
@@ -573,7 +579,7 @@ public class InteractionsIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the interaction doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
-                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
+                    throw new ResourceNotFoundException("Message [" + interactionId + "] not found");
                 }
                 Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
                 // checks if the user has permission to access the conversation that the interaction belongs to
@@ -582,7 +588,7 @@ public class InteractionsIndex {
             client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.get(request, ActionListener.runBefore(al, () -> threadContext.restore()));
             }, e -> {
-                log.error("Failed to refresh interactions index during get interaction ", e);
+                log.error("Failed to refresh message index during get message ", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
@@ -600,10 +606,7 @@ public class InteractionsIndex {
         if (!clusterService.state().metadata().hasIndex(INTERACTIONS_INDEX_NAME)) {
             listener
                 .onFailure(
-                    new IndexNotFoundException(
-                        "cannot update interaction since the interaction index does not exist",
-                        INTERACTIONS_INDEX_NAME
-                    )
+                    new IndexNotFoundException("cannot update message since the message index does not exist", INTERACTIONS_INDEX_NAME)
                 );
             return;
         }
@@ -614,7 +617,7 @@ public class InteractionsIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the interaction doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
-                    throw new ResourceNotFoundException("Interaction [" + interactionId + "] not found");
+                    throw new ResourceNotFoundException("message [" + interactionId + "] not found");
                 }
                 Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
                 // checks if the user has permission to access the conversation that the interaction belongs to
@@ -631,7 +634,7 @@ public class InteractionsIndex {
                             ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
                             : User.parse(userstr).getName();
                         throw new OpenSearchStatusException(
-                            "User [" + user + "] does not have access to interaction " + interactionId,
+                            "User [" + user + "] does not have access to message " + interactionId,
                             RestStatus.UNAUTHORIZED
                         );
                     }
@@ -641,7 +644,7 @@ public class InteractionsIndex {
             client.admin().indices().refresh(Requests.refreshRequest(INTERACTIONS_INDEX_NAME), ActionListener.wrap(refreshResponse -> {
                 client.get(request, ActionListener.runBefore(al, () -> threadContext.restore()));
             }, e -> {
-                log.error("Failed to refresh interactions index during get interaction ", e);
+                log.error("Failed to refresh messages index during get message ", e);
                 internalListener.onFailure(e);
             }));
         } catch (Exception e) {
@@ -654,7 +657,7 @@ public class InteractionsIndex {
             ActionListener<UpdateResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             client.update(updateRequest, internalListener);
         } catch (Exception e) {
-            log.error("Failed to update Conversation. Details {}:", e);
+            log.error("Failed to update message. Details {}:", e);
             listener.onFailure(e);
         }
     }
@@ -664,6 +667,7 @@ public class InteractionsIndex {
         ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
             if (access) {
                 internalListener.onResponse(interaction);
+                log.info("Successfully get the message : {}", interactionId);
             } else {
                 String userstr = client
                     .threadPool()
@@ -671,7 +675,7 @@ public class InteractionsIndex {
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
                 String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                 throw new OpenSearchStatusException(
-                    "User [" + user + "] does not have access to interaction " + interactionId,
+                    "User [" + user + "] does not have access to message " + interactionId,
                     RestStatus.UNAUTHORIZED
                 );
             }
