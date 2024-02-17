@@ -98,6 +98,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(iid -> {
                 cmHandler.updateConversation(cid, new HashMap<>(), getUpdateResponseListener(cid, iid, internalListener));
+                log.info("Updating the memory {} after the message {} is created", cid, iid);
             }, e -> { internalListener.onFailure(e); });
             if (parintIid == null || traceNumber == null) {
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
@@ -105,7 +106,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al, parintIid, traceNumber);
             }
         } catch (Exception e) {
-            log.error("Failed to create interaction for conversation " + cid, e);
+            log.error("Failed to create message for memory " + cid, e);
             actionListener.onFailure(e);
         }
     }
@@ -117,21 +118,16 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
     ) {
         return ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                log
-                    .debug(
-                        "Successfully updated the Conversation with ID: {} after interaction {} is created",
-                        conversationId,
-                        interactionId
-                    );
+                log.debug("Successfully updated the memory with ID: {} after message {} is created", conversationId, interactionId);
                 actionListener.onResponse(new CreateInteractionResponse(interactionId));
             } else {
-                log.error("Failed to update the Conversation with ID: {} after interaction {} is created", conversationId, interactionId);
+                log.error("Failed to update the memory with ID: {} after message {} is created", conversationId, interactionId);
                 actionListener.onResponse(new CreateInteractionResponse(interactionId));
             }
         }, exception -> {
             log
                 .error(
-                    "Failed to update Conversation with ID {} after interaction {} is created. Details: {}",
+                    "Failed to update memory with ID {} after message {} is created. Details: {}",
                     conversationId,
                     interactionId,
                     exception

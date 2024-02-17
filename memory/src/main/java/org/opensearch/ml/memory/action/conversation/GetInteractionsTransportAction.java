@@ -94,7 +94,7 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
             }, e -> { internalListener.onFailure(e); });
             cmHandler.getInteractions(request.getConversationId(), from, maxResults, al);
         } catch (Exception e) {
-            log.error("Failed to get interactions for conversation " + request.getConversationId(), e);
+            log.error("Failed to get messages for memory " + request.getConversationId(), e);
             actionListener.onFailure(e);
         }
 

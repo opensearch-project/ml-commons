@@ -246,7 +246,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Failed to add conversation due to missing index"));
+        assert (argCaptor.getValue().getMessage().equals("Failed to add memory due to missing index"));
     }
 
     public void testCreate_BadRestStatus_ThenFail() {
@@ -263,7 +263,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("failed to create conversation"));
+        assert (argCaptor.getValue().getMessage().equals("failed to create memory"));
     }
 
     public void testCreate_InternalFailure_ThenFail() {
@@ -446,7 +446,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue() instanceof ResourceNotFoundException);
-        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
+        assert (argCaptor.getValue().getMessage().equals("Memory [test id] not found"));
     }
 
     public void testCheckAccess_WrongId_ThenFail() {
@@ -467,7 +467,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue() instanceof ResourceNotFoundException);
-        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
+        assert (argCaptor.getValue().getMessage().equals("Memory [test id] not found"));
     }
 
     public void testCheckAccess_GetFails_ThenFail() {
@@ -574,7 +574,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals("no such index [.plugins-ml-memory-meta] and cannot get conversation since the conversation index does not exist"));
+            .equals("no such index [.plugins-ml-memory-meta] and cannot get memory since the memory index does not exist"));
     }
 
     public void testGetConversation_ResponseNotExist_ThenFail() {
@@ -592,7 +592,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Conversation [tester_id] not found"));
+        assert (argCaptor.getValue().getMessage().equals("Memory [tester_id] not found"));
     }
 
     public void testGetConversation_WrongId_ThenFail() {
@@ -611,7 +611,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.getConversation("tester_id", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Conversation [tester_id] not found"));
+        assert (argCaptor.getValue().getMessage().equals("Memory [tester_id] not found"));
     }
 
     public void testGetConversation_RefreshFails_ThenFail() {
@@ -650,7 +650,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals("no such index [.plugins-ml-memory-meta] and cannot update conversation since the conversation index does not exist"));
+            .equals("no such index [.plugins-ml-memory-meta] and cannot update memory since the memory index does not exist"));
     }
 
     public void testUpdateConversation_Success() {
@@ -714,6 +714,6 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.updateConversation("conversationId", new UpdateRequest(), updateListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(updateListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [BAD_USER] does not have access to conversation conversationId"));
+        assert (argCaptor.getValue().getMessage().equals("User [BAD_USER] does not have access to memory conversationId"));
     }
 }

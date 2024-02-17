@@ -90,7 +90,7 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
             }, e -> { internalListener.onFailure(e); });
             cmHandler.deleteConversation(conversationId, al);
         } catch (Exception e) {
-            log.error("Failed to delete conversation " + conversationId, e);
+            log.error("Failed to delete memory " + conversationId, e);
             listener.onFailure(e);
         }
     }
