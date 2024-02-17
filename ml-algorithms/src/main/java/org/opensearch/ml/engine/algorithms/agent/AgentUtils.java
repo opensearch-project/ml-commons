@@ -213,7 +213,12 @@ public class AgentUtils {
         }
         String action = modelOutput.get(ACTION);
         if (action != null) {
-            modelOutput.put(ACTION, getMatchingTool(inputTools, action));
+            String matchedTool = getMatchedTool(inputTools, action);
+            if (matchedTool != null) {
+                modelOutput.put(ACTION, matchedTool);
+            } else {
+                modelOutput.remove(ACTION);
+            }
         }
         if (!modelOutput.containsKey(ACTION) && !modelOutput.containsKey(FINAL_ANSWER)) {
             modelOutput.put(FINAL_ANSWER, modelOutput.get(THOUGHT_RESPONSE));
@@ -221,7 +226,7 @@ public class AgentUtils {
         return modelOutput;
     }
 
-    public static String getMatchingTool(Collection<String> tools, String action) {
+    public static String getMatchedTool(Collection<String> tools, String action) {
         for (String tool : tools) {
             if (action.toLowerCase(Locale.ROOT).contains(tool.toLowerCase(Locale.ROOT))) {
                 return tool;

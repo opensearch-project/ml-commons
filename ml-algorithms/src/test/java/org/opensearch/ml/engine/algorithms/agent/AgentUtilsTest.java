@@ -68,6 +68,10 @@ public class AgentUtilsTest {
         "\"thought\": \"Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:\",\n  "
             + "\"final_answer\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
 
+    private String responseForFinalAnswerWithJson = "---------------------```json\n{\n  "
+        + "\"thought\": \"Now I know the final answer\",\n  "
+        + "\"final_answer\": \"PPLTool generates such query ```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```.\"\n}\n```";
+
     private String wrongResponseForAction = "---------------------```json\n{\n  "
         + "\"thought\": \"Let's try VectorDBTool\",\n  "
         + "\"action\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
@@ -116,6 +120,26 @@ public class AgentUtilsTest {
                 "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```"
             );
         llmResponseExpectedParseResults.put(responseForFinalAnswerInvalidJson, responseForFinalAnswerExpectedResultExpectedResult);
+        Map responseForFinalAnswerWithJsonExpectedResultExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Now I know the final answer",
+                FINAL_ANSWER,
+                "PPLTool generates such query ```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```."
+            );
+        llmResponseExpectedParseResults.put(responseForFinalAnswerWithJson, responseForFinalAnswerWithJsonExpectedResultExpectedResult);
+
+        Map wrongResponseForActionExpectedResultExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Let's try VectorDBTool",
+                FINAL_ANSWER,
+                "{\n"
+                    + "  \"thought\": \"Let's try VectorDBTool\",\n"
+                    + "  \"action\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n"
+                    + "}"
+            );
+        llmResponseExpectedParseResults.put(wrongResponseForAction, wrongResponseForActionExpectedResultExpectedResult);
 
     }
 
