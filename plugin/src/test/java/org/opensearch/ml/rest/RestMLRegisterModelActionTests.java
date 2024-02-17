@@ -137,6 +137,19 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
+        assertEquals(null, ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
+        assertEquals(null, ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
+    }
+
+    public void testRegisterAsymmetricModelRequest() throws Exception {
+        RestRequest request = getRestRequestAsymmetricModel();
+        restMLRegisterModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
+        verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
+        MLRegisterModelInput registerModelInput = argumentCaptor.getValue().getRegisterModelInput();
+        assertEquals("test_model", registerModelInput.getModelName());
+        assertEquals("1", registerModelInput.getVersion());
+        assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
         assertEquals("query: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
         assertEquals("passage: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
     }
@@ -186,6 +199,36 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequest() {
+        RestRequest.Method method = RestRequest.Method.POST;
+        final Map<String, Object> modelConfig = Map
+            .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
+        final Map<String, Object> model = Map
+            .of(
+                "name",
+                "test_model",
+                "model_id",
+                "test_model_with_modelId",
+                "version",
+                "1",
+                "model_group_id",
+                "modelGroupId",
+                "url",
+                "testUrl",
+                "model_format",
+                "TORCH_SCRIPT",
+                "model_config",
+                modelConfig
+            );
+        String requestContent = new Gson().toJson(model).toString();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}/{version}/_register")
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestAsymmetricModel() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
             .of(

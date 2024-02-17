@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -35,6 +36,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams.DistanceType;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -242,15 +245,21 @@ public class TextEmbeddingDenseModelTest {
     }
 
     @Test
-    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts() throws URISyntaxException {
+    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts_HappyPath() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
-        TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).queryPrefix("query >> ").build();
-        MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
-        textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
-        MLInput mlInputQueries = MLInput
+
+        TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
+            .toBuilder()
+            .embeddingDimension(768)
+            .queryPrefix("query >> ")
+            .passagePrefix("passage >> ")
+            .build();
+        MLModel asymmetricSmallModel = model.toBuilder().modelConfig(asymmetricModelConfig).build();
+        textEmbeddingDenseModel.initModel(asymmetricSmallModel, params, encryptor);
+        MLInput asymmetricMlInputQueries = MLInput
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
@@ -258,7 +267,7 @@ public class TextEmbeddingDenseModelTest {
             )
             .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY))
             .build();
-        MLInput mlInputPassages = MLInput
+        MLInput asymmetricMlInputPassages = MLInput
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
@@ -267,16 +276,181 @@ public class TextEmbeddingDenseModelTest {
             .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.PASSAGE))
             .build();
 
-        textEmbeddingDenseModel.predict(mlInputQueries);
-        textEmbeddingDenseModel.predict(mlInputPassages);
-        TextDocsInputDataSet queries = (TextDocsInputDataSet) mlInputQueries.getInputDataset();
-        TextDocsInputDataSet passages = (TextDocsInputDataSet) mlInputPassages.getInputDataset();
+        ModelTensorOutput asymmetricQueryEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputQueries);
+        ModelTensorOutput asymmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputPassages);
 
-        assertTrue("all docs should start with query prefix", queries.getDocs().stream().allMatch(doc -> doc.startsWith("query >> ")));
-        assertEquals("passage 0 should remain unchanged", passages.getDocs().get(0), "The meaning of life is 42");
-        assertEquals("passage 1 should remain unchanged", passages.getDocs().get(1), "I won this year's us open");
+        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        MLModel smallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
+        textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
+        MLInput symmetricMlInputQueries = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+            )
+            .build();
+        MLInput symmetricMlInputPassages = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("The meaning of life is 42", "I won this year's us open")).build()
+            )
+            .build();
+
+        ModelTensorOutput symmetricQueryEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(symmetricMlInputQueries);
+        ModelTensorOutput symmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(symmetricMlInputPassages);
+
+        assertTrue(
+            "asymmetric and symmetric query embeddings should be different",
+            areTensorsDifferent(
+                asymmetricQueryEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().get(0),
+                symmetricQueryEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().get(0),
+                0.3f
+            )
+        );
+        assertTrue(
+            "asymmetric and symmetric passage embeddings should be different",
+            areTensorsDifferent(
+                asymmetricPassageEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().get(0),
+                symmetricPassageEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().get(0),
+                0.3f
+            )
+        );
 
         textEmbeddingDenseModel.close();
+    }
+
+    private boolean areTensorsDifferent(ModelTensor tensor1, ModelTensor tensor2, float delta) {
+
+        if (tensor1.getShape() != tensor2.getShape()) {
+            return true; // Tensors are different if they have different lengths
+        }
+
+        List<Number> vectorA = Arrays.asList(tensor1.getData());
+        List<Number> vectorB = Arrays.asList(tensor2.getData());
+
+        for (int i = 0; i < vectorA.size(); i++) {
+            if (Math.abs(vectorA.get(i).floatValue() - vectorB.get(i).floatValue()) > delta) {
+                return true; // Vectors are different if any pair of corresponding elements differ by more than the tolerance
+            }
+        }
+        return false; // Vectors are the same
+
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts_SadPath1() throws URISyntaxException {
+        // asymmetric model, no parameter passed
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+
+        TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
+            .toBuilder()
+            .embeddingDimension(768)
+            .queryPrefix("query >> ")
+            .passagePrefix("passage >>")
+            .build();
+        MLModel asymmetricSmallModel = model.toBuilder().modelConfig(asymmetricModelConfig).build();
+        textEmbeddingDenseModel.initModel(asymmetricSmallModel, params, encryptor);
+
+        MLInput symmetricMlInputQueries = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+            )
+            .build();
+
+        try {
+            textEmbeddingDenseModel.predict(symmetricMlInputQueries);
+        } catch (MLException e) {
+            assertEquals(IllegalArgumentException.class, e.getCause().getClass());
+            assertEquals(
+                "The embedding model chosen is asymmetric. To use it, you must declare whether the input is a query or a passage.",
+                e.getCause().getMessage()
+            );
+            return;
+        } finally {
+            textEmbeddingDenseModel.close();
+        }
+
+        fail("Expected exception not thrown");
+
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts_SadPath2() throws URISyntaxException {
+        // symmetric model, asymmetric parameter passed
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+
+        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        MLModel symmetricSmallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
+        textEmbeddingDenseModel.initModel(symmetricSmallModel, params, encryptor);
+
+        MLInput asymmetricMlInputQueries = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+            )
+            .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY))
+            .build();
+
+        try {
+            textEmbeddingDenseModel.predict(asymmetricMlInputQueries);
+        } catch (MLException e) {
+            assertEquals(IllegalArgumentException.class, e.getCause().getClass());
+            assertEquals(
+                "When passing AsymmetricTextEmbeddingParameters, the model requires to be registered with at least one of `query_prefix` or `passage_prefix`.",
+                e.getCause().getMessage()
+            );
+            return;
+        } finally {
+            textEmbeddingDenseModel.close();
+        }
+
+        fail("Expected exception not thrown");
+
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts_SadPath3() throws URISyntaxException {
+        // wrong parameter type
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+
+        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        MLModel symmetricSmallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
+        textEmbeddingDenseModel.initModel(symmetricSmallModel, params, encryptor);
+
+        MLInput asymmetricMlInputQueries = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(
+                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+            )
+            .parameters(new KMeansParams(0, 1, DistanceType.COSINE))
+            .build();
+
+        try {
+            textEmbeddingDenseModel.predict(asymmetricMlInputQueries);
+        } catch (MLException e) {
+            assertEquals(IllegalArgumentException.class, e.getCause().getClass());
+            assertEquals("TEXT_EMBEDDING algorithm only supports AsymmetricTextEmbeddingParameters.", e.getCause().getMessage());
+            return;
+        } finally {
+            textEmbeddingDenseModel.close();
+        }
+
+        fail("Expected exception not thrown");
+
     }
 
     @Test

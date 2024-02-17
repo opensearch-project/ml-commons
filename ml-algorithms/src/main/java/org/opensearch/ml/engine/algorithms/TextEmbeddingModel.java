@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -26,17 +27,12 @@ public abstract class TextEmbeddingModel extends DLModel {
 
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
-        MLInputDataset inputDataSet = mlInput.getInputDataset();
         MLAlgoParams mlParams = mlInput.getParameters();
-        if (mlParams != null && mlParams instanceof AsymmetricTextEmbeddingParameters) {
-            addPrefixesToData((AsymmetricTextEmbeddingParameters) mlParams, (TextDocsInputDataSet) inputDataSet);
-        } else if (modelConfig != null
-            && (((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() != null
-                || ((TextEmbeddingModelConfig) modelConfig).getQueryPrefix() != null)) {
-            throw new IllegalArgumentException(
-                "The embedding model chosen is asymmetric. To use it, you must declare whether the input is a query or a passage."
-            );
-        }
+
+        MLInputDataset inputDataSet = isAsymmetricModel(mlParams)
+            ? addPrefixesToData((AsymmetricTextEmbeddingParameters) mlParams, (TextDocsInputDataSet) mlInput.getInputDataset())
+            : mlInput.getInputDataset();
+
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
         TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
@@ -50,7 +46,38 @@ public abstract class TextEmbeddingModel extends DLModel {
         return new ModelTensorOutput(tensorOutputs);
     }
 
-    private void addPrefixesToData(AsymmetricTextEmbeddingParameters mlParams, TextDocsInputDataSet inputDataSet) {
+    private boolean isAsymmetricModel(MLAlgoParams mlParams) {
+        if (mlParams instanceof AsymmetricTextEmbeddingParameters) {
+            // Check for the necessary prefixes in modelConfig
+            if (modelConfig == null
+                || ((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() == null
+                    && ((TextEmbeddingModelConfig) modelConfig).getQueryPrefix() == null) {
+                throw new IllegalArgumentException(
+                    "When passing AsymmetricTextEmbeddingParameters, the model requires to be "
+                        + "registered with at least one of `query_prefix` or `passage_prefix`."
+                );
+            }
+            // Passed all checks
+            return true;
+        } else if (mlParams != null) {
+            // mlParams is not null and not an instance of AsymmetricTextEmbeddingParameters.
+            // Should never happen.
+            throw new IllegalArgumentException("TEXT_EMBEDDING algorithm only supports AsymmetricTextEmbeddingParameters.");
+        }
+
+        // mlParams is null, but the model is asymmetric.
+        if (modelConfig != null
+            && (((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() != null
+                || ((TextEmbeddingModelConfig) modelConfig).getQueryPrefix() != null)) {
+            throw new IllegalArgumentException(
+                "The embedding model chosen is asymmetric. To use it, you must declare whether the input is a query or a passage."
+            );
+        }
+
+        return false;
+    }
+
+    private TextDocsInputDataSet addPrefixesToData(AsymmetricTextEmbeddingParameters mlParams, TextDocsInputDataSet inputDataSet) {
         // Asymmetric embedding models typically work with "mini-prompts" that prime the model to embed a text
         // as a query or as a passage. Here we apply the prompt as defined in the model configuration. We default
         // to passage embedding.
@@ -59,8 +86,10 @@ public abstract class TextEmbeddingModel extends DLModel {
             ? modelConfig.getQueryPrefix()
             : modelConfig.getPassagePrefix();
         if (prefix != null) {
-            inputDataSet.getDocs().replaceAll(doc -> prefix + doc);
+            List<String> prefixedDocs = inputDataSet.getDocs().stream().map(s -> prefix + s).collect(Collectors.toList());
+            return TextDocsInputDataSet.builder().docs(prefixedDocs).build();
         }
+        return inputDataSet;
     }
 
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
