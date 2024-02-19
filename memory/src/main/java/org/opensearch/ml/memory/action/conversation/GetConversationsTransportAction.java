@@ -92,12 +92,12 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
                 internalListener
                     .onResponse(new GetConversationsResponse(conversations, from + maxResults, conversations.size() == maxResults));
             }, e -> {
-                log.error("Failed to get conversations", e);
+                log.error("Failed to get memories", e);
                 internalListener.onFailure(e);
             });
             cmHandler.getConversations(from, maxResults, al);
         } catch (Exception e) {
-            log.error("Failed to get conversations", e);
+            log.error("Failed to get memories", e);
             actionListener.onFailure(e);
         }
     }

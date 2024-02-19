@@ -5,32 +5,60 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.FINAL_ANSWER;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.PROMPT_SUFFIX;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.core.common.Strings;
+import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.StringUtils;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class AgentUtils {
+
+    public static final String SELECTED_TOOLS = "selected_tools";
+    public static final String PROMPT_PREFIX = "prompt.prefix";
+    public static final String PROMPT_SUFFIX = "prompt.suffix";
+    public static final String RESPONSE_FORMAT_INSTRUCTION = "prompt.format_instruction";
+    public static final String TOOL_RESPONSE = "prompt.tool_response";
+    public static final String PROMPT_CHAT_HISTORY_PREFIX = "prompt.chat_history_prefix";
+    public static final String DISABLE_TRACE = "disable_trace";
+    public static final String VERBOSE = "verbose";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -147,15 +175,184 @@ public class AgentUtils {
         return prompt;
     }
 
-    public static String extractModelResponseJson(String text) {
-        Pattern pattern = Pattern.compile("```json\\s*([\\s\\S]+?)\\s*```");
-        Matcher matcher = pattern.matcher(text);
+    public static List<String> MODEL_RESPONSE_PATTERNS = List
+        .of("\\{\\s*(\"(thought|action|action_input|final_answer)\"\\s*:\\s*\".*?\"\\s*,?\\s*)+\\}");
 
-        if (matcher.find()) {
-            return matcher.group(1);
+    public static String extractModelResponseJson(String text) {
+        return extractModelResponseJson(text, null);
+    }
+
+    public static Map<String, String> parseLLMOutput(
+        ModelTensorOutput tmpModelTensorOutput,
+        List<String> llmResponsePatterns,
+        Set<String> inputTools
+    ) {
+        Map<String, String> modelOutput = new HashMap<>();
+        Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        if (dataAsMap.size() == 1 && dataAsMap.containsKey("response")) {
+            String llmReasoningResponse = (String) dataAsMap.get("response");
+            String thoughtResponse = null;
+            try {
+                thoughtResponse = extractModelResponseJson(llmReasoningResponse, llmResponsePatterns);
+                modelOutput.put(THOUGHT_RESPONSE, thoughtResponse);
+            } catch (IllegalArgumentException e) {
+                modelOutput.put(THOUGHT_RESPONSE, llmReasoningResponse);
+                thoughtResponse = llmReasoningResponse;
+            }
+            parseThoughtResponse(modelOutput, thoughtResponse);
         } else {
-            throw new IllegalArgumentException("Model output is invalid");
+            extractParams(modelOutput, dataAsMap, THOUGHT);
+            extractParams(modelOutput, dataAsMap, ACTION);
+            extractParams(modelOutput, dataAsMap, ACTION_INPUT);
+            extractParams(modelOutput, dataAsMap, FINAL_ANSWER);
+            try {
+                modelOutput.put(THOUGHT_RESPONSE, StringUtils.toJson(dataAsMap));
+            } catch (Exception e) {
+                log.warn("Failed to parse model response", e);
+            }
         }
+        String action = modelOutput.get(ACTION);
+        if (action != null) {
+            String matchedTool = getMatchedTool(inputTools, action);
+            if (matchedTool != null) {
+                modelOutput.put(ACTION, matchedTool);
+            } else {
+                modelOutput.remove(ACTION);
+            }
+        }
+        if (!modelOutput.containsKey(ACTION) && !modelOutput.containsKey(FINAL_ANSWER)) {
+            modelOutput.put(FINAL_ANSWER, modelOutput.get(THOUGHT_RESPONSE));
+        }
+        return modelOutput;
+    }
+
+    public static String getMatchedTool(Collection<String> tools, String action) {
+        for (String tool : tools) {
+            if (action.toLowerCase(Locale.ROOT).contains(tool.toLowerCase(Locale.ROOT))) {
+                return tool;
+            }
+        }
+        return null;
+    }
+
+    public static void extractParams(Map<String, String> modelOutput, Map<String, ?> dataAsMap, String paramName) {
+        if (dataAsMap.containsKey(paramName)) {
+            modelOutput.put(paramName, toJson(dataAsMap.get(paramName)));
+        }
+    }
+
+    public static String extractModelResponseJson(String text, List<String> llmResponsePatterns) {
+        if (text.contains("```json")) {
+            text = text.substring(text.indexOf("```json") + "```json".length());
+            if (text.contains("```")) {
+                text = text.substring(0, text.lastIndexOf("```"));
+            }
+        }
+        text = text.trim();
+        if (isJson(text)) {
+            return text;
+        }
+        String matchedPart = null;
+        if (llmResponsePatterns != null) {
+            matchedPart = findMatchedPart(text, llmResponsePatterns);
+            if (matchedPart != null) {
+                return matchedPart;
+            }
+        }
+        matchedPart = findMatchedPart(text, MODEL_RESPONSE_PATTERNS);
+        if (matchedPart != null) {
+            return matchedPart;
+        }
+        throw new IllegalArgumentException("Model output is invalid");
+    }
+
+    public static void parseThoughtResponse(Map<String, String> modelOutput, String thoughtResponse) {
+        if (thoughtResponse != null) {
+            if (isJson(thoughtResponse)) {
+                modelOutput.putAll(getParameterMap(gson.fromJson(thoughtResponse, Map.class)));
+            } else {// sometimes LLM return invalid json response
+                String thought = extractThought(thoughtResponse);
+                String action = extractAction(thoughtResponse);
+                String actionInput = extractActionInput(thoughtResponse);
+                String finalAnswer = extractFinalAnswer(thoughtResponse);
+                if (thought != null) {
+                    modelOutput.put(THOUGHT, thought);
+                }
+                if (action != null) {
+                    modelOutput.put(ACTION, action);
+                }
+                if (actionInput != null) {
+                    modelOutput.put(ACTION_INPUT, actionInput);
+                }
+                if (finalAnswer != null) {
+                    modelOutput.put(FINAL_ANSWER, finalAnswer);
+                }
+            }
+        }
+    }
+
+    public static String extractFinalAnswer(String text) {
+        String result = null;
+        if (text.contains("\"final_answer\"")) {
+            String pattern = "\"final_answer\"\\s*:\\s*\"(.*?)$";
+            Pattern jsonBlockPattern = Pattern.compile(pattern, Pattern.DOTALL);
+            Matcher jsonBlockMatcher = jsonBlockPattern.matcher(text);
+            if (jsonBlockMatcher.find()) {
+                result = jsonBlockMatcher.group(1);
+            }
+        }
+        return result;
+    }
+
+    public static String extractThought(String text) {
+        String result = null;
+        if (text.contains("\"thought\"")) {
+            String pattern = "\"thought\"\\s*:\\s*\"(.*?)\"\\s*,\\s*[\"final_answer\"|\"action\"]";
+            Pattern jsonBlockPattern = Pattern.compile(pattern, Pattern.DOTALL);
+            Matcher jsonBlockMatcher = jsonBlockPattern.matcher(text);
+            if (jsonBlockMatcher.find()) {
+                result = jsonBlockMatcher.group(1);
+            }
+        }
+        return result;
+    }
+
+    public static String extractAction(String text) {
+        String result = null;
+        if (text.contains("\"action\"")) {
+            String pattern = "\"action\"\\s*:\\s*\"(.*?)(?:\"action_input\"|$)";
+            Pattern jsonBlockPattern = Pattern.compile(pattern, Pattern.DOTALL);
+            Matcher jsonBlockMatcher = jsonBlockPattern.matcher(text);
+            if (jsonBlockMatcher.find()) {
+                result = jsonBlockMatcher.group(1);
+            }
+        }
+        return result;
+    }
+
+    public static String extractActionInput(String text) {
+        String result = null;
+        if (text.contains("\"action_input\"")) {
+            String pattern = "\"action_input\"\\s*:\\s*\"((?:[^\\\"]|\\\")*)\"";
+            Pattern jsonBlockPattern = Pattern.compile(pattern, Pattern.DOTALL); // Add Pattern.DOTALL to match across newlines
+            Matcher jsonBlockMatcher = jsonBlockPattern.matcher(text);
+            if (jsonBlockMatcher.find()) {
+                result = jsonBlockMatcher.group(1);
+                result = result.replace("\\\"", "\"");
+            }
+        }
+        return result;
+    }
+
+    public static String findMatchedPart(String text, List<String> patternList) {
+        for (String p : patternList) {
+            Pattern pattern = Pattern.compile(p);
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                return matcher.group();
+            }
+        }
+        return null;
     }
 
     public static String outputToOutputString(Object output) throws PrivilegedActionException {
@@ -176,13 +373,83 @@ public class AgentUtils {
         return outputString;
     }
 
-    public static String parseInputFromLLMReturn(Map<String, ?> retMap) {
-        Object actionInput = retMap.get("action_input");
-        if (actionInput instanceof Map) {
-            return gson.toJson(actionInput);
-        } else {
-            return String.valueOf(actionInput);
+    public static int getMessageHistoryLimit(Map<String, String> params) {
+        String messageHistoryLimitStr = params.get(MESSAGE_HISTORY_LIMIT);
+        return messageHistoryLimitStr != null ? Integer.parseInt(messageHistoryLimitStr) : LAST_N_INTERACTIONS;
+    }
+
+    public static String getToolName(MLToolSpec toolSpec) {
+        return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
+    }
+
+    public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
+        String selectedToolsStr = params.get(SELECTED_TOOLS);
+        List<MLToolSpec> toolSpecs = mlAgent.getTools();
+        if (!Strings.isEmpty(selectedToolsStr)) {
+            List<String> selectedTools = gson.fromJson(selectedToolsStr, List.class);
+            Map<String, MLToolSpec> toolNameSpecMap = new HashMap<>();
+            for (MLToolSpec toolSpec : toolSpecs) {
+                toolNameSpecMap.put(getToolName(toolSpec), toolSpec);
+            }
+            List<MLToolSpec> selectedToolSpecs = new ArrayList<>();
+            for (String tool : selectedTools) {
+                if (toolNameSpecMap.containsKey(tool)) {
+                    selectedToolSpecs.add(toolNameSpecMap.get(tool));
+                }
+            }
+            toolSpecs = selectedToolSpecs;
+        }
+        return toolSpecs;
+    }
+
+    public static void createTools(
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, String> params,
+        List<MLToolSpec> toolSpecs,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap
+    ) {
+        for (MLToolSpec toolSpec : toolSpecs) {
+            Tool tool = createTool(toolFactories, params, toolSpec);
+            tools.put(tool.getName(), tool);
+            toolSpecMap.put(tool.getName(), toolSpec);
+        }
+    }
+
+    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> params, MLToolSpec toolSpec) {
+        if (!toolFactories.containsKey(toolSpec.getType())) {
+            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
+        }
+        Map<String, String> executeParams = new HashMap<>();
+        if (toolSpec.getParameters() != null) {
+            executeParams.putAll(toolSpec.getParameters());
+        }
+        for (String key : params.keySet()) {
+            String toolNamePrefix = getToolName(toolSpec) + ".";
+            if (key.startsWith(toolNamePrefix)) {
+                executeParams.put(key.replace(toolNamePrefix, ""), params.get(key));
+            }
+        }
+        Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
+        String toolName = getToolName(toolSpec);
+        tool.setName(toolName);
+
+        if (toolSpec.getDescription() != null) {
+            tool.setDescription(toolSpec.getDescription());
+        }
+        if (params.containsKey(toolName + ".description")) {
+            tool.setDescription(params.get(toolName + ".description"));
         }
 
+        return tool;
+    }
+
+    public static List<String> getToolNames(Map<String, Tool> tools) {
+        final List<String> inputTools = new ArrayList<>();
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            String toolName = entry.getValue().getName();
+            inputTools.add(toolName);
+        }
+        return inputTools;
     }
 }

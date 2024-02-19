@@ -87,7 +87,7 @@ public class GetInteractionTransportAction extends HandledTransportAction<GetInt
             }, e -> { internalListener.onFailure(e); });
             cmHandler.getInteraction(interactionId, al);
         } catch (Exception e) {
-            log.error("Failed to get interaction " + interactionId, e);
+            log.error("Failed to get message " + interactionId, e);
             actionListener.onFailure(e);
         }
     }

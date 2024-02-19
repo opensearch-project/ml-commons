@@ -57,7 +57,7 @@ public class GetTracesTransportAction extends HandledTransportAction<GetTracesRe
             }, e -> { internalListener.onFailure(e); });
             cmHandler.getTraces(request.getInteractionId(), from, maxResults, al);
         } catch (Exception e) {
-            log.error("Failed to get traces for conversation " + request.getInteractionId(), e);
+            log.error("Failed to get traces for message " + request.getInteractionId(), e);
             actionListener.onFailure(e);
         }
     }
