@@ -1,26 +1,26 @@
 # Topic
 
-> This tutorial doesn't explain details about byte-quantized vectors. Read this [Byte-quantized vectors in OpenSearch](https://opensearch.org/blog/byte-quantized-vectors-in-opensearch/) to learn more details.
+> This tutorial doesn't explain byte-quantized vectors in detail. For more information, see [Byte-quantized vectors in OpenSearch](https://opensearch.org/blog/byte-quantized-vectors-in-opensearch/).
 
-This tutorial explains how to build semantic search with [Cohere Embedding model](https://docs.cohere.com/reference/embed) and byte-quantized vectors in OpenSearch.
+This tutorial shows how to build semantic search using the [Cohere Embed model](https://docs.cohere.com/reference/embed) and byte-quantized vectors in OpenSearch.
 
-Cohere embedding model v3 supports more `embedding_types`, this tutorial uses `"int8"` to work with byte-quantized vectors.
+The Cohere Embed v3 model supports several `embedding_types`. This tutorial uses the `int8` type for byte-quantized vectors. 
 
 Note: Replace the placeholders that start with `your_` with your own values.
 
 # Steps
 
-Cohere embedding model v3 supports different `input_type`. From Cohere [doc](https://docs.cohere.com/reference/embed)
-> - `"search_document"`: Used for embeddings stored in a vector database for search use-cases.
+The Cohere Embed v3 model supports several input types. This tutorial uses the following input types (from the Cohere [documentation](https://docs.cohere.com/reference/embed)):
+> - `search_document`: Used for embeddings stored in a vector database for search use cases.
 > - `"search_query"`: Used for embeddings of search queries run against a vector DB to find relevant documents.
 
-We will create two models in this tutorial:
-- one model with `search_document` input type for ingestion
-- one model with `search_query` input type for search
+You will create two models in this tutorial:
+- A model used for ingestion with the `search_document` input type 
+- A model used for search with the `search_query` input type 
 
 ## 1. Create embedding model for ingestion
 
-Create connector with `search_document` input type
+Create a connector with the `search_document` input type:
 
 ```
 POST /_plugins/_ml/connectors/_create
@@ -53,7 +53,7 @@ POST /_plugins/_ml/connectors/_create
     ]
 }
 ```
-Use connector id from the response to create model
+Use the connector ID from the response to create a model:
 ```
 POST /_plugins/_ml/models/_register?deploy=true
 {
@@ -63,9 +63,9 @@ POST /_plugins/_ml/models/_register?deploy=true
     "connector_id": "your_connector_id"
 }
 ```
-Note the model id, it will be used in step 2.1
+Note the model ID; you'll use it in step 2.1.
 
-Test model
+Test the model:
 ```
 POST /_plugins/_ml/models/your_embedding_model_id/_predict
 {
@@ -74,7 +74,7 @@ POST /_plugins/_ml/models/your_embedding_model_id/_predict
     }
 }
 ```
-Sample response
+Sample response:
 
 ```
 {
@@ -138,7 +138,7 @@ PUT /_ingest/pipeline/pipeline-cohere
 ```
 
 ### 2.2 Create KNN index with byte-quantized vector
-Refer to https://opensearch.org/blog/byte-quantized-vectors-in-opensearch/
+For more information, refer to [this blog](https://opensearch.org/blog/byte-quantized-vectors-in-opensearch/).
 
 ```
 PUT my_test_data
@@ -174,7 +174,7 @@ PUT my_test_data
 }
 ```
 
-Ingest test data
+Ingest test data:
 
 ```
 POST _bulk
@@ -187,7 +187,7 @@ POST _bulk
 
 ## 3. Semantic search
 
-Let's create another embedding model with `search_query` input type
+Create another embedding model with the `search_query` input type:
 ```
 POST /_plugins/_ml/connectors/_create
 {
@@ -219,7 +219,7 @@ POST /_plugins/_ml/connectors/_create
     ]
 }
 ```
-Use the connector id from response to create model
+Use the connector ID from the response to create a model:
 ```
 POST /_plugins/_ml/models/_register?deploy=true
 {
