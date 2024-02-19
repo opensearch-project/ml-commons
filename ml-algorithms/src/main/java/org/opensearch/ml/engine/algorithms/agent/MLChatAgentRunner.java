@@ -18,6 +18,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
@@ -185,15 +186,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         ActionListener<Object> listener
     ) {
-        String question = parameters.get(MLAgentExecutor.QUESTION);
-        String parentInteractionId = parameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
-        boolean verbose = parameters.containsKey(VERBOSE) && Boolean.parseBoolean(parameters.get(VERBOSE));
-        boolean traceDisabled = parameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(parameters.get(DISABLE_TRACE));
-
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
         final String finalPrompt = prompt;
+
+        String question = tmpParameters.get(MLAgentExecutor.QUESTION);
+        String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+        boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
+        boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
 
         // Create root interaction.
         ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
@@ -436,7 +437,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         MLToolSpec toolSpec = toolSpecMap.get(lastAction.get());
         if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
             String outputString = outputToOutputString(output);
-            String toolOutputKey = String.format("%s.output", toolSpec.getType());
+            String toolOutputKey = String.format("%s.output", getToolName(toolSpec));
             if (additionalInfo.get(toolOutputKey) != null) {
                 List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
                 list.add(outputString);
@@ -468,7 +469,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     Map<String, String> llmToolTmpParameters = new HashMap<>();
                     llmToolTmpParameters.putAll(tmpParameters);
                     llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
-                    // TODO: support tool parameter override : langauge_model_tool.prompt
                     llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
                     tools.get(action).run(llmToolTmpParameters, toolListener); // run tool
                 } else {
