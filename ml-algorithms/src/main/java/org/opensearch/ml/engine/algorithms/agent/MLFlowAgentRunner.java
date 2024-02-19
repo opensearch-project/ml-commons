@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -103,10 +104,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 StepListener<Object> nextStepListener = new StepListener<>();
                 int finalI = i;
                 previousStepListener.whenComplete(output -> {
-                    String key = previousToolSpec.getName();
-                    String outputKey = previousToolSpec.getName() != null
-                        ? previousToolSpec.getName() + ".output"
-                        : previousToolSpec.getType() + ".output";
+                    String key = getToolName(previousToolSpec);
+                    String outputKey = key + ".output";
 
                     String outputResponse = parseResponse(output);
                     params.put(outputKey, escapeJson(outputResponse));
