@@ -173,6 +173,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
+        when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(true);
+
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
 
         MLStat mlStat = mock(MLStat.class);
@@ -204,6 +206,30 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             listener.onResponse(mlModel);
             return null;
         }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
+    }
+
+    public void testDoExecute_success_not_userInitiatedRequest() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(false);
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockIndexId");

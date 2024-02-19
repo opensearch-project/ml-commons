@@ -38,17 +38,24 @@ public class MLDeployModelRequest extends MLTaskRequest {
     private String modelId;
     private String[] modelNodeIds;
     boolean async;
+    // This is to identify if the deploy request is initiated by user or not. During auto redeploy also, we perform deploy operation.
+    // This field is mainly to distinguish between these two situations.
+    private final boolean isUserInitiatedDeployRequest;
 
     @Builder
-    public MLDeployModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask) {
+    public MLDeployModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask, boolean isUserInitiatedDeployRequest) {
         super(dispatchTask);
         this.modelId = modelId;
         this.modelNodeIds = modelNodeIds;
         this.async = async;
+        this.isUserInitiatedDeployRequest = isUserInitiatedDeployRequest;
     }
 
+    // In this constructor, isUserInitiatedDeployRequest to always set to true. So, it can be used only when
+    // deploy request is coming directly from the user. DO NOT use this when the
+    // deploy call is from the code or system initiated.
     public MLDeployModelRequest(String modelId, boolean async) {
-        this(modelId, null, async, true);
+        this(modelId, null, async, true, true);
     }
 
     public MLDeployModelRequest(StreamInput in) throws IOException {
@@ -56,6 +63,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         this.modelId = in.readString();
         this.modelNodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
+        this.isUserInitiatedDeployRequest = in.readBoolean();
     }
 
     @Override
@@ -74,6 +82,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         out.writeString(modelId);
         out.writeOptionalStringArray(modelNodeIds);
         out.writeBoolean(async);
+        out.writeBoolean(isUserInitiatedDeployRequest);
     }
 
     public static MLDeployModelRequest parse(XContentParser parser, String modelId) throws IOException {
@@ -96,7 +105,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
             }
         }
         String[] nodeIds = nodeIdList == null ? null : nodeIdList.toArray(new String[0]);
-        return new MLDeployModelRequest(modelId, nodeIds, false, true);
+        return new MLDeployModelRequest(modelId, nodeIds, false, true, true);
     }
 
     public static MLDeployModelRequest fromActionRequest(ActionRequest actionRequest) {
