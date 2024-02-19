@@ -74,7 +74,7 @@ public class ConversationMetaIndex {
     private Client client;
     private ClusterService clusterService;
 
-    public static final Map<String, Object> INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-1");
+    public static final Map<String, Object> INDEX_SETTINGS = Map.of("index.number_of_shards", "1", "index.auto_expand_replicas", "0-1");
 
     private String getUserStrFromThreadContext() {
         return client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
