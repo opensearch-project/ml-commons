@@ -24,7 +24,13 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * This class defines the modes of operation of an asymmetric text embedding algorithm. The algorithm can be used to embed either a query or a passage.
+ * This class defines the modes of operation of an asymmetric text embedding model.
+ * Asymmetric embedding models treat the input text differently, depending on whether it is a
+ * passage or a query. One example asymmetric model, that requires different prefixes is e5
+ * (cf. https://arxiv.org/pdf/2212.03533.pdf).
+ * <p>
+ * Use this parameter only if the model is asymmetric and has been registered with the corresponding
+ * `query_prefix` and `passage_prefix` configuration parameters.
  */
 @Data
 @MLAlgoParameter(algorithms = { FunctionName.TEXT_EMBEDDING })
