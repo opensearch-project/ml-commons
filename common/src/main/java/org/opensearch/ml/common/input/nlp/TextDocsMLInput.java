@@ -5,20 +5,24 @@
 
 package org.opensearch.ml.common.input.nlp;
 
+import java.util.Locale;
+import java.util.Map;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -126,7 +130,12 @@ public class TextDocsMLInput extends MLInput {
                     resultFilter = ModelResultFilter.parse(parser);
                     break;
                 case ML_PARAMETERS_FIELD:
-                    this.parameters = parser.namedObject(MLAlgoParams.class, functionName.name(), null);
+                    Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
+                    if (!parameters.containsKey(AsymmetricTextEmbeddingParameters.EMBEDDING_CONTENT_TYPE_FIELD)) {
+                        throw new IllegalArgumentException(String.format(Locale.ROOT, "Only accepted parameter is `%s`, which can have the values `query` or `passage`.", AsymmetricTextEmbeddingParameters.EMBEDDING_CONTENT_TYPE_FIELD));
+                    }
+                    EmbeddingContentType embeddingContentType = EmbeddingContentType.valueOf(parameters.get(AsymmetricTextEmbeddingParameters.EMBEDDING_CONTENT_TYPE_FIELD).toUpperCase(Locale.ROOT));
+                    this.parameters = new AsymmetricTextEmbeddingParameters(embeddingContentType);
                     break;
                 default:
                     parser.skipChildren();

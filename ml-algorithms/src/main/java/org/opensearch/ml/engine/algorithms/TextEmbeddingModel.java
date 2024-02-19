@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -15,8 +17,6 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.engine.algorithms.text_embedding.AsymmetricTextEmbeddingParameters;
-import org.opensearch.ml.engine.algorithms.text_embedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
@@ -70,7 +70,7 @@ public abstract class TextEmbeddingModel extends DLModel {
             && (((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() != null
                 || ((TextEmbeddingModelConfig) modelConfig).getQueryPrefix() != null)) {
             throw new IllegalArgumentException(
-                "The embedding model chosen is asymmetric. To use it, you must declare whether the input is a query or a passage."
+                "The embedding model chosen is asymmetric. To use it, you must declare whether the input is of type `QUERY` or of type `PASSAGE`."
             );
         }
 
