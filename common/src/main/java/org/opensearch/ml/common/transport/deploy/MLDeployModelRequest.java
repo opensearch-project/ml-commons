@@ -38,7 +38,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
     private String modelId;
     private String[] modelNodeIds;
     boolean async;
-    // This is to identify if the get request is initiated by user or not. During auto redeploy also, we perform deploy operation.
+    // This is to identify if the deploy request is initiated by user or not. During auto redeploy also, we perform deploy operation.
     // This field is mainly to distinguish between these two situations.
     private final boolean isUserInitiatedDeployRequest;
 
