@@ -25,12 +25,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -569,4 +572,38 @@ public class AgentUtilsTest {
         Assert.assertEquals("Let me search our index to find population projections", result);
     }
 
+    @Test
+    public void testConstructToolParams() {
+        String question = "dummy question";
+        String actionInput = "{'detectorName': 'abc', 'indices': 'sample-data' }";
+        verifyConstructToolParams(question, actionInput, (toolParams) -> {
+            Assert.assertEquals(4, toolParams.size());
+            Assert.assertEquals(actionInput, toolParams.get("input"));
+            Assert.assertEquals("abc", toolParams.get("detectorName"));
+            Assert.assertEquals("sample-data", toolParams.get("indices"));
+            Assert.assertEquals("value1", toolParams.get("key1"));
+        });
+    }
+
+    @Test
+    public void testConstructToolParams_UseOriginalInput() {
+        String question = "dummy question";
+        String actionInput = "{'detectorName': 'abc', 'indices': 'sample-data' }";
+        when(tool1.useOriginalInput()).thenReturn(true);
+        verifyConstructToolParams(question, actionInput, (toolParams) -> {
+            Assert.assertEquals(2, toolParams.size());
+            Assert.assertEquals(question, toolParams.get("input"));
+            Assert.assertEquals("value1", toolParams.get("key1"));
+        });
+    }
+
+    private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
+        Map<String, Tool> tools = Map.of("tool1", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of("tool1", MLToolSpec.builder().type("tool1").parameters(Map.of("key1", "value1")).build());
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "tool1";
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+        verify.accept(toolParams);
+    }
 }

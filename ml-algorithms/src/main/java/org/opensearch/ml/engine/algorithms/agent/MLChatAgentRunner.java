@@ -15,6 +15,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.RESPONSE_FORMAT_INSTRUCTION;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -482,28 +483,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
             nextStepListener.onResponse(res);
         }
-    }
-
-    private static Map<String, String> constructToolParams(
-        Map<String, Tool> tools,
-        Map<String, MLToolSpec> toolSpecMap,
-        String question,
-        AtomicReference<String> lastActionInput,
-        String action,
-        String actionInput
-    ) {
-        Map<String, String> toolParams = new HashMap<>();
-        Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
-        if (toolSpecParams != null) {
-            toolParams.putAll(toolSpecParams);
-        }
-        if (tools.get(action).useOriginalInput()) {
-            toolParams.put("input", question);
-            lastActionInput.set(question);
-        } else {
-            toolParams.put("input", actionInput);
-        }
-        return toolParams;
     }
 
     private static void saveTraceData(

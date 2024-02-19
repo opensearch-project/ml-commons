@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -451,5 +452,31 @@ public class AgentUtils {
             inputTools.add(toolName);
         }
         return inputTools;
+    }
+
+    public static Map<String, String> constructToolParams(
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        String question,
+        AtomicReference<String> lastActionInput,
+        String action,
+        String actionInput
+    ) {
+        Map<String, String> toolParams = new HashMap<>();
+        Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
+        if (toolSpecParams != null) {
+            toolParams.putAll(toolSpecParams);
+        }
+        if (tools.get(action).useOriginalInput()) {
+            toolParams.put("input", question);
+            lastActionInput.set(question);
+        } else {
+            toolParams.put("input", actionInput);
+            if (isJson(actionInput)) {
+                Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
+                toolParams.putAll(params);
+            }
+        }
+        return toolParams;
     }
 }
