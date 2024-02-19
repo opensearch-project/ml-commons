@@ -59,13 +59,9 @@ public abstract class TextEmbeddingModel extends DLModel {
             }
             // Passed all checks
             return true;
-        } else if (mlParams != null) {
-            // mlParams is not null and not an instance of AsymmetricTextEmbeddingParameters.
-            // Should never happen.
-            throw new IllegalArgumentException("TEXT_EMBEDDING algorithm only supports AsymmetricTextEmbeddingParameters.");
         }
 
-        // mlParams is null, but the model is asymmetric.
+        // no AsymmetricTextEmbeddingParameters passed, but the model is asymmetric.
         if (modelConfig != null
             && (((TextEmbeddingModelConfig) modelConfig).getPassagePrefix() != null
                 || ((TextEmbeddingModelConfig) modelConfig).getQueryPrefix() != null)) {
@@ -80,11 +76,11 @@ public abstract class TextEmbeddingModel extends DLModel {
     private TextDocsInputDataSet addPrefixesToData(AsymmetricTextEmbeddingParameters mlParams, TextDocsInputDataSet inputDataSet) {
         // Asymmetric embedding models typically work with "mini-prompts" that prime the model to embed a text
         // as a query or as a passage. Here we apply the prompt as defined in the model configuration. We default
-        // to passage embedding.
+        // to query embedding.
         TextEmbeddingModelConfig modelConfig = (TextEmbeddingModelConfig) this.modelConfig;
-        String prefix = mlParams.getEmbeddingContentType() == EmbeddingContentType.QUERY
-            ? modelConfig.getQueryPrefix()
-            : modelConfig.getPassagePrefix();
+        String prefix = mlParams.getEmbeddingContentType() == EmbeddingContentType.PASSAGE
+            ? modelConfig.getPassagePrefix()
+            : modelConfig.getQueryPrefix();
         if (prefix != null) {
             List<String> prefixedDocs = inputDataSet.getDocs().stream().map(s -> prefix + s).collect(Collectors.toList());
             return TextDocsInputDataSet.builder().docs(prefixedDocs).build();

@@ -12,8 +12,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -41,9 +39,9 @@ public class TextDocsMLInputTest {
     @Before
     public void setUp() throws Exception {
         ModelResultFilter resultFilter = ModelResultFilter.builder().returnBytes(true).returnNumber(true)
-                .targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
+            .targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
         MLInputDataset inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2"))
-                .resultFilter(resultFilter).build();
+            .resultFilter(resultFilter).build();
         input = new TextDocsMLInput(algorithm, inputDataset);
     }
 
@@ -68,25 +66,13 @@ public class TextDocsMLInputTest {
         parseMLInput(jsonStr, 2);
     }
 
-    @Test
-    public void serializationRoundTrip() throws IOException {
-        MLInput mlInput = TextDocsMLInput.builder().inputDataset(
-            TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2")).build()).algorithm(algorithm)
-            .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY))
-            .build();
-
-        String mlInput_json = mlInput.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS).toString();
-
-        MLInput mlInput_2 = parseMLInputJson(mlInput_json);
-
-        assertEquals(mlInput.getParameters(), mlInput_2.getParameters());
-        assertEquals(mlInput.getAlgorithm(), mlInput_2.getAlgorithm());
-        assertEquals(mlInput.getInputDataset().getInputDataType(), mlInput_2.getInputDataset().getInputDataType());
-
-    }
-
     private void parseMLInput(String jsonStr, int docSize) throws IOException {
-        TextDocsMLInput parsedInput = parseMLInputJson(jsonStr);
+        XContentParser parser = XContentType.JSON.xContent()
+            .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
+
+        MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());
         assertTrue(parsedInput instanceof TextDocsMLInput);
         assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
         assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
@@ -100,16 +86,6 @@ public class TextDocsMLInputTest {
         assertNotNull(inputDataset.getResultFilter());
         assertTrue(inputDataset.getResultFilter().isReturnBytes());
         assertTrue(inputDataset.getResultFilter().isReturnNumber());
-    }
-
-    private TextDocsMLInput parseMLInputJson(String jsonStr) throws IOException {
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
-        parser.nextToken();
-
-        TextDocsMLInput parsedInput = (TextDocsMLInput) MLInput.parse(parser, input.getFunctionName().name());
-        return parsedInput;
     }
 
 }

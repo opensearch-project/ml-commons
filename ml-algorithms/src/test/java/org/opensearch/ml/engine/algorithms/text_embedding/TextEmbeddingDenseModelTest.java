@@ -38,8 +38,6 @@ import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.Embedd
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
-import org.opensearch.ml.common.input.parameter.clustering.KMeansParams.DistanceType;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -487,41 +485,6 @@ public class TextEmbeddingDenseModelTest {
                 "When passing AsymmetricTextEmbeddingParameters, the model requires to be registered with at least one of `query_prefix` or `passage_prefix`.",
                 e.getCause().getMessage()
             );
-            return;
-        } finally {
-            textEmbeddingDenseModel.close();
-        }
-
-        fail("Expected exception not thrown");
-
-    }
-
-    @Test
-    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel_With_Asymmetric_Prompts_SadPath3() throws URISyntaxException {
-        // wrong parameter type
-        Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
-        params.put(ML_ENGINE, mlEngine);
-
-        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
-        MLModel symmetricSmallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
-        textEmbeddingDenseModel.initModel(symmetricSmallModel, params, encryptor);
-
-        MLInput asymmetricMlInputQueries = MLInput
-            .builder()
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
-            )
-            .parameters(new KMeansParams(0, 1, DistanceType.COSINE))
-            .build();
-
-        try {
-            textEmbeddingDenseModel.predict(asymmetricMlInputQueries);
-        } catch (MLException e) {
-            assertEquals(IllegalArgumentException.class, e.getCause().getClass());
-            assertEquals("TEXT_EMBEDDING algorithm only supports AsymmetricTextEmbeddingParameters.", e.getCause().getMessage());
             return;
         } finally {
             textEmbeddingDenseModel.close();
