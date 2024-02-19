@@ -52,6 +52,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
         try {
             AtomicReference<String> responseRef = new AtomicReference<>("");
+            AtomicReference<Integer> statusCodeRef = new AtomicReference<>();
 
             HttpUriRequest request;
             switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
@@ -97,12 +98,14 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
                     responseRef.set(responseBody);
+                    statusCodeRef.set(response.getStatusLine().getStatusCode());
                 }
                 return null;
             });
             String modelResponse = responseRef.get();
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
+            tensors.setStatusCode(statusCodeRef.get());
             tensorOutputs.add(tensors);
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
