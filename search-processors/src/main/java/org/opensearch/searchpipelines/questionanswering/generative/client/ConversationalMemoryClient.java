@@ -102,14 +102,12 @@ public class ConversationalMemoryClient {
                 interactions.addAll(list);
                 from += list.size();
                 maxResults -= list.size();
-                log.info("Interactions: {}, from: {}, maxResults: {}", interactions, from, maxResults);
             } else if (response.hasMorePages()) {
                 // If we didn't get any results back, we ignore this flag and break out of the loop
                 // to avoid an infinite loop.
                 // But in the future, we may support this mode, e.g. DynamoDB.
                 break;
             }
-            log.info("Interactions: {}, from: {}, maxResults: {}", interactions, from, maxResults);
             allInteractionsFetched = !response.hasMorePages();
         } while (from < lastN && !allInteractionsFetched);
 

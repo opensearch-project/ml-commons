@@ -120,7 +120,6 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         if (timeout == null || timeout == GenerativeQAParameters.SIZE_NULL_VALUE) {
             timeout = DEFAULT_PROCESSOR_TIME_IN_SECONDS;
         }
-        log.info("Timeout for this request: {} seconds.", timeout);
 
         String llmQuestion = params.getLlmQuestion();
         String llmModel = params.getLlmModel() == null ? this.llmModel : params.getLlmModel();
@@ -129,17 +128,14 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         }
         String conversationId = params.getConversationId();
 
-        log.info("LLM model {}, conversation id: {}", llmModel, conversationId);
         Instant start = Instant.now();
         Integer interactionSize = params.getInteractionSize();
         if (interactionSize == null || interactionSize == GenerativeQAParameters.SIZE_NULL_VALUE) {
             interactionSize = DEFAULT_CHAT_HISTORY_WINDOW;
         }
-        log.info("Using interaction size of {}", interactionSize);
         List<Interaction> chatHistory = (conversationId == null)
             ? Collections.emptyList()
             : memoryClient.getInteractions(conversationId, interactionSize);
-        log.info("Retrieved chat history. ({})", getDuration(start));
 
         Integer topN = params.getContextSize();
         if (topN == null) {
@@ -147,8 +143,6 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         }
         List<String> searchResults = getSearchResults(response, topN);
 
-        log.info("system_prompt: {}", systemPrompt);
-        log.info("user_instructions: {}", userInstructions);
         start = Instant.now();
         try {
             ChatCompletionOutput output = llm
@@ -313,15 +307,6 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                         tag,
                         config,
                         GenerativeQAProcessorConstants.CONFIG_NAME_USER_INSTRUCTIONS
-                    );
-                log
-                    .info(
-                        "model_id {}, llm_model {}, context_field_list {}, system_prompt {}, user_instructions {}",
-                        modelId,
-                        llmModel,
-                        contextFields,
-                        systemPrompt,
-                        userInstructions
                     );
                 return new GenerativeQAResponseProcessor(
                     client,
