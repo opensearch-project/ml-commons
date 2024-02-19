@@ -17,10 +17,10 @@ public enum FunctionName {
     RCF_SUMMARIZE,
     LOGISTIC_REGRESSION,
     TEXT_EMBEDDING,
-    SPARSE_ENCODING,
-    SPARSE_TOKENIZE,
     METRICS_CORRELATION,
-    REMOTE;
+    REMOTE,
+    SPARSE_ENCODING,
+    SPARSE_TOKENIZE;
 
     public static FunctionName from(String value) {
         try {
