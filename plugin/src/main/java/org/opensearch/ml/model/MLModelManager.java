@@ -857,7 +857,7 @@ public class MLModelManager {
     void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
-        MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);
+        MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true, true);
         ActionListener<MLDeployModelResponse> listener = ActionListener
             .wrap(r -> log.debug("model deployed, response {}", r), e -> log.error("Failed to deploy model", e));
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
