@@ -91,7 +91,7 @@ Both `conversational_flow` and `conversational` agents support conversation hist
 
 The `conversational_flow` and `conversational` agents differ in the following ways:
 - `conversational_flow` agent runs tools sequentially, in a predefined order.
-- `conversational` agent dynamically chooses which tool to run.
+- `conversational` agent dynamically chooses which tool to run next.
 
 In this tutorial, the agent includes two tools that provide recent population data and tech news.
 
