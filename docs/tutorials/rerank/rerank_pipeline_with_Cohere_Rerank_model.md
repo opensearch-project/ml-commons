@@ -1,9 +1,9 @@
 # Topic
 
-Rerank Pipeline is a feature released in OpenSearch 2.12. It can rerank the search result with the relevance score between search query and each document in search result.
-The relevance score will be calculated by some cross-encoder model. 
+Reranking pipeline is a feature released in OpenSearch 2.12. It can rerank search results, providing a relevance score for each document in the search results with respect to the search query.
+The relevance score is calculated by a cross-encoder model. 
 
-This tutorial explains how to use [Cohere Rerank](https://docs.cohere.com/reference/rerank-1) model in Rerank Pipeline (todo: add doc link). 
+This tutorial explains how to use the [Cohere Rerank](https://docs.cohere.com/reference/rerank-1) model in a reranking pipeline (todo: add doc link). 
 
 Note: Replace the placeholders that start with `your_` with your own values.
 
@@ -11,7 +11,7 @@ Note: Replace the placeholders that start with `your_` with your own values.
 
 ## 1. Create Cohere Rerank model
 
-Create connector
+Create a connector:
 ```
 POST /_plugins/_ml/connectors/_create
 {
@@ -40,7 +40,7 @@ POST /_plugins/_ml/connectors/_create
     ]
 }
 ```
-Use the connector id in response to create model
+Use the connector ID from the response to create a model:
 ```
 POST /_plugins/_ml/models/_register?deploy=true
 {
@@ -50,9 +50,9 @@ POST /_plugins/_ml/models/_register?deploy=true
     "connector_id": "your_connector_id"
 }
 ```
-Note the model id in response, will use it in following steps.
+Note the model ID in the response; you will use it in the following steps.
 
-Test model with predict API
+Test the model using the Predict API:
 ```
 POST _plugins/_ml/models/your_model_id/_predict
 {
@@ -68,13 +68,13 @@ POST _plugins/_ml/models/your_model_id/_predict
   }
 }
 ```
-Sample response
+Sample response:
 
 Explanation of the response:
-1. The response contains 4 `similarity` output. For each `similarity` output, the `data` array contains relevance score between each doc and query.
-2. The `similarity` output corresponds to the order of the input documents; the first result of similarity pertains to the first document.
-This differs from the default 'Cohere Re-rank' model, which prioritizes documents with higher relevance scores at the top.
-The order is changed by the post process function `connector.post_process.cohere.rerank`. This is to keep compatible with Rerank Pipeline.
+1. The response contains 4 `similarity` outputs. For each `similarity` output, the `data` array contains a relevance score between each document and the query.
+2. The `similarity` outputs are provided in the order of the input documents; the first result of similarity pertains to the first document.
+This differs from the default output of the Cohere Rerank model, which orders documents by relevance scores.
+The document order is changed in the `connector.post_process.cohere.rerank` post-processing function in order to make the output compatible with a reranking pipeline.
 ```
 {
   "inference_results": [
@@ -126,7 +126,7 @@ The order is changed by the post process function `connector.post_process.cohere
   ]
 }
 ```
-## 2. Rerank Pipeline
+## 2. Reranking pipeline
 ### 2.1 Ingest test data
 ```
 POST _bulk
@@ -140,7 +140,7 @@ POST _bulk
 { "passage_text" : "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states." }
 
 ```
-### 2.2 Create Rerank Pipeline
+### 2.2 Create reranking pipeline
 ```
 PUT /_search/pipeline/rerank_pipeline_cohere
 {
@@ -159,7 +159,7 @@ PUT /_search/pipeline/rerank_pipeline_cohere
     ]
 }
 ```
-### 2.2 Test rerank
+### 2.2 Test reranking
 
 ```
 GET my-test-data/_search?search_pipeline=rerank_pipeline_cohere
@@ -176,7 +176,7 @@ GET my-test-data/_search?search_pipeline=rerank_pipeline_cohere
   }
 }
 ```
-Response
+Response:
 ```
 {
   "took": 0,
@@ -233,7 +233,7 @@ Response
   }
 }
 ```
-Test without Rerank Pipeline:
+Test without reranking pipeline:
 ```
 GET my-test-data/_search
 {
@@ -249,8 +249,7 @@ GET my-test-data/_search
   }
 }
 ```
-Response:
-We can see the response returns ""Carson City is the capital city of the American state of Nevad" at top which is wrong.
+The first document in the response is `Carson City is the capital city of the American state of Nevada`, which is incorrect.
 ```
 {
   "took": 0,
