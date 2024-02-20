@@ -275,12 +275,12 @@ public class ConnectorUtils {
         SdkHttpMethod method
     ) throws UnknownHostException {
         String endpoint = connector.getPredictEndpoint(parameters);
-        Pattern pattern = Pattern.compile("(?:(\\w+)://)?((\\w+\\.)*\\w+)(?::(\\w+))?");
+        Pattern pattern = Pattern.compile("(?:(\\w+)://)?([-a-zA-Z0-9+&@#%?=~_|!,.;]*)(?::(\\w+))?");
         Matcher matcher = pattern.matcher(endpoint);
         if (matcher.find()) {
             String protocol = matcher.group(1);
             String host = matcher.group(2);
-            String port = matcher.group(4);
+            String port = matcher.group(3);
             MLHttpClientFactory.validate(protocol, host, port);
         } else {
             throw new IllegalArgumentException("Invalid endpoint: " + endpoint);
