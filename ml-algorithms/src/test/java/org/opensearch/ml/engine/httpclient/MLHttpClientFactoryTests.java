@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.httpclient;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -36,7 +35,7 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateIp_validIp_noException() throws UnknownHostException {
+    public void test_validateIp_validIp_noException() throws Exception {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
@@ -56,7 +55,7 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateIp_rarePrivateIp_throwException() throws UnknownHostException {
+    public void test_validateIp_rarePrivateIp_throwException() throws Exception {
         try {
             ConnectorAction predictAction = ConnectorAction
                 .builder()
@@ -179,7 +178,7 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_success() throws UnknownHostException {
+    public void test_validateSchemaAndPort_success() throws Exception {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
@@ -199,7 +198,7 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_notAllowedSchema_throwException() throws UnknownHostException {
+    public void test_validateSchemaAndPort_notAllowedSchema_throwException() throws Exception {
         expectedException.expect(IllegalArgumentException.class);
         expectedException.expectMessage("Protocol is not http or https: ftp");
         ConnectorAction predictAction = ConnectorAction
@@ -221,7 +220,7 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_portNotInRange_throwException() throws UnknownHostException {
+    public void test_validateSchemaAndPort_portNotInRange_throwException() throws Exception {
         expectedException.expect(IllegalArgumentException.class);
         expectedException.expectMessage("Port out of range: 65537");
         ConnectorAction predictAction = ConnectorAction
@@ -242,7 +241,7 @@ public class MLHttpClientFactoryTests {
     }
 
     @Test
-    public void test_validateSchemaAndPort_portNotANumber_throwException() throws UnknownHostException {
+    public void test_validateSchemaAndPort_portNotANumber_throwException() throws Exception {
         expectedException.expect(IllegalArgumentException.class);
         expectedException.expectMessage("Port is not a valid number: abc");
         ConnectorAction predictAction = ConnectorAction

@@ -16,7 +16,7 @@ import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunct
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.UnknownHostException;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -273,18 +271,13 @@ public class ConnectorUtils {
         Map<String, String> parameters,
         String payload,
         SdkHttpMethod method
-    ) throws UnknownHostException {
+    ) throws Exception {
         String endpoint = connector.getPredictEndpoint(parameters);
-        Pattern pattern = Pattern.compile("(?:(\\w+)://)?([-a-zA-Z0-9+&@#%?=~_|!,.;]*)(?::(\\w+))?");
-        Matcher matcher = pattern.matcher(endpoint);
-        if (matcher.find()) {
-            String protocol = matcher.group(1);
-            String host = matcher.group(2);
-            String port = matcher.group(3);
-            MLHttpClientFactory.validate(protocol, host, port);
-        } else {
-            throw new IllegalArgumentException("Invalid endpoint: " + endpoint);
-        }
+        URL url = new URL(endpoint);
+        String protocol = url.getProtocol();
+        String host = url.getHost();
+        int port = url.getPort();
+        MLHttpClientFactory.validate(protocol, host, port);
         String charset = parameters.getOrDefault("charset", "UTF-8");
         RequestBody requestBody;
         if (payload != null) {

@@ -13,9 +13,6 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Optional;
-
-import org.apache.commons.lang3.math.NumberUtils;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -35,24 +32,19 @@ public class MLHttpClientFactory {
         }
     }
 
-    public static void validate(String protocol, String host, String port) throws UnknownHostException {
+    public static void validate(String protocol, String host, int port) throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equals(protocol)) {
             log.error("Remote inference protocol is not http or https: " + protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
         }
-        String portStr = Optional.ofNullable(port).orElseGet(() -> {
+        if (port == -1) {
             if (protocol == null || "http".equals(protocol.toLowerCase(Locale.getDefault()))) {
-                return "80";
+                port = 80;
             } else {
-                return "443";
+                port = 443;
             }
-        });
-        if (!NumberUtils.isDigits(portStr)) {
-            log.error("Remote inference port is not a valid number: " + portStr);
-            throw new IllegalArgumentException("Port is not a valid number: " + portStr);
         }
-        int portNum = Integer.parseInt(portStr);
-        if (portNum < 0 || portNum > 65536) {
+        if (port < 0 || port > 65536) {
             log.error("Remote inference port out of range: " + port);
             throw new IllegalArgumentException("Port out of range: " + port);
         }

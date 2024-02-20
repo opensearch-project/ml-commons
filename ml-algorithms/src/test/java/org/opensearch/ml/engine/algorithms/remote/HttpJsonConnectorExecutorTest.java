@@ -159,6 +159,34 @@ public class HttpJsonConnectorExecutorTest {
             );
     }
 
+    @Test
+    public void invokeRemoteModel_post_request() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor
+            .invokeRemoteModel(
+                createMLInput(),
+                new HashMap<>(),
+                "hello world",
+                new HashMap<>(),
+                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                actionListener
+            );
+    }
+
     private MLInput createMLInput() {
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         return MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.REMOTE).build();

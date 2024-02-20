@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
@@ -31,6 +32,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
@@ -595,6 +597,14 @@ public class TextEmbeddingDenseModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
         textEmbeddingDenseModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
+    }
+
+    @Test
+    public void test_async_inference() {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage("Method is not implemented");
+        textEmbeddingDenseModel.asyncPredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), mock(
+            ActionListener.class));
     }
 
     @After

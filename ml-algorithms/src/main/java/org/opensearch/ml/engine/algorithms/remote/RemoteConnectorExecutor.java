@@ -72,6 +72,11 @@ public interface RemoteConnectorExecutor {
         }
     }
 
+    /**
+     * Calculate the chunk size.
+     * @param textDocsInputDataSet
+     * @return Tuple of chunk size and step size.
+     */
     private Tuple<Integer, Integer> calculateChunkSize(TextDocsInputDataSet textDocsInputDataSet) {
         int textDocsLength = textDocsInputDataSet.getDocs().size();
         Map<String, String> parameters = getConnector().getParameters();
