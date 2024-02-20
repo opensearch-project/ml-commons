@@ -51,12 +51,12 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
                 case LIMIT_FIELD:
                     limit = parser.text();
                     try {
-                        int limitNumber = Integer.parseInt(limit);
+                        double limitNumber = Double.parseDouble(limit);
                         if (limitNumber < 0) {
-                            throw new OpenSearchParseException("Limit field must be a positive integer.");
+                            throw new OpenSearchParseException("Limit field must be a positive number.");
                         }
                     } catch (NumberFormatException e) {
-                        throw new OpenSearchParseException("Limit field must be a positive integer.");
+                        throw new OpenSearchParseException("Limit field must be a positive number.");
                     }
                     break;
                 case UNIT_FIELD:
