@@ -8,6 +8,7 @@ package org.opensearch.ml.common.controller;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -49,6 +50,14 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case LIMIT_FIELD:
                     limit = parser.text();
+                    try {
+                        double limitNumber = Double.parseDouble(limit);
+                        if (limitNumber < 0) {
+                            throw new OpenSearchParseException("Limit field must be a positive number.");
+                        }
+                    } catch (NumberFormatException e) {
+                        throw new OpenSearchParseException("Limit field must be a positive number.");
+                    }
                     break;
                 case UNIT_FIELD:
                     unit = TimeUnit.valueOf(parser.text());

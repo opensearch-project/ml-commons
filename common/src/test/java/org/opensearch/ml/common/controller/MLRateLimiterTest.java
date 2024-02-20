@@ -20,6 +20,7 @@ import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
@@ -53,6 +54,7 @@ public class MLRateLimiterTest {
                 .limit("1")
                 .unit(TimeUnit.MILLISECONDS)
                 .build();
+
         rateLimiterWithNumber = MLRateLimiter.builder()
                 .limit("1")
                 .build();
@@ -100,6 +102,20 @@ public class MLRateLimiterTest {
             assertEquals("1", parsedInput.getLimit());
             assertEquals(TimeUnit.MILLISECONDS, parsedInput.getUnit());
         });
+    }
+
+    @Test
+    public void parseWithIllegalLimit() throws Exception {
+        exceptionRule.expect(OpenSearchParseException.class);
+        String inputStrWithIllegalLimit = "{\"limit\":\"-1\",\"unit\":\"MILLISECONDS\"}";
+        testParseFromJsonString(inputStrWithIllegalLimit, parsedInput -> {});
+    }
+
+    @Test
+    public void parseWithNegativeLimit() throws Exception {
+        exceptionRule.expect(OpenSearchParseException.class);
+        String inputStrWithNegativeLimit = "{\"limit\":\"ILLEGAL\",\"unit\":\"MILLISECONDS\"}";
+        testParseFromJsonString(inputStrWithNegativeLimit, parsedInput -> {});
     }
 
     @Test
