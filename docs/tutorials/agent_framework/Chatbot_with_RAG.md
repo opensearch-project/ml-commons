@@ -1,27 +1,27 @@
 # Topic
 
-> Agent Framework is an experimental feature released in OpenSearch 2.12 and not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
+> Agent Framework is an experimental feature released in OpenSearch 2.12 and is not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
 
-> This tutorial doesn't explain what retrieval-augmented generation(RAG) is.
+> This tutorial doesn't explain what retrieval-augmented generation (RAG) is.
 
-LLM has some known limitation, one is the frozen world to the time when the LLM trained. 
-They have no knowledge about recent events and your internal data. 
-We can solve this problem by using retrieval-augmented generation(RAG).
+One of the known limitations of large language models (LLMs) is that their knowledge base only contains information up to the time when the LLMs were trained. 
+LLMs have no knowledge of recent events or your internal data. 
+You can augment the LLM knowledge base by using retrieval-augmented generation (RAG).
 
-This tutorial explains how to build your own Chatbot with Agent Framework and RAG (use your OpenSearch index as knowledge base).
+This tutorial explains how to build your own chatbot using the Agent Framework and RAG, supplementing the LLM knowledge with information contained in OpenSearch indexes.
 
-Note: You should replace the placeholders with prefix `your_` with your own value
+Note: Replace the placeholders that start with `your_` with your own values.
 
 # Steps
 
 ## 0. Preparation
 
 Follow step 0 and step 1 of [RAG_with_conversational_flow_agent](./RAG_with_conversational_flow_agent.md) to set up
-knowledge base index `test_population_data` which contains population data of US cities.
+the `test_population_data` index to provide supplementary information to the LLM. The index contains population data of US cities.
 
-Note the embedding model id, then create another knowledge base `test_tech_news` which contains recent tech news.
+Note the embedding model ID, which you'll use in the next steps. 
 
-Create ingest pipeline:
+Create an ingest pipeline:
 ```
 PUT /_ingest/pipeline/test_tech_news_pipeline
 {
@@ -39,7 +39,7 @@ PUT /_ingest/pipeline/test_tech_news_pipeline
 }
 ```
 
-Create index `test_tech_news`:
+Next, create another index named `test_tech_news`, which contains recent tech news:
 
 ```
 PUT test_tech_news
@@ -67,7 +67,7 @@ PUT test_tech_news
 
 Ingest data. 
 - The first two documents are from Wikipedia([Apple Vision Pro](https://en.wikipedia.org/wiki/Apple_Vision_Pro), [LLaMA](https://en.wikipedia.org/wiki/LLaMA)).
-- The third one is from [Amazon Bedrock document](https://aws.amazon.com/bedrock/)
+- The third one is from [Amazon Bedrock documentation](https://aws.amazon.com/bedrock/)
 ```
 POST _bulk
 {"index":{"_index":"test_tech_news"}}
@@ -80,26 +80,26 @@ POST _bulk
 ```
 ## 1. Create LLM
 
-Follow step 2 "Prepare LLM" of [RAG_with_conversational_flow_agent](./RAG_with_conversational_flow_agent.md) to set up Bedrock Claude model.
+Follow step 2 (Prepare LLM) of [RAG_with_conversational_flow_agent](./RAG_with_conversational_flow_agent.md) to set up the Bedrock Claude model.
 
-Note the model id, you will use it in following steps.
+Note the model ID, you will use it in following steps.
 
 ## 2. Create Agent
-Create agent with `conversational` type. 
+Create an agent of the `conversational` type. 
 
-Both `conversational_flow` and `conversational` agents can support conversation history.
+Both `conversational_flow` and `conversational` agents support conversation history.
 
-Difference:
-- `conversational_flow` agent runs tools sequentially with predefined order.
+The `conversational_flow` and `conversational` agents differ in the following ways:
+- `conversational_flow` agent runs tools sequentially, in a predefined order.
 - `conversational` agent dynamically chooses which tool to run.
 
-This agent includes two tools which provides recent population data and tech news.
+In this tutorial, the agent includes two tools that provide recent population data and tech news.
 
 Explanation:
 
-- `"max_iteration": 5`: Agent will run at most 5 times of LLM.
-- `"response_filter": "$.completion"` is to filter only the answer from Bedrock Claude model response
-- `"doc_size": 3` in `population_data_knowledge_base`: means it will return top 3 documents.
+- `"max_iteration": 5`: Agent runs the LLM a maximum of 5 times.
+- `"response_filter": "$.completion"` is to retrieve the LLM answer from the Bedrock Claude model response.
+- `"doc_size": 3` (in `population_data_knowledge_base`) specifies to return the top 3 documents.
 ```
 POST _plugins/_ml/agents/_register
 {
@@ -151,19 +151,19 @@ POST _plugins/_ml/agents/_register
   "app_type": "chat_with_rag"
 }
 ```
-Note the agent id, you will use it in next step.
+Note the agent ID; you will use it in the next step.
 
 ## 3. Test Agent
 
-`conversational` agent supports `verbose`. You can set it as `true` to see detail steps.
+The `conversational` agent supports a `verbose` option. You can set `verbose` to `true` to obtain detailed steps.
 
-Or you can use get trace data API.
+Alternatively, you can use the Get Trace Data API:
 ```
 GET _plugins/_ml/memory/message/message_id/traces
 ```
 
 ### 3.1 Start new conversation
-- Example1: ask question related to tech news
+- Example 1: Ask a question related to tech news:
 ```
 POST _plugins/_ml/agents/your_agent_id/_execute
 {
@@ -173,8 +173,8 @@ POST _plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
-From response, we can see Agent runs `tech_news_knowledge_base` tool and get top 2 documents. Agent will pass these documents as context to LLM.
-Then LLM can answer the question correctly.
+In the response, note that the agent runs the `tech_news_knowledge_base` tool to obtain the top 2 documents. The agent then passes these documents as context to the LLM.
+The LLM uses the context to answer the question correctly.
 ```
 {
   "inference_results": [
@@ -211,12 +211,12 @@ Then LLM can answer the question correctly.
   ]
 }
 ```
-You can also check detail steps in trace data:
+Alternatively, you can check the detailed steps in the trace data:
 ```
 GET _plugins/_ml/memory/message/ebVSxI0B8vrNLhb9nxty/traces
 ```
 
-- Example2: ask question related to city population
+- Example 2: Ask a question related to city population:
 ```
 POST _plugins/_ml/agents/your_agent_id/_execute
 {
@@ -226,7 +226,7 @@ POST _plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
-From response, we can see Agent runs `population_data_knowledge_base` tool and get top 3 documents. Agent will pass these documents as context to LLM.
+In the response, note that the agent runs the `population_data_knowledge_base` tool to obtain the top 3 documents. The agent then passes these documents as context to the LLM.  
 Then LLM can answer the question correctly.
 ```
 {
@@ -277,8 +277,7 @@ POST _plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
-From response, you can see `population_data_knowledge_base` doesn't return Seattle population, but agent learnt from history messages
-that Seattle population is "approximately 3,519,000 people, a 0.86% increase from 2022".
+In the response, note that the `population_data_knowledge_base` doesn't return the population of Seattle. Instead, the agent learns the population of Seattle from historical messages:
 ```
 {
   "inference_results": [
