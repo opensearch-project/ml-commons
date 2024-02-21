@@ -14,4 +14,17 @@ public class PromptTemplate {
         "Assistant:\n---------------------\n${parameters.llm_tool_selection_response}\n\nHuman: TOOL RESPONSE of ${parameters.tool_name}: \n---------------------\nTool input:\n${parameters.tool_input}\n\nTool output:\n${parameters.observation}\n\n";
     public static final String CHAT_HISTORY_PREFIX =
         "Human:CONVERSATION HISTORY WITH AI ASSISTANT\n----------------------------\nBelow is Chat History between Human and AI which sorted by time with asc order:\n";
+
+    public static final String PROMPT_FORMAT_INSTRUCTION_FOR_THOUGHT_EXTRACT =
+        "Human:RESPONSE FORMAT INSTRUCTIONS\n----------------------------\nOutput a JSON markdown code snippet containing a valid JSON object in one of two formats:\n\n**Option 1:**\nUse this if you want the human to use a tool.\nMarkdown code snippet formatted in the following schema:\n\n```json\n{\n    \"thought\": string, // think about what to do next: if you know the final answer just return \"Now I know the final answer\". Try to contain user question information inside the thought, and Do not show word 'API', use 'external tool' instead. \n \"empty\": \"\"}}\n```\n\n**Option #2:**\nUse this if you want to respond directly and conversationally to the human. Markdown code snippet formatted in the following schema:\n\n```json\n{\n    \"thought\": \"Now I know the final answer\",\n    \"final_answer\": string, // summarize and return the final answer in a sentence with details, don't just return a number or a word.\n}\n```";
+
+    public static final String PROMPT_TEMPLATE_SUFFIX_FOR_THOUGHT_EXTRACT =
+        "Human:TOOLS\n------\nAssistant can ask Human to use tools to look up information that may be helpful in answering the users original question. The tool response will be listed in \"TOOL RESPONSE of {tool name}:\". If TOOL RESPONSE is enough to answer human's question, Assistant should avoid rerun the same tool.\n\n${parameters.chat_history}\n\n${parameters.prompt.format_instruction}\n\n\nHuman:USER'S INPUT\n--------------------\nHere is the user's input :\n${parameters.question}\n\n${parameters.scratchpad}";
+
+    public static final String PROMPT_FORMAT_INSTRUCTION_FOR_ACTION_INPUT =
+        "Human:RESPONSE FORMAT INSTRUCTIONS\n----------------------------\nOutput a JSON markdown code snippet containing a valid JSON object in this formats:\n\nUse for generating tool input. \nMarkdown code snippet formatted in the following schema:\n\n```json\n{\n     \"action_input\": string // The input to the action. May be a stringified object.\n}\n```";
+
+    public static final String PROMPT_TEMPLATE_SUFFIX_FOR_ACTION_INPUT =
+        "Human:TOOLS\n------\nAssistant is now solving problems step by step. The previous tool response will be listed in \"TOOL RESPONSE of {tool name}:\".\n\n${parameters.chat_history}\n\nNow in this step, assistant already know which tool to use. And you are also provided the current step's thought and user's input. Now you are required to generate input for the target tool. You may need to use information from previous tool output and chat history to generate tool input. You should use following format to help input for the target tool. ${parameters.prompt.format_instruction}\n\n--------------------\nHere is the target tool and its description:\n${parameters.tool_descriptions}\n\nHere is the thought from current step.${parameters.current_thought}\n\nHere is the user's input :\n${parameters.question} \n\n${parameters.scratchpad}";
+
 }

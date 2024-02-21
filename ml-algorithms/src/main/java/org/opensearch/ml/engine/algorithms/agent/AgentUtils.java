@@ -32,7 +32,9 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 
 public class AgentUtils {
 
@@ -293,5 +295,12 @@ public class AgentUtils {
             inputTools.add(toolName);
         }
         return inputTools;
+    }
+
+    public static MLTaskResponse constructNextStepResponseFromMap(Map<String, String> map) {
+        ModelTensor modelTensor = new ModelTensor("nextOutput", null, null, null, null, null, map);
+        ModelTensors modelTensors = new ModelTensors(List.of(modelTensor));
+        ModelTensorOutput modelTensorOutput = new ModelTensorOutput(List.of(modelTensors));
+        return MLTaskResponse.builder().output(modelTensorOutput).build();
     }
 }

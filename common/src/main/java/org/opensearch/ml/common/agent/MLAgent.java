@@ -41,6 +41,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String APP_TYPE_FIELD = "app_type";
+    public static final String TOOL_SELECTION_FIELD = "tool_selection";
 
     private String name;
     private String type;
@@ -49,6 +50,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
+    private MLToolSelectionSpec toolSelectionSpec;
 
     private Instant createdTime;
     private Instant lastUpdateTime;
