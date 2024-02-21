@@ -503,7 +503,7 @@ POST /_plugins/_ml/agents/_register
 POST /_plugins/_ml/agents/your_agent_id/_execute
 {
     "parameters": {
-        "question": "what's the population increase of Seattle from 2021 to 2023??",
+        "question": "what's the population increase of Seattle from 2021 to 2023?",
         "index": "test_population_data",
         "query": {
             "query": {
@@ -514,6 +514,55 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
             "size": 2,
             "_source": "population_description"
         }
+    }
+}
+```
+
+To expose only the `question` parameter, define the agent as follows:
+```
+POST /_plugins/_ml/agents/_register
+{
+  "name": "Demo agent",
+  "type": "conversational_flow",
+  "description": "This is a test agent support running any search query",
+  "memory": {
+    "type": "conversation_index"
+  },
+  "app_type": "rag",
+  "tools": [
+    {
+      "type": "SearchIndexTool",
+      "parameters": {
+        "input": "{\"index\": \"${parameters.index}\", \"query\": ${parameters.query} }",
+        "index": "test_population_data",
+        "query": {
+          "query": {
+            "match": {
+              "population_description": "${parameters.question}"
+            }
+          },
+          "size": 2,
+          "_source": "population_description"
+        }
+      }
+    },
+    {
+      "type": "MLModelTool",
+      "description": "A general tool to answer any question",
+      "parameters": {
+        "model_id": "your_llm_model_id",
+        "prompt": "\n\nHuman:You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say don't know. \n\n Context:\n${parameters.SearchIndexTool.output:-}\n\nHuman:${parameters.question}\n\nAssistant:"
+      }
+    }
+  ]
+}
+```
+Then you can run the agent specifying only the `question` parameter:
+```
+POST /_plugins/_ml/agents/your_agent_id/_execute
+{
+    "parameters": {
+        "question": "what's the population increase of Seattle from 2021 to 2023?"
     }
 }
 ```
@@ -542,6 +591,8 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
     }
 }
 ```
+
+If you want to only expose the `question` parameter, see step 5.2.2.
 
 #### 5.2.4 Execute agent with hybrid search query
 For more information, see [Hybrid Search](https://opensearch.org/docs/latest/search-plugins/hybrid-search),
@@ -612,7 +663,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
     }
 }
 ```
-
+If you want to only expose the `question` parameter, see step 5.2.2.
 ### 5.3 Natural language query (NLQ)
 
 The `PPLTool` can translate natural language to [PPL](https://opensearch.org/docs/latest/search-plugins/sql/ppl/index/)
