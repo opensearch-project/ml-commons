@@ -2,31 +2,30 @@
 
 > Agent Framework is an experimental feature released in OpenSearch 2.12 and is not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
 
-One round of LLM call is not enough to answer some questions. For example, LLM can't answer how many errors in your log index of last week as it doesn't know your data.
-Agent is to solve such complex problems. It can run tools to get more information as LLM context.
+Some questions require more than one call to an LLM to produce an answer. For example, an LLM can't answer how many errors there are in your log index for last week because its knowledge base does not contain your proprietary data.
+You can use an agent to solve such complex problems. The agent can run tools to obtain more information and send it to the LLM as context.
 
-Three types of agent released in OpenSearch 2.12 (all experimental):
+The OpenSearch 2.12 release includes three types of agents (all experimental):
 1. `flow`: Runs tools sequentially, in the order specified in its configuration. The workflow of a flow agent is fixed. It doesn't store chat messages.
-2. `conversational_flow`: Runs tools sequentially, in the order specified in its configuration. The workflow of a flow agent is fixed. Stores history message so that users can ask follow-up questions.
-3. `conversational`: Use LLM to reason what action to take dynamically until find the final answer or reach max iteration limit. 
+2. `conversational_flow`: Runs tools sequentially, in the order specified in its configuration. The workflow of a flow agent is fixed. Stores message history so that users can ask follow-up questions.
+3. `conversational`: Sends questions to an LLM. The LLM reasons iteratively to decide what action to take, until it obtains the final answer or reaches the iteration limit. 
 
-This tutorial will show you how to use `conversational` agent to build your own chatbot in OpenSearch.
+This tutorial demonstrates how to build your own chatbot in OpenSearch using a `conversational` agent.
 
-Note: You should replace the placeholders with prefix `your_` with your own value
+Note: Replace the placeholders starting with the prefix `your_` with your own values.
 
 # Steps
 ## 0. preparation
 
-Login OpenSearch Dashboard homepage, click "Add sample data", then add "Sample eCommerce orders" data.
+Log in to the OpenSearch Dashboards homepage, select **Add sample data**, then add **Sample eCommerce orders** data.
 
 ## 1. Set up knowledge base
 
 Follow step 0 and step 1 of [RAG_with_conversational_flow_agent](./RAG_with_conversational_flow_agent.md) to set up
-knowledge base index `test_population_data` which contains population data of US cities.
+the `test_population_data` knowledge base index, which contains US city population data.
 
-Use similar way to prepare another index `test_stock_price_data` which contains historical stock price.
 
-Create ingest pipeline
+Create an ingest pipeline:
 ```
 PUT /_ingest/pipeline/test_stock_price_data_pipeline
 {
@@ -43,7 +42,7 @@ PUT /_ingest/pipeline/test_stock_price_data_pipeline
     ]
 }
 ```
-Create index 
+Create the `test_stock_price_data` index, which contains historical stock price data:
 ```
 PUT test_stock_price_data
 {
@@ -67,7 +66,7 @@ PUT test_stock_price_data
   }
 }
 ```
-Ingest data
+Ingest data:
 ```
 POST _bulk
 {"index": {"_index": "test_stock_price_data"}}
@@ -91,7 +90,7 @@ For more information, see [Remote models](https://opensearch.org/docs/latest/ml-
 
 This tutorial uses the [Bedrock Claude model](https://aws.amazon.com/bedrock/claude/). You can also use other LLMs.
 
-1. Create connector:
+1. Create a connector:
 ```
 POST /_plugins/_ml/connectors/_create
 {
@@ -130,7 +129,7 @@ POST /_plugins/_ml/connectors/_create
 
 Note the connector ID; you'll use it to register the model.
 
-2. Register model:
+2. Register the model:
 
 ```
 POST /_plugins/_ml/models/_register
@@ -143,12 +142,12 @@ POST /_plugins/_ml/models/_register
 ```
 Note the LLM model id from the response; you will use it to create agent.
 
-3. Deploy model
+3. Deploy the model:
 ```
 POST /_plugins/_ml/models/your_LLM_model_id/_deploy
 ```
 
-4. Test predict
+4. Test the model:
 ```
 POST /_plugins/_ml/models/your_LLM_model_id/_predict
 {
@@ -163,32 +162,30 @@ POST /_plugins/_ml/models/your_LLM_model_id/_predict
 
 ### 3.1 Create agent
 
-Create agent with `conversational` type. 
+Create an agent of the `conversational` type. 
 
-Agent consists of these parts:
+The agent is configured with the following information:
 1. Meta info: `name`, `type`, `description`
-2. LLM: Agent use LLM to reason what's next step, choose tool and prepare tool input.
-3. Tools: Tool is a function which can be executed by Agent. Each tool can define its own `name`, `description` and `parameters`.
-4. Memory: Store chatting messages. OpenSearch 2.12 only support one memory type `conversation_index`
+2. LLM: The agent uses an LLM to reason and select the next step, including choosing an appropriate tool and preparing the tool input.
+3. Tools: A tool is a function that can be executed by the agent. Each tool can define its own `name`, `description` and `parameters`.
+4. Memory: Stores chat messages. OpenSearch 2.12 only supports one memory type: `conversation_index`.
 
 
 Explanation of key parameters:
-1. `conversational`: This agent type has built-in prompt. You can override it with your own prompt, check step 4
-2. `app_type`: This is for reference purpose, so you can differentiate multiple agents.
-3. `llm`: This part defines LLM configuration
-   1. `"max_iteration": 5`:  Agent runs the LLM a maximum of 5 times
+1. `conversational`: This agent type has a built-in prompt. To override it with your own prompt, see step 4.
+2. `app_type`: This is for reference purposes, so you can differentiate between multiple agents.
+3. `llm`: Defines the LLM configuration.
+   1. `"max_iteration": 5`:  The agent runs the LLM a maximum of 5 times.
    2. `"response_filter": "$.completion"` is to retrieve the LLM answer from the Bedrock Claude model response.
-   3. `"message_history_limit": 5`: Agent retrieves a maxium of 5 most recent history messages and added to LLM context. Set as `0` will not retrieve history message.
-   4. `disable_trace`: If `true` will not store trace data in memory. Each message has its own trace data which is the detail steps of how the message generated.
-4. `memory`: This part defines how to store messages. In 2.12, only support `conversation_index` memory, which stores messages in memory index.
-5. Tools: This tutorial doesn't explain details for each tool. You can read more details on [Tools doc](https://opensearch.org/docs/latest/ml-commons-plugin/agents-tools/tools/index/). 
-   1. LLM will reason which tool to run and prepare tool's input. 
-   2. If you want to include the tool's output in response, you can set `"include_output_in_agent_response": true`. In this tutorial, will include `PPLTool` output in response, check sample response in step 3.2. 
-   3. By default, the tool's `name` is same with tool's `type` and each tool has its default description. But you can override
-them. 
-   4. Each tool in `tools` list must have unique name. For example, the demo agent below defines two `VectorDBTool` with different
-names `population_data_knowledge_base` and `stock_price_data_knowledge_base`. They also have custom description to make LLM 
-understand what they can do easily.
+   3. `"message_history_limit": 5`: Agent retrieves a maximum of 5 most recent history messages and adds them to the LLM context. Set to`0` to omit message history in the context.
+   4. `disable_trace`: If `true`, the agent does not store trace data in memory. Trace data is included in each message and provides detailed steps performed while generating the message.
+4. `memory`: Defines how to store messages. OpenSearch 2.12 only supports the `conversation_index` memory, which stores messages in a memory index.
+5. Tools: This tutorial doesn't explain each tool's details. For more information, see the [Tools documentation](https://opensearch.org/docs/latest/ml-commons-plugin/agents-tools/tools/index/). Note the following information:
+   1. An LLM will reason to decide which tool to run and will prepare the tool's input. 
+   2. To include the tool's output in the response, specify `"include_output_in_agent_response": true`. In this tutorial, you will include the `PPLTool` output in the response (see the sample response in step 3.2). 
+   3. By default, the tool's `name` is the same as the tool's `type`, and each tool has its default description. You can override the tool's `name` and `description`.
+   4. Each tool in the `tools` list must have a unique name. For example, the demo agent below defines two tools of the `VectorDBTool` type with different
+names (`population_data_knowledge_base` and `stock_price_data_knowledge_base`). Each tool has a custom description so the LLM can easily understand what the tool does.
 
 Note: You don't need to configure all of these tools in your agent. You can simply configure those that are relevant to your use case.
 ```
@@ -276,21 +273,21 @@ POST _plugins/_ml/agents/_register
   ]
 }
 ```
-Note the agent id, you will use it in next step.
+Note the agent ID; you will use it in the next step.
 
 ### 3.2 Test agent
 
 Tips: 
-1. You can see detail steps of one agent execution by
-   1. enabling verbose model : `"verbose": true`
-   2. or calling Get Trace API: `GET _plugins/_ml/memory/message/your_message_id/traces`
+1. You can view the detailed steps of an agent execution in one of the following ways:
+   1. Enabling verbose mode : `"verbose": true`
+   2. Calling the Get Trace API: `GET _plugins/_ml/memory/message/your_message_id/traces`
 
-2. Sometimes LLM has hallucination. It may choose wrong tool to solve your problem especially when you configured many tools. You can use these options to solve:
-   1. Avoid configuring many tools in agent.
-   2. Fine tune tool description to clarify what the tool can do. 
-   3. Tell LLM which tool to use in question, for example `Can you use PPLTool to query index opensearch_dashboards_sample_data_ecommerce to calculate how many orders in last week?`
-   4. Specify which tool to use when execute agent, 
-   for example, you can tell agent to only use `PPLTool` and `CatIndexTool` in current request.
+2. An LLM may sometimes hallucinate. It may choose a wrong tool to solve your problem, especially when you configured many tools. You can use these options to avoid hallucinations:
+   1. Avoid configuring many tools in an agent.
+   2. Provide a detailed tool description to clarify what the tool can do. 
+   3. Specify the tool to use in the LLM question, for example, `Can you use the PPLTool to query index opensearch_dashboards_sample_data_ecommerce to calculate how many orders there were during last week?`
+   4. Specify the tool to use when executing an agent, 
+   for example, tell the agent to only use the `PPLTool` and `CatIndexTool` in the current request.
    ```
    POST _plugins/_ml/agents/your_agent_id/_execute
    {
@@ -313,7 +310,7 @@ POST _plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
-As we set `"include_output_in_agent_response": true` for `PPLTool`, the response contains `PPLTool.output` in `additional_info`.
+Because you specified`"include_output_in_agent_response": true` for the `PPLTool`, the response contains `PPLTool.output` in the `additional_info` object.
 ```
 {
   "inference_results": [
@@ -344,14 +341,14 @@ As we set `"include_output_in_agent_response": true` for `PPLTool`, the response
 }
 ```
 
-Find trace data:
+Obtain trace data:
 ```
 GET _plugins/_ml/memory/message/T0JwyI0Bn3OCesyvz-EI/traces
 ```
 
 #### 3.2.2 Test `population_data_knowledge_base` tool.
 
-You can use `"verbose": true` to see detail steps.
+You can use `"verbose": true` to view the detailed steps:
 ```
 POST _plugins/_ml/agents/your_agent_id/_execute
 {
@@ -361,7 +358,7 @@ POST _plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
-Response
+Response:
 ```
 {
   "inference_results": [
@@ -399,14 +396,14 @@ Response
   ]
 }
 ```
-Find trace data:
+Obtain trace data:
 ```
 GET _plugins/_ml/memory/message/L0JuyI0Bn3OCesyv3-Er/traces
 ```
 
 #### 3.2.3 Continue a conversation
 
-You can continue a conversation by specifying `memory_id`.
+You can continue the same conversation by specifying its `memory_id`:
 ```
 POST _plugins/_ml/agents/your_agent_id/_execute
 {
@@ -456,22 +453,22 @@ Instead, the agent learns the population of Seattle from historical messages:
   ]
 }
 ```
-Find all messages:
+View all messages:
 ```
 GET _plugins/_ml/memory/LkJuyI0Bn3OCesyv3-Ef/messages
 ```
 
-Find trace data:
+Obtain trace data:
 ```
 GET _plugins/_ml/memory/message/00J6yI0Bn3OCesyvIuGZ/traces
 ```
 
 ## 4. Agent with custom prompt (Optional)
 
-If you don't need to customize prompt, just skip this step.
+If you don't need to customize the prompt, skip this step.
 
 ### 4.1 Default prompt
-You can find default prompt in [PromptTemplate code](https://github.com/opensearch-project/ml-commons/blob/main/ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/agent/PromptTemplate.java).
+You can find the default prompt in the [PromptTemplate code](https://github.com/opensearch-project/ml-commons/blob/main/ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/agent/PromptTemplate.java).
 
 Default prompt: 
 ```
@@ -486,9 +483,9 @@ Human: follow RESPONSE FORMAT INSTRUCTIONS
 Assistant:"""
 ```
 
-It consists of two parts
-1. `${parameters.prompt.prefix}`: It describes what AI Assistant can do. You can change this part based on your use case. For example `Assistant is a professional data analysist. You will always answer question based on the tool response first. If you don't know the answer, just say don't know.`
-2. `${parameters.prompt.suffix}`: This is the main part which defines tools, chat history, format instruction, question and scratchpad. Default value is
+The prompt consists of two parts:
+1. `${parameters.prompt.prefix}`: Describes what AI Assistant can do. You can change this parameter based on your use case. For example `You are a professional data analyst. You will always answer question based on the tool response first. If you don't know the answer, just say you don't know.`
+2. `${parameters.prompt.suffix}`: This is the main part that defines tools, chat history, prompt format instructions, a question, and a scratchpad. 
 
 Default `prompt.suffix`:
 ```
@@ -513,12 +510,12 @@ ${parameters.question}
 ${parameters.scratchpad}"""
 ```
 
-We can see `prompt.suffix` consists of these placeholders:
-1. `${parameters.tool_descriptions}`: This placeholder will be filled by agent tools information: name, description. If you remove this part. Agent will not use any tools.
-2. `${parameters.prompt.format_instruction}`: This part defines LLM response format. This is critical. Suggest not remove this part.
-3. `${parameters.chat_history}`: This placeholder will be filled by history message of current memory. If you don't set `memory_id` when run agent, or there are no history messages, this part will be empty. If you don't need chat history, you can remove this part.
+The `prompt.suffix` consists of the following placeholders:
+1. `${parameters.tool_descriptions}`: This placeholder will be filled by the agent's tools' information: the tool name and description. If you remove this part, the agent will not use any tools.
+2. `${parameters.prompt.format_instruction}`: This part defines the LLM response format. This is critical. We recommend not removing this part.
+3. `${parameters.chat_history}`: This placeholder will be filled by the message history of the current memory. If you don't set the `memory_id` when you run the agent, or there are no history messages, this part will be empty. If you don't need chat history, you can remove this part.
 4. `${parameters.question}`: This placeholder will be filled by your question.
-5. `${parameters.scratchpad}`: This part will be filled by detail steps in agent run, which you see in step 3.2 verbose mode or trace data. This is critical for LLM to reason what's next step based on what happened before. Suggest no remove this part.
+5. `${parameters.scratchpad}`: This part will be filled with the detailed steps in agent execution. These steps are the same as those you can view by specifying verbose mode or obtaining trace data (see an example in step 3.2). This is critical for the LLM to reason and select the next step based on the outcome of the previous steps. We recommend not removing this part.
 
 ### 4.2 Examples with custom prompt
 #### Example1: customize `prompt.prefix`
@@ -574,7 +571,7 @@ POST _plugins/_ml/agents/_register
   ]
 }
 ```
-Test with
+Test by running the agent:
 ```
 POST _plugins/_ml/agents/o0LDyI0Bn3OCesyvr-Zq/_execute
 {
@@ -587,7 +584,7 @@ POST _plugins/_ml/agents/o0LDyI0Bn3OCesyvr-Zq/_execute
 
 #### Example2: OpenAI model with custom prompt
 
-Create connector for openAI "gpt-3.5-turbo" model
+Create a connector for the OpenAI "gpt-3.5-turbo" model:
 
 ```
 POST _plugins/_ml/connectors/_create
@@ -628,7 +625,7 @@ POST /_plugins/_ml/models/_register?deploy=true
     "connector_id": "your_connector_id"
 }
 ```
-Note model id, test with predict API:
+Note the model ID and test the model by calling the Predict API:
 ```
 POST /_plugins/_ml/models/your_openai_model_id/_predict
 {
@@ -639,9 +636,9 @@ POST /_plugins/_ml/models/your_openai_model_id/_predict
 }
 ```
 
-Create Agent with custom `system_instruction` and `prompt`.
+Create an agent with custom `system_instruction` and `prompt`.
 
-`prompt` includes these placeholders (read more details in step 4.1): `tool_descriptions`, `chat_history`, `format_instruction`, `question` and `scratchpad`
+The `prompt` includes the following placeholders (for more information, see step 4.1): `tool_descriptions`, `chat_history`, `format_instruction`, `question`, and `scratchpad`.
 
 ```
 POST _plugins/_ml/agents/_register
@@ -698,7 +695,7 @@ POST _plugins/_ml/agents/_register
 }
 ```
 
-Note agent id from response, execute agent to test:
+Note the agent ID from the response and test the model by running the agent:
 ```
 POST _plugins/_ml/agents/your_agent_id/_execute
 {
@@ -709,7 +706,7 @@ POST _plugins/_ml/agents/your_agent_id/_execute
 }
 ```
 
-Test with running two tools
+Test the agent by asking a question that requires the agent to use both configured tools:
 ```
 POST _plugins/_ml/agents/your_agent_id/_execute
 {
@@ -719,7 +716,7 @@ POST _plugins/_ml/agents/your_agent_id/_execute
   }
 }
 ```
-Response shows agent runs `population_data_knowledge_base` and `stock_price_data_knowledge_base` tools:
+The response shows that the agent runs both `population_data_knowledge_base` and `stock_price_data_knowledge_base` tools:
 ```
 {
   "inference_results": [
@@ -775,13 +772,13 @@ Response shows agent runs `population_data_knowledge_base` and `stock_price_data
 
 ## 5. Configure root chatbot in OpenSearch Dashboard
 
-Read this [document](https://opensearch.org/docs/latest/ml-commons-plugin/opensearch-assistant/) for more details. 
+For more information, see [OpenSearch Assistant documentation](https://opensearch.org/docs/latest/ml-commons-plugin/opensearch-assistant/). 
 
-OpenSearch 2.12 released experimental Chabot UI on OpenSearch Dashboard. To use it, you need to configure a root Chatbot agent first.
+OpenSearch 2.12 released an experimental chabot UI for OpenSearch Dashboards. To use it, first you need to configure a root chatbot agent.
 
-A root chatbot agent consists of
-- `conversational` agent: You can use any `conversational` agent in `AgentTool` created in previous steps.
-- `MLModelTool`: This is for suggesting new questions based on your current question and model response.
+A root chatbot agent consists of the following parts:
+- `conversational` agent: Within the `AgentTool`, you can use any `conversational` agent created in the previous steps.
+- `MLModelTool`: This tool is used for suggesting new questions based on your current question and the model response.
 
 ```
 POST /_plugins/_ml/agents/_register
@@ -814,7 +811,7 @@ POST /_plugins/_ml/agents/_register
   }
 }
 ```
-Note the root chatbot agent id, then login your OpenSearch server, go to OpenSearch config folder `$OS_HOME/config` and run this
+Note the root chatbot agent ID, then log in to your OpenSearch server, go to OpenSearch config folder `$OS_HOME/config` and run the following command:
 ```
  curl -k --cert ./kirk.pem --key ./kirk-key.pem -X PUT https://localhost:9200/.plugins-ml-config/_doc/os_chat -H 'Content-Type: application/json' -d'
  {
@@ -825,12 +822,12 @@ Note the root chatbot agent id, then login your OpenSearch server, go to OpenSea
  }'
 ```
 
-Go to your OpenSearch Dashboard config folder, `$OSD_HOME/config`, edit `opensearch_dashboards.yml` by adding this line to the end `assistant.chat.enabled: true`
+Go to your OpenSearch Dashboards config folder, `$OSD_HOME/config`, edit `opensearch_dashboards.yml` by adding the following line to the end: `assistant.chat.enabled: true`.
 
-Restart OpenSearch Dashboard, click the chat icon
+Restart OpenSearch Dashboards, then select the chat icon, as shown in the following image.
 
 ![Alt text](images/chatbot/osd_chatbot_1.png)
 
-Then chat on OpenSearch Dashboard
+You can now chat in OpenSearch Dashboards, as shown in the following image.
 
 ![Alt text](images/chatbot/osd_chatbot_2.png)

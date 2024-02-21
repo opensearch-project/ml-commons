@@ -518,7 +518,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 }
 ```
 
-If you want to only expose question parameter, you can define agent like this way
+To expose only the `question` parameter, define the agent as follows:
 ```
 POST /_plugins/_ml/agents/_register
 {
@@ -551,13 +551,13 @@ POST /_plugins/_ml/agents/_register
       "description": "A general tool to answer any question",
       "parameters": {
         "model_id": "your_llm_model_id",
-        "prompt": "\n\nHuman:You are a professional data analysist. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say don't know. \n\n Context:\n${parameters.SearchIndexTool.output:-}\n\nHuman:${parameters.question}\n\nAssistant:"
+        "prompt": "\n\nHuman:You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say don't know. \n\n Context:\n${parameters.SearchIndexTool.output:-}\n\nHuman:${parameters.question}\n\nAssistant:"
       }
     }
   ]
 }
 ```
-Then you can run agent with only question:
+Then you can run the agent specifying only the `question` parameter:
 ```
 POST /_plugins/_ml/agents/your_agent_id/_execute
 {
@@ -592,7 +592,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
 }
 ```
 
-If you want to only expose question parameter, refer to step 5.2.2.
+If you want to only expose the `question` parameter, see step 5.2.2.
 
 #### 5.2.4 Execute agent with hybrid search query
 For more information, see [Hybrid Search](https://opensearch.org/docs/latest/search-plugins/hybrid-search),
@@ -663,7 +663,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
     }
 }
 ```
-If you want to only expose question parameter, refer to step 5.2.2.
+If you want to only expose the `question` parameter, see step 5.2.2.
 ### 5.3 Natural language query (NLQ)
 
 The `PPLTool` can translate natural language to [PPL](https://opensearch.org/docs/latest/search-plugins/sql/ppl/index/)
