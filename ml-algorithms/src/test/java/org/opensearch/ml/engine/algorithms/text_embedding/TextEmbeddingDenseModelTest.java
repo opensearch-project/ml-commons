@@ -603,8 +603,11 @@ public class TextEmbeddingDenseModelTest {
     public void test_async_inference() {
         exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("Method is not implemented");
-        textEmbeddingDenseModel.asyncPredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), mock(
-            ActionListener.class));
+        textEmbeddingDenseModel
+            .asyncPredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                mock(ActionListener.class)
+            );
     }
 
     @After
