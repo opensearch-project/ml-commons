@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.httpclient;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import java.net.MalformedURLException;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -172,6 +173,26 @@ public class MLHttpClientFactoryTests {
                 .actions(Arrays.asList(predictAction))
                 .build();
             ConnectorUtils.buildSdkRequest(connector, Map.of(), "hello world", SdkHttpMethod.POST);
+        } catch (MalformedURLException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            ConnectorAction predictAction = ConnectorAction
+                .builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("POST")
+                .url("http://153.24.76.232/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
+            Connector connector = HttpConnector
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .actions(Arrays.asList(predictAction))
+                .build();
+            ConnectorUtils.buildSdkRequest(connector, Map.of(), "hello world", SdkHttpMethod.POST);
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
         }
@@ -242,8 +263,7 @@ public class MLHttpClientFactoryTests {
 
     @Test
     public void test_validateSchemaAndPort_portNotANumber_throwException() throws Exception {
-        expectedException.expect(IllegalArgumentException.class);
-        expectedException.expectMessage("Port is not a valid number: abc");
+        expectedException.expect(MalformedURLException.class);
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)

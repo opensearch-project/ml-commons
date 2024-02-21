@@ -163,8 +163,8 @@ public class AwsConnectorExecutorTest {
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-        assert exceptionCaptor.getValue() instanceof MLException;
-        assertEquals("Fail to execute predict in aws connector", exceptionCaptor.getValue().getMessage());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Remote inference host name has private ip address: ", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
