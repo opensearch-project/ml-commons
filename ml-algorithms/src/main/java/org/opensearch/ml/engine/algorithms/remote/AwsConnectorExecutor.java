@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
