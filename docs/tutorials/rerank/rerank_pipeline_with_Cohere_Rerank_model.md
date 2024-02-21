@@ -4,7 +4,7 @@
 It can rerank search results, providing a relevance score for each document in the search results with respect to the search query.
 The relevance score is calculated by a cross-encoder model. 
 
-This tutorial explains how to use the [Cohere Rerank](https://docs.cohere.com/reference/rerank-1) model in a reranking pipeline (todo: add doc link). 
+This tutorial explains how to use the [Cohere Rerank](https://docs.cohere.com/reference/rerank-1) model in a reranking pipeline. 
 
 Note: Replace the placeholders that start with `your_` with your own values.
 
