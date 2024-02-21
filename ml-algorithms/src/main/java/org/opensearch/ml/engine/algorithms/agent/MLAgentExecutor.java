@@ -98,7 +98,7 @@ public class MLAgentExecutor implements Executable {
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        if (inputDataSet.getParameters() == null) {
+        if (inputDataSet == null || inputDataSet.getParameters() == null) {
             throw new IllegalArgumentException("wrong input");
         }
 
