@@ -6,7 +6,10 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +66,7 @@ public class HttpJsonConnectorExecutorTest {
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         executor.invokeRemoteModel(null, null, null, null, null, actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
-        Mockito.verify(actionListener, Mockito.times(1)).onFailure(captor.capture());
+        Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assertEquals("unsupported http method", captor.getValue().getMessage());
     }
 
@@ -94,7 +97,7 @@ public class HttpJsonConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
-        Mockito.verify(actionListener, Mockito.times(1)).onFailure(captor.capture());
+        Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof IllegalArgumentException;
         assertEquals("Remote inference host name has private ip address: 127.0.0.1", captor.getValue().getMessage());
     }
@@ -126,7 +129,7 @@ public class HttpJsonConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
-        Mockito.verify(actionListener, Mockito.times(1)).onFailure(captor.capture());
+        Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof IllegalArgumentException;
         assertEquals("Content length is 0. Aborting request to remote model", captor.getValue().getMessage());
     }
@@ -185,6 +188,40 @@ public class HttpJsonConnectorExecutorTest {
                 new WrappedCountDownLatch(0, new CountDownLatch(1)),
                 actionListener
             );
+    }
+
+    @Test
+    public void invokeRemoteModel_nullHttpClient_throwMLException() throws NoSuchFieldException, IllegalAccessException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("hello world")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        Field httpClientField = HttpJsonConnectorExecutor.class.getDeclaredField("httpClient");
+        httpClientField.setAccessible(true);
+        httpClientField.set(executor, null);
+        executor
+            .invokeRemoteModel(
+                createMLInput(),
+                new HashMap<>(),
+                "hello world",
+                new HashMap<>(),
+                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                actionListener
+            );
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(argumentCaptor.capture());
+        assert argumentCaptor.getValue() instanceof NullPointerException;
     }
 
     private MLInput createMLInput() {
