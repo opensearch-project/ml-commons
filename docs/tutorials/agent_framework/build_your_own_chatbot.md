@@ -15,6 +15,9 @@ This tutorial will show you how to use `conversational` agent to build your own 
 Note: You should replace the placeholders with prefix `your_` with your own value
 
 # Steps
+## 0. preparation
+
+Login OpenSearch Dashboard homepage, click "Add sample data", then add "Sample eCommerce orders" data.
 
 ## 1. Set up knowledge base
 
@@ -102,7 +105,8 @@ POST /_plugins/_ml/connectors/_create
     "anthropic_version": "bedrock-2023-05-31",
     "max_tokens_to_sample": 8000,
     "temperature": 0.0001,
-    "response_filter": "$.completion"
+    "response_filter": "$.completion",
+    "stop_sequences": ["\n\nHuman:","\nObservation:","\n\tObservation:","\nObservation","\n\tObservation","\n\nQuestion"]
   },
   "credential": {
     "access_key": "your_aws_access_key",
@@ -118,7 +122,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
-      "request_body": "{\"prompt\":\"${parameters.prompt}\", \"max_tokens_to_sample\":${parameters.max_tokens_to_sample}, \"temperature\":${parameters.temperature},  \"anthropic_version\":\"${parameters.anthropic_version}\" }"
+      "request_body": "{\"prompt\":\"${parameters.prompt}\", \"stop_sequences\": ${parameters.stop_sequences}, \"max_tokens_to_sample\":${parameters.max_tokens_to_sample}, \"temperature\":${parameters.temperature},  \"anthropic_version\":\"${parameters.anthropic_version}\" }"
     }
   ]
 }
@@ -593,7 +597,9 @@ POST _plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "model": "gpt-3.5-turbo",
-    "response_filter": "$.choices[0].message.content"
+    "response_filter": "$.choices[0].message.content",
+    "stop": ["\n\nHuman:","\nObservation:","\n\tObservation:","\n\tObservation","\n\nQuestion"],
+    "system_instruction": "You are an Assistant which can answer kinds of questions."
   },
   "credential": {
     "openAI_key": "your_openAI_key"
