@@ -258,7 +258,8 @@ POST _plugins/_ml/agents/_register
       }
     },
     {
-      "type": "CatIndexTool"
+      "type": "CatIndexTool",
+      "description": "Use this tool to get OpenSearch index information: (health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, store.size, primary.store.size). \nIt takes 2 optional arguments named `index` which is a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices), and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false)."
     },
     {
       "type": "SearchAnomalyDetectorsTool"
