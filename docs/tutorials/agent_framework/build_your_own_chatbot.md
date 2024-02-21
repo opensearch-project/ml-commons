@@ -615,7 +615,7 @@ POST _plugins/_ml/connectors/_create
   ]
 }
 ```
-Create model with connector id in response:
+Create a model using the connector ID from the response:
 ```
 POST /_plugins/_ml/models/_register?deploy=true
 {
