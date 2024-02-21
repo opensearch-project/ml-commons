@@ -1,6 +1,7 @@
 # Topic
 
-Reranking pipeline is a feature released in OpenSearch 2.12. It can rerank search results, providing a relevance score for each document in the search results with respect to the search query.
+[Reranking pipeline](https://opensearch.org/docs/latest/search-plugins/search-relevance/reranking-search-results/) is a feature released in OpenSearch 2.12.
+It can rerank search results, providing a relevance score for each document in the search results with respect to the search query.
 The relevance score is calculated by a cross-encoder model. 
 
 This tutorial explains how to use the [Cohere Rerank](https://docs.cohere.com/reference/rerank-1) model in a reranking pipeline (todo: add doc link). 
@@ -68,6 +69,10 @@ POST _plugins/_ml/models/your_model_id/_predict
   }
 }
 ```
+
+The value `top_n` must be the size of `documents` list. This is to keep compatible with Rerank Pipeline.
+You can customize the number of top document returns in the response using the OpenSearch query parameter size. Refer to step 2.2 for more details.
+
 Sample response:
 
 Explanation of the response:
@@ -161,12 +166,15 @@ PUT /_search/pipeline/rerank_pipeline_cohere
 ```
 ### 2.2 Test reranking
 
+You can tune `size` if you want to return less result. For example, set `"size": 2` if you want to return top 2 documents.
+
 ```
 GET my-test-data/_search?search_pipeline=rerank_pipeline_cohere
 {
   "query": {
     "match_all": {}
   },
+  "size": 4,
   "ext": {
     "rerank": {
       "query_context": {
