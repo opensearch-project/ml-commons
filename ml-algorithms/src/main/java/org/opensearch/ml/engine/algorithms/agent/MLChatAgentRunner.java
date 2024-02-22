@@ -83,6 +83,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String ACTION_INPUT = "action_input";
     public static final String FINAL_ANSWER = "final_answer";
     public static final String THOUGHT_RESPONSE = "thought_response";
+    public static final String EMPTY_LABEL = "empty";
 
     private Client client;
     private Settings settings;
@@ -419,6 +420,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             tmpParameters.put("prompt.format_instruction", PROMPT_FORMAT_INSTRUCTION_FOR_THOUGHT_EXTRACT);
             tmpParameters.put("prompt.suffix", PROMPT_TEMPLATE_SUFFIX_FOR_THOUGHT_EXTRACT);
+            tmpParameters.remove(PROMPT);
             String thuoghtPrompt = constructLLMPrompt(tools, tmpParameters);
             StringSubstitutor tmpSubstitutor = new StringSubstitutor(
                 Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
@@ -485,7 +487,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         tmpParameters.put("prompt.format_instruction", PROMPT_FORMAT_INSTRUCTION_FOR_ACTION_INPUT);
                         tmpParameters.put("prompt.suffix", PROMPT_TEMPLATE_SUFFIX_FOR_ACTION_INPUT);
                         tmpParameters.put("current_thought", thought);
-
+                        tmpParameters.remove(PROMPT);
                         String actionPrompt = constructLLMPrompt(ImmutableMap.of(action, tools.get(action)), tmpParameters);
                         tmpParameters.put("prompt", tmpSubstitutor.replace(actionPrompt));
                         ActionRequest getActionInputRequest = new MLPredictionTaskRequest(

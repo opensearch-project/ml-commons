@@ -10,17 +10,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.FINAL_ANSWER;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.*;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.security.AccessController;
@@ -223,7 +213,7 @@ public class AgentUtils {
                 modelOutput.remove(ACTION);
             }
         }
-        if (!modelOutput.containsKey(ACTION) && !modelOutput.containsKey(FINAL_ANSWER)) {
+        if (!modelOutput.containsKey(ACTION) && !modelOutput.containsKey(FINAL_ANSWER) && !modelOutput.containsKey(EMPTY_LABEL)) {
             modelOutput.put(FINAL_ANSWER, modelOutput.get(THOUGHT_RESPONSE));
         }
         return modelOutput;
