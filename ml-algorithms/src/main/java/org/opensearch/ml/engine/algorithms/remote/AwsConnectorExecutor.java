@@ -117,8 +117,6 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
                 throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
             }
             String modelResponse = responseBuilder.toString();
-            log.info("from LLM");
-            log.info(modelResponse);
             if (statusCode < 200 || statusCode >= 300) {
                 throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
             }
