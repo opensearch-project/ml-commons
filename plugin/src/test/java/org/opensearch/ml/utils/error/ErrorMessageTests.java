@@ -10,7 +10,12 @@ import static org.junit.Assert.assertEquals;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.SERVICE_UNAVAILABLE;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+
 import org.junit.Test;
+import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.transport.ActionTransportException;
 
 public class ErrorMessageTests {
 
@@ -26,6 +31,22 @@ public class ErrorMessageTests {
         ErrorMessage errorMessage = new ErrorMessage(new IllegalStateException("illegal state"), SERVICE_UNAVAILABLE.getStatus());
 
         assertEquals(errorMessage.fetchDetails(), "illegal state");
+    }
+
+    @Test
+    public void fetchDetailsWithPrivateIP() throws UnknownHostException {
+        InetAddress ipAddress = InetAddress.getByName("192.168.1.1");
+        Throwable throwable = new ActionTransportException(
+            "node 1",
+            new TransportAddress(ipAddress, 9300),
+            null,
+            "Node not connected",
+            null
+        );
+        ErrorMessage errorMessage = new ErrorMessage(throwable, SERVICE_UNAVAILABLE.getStatus());
+
+        assertEquals(throwable.getLocalizedMessage(), "[node 1][192.168.1.1:9300] Node not connected");
+        assertEquals(errorMessage.fetchDetails(), "[node 1][x.x.x.x:x] Node not connected");
     }
 
     @Test

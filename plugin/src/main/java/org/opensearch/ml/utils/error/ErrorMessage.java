@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.transport.ActionTransportException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -50,12 +51,34 @@ public class ErrorMessage {
     }
 
     protected String fetchDetails() {
-        // Some exception prints internal information (full class name) which is security concern
-        return emptyStringIfNull(exception.getLocalizedMessage());
+        String msg;
+        // Prevent the method from exposing internal information such as internal ip address etc. that is a security concern.
+        if (hasInternalInformation(exception)) {
+            msg = decorateMessage(exception);
+        } else {
+            msg = exception.getLocalizedMessage();
+        }
+
+        return emptyStringIfNull(msg);
     }
 
     private String emptyStringIfNull(String str) {
         return str != null ? str : "";
+    }
+
+    private Boolean hasInternalInformation(Throwable t) {
+        if (t instanceof ActionTransportException) {
+            return true;
+        }
+        return false;
+    }
+
+    private String decorateMessage(Throwable t) {
+        if (t instanceof ActionTransportException) {
+            String regexIPPort = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(:\\d{1,5})?";
+            return emptyStringIfNull(t.getLocalizedMessage()).replaceAll(regexIPPort, "x.x.x.x:x");
+        }
+        return "";
     }
 
     @SneakyThrows
