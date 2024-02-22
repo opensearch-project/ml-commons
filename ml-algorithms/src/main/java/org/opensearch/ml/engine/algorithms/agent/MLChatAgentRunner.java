@@ -417,7 +417,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     ) {
         String toolSeletctionType = "original";
         String toolSelectionModelId;
-        if (agentParameters.containsKey("tool_selection"))
+        if (agentParameters !=null && agentParameters.containsKey("tool_selection"))
         {
             Map<String, String> toolSelectionConfig = gson.fromJson(agentParameters.get("tool_selection"), Map.class);
             toolSeletctionType = toolSelectionConfig.getOrDefault("type", "original");
