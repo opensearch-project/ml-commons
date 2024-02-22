@@ -50,7 +50,6 @@ public class MLAgent implements ToXContentObject, Writeable {
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
-    private MLToolSelectionSpec toolSelectionSpec;
 
     private Instant createdTime;
     private Instant lastUpdateTime;
