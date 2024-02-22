@@ -282,7 +282,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             .createInteraction("cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta"), createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("no index to add conversation to"));
+        assert (argCaptor.getValue().getMessage().equals("no index to add memory to"));
     }
 
     public void testCreate_BadRestStatus_ThenFail() {
@@ -301,7 +301,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             .createInteraction("cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta"), createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Failed to create interaction"));
+        assert (argCaptor.getValue().getMessage().equals("Failed to create message"));
     }
 
     public void testCreate_InternalFailure_ThenFail() {
@@ -347,7 +347,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
+            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to memory cid"));
     }
 
     public void testCreate_NoAccessWithUser_ThenFail() {
@@ -360,7 +360,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             .createInteraction("cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta"), createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to conversation cid"));
+        assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to memory cid"));
     }
 
     public void testCreate_CreateIndexFails_ThenFail() {
@@ -445,7 +445,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
+            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to memory cid"));
     }
 
     public void testGetTraces_NoIndex_ThenEmpty() {
@@ -660,7 +660,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
+            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to memory cid"));
     }
 
     public void testDelete_NoAccessWithUser_ThenFail() {
@@ -671,7 +671,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.deleteConversation("cid", deleteConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to conversation cid"));
+        assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to memory cid"));
     }
 
     public void testDelete_AccessFails_ThenFail() {
@@ -740,7 +740,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.searchInteractions(cid, request, searchInteractionsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(searchInteractionsListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to conversation test_cid"));
+        assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to memory test_cid"));
     }
 
     public void testGetSg_NoIndex_ThenFail() {
@@ -750,10 +750,11 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
+        System.out.println(argCaptor.getValue().getMessage());
         assert (argCaptor
             .getValue()
             .getMessage()
-            .equals("no such index [.plugins-ml-memory-message] and cannot get interaction since the interactions index does not exist"));
+            .equals("no such index [.plugins-ml-memory-message] and cannot get message since the messages index does not exist"));
     }
 
     public void testGetSg_InteractionNotExist_ThenFail() {
@@ -772,7 +773,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Interaction [iid] not found"));
+        assert (argCaptor.getValue().getMessage().equals("Message [iid] not found"));
     }
 
     public void testGetSg_WrongId_ThenFail() {
@@ -792,7 +793,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Interaction [iid] not found"));
+        assert (argCaptor.getValue().getMessage().equals("Message [iid] not found"));
     }
 
     public void testGetSg_RefreshFails_ThenFail() {
@@ -837,7 +838,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [Henry] does not have access to interaction iid"));
+        assert (argCaptor.getValue().getMessage().equals("User [Henry] does not have access to message iid"));
     }
 
     public void testGetSg_GrantAccess_Success() {
@@ -873,7 +874,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getTraces("iid", 0, 10, getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [Xun] does not have access to interaction iid"));
+        assert (argCaptor.getValue().getMessage().equals("User [Xun] does not have access to message iid"));
     }
 
     public void testUpdateInteraction_NoAccess_ThenFail() {
@@ -891,7 +892,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.updateInteraction("iid", new UpdateRequest(), updateListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(updateListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [Xun] does not have access to interaction iid"));
+        assert (argCaptor.getValue().getMessage().equals("User [Xun] does not have access to message iid"));
     }
 
     public void testUpdateInteraction_Success() {

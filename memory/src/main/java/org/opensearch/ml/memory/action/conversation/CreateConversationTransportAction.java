@@ -86,7 +86,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(r -> { internalListener.onResponse(new CreateConversationResponse(r)); }, e -> {
-                log.error("Failed to create new conversation with name " + request.getName(), e);
+                log.error("Failed to create new memory with name " + request.getName(), e);
                 internalListener.onFailure(e);
             });
 
@@ -96,7 +96,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
                 cmHandler.createConversation(name, applicationType, al);
             }
         } catch (Exception e) {
-            log.error("Failed to create new conversation with name " + request.getName(), e);
+            log.error("Failed to create new memory with name " + request.getName(), e);
             actionListener.onFailure(e);
         }
     }
