@@ -10,9 +10,9 @@ Note: Replace the placeholders that start with `your_` with your own values.
 
 # Steps
 
-The Cohere Embed v3 model supports several input types. This tutorial uses the following input types (from the Cohere [documentation](https://docs.cohere.com/reference/embed)):
-> - `search_document`: Used for embeddings stored in a vector database for search use cases.
-> - `"search_query"`: Used for embeddings of search queries run against a vector DB to find relevant documents.
+The Cohere Embed v3 model supports several input types. This tutorial uses the following input types (from the Cohere [documentation](https://docs.cohere.com/docs/embed-api#the-input_type-parameter)):
+> - `input_type="search_document":`: Use this when you have texts (documents) that you want to store in a vector database.
+> - `input_type="search_query":`: Use this when structuring search queries to find the most relevant documents in your vector database.
 
 You will create two models in this tutorial:
 - A model used for ingestion with the `search_document` input type 
@@ -63,9 +63,7 @@ POST /_plugins/_ml/models/_register?deploy=true
     "connector_id": "your_connector_id"
 }
 ```
-Note the model ID; you'll use it in step 2.1.
-
-Test the model:
+Use the model ID from the response to test predict API (you'll use the model id in step 2.1 too.):
 ```
 POST /_plugins/_ml/models/your_embedding_model_id/_predict
 {
@@ -76,6 +74,7 @@ POST /_plugins/_ml/models/your_embedding_model_id/_predict
 ```
 Sample response:
 
+Note: Set `inference_results.output.data_type` as `FLOAT32` just to keep compatible with neural-search plugin. The embedding value is `INT8` actually.
 ```
 {
     "inference_results": [
@@ -136,6 +135,7 @@ PUT /_ingest/pipeline/pipeline-cohere
   ]
 }
 ```
+The response simply acknowledges that the request has been executed.
 
 ### 2.2 Create KNN index with byte-quantized vector
 For more information, refer to [this blog](https://opensearch.org/blog/byte-quantized-vectors-in-opensearch/).
