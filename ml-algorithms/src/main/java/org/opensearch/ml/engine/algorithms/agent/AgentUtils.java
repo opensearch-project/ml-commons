@@ -383,10 +383,8 @@ public class AgentUtils {
         return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
     }
 
-    public static void fillSelectTool(Map<String, String> params)
-    {
-        if (params.containsKey(SELECTED_TOOLS))
-        {
+    public static void fillSelectTool(Map<String, String> params) {
+        if (params.containsKey(SELECTED_TOOLS)) {
             String selectedTools = params.get(SELECTED_TOOLS);
             StringSubstitutor substitutor = new StringSubstitutor(params, "${parameters.", "}");
             selectedTools = substitutor.replace(selectedTools);
