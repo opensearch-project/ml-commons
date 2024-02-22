@@ -12,12 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
@@ -200,6 +195,7 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
@@ -273,6 +269,7 @@ import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
+import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -296,7 +293,13 @@ import com.google.common.annotations.VisibleForTesting;
 
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin, ExtensiblePlugin {
+public class MachineLearningPlugin extends Plugin
+    implements
+        ActionPlugin,
+        SearchPlugin,
+        SearchPipelinePlugin,
+        ExtensiblePlugin,
+        IngestPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -976,5 +979,16 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 externalToolFactories.put(annotationValue, toolFactory);
             }
         }
+    }
+
+    /**
+     * To get ingest processors
+     */
+    @Override
+    public Map<String, org.opensearch.ingest.Processor.Factory> getProcessors(org.opensearch.ingest.Processor.Parameters parameters) {
+        Map<String, org.opensearch.ingest.Processor.Factory> processors = new HashMap<>();
+        processors
+            .put(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
+        return Collections.unmodifiableMap(processors);
     }
 }
