@@ -41,6 +41,9 @@ public class MLIndicesHandler {
     ClusterService clusterService;
     Client client;
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
+    // This setting is for index update only, so only dynamic settings should be contained!
+    // For index creation setting, use INDEX_SETTINGS directly.
+    public static final Map<String, Object> UPDATED_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-1");
 
     static {
         for (MLIndex mlIndex : MLIndex.values()) {
@@ -123,7 +126,7 @@ public class MLIndicesHandler {
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
                                             UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                            updateSettingRequest.indices(indexName).settings(INDEX_SETTINGS);
+                                            updateSettingRequest.indices(indexName).settings(UPDATED_INDEX_SETTINGS);
                                             client
                                                 .admin()
                                                 .indices()
