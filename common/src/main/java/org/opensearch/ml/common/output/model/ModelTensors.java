@@ -35,6 +35,12 @@ public class ModelTensors implements Writeable, ToXContentObject {
         this.mlModelTensors = mlModelTensors;
     }
 
+    @Builder
+    public ModelTensors(List<ModelTensor> mlModelTensors, Integer statusCode) {
+        this.mlModelTensors = mlModelTensors;
+        this.statusCode = statusCode;
+    }
+
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();

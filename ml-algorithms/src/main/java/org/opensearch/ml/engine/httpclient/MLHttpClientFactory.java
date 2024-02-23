@@ -33,10 +33,11 @@ public class MLHttpClientFactory {
     }
 
     public static void validate(String protocol, String host, int port) throws UnknownHostException {
-        if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equals(protocol)) {
+        if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
             log.error("Remote inference protocol is not http or https: " + protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
         }
+        // When port is not specified, the default port is -1, and we need to set it to 80 or 443 based on protocol.
         if (port == -1) {
             if (protocol == null || "http".equals(protocol.toLowerCase(Locale.getDefault()))) {
                 port = 80;

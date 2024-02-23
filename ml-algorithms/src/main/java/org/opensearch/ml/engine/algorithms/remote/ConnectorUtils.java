@@ -27,6 +27,7 @@ import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -222,12 +223,13 @@ public class ConnectorUtils {
             Object filteredResponse = JsonPath.parse(response).read(parameters.get(RESPONSE_FILTER_FIELD));
             connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
         }
-        return ModelTensors.builder().mlModelTensors(modelTensors).build();
+        return ModelTensors.builder().statusCode(RestStatus.OK.getStatus()).mlModelTensors(modelTensors).build();
     }
 
     public static ModelTensors processErrorResponse(String errorResponse) {
         return ModelTensors
             .builder()
+            .statusCode(RestStatus.INTERNAL_SERVER_ERROR.getStatus())
             .mlModelTensors(List.of(ModelTensor.builder().dataAsMap(Map.of("remote_response", errorResponse)).build()))
             .build();
     }
@@ -285,7 +287,7 @@ public class ConnectorUtils {
         } else {
             requestBody = RequestBody.empty();
         }
-        if (SdkHttpMethod.POST == method && "0".equals(requestBody.optionalContentLength().get().toString())) {
+        if (SdkHttpMethod.POST == method && 0 == requestBody.optionalContentLength().get()) {
             log.error("Content length is 0. Aborting request to remote model");
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
