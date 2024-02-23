@@ -7,7 +7,8 @@ package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
-import static org.opensearch.ml.memory.index.ConversationMetaIndex.INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_INDEX_SETTINGS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -41,9 +42,6 @@ public class MLIndicesHandler {
     ClusterService clusterService;
     Client client;
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
-    // This setting is for index update only, so only dynamic settings should be contained!
-    // For index creation setting, use INDEX_SETTINGS directly.
-    public static final Map<String, Object> UPDATED_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-1");
 
     static {
         for (MLIndex mlIndex : MLIndex.values()) {
