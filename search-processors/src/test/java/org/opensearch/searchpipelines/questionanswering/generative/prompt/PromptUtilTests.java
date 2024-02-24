@@ -117,6 +117,42 @@ public class PromptUtilTests extends OpenSearchTestCase {
         assertTrue(parameter.contains(systemPrompt));
     }
 
+    public void testBuildOciGenaiPromptParameter() {
+        final String question = "Who am I";
+        final List<String> contexts = List.of("context 1", "context 2");
+        final List<Interaction> chatHistory = List
+            .of(
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 1",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer1"
+                            )
+                    ),
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 2",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer2"
+                            )
+                    )
+            );
+        final String prompt = PromptUtil.buildSingleStringPromptForOciGenAi(question, chatHistory, contexts);
+        assertEquals("context 1\ncontext 2\nmessage 1\nanswer1\nmessage 2\nanswer2\nWho am I", prompt);
+    }
+
     private boolean isJson(String Json) {
         try {
             new JSONObject(Json);

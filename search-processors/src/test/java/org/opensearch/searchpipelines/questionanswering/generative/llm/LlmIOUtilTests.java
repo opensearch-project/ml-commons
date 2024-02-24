@@ -61,4 +61,17 @@ public class LlmIOUtilTests extends OpenSearchTestCase {
         assertTrue(input instanceof ChatCompletionInput);
         assertEquals(Llm.ModelProvider.COHERE, input.getModelProvider());
     }
+
+    public void testChatCompletionInputForOciGenai() {
+        final ChatCompletionInput input = LlmIOUtil
+                .createChatCompletionInput(
+                        LlmIOUtil.OCI_GENAI_PROVIDER_PREFIX + "model",
+                        "question",
+                        Collections.emptyList(),
+                        Collections.emptyList(),
+                        0,
+                        null);
+        assertTrue(input instanceof ChatCompletionInput);
+        assertEquals(Llm.ModelProvider.OCI_GENAI, input.getModelProvider());
+    }
 }

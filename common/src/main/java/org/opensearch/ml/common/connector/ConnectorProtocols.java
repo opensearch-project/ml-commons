@@ -14,7 +14,11 @@ public class ConnectorProtocols {
     public static final String HTTP = "http";
     public static final String AWS_SIGV4 = "aws_sigv4";
 
-    public static final List<String> VALID_PROTOCOLS = Arrays.asList(AWS_SIGV4, HTTP);
+    /**
+     * oci_sigv1 is a protocol to call OCI services API
+     */
+    public static final String OCI_SIGV1 = "oci_sigv1";
+    public static final List<String> VALID_PROTOCOLS = Arrays.asList(AWS_SIGV4, HTTP, OCI_SIGV1);
 
     public static void validateProtocol(String protocol) {
         if (protocol == null) {

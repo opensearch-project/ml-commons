@@ -19,8 +19,10 @@ package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.core.common.Strings;
@@ -55,7 +57,7 @@ public class PromptUtil {
 
     private static final String roleUser = "user";
 
-    private static final String NEWLINE = "\\n";
+    private static final String NEWLINE = "\n";
 
     public static String getQuestionRephrasingPrompt(String originalQuestion, List<Interaction> chatHistory) {
         return null;
@@ -165,6 +167,43 @@ public class PromptUtil {
         messageArray.add(new Message(ChatRole.USER, "ANSWER:").toJson());
 
         return messageArray.toString();
+    }
+
+    /**
+     * Create the prompt that is used for OCI Genai service
+     * to generate answer for a given question
+     *
+     * @param question the llm question
+     * @param chatHistory the previous conversation interactions
+     * @param contexts the question contexts
+     * @return the prompt
+     */
+    public static String buildSingleStringPromptForOciGenAi(
+        final String question,
+        final List<Interaction> chatHistory,
+        final List<String> contexts
+    ) {
+        final StringBuilder prompt = new StringBuilder();
+
+        for (String context : contexts) {
+            prompt.append(context);
+            prompt.append(NEWLINE);
+        }
+
+        final List<Interaction> sortedInteractions = chatHistory
+            .stream()
+            .sorted(Comparator.comparing(Interaction::getCreateTime))
+            .collect(Collectors.toList());
+
+        sortedInteractions.forEach(interaction -> {
+            prompt.append(interaction.getInput());
+            prompt.append(NEWLINE);
+            prompt.append(interaction.getResponse());
+            prompt.append(NEWLINE);
+        });
+
+        prompt.append(question);
+        return prompt.toString();
     }
 
     public static String getPromptTemplate(String systemPrompt, String userInstructions) {
