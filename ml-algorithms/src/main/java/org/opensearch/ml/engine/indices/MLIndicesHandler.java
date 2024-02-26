@@ -7,7 +7,8 @@ package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
-import static org.opensearch.ml.memory.index.ConversationMetaIndex.INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_INDEX_SETTINGS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -123,7 +124,7 @@ public class MLIndicesHandler {
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
                                             UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                            updateSettingRequest.indices(indexName).settings(INDEX_SETTINGS);
+                                            updateSettingRequest.indices(indexName).settings(UPDATED_INDEX_SETTINGS);
                                             client
                                                 .admin()
                                                 .indices()
