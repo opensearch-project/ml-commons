@@ -32,6 +32,13 @@ public class MLHttpClientFactory {
         }
     }
 
+    /**
+     * Validate the input parameters, such as protocol, host and port.
+     * @param protocol The protocol supported in remote inference, currently only http and https are supported.
+     * @param host The host name of the remote inference server, host must be a valid ip address or domain name and must not be localhost.
+     * @param port The port number of the remote inference server, port number must be in range [0, 65536].
+     * @throws UnknownHostException
+     */
     public static void validate(String protocol, String host, int port) throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
             log.error("Remote inference protocol is not http or https: " + protocol);
