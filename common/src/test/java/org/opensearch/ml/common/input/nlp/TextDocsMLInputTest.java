@@ -39,9 +39,9 @@ public class TextDocsMLInputTest {
     @Before
     public void setUp() throws Exception {
         ModelResultFilter resultFilter = ModelResultFilter.builder().returnBytes(true).returnNumber(true)
-                .targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
+            .targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
         MLInputDataset inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2"))
-                .resultFilter(resultFilter).build();
+            .resultFilter(resultFilter).build();
         input = new TextDocsMLInput(algorithm, inputDataset);
     }
 
@@ -68,8 +68,8 @@ public class TextDocsMLInputTest {
 
     private void parseMLInput(String jsonStr, int docSize) throws IOException {
         XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
+            .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());

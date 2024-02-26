@@ -135,6 +135,12 @@ public class ModelHelper {
                                     case TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD:
                                         configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
                                         break;
+                                    case TextEmbeddingModelConfig.QUERY_PREFIX:
+                                        configBuilder.queryPrefix(configEntry.getValue().toString());
+                                        break;
+                                    case TextEmbeddingModelConfig.PASSAGE_PREFIX:
+                                        configBuilder.passagePrefix(configEntry.getValue().toString());
+                                        break;
                                     default:
                                         break;
                                 }

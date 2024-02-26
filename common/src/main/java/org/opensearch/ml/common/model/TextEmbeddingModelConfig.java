@@ -37,16 +37,25 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
     public static final String POOLING_MODE_FIELD = "pooling_mode";
     public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
     public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
+    public static final String QUERY_PREFIX = "query_prefix";
+    public static final String PASSAGE_PREFIX = "passage_prefix";
 
     private final Integer embeddingDimension;
     private final FrameworkType frameworkType;
     private final PoolingMode poolingMode;
     private final boolean normalizeResult;
     private final Integer modelMaxLength;
+    private final String queryPrefix;
+    private final String passagePrefix;
+
+    public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig,
+        PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength) {
+        this(modelType, embeddingDimension, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength, null, null);
+    }
 
     @Builder(toBuilder = true)
     public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig,
-                                    PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength) {
+                                    PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength, String queryPrefix, String passagePrefix) {
         super(modelType, allConfig);
         if (embeddingDimension == null) {
             throw new IllegalArgumentException("embedding dimension is null");
@@ -59,6 +68,8 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelMaxLength = modelMaxLength;
+        this.queryPrefix = queryPrefix;
+        this.passagePrefix = passagePrefix;
     }
 
     public static TextEmbeddingModelConfig parse(XContentParser parser) throws IOException {
@@ -69,6 +80,8 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
+        String queryPrefix = null;
+        String passagePrefix = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -97,12 +110,18 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
                 case MODEL_MAX_LENGTH_FIELD:
                     modelMaxLength = parser.intValue();
                     break;
+                case QUERY_PREFIX:
+                    queryPrefix = parser.text();
+                    break;
+                case PASSAGE_PREFIX:
+                    passagePrefix = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new TextEmbeddingModelConfig(modelType,  embeddingDimension, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength);
+        return new TextEmbeddingModelConfig(modelType,  embeddingDimension, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength, queryPrefix, passagePrefix);
     }
 
     @Override
@@ -121,6 +140,8 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         }
         normalizeResult = in.readBoolean();
         modelMaxLength = in.readOptionalInt();
+        queryPrefix = in.readOptionalString();
+        passagePrefix = in.readOptionalString();
     }
 
     @Override
@@ -136,6 +157,8 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         }
         out.writeBoolean(normalizeResult);
         out.writeOptionalInt(modelMaxLength);
+        out.writeOptionalString(queryPrefix);
+        out.writeOptionalString(passagePrefix);
     }
 
     @Override
@@ -161,6 +184,12 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         }
         if (normalizeResult) {
             builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
+        }
+        if (queryPrefix != null) {
+            builder.field(QUERY_PREFIX, queryPrefix);
+        }
+        if (passagePrefix != null) {
+            builder.field(PASSAGE_PREFIX, passagePrefix);
         }
         builder.endObject();
         return builder;

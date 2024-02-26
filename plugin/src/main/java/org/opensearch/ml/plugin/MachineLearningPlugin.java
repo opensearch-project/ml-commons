@@ -91,6 +91,7 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
 import org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -843,7 +844,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
                 RCFSummarizeParams.XCONTENT_REGISTRY,
                 LogisticRegressionParams.XCONTENT_REGISTRY,
-                TextEmbeddingModelConfig.XCONTENT_REGISTRY
+                TextEmbeddingModelConfig.XCONTENT_REGISTRY,
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY
             );
     }
 
