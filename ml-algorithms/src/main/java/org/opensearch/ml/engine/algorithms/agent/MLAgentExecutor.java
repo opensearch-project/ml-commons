@@ -99,7 +99,7 @@ public class MLAgentExecutor implements Executable {
         String agentId = agentMLInput.getAgentId();
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         if (inputDataSet == null || inputDataSet.getParameters() == null) {
-            throw new IllegalArgumentException("wrong input");
+            throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
         List<ModelTensors> outputs = new ArrayList<>();
