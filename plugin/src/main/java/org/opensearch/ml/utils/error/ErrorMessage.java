@@ -51,7 +51,7 @@ public class ErrorMessage {
     }
 
     protected String fetchDetails() {
-        String msg;
+        final String msg;
         // Prevent the method from exposing internal information such as internal ip address etc. that is a security concern.
         if (hasInternalInformation(exception)) {
             msg = decorateMessage(exception);
