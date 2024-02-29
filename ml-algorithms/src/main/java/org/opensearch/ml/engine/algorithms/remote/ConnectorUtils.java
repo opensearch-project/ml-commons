@@ -226,7 +226,7 @@ public class ConnectorUtils {
         return ModelTensors.builder().statusCode(RestStatus.OK.getStatus()).mlModelTensors(modelTensors).build();
     }
 
-    public static ModelTensors processErrorResponse(Integer statusCode,String errorResponse) {
+    public static ModelTensors processErrorResponse(Integer statusCode, String errorResponse) {
         return ModelTensors
             .builder()
             .statusCode(statusCode)
