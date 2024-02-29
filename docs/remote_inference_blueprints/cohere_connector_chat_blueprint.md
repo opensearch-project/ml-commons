@@ -12,7 +12,6 @@ See [Cohere's /chat API docs](https://docs.cohere.com/reference/chat) for more d
 
 ```json
 POST /_plugins/_ml/model_groups/_register
-
 {
   "name": "cohere_model_group",
   "description": "Your Cohere model group"
@@ -70,7 +69,6 @@ You will now register the model you created using the `model_group_id` and `conn
 
 ```json
 POST /_plugins/_ml/models/_register
-
 {
     "name": "Cohere Chat Model",
     "function_name": "remote",
