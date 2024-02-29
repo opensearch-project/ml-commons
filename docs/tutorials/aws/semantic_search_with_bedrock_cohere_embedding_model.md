@@ -3,7 +3,7 @@
 > The easiest way for setting up embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
 
 > This tutorial explains detail steps if you want to configure everything manually. 
- 
+
 > Bedrock has [quota limit](https://docs.aws.amazon.com/bedrock/latest/userguide/quotas.html). You can purchase [Provisioned Throughput](https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput.html) to increase quota limit.
 
 This doc introduces how to build semantic search in Amazon managed OpenSearch with [Bedrock Titan embedding model](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html).
@@ -23,7 +23,7 @@ Copy the domain ARN which will be used in later steps.
 To invoke Bedrock model, we need to create an IAM role with proper permission.
 This IAM role will be configured in connector. Connector will use this role to invoke Bedrock model.
 
-Go to IAM console, create IAM role `my_invoke_bedrock_role` with:
+Go to IAM console, create IAM role `my_invoke_bedrock_cohere_role` with:
 
 - Custom trust policy:
 ```
@@ -50,11 +50,13 @@ Go to IAM console, create IAM role `my_invoke_bedrock_role` with:
                 "bedrock:InvokeModel"
             ],
             "Effect": "Allow",
-            "Resource": "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v1"
+            "Resource": "arn:aws:bedrock:*::foundation-model/cohere.embed-english-v3"
         }
     ]
 }
 ```
+
+If you need to support multi-language, you can use multilingual model: `cohere.embed-multilingual-v3`
 
 Copy the role ARN which will be used in later steps.
 
@@ -65,7 +67,7 @@ Copy the role ARN which will be used in later steps.
 Generate a new IAM role specifically for signing your create connector request.
 
 
-Create IAM role `my_create_bedrock_connector_role` with 
+Create IAM role `my_create_bedrock_cohere_connector_role` with 
 - Custom trust policy. Note: `your_iam_user_arn` is the IAM user which will run `aws sts assume-role` in step 3.1
 ```
 {
@@ -133,7 +135,9 @@ AWS_SESSION_TOKEN=your_session_token_of_role_created_in_step2.1
 ### 3.2 Create connector
 
 Run this python code with the temporary credential configured in `~/.aws/credentials`
- 
+
+Read [Cohere blueprint](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/cohere_connector_embedding_blueprint.md) for more details.
+
 ```
 import boto3
 import requests 
@@ -150,13 +154,15 @@ path = '/_plugins/_ml/connectors/_create'
 url = host + path
 
 payload = {
-  "name": "Amazon Bedrock Connector: titan embedding v1",
-  "description": "The connector to bedrock Titan embedding model",
+  "name": "Amazon Bedrock Cohere Connector: embedding v3",
+  "description": "The connector to Bedrock Cohere embedding model",
   "version": 1,
   "protocol": "aws_sigv4",
   "parameters": {
     "region": "your_bedrock_model_region",
-    "service_name": "bedrock"
+    "service_name": "bedrock",
+    "input_type":"search_document",
+    "truncate": "END"
   },
   "credential": {
     "roleArn": "your_iam_role_arn_created_in_step1"
@@ -165,14 +171,14 @@ payload = {
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.your_bedrock_model_region.amazonaws.com/model/amazon.titan-embed-text-v1/invoke",
+      "url": "https://bedrock-runtime.your_bedrock_model_region.amazonaws.com/model/cohere.embed-english-v3/invoke",
       "headers": {
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
-      "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
-      "pre_process_function": "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"inputText\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";",
-      "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
+      "request_body": "{ \"texts\": ${parameters.texts}, \"truncate\": \"${parameters.truncate}\", \"input_type\": \"${parameters.input_type}\" }",
+      "pre_process_function": "connector.pre_process.cohere.embedding",
+      "post_process_function": "connector.post_process.cohere.embedding"
     }
   ]
 }
@@ -186,7 +192,7 @@ The script will output connector id.
 
 sample output
 ```
-{"connector_id":"N0qpQY0BOhavBOmfOCnw"}
+{"connector_id":"1p0u8o0BWbTmLN9F2Y7m"}
 ```
 
 Copy connector id which will be used in later steps.
@@ -206,7 +212,7 @@ POST /_plugins/_ml/model_groups/_register
 Sample output
 ```
 {
-  "model_group_id": "LxWiQY0BTaDH9c7t9xeE",
+  "model_group_id": "050q8o0BWbTmLN9Foo4f",
   "status": "CREATED"
 }
 ```
@@ -216,40 +222,40 @@ Sample output
 ```
 POST /_plugins/_ml/models/_register
 {
-  "name": "bedrock titan embedding model v1",
+  "name": "Bedrock Cohere embedding model v3",
   "function_name": "remote",
   "description": "test embedding model",
-  "model_group_id": "LxWiQY0BTaDH9c7t9xeE",
-  "connector_id": "N0qpQY0BOhavBOmfOCnw"
+  "model_group_id": "050q8o0BWbTmLN9Foo4f",
+  "connector_id": "0p0p8o0BWbTmLN9F-o4G"
 }
 ```
 Sample output
 ```
 {
-  "task_id": "O0q3QY0BOhavBOmf1SmL",
+  "task_id": "TRUr8o0BTaDH9c7tSRfx",
   "status": "CREATED",
-  "model_id": "PEq3QY0BOhavBOmf1Sml"
+  "model_id": "VRUu8o0BTaDH9c7t9xet"
 }
 ```
 
 3. Deploy model
 ```
-POST /_plugins/_ml/models/PEq3QY0BOhavBOmf1Sml/_deploy
+POST /_plugins/_ml/models/VRUu8o0BTaDH9c7t9xet/_deploy
 ```
 Sample output
 ```
 {
-  "task_id": "PUq4QY0BOhavBOmfBCkQ",
+  "task_id": "1J0r8o0BWbTmLN9FjY6I",
   "task_type": "DEPLOY_MODEL",
   "status": "COMPLETED"
 }
 ```
 4. Predict
 ```
-POST /_plugins/_ml/models/PEq3QY0BOhavBOmf1Sml/_predict
+POST /_plugins/_ml/models/VRUu8o0BTaDH9c7t9xet/_predict
 {
   "parameters": {
-    "inputText": "hello world"
+    "texts": ["hello world"]
   }
 }
 ```
@@ -263,12 +269,12 @@ Sample response
           "name": "sentence_embedding",
           "data_type": "FLOAT32",
           "shape": [
-            1536
+            1024
           ],
           "data": [
-            0.7265625,
-            -0.0703125,
-            0.34765625,
+            -0.02973938,
+            -0.023651123,
+            -0.06021118,
             ...]
         }
       ],
@@ -284,7 +290,7 @@ Sample response
 Find more details: [ingest pipeline](https://opensearch.org/docs/latest/ingest-pipelines/)
 
 ```
-PUT /_ingest/pipeline/my_bedrock_embedding_pipeline
+PUT /_ingest/pipeline/my_bedrock_cohere_embedding_pipeline
 {
     "description": "text embedding pentest",
     "processors": [
@@ -309,7 +315,7 @@ PUT my_index
   "settings": {
     "index": {
       "knn.space_type": "cosinesimil",
-      "default_pipeline": "my_bedrock_embedding_pipeline",
+      "default_pipeline": "my_bedrock_cohere_embedding_pipeline",
       "knn": "true"
     }
   },
@@ -317,7 +323,7 @@ PUT my_index
     "properties": {
       "text_knn": {
         "type": "knn_vector",
-        "dimension": 1536
+        "dimension": 1024
       }
     }
   }
