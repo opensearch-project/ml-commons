@@ -124,7 +124,7 @@ Note: `conversation_id` here is the string value for "1", but you can use any st
 POST /_plugins/_ml/models/<MODEL_ID_HERE>/_predict
 {
   "parameters": {
-    "message": "What is the weather like in London?",
+    "message": "What is the weather like in London?"
   }
 }
 ```
