@@ -12,7 +12,6 @@ See [Cohere's /chat API docs](https://docs.cohere.com/reference/chat) for more d
 
 ```json
 POST /_plugins/_ml/model_groups/_register
-
 {
   "name": "cohere_model_group",
   "description": "Your Cohere model group"
@@ -56,7 +55,7 @@ POST /_plugins/_ml/connectors/_create
         "Authorization": "Bearer ${credential.cohere_key}",
         "Request-Source": "unspecified:opensearch"
       },
-      "request_body": "{ \"message\": ${parameters.message}, \"model\": \"${parameters.model}\" }"
+      "request_body": "{ \"message\": \"${parameters.message}\", \"model\": \"${parameters.model}\" }"
     }
   ]
 }
@@ -70,7 +69,6 @@ You will now register the model you created using the `model_group_id` and `conn
 
 ```json
 POST /_plugins/_ml/models/_register
-
 {
     "name": "Cohere Chat Model",
     "function_name": "remote",
@@ -126,7 +124,7 @@ Note: `conversation_id` here is the string value for "1", but you can use any st
 POST /_plugins/_ml/models/<MODEL_ID_HERE>/_predict
 {
   "parameters": {
-    "message": "What is the weather like in London?",
+    "message": "What is the weather like in London?"
   }
 }
 ```
@@ -139,31 +137,47 @@ It should return a response similar to this:
     {
       "output": [
         {
-            "response_id": "f92fdef6-e43c-465f-a2b8-45772b9ef39d",
-            "text": "The weather on Thursday, February 1, 2018, in London will be an overcast high of 13°C and a low of 10°C. Unfortunately, I cannot give you a detailed weather forecast for the next ten days in London, as it varies considerably across different sources. Would you like to know more about the weather on any particular day within the next ten?",
-            "generation_id": "76e5c68c-a3ca-40a0-91a9-20315f52b4c4",
+          "name": "response",
+          "dataAsMap": {
+            "response_id": "b0f6eaf6-3f63-418b-9178-a5db8431e55e",
+            "text": """Here is the current weather and forecast for London, UK:
+
+            **Current Weather:**
+
+            - Temperature: 26.0°C (79°F)
+            - Conditions: Cloudy with occasional sunny spells
+            - Humidity: 62%
+            - Wind: 3 mph (5 km/h) (NW)
+            - Visibility: 10 km (6 miles)
+
+            **Forecast for the next few days:**
+
+            The weather in London will continue to be moderately warm for the next few days with temperatures reaching 27°C (81°F) on Saturday. The coming days will be mostly cloudy with occasional sunny spells and chances of light rain throughout the weekend.
+
+            Make sure to carry an umbrella if you are going outside, and consider using sunscreen as and when required.
+
+            If you would like a more detailed or specific weather forecast for London, let me know, and I'll be happy to provide it!""",
+            "generation_id": "89c59a14-f099-4100-95b0-7d0d68104f4b",
+            "finish_reason": "COMPLETE",
             "token_count": {
-                "prompt_tokens": 1523,
-                "response_tokens": 74,
-                "total_tokens": 1597,
-                "billed_tokens": 81
+              "prompt_tokens": 70,
+              "response_tokens": 189,
+              "total_tokens": 259,
+              "billed_tokens": 248
             },
             "meta": {
-                ...
-            },
-           
-            "documents": [
-                ...
-            ],
-            "search_results": [
-                ...
-            ],
-            "tool_inputs": null,
-            "search_queries": [
-                ...
-            ]
+              "api_version": {
+                "version": "1"
+              },
+              "billed_units": {
+                "input_tokens": 59,
+                "output_tokens": 189
+              }
+            }
+          }
         }
-      ]
+      ],
+      "status_code": 200
     }
   ]
 }
