@@ -226,10 +226,10 @@ public class ConnectorUtils {
         return ModelTensors.builder().statusCode(RestStatus.OK.getStatus()).mlModelTensors(modelTensors).build();
     }
 
-    public static ModelTensors processErrorResponse(String errorResponse) {
+    public static ModelTensors processErrorResponse(Integer statusCode,String errorResponse) {
         return ModelTensors
             .builder()
-            .statusCode(RestStatus.INTERNAL_SERVER_ERROR.getStatus())
+            .statusCode(statusCode)
             .mlModelTensors(List.of(ModelTensor.builder().dataAsMap(Map.of("remote_response", errorResponse)).build()))
             .build();
     }

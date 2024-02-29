@@ -121,17 +121,17 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         ModelTensors tensors;
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            tensors = processErrorResponse("null");
+            tensors = processErrorResponse(statusCode, "null");
         } else {
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
-                tensors = processErrorResponse(body);
+                tensors = processErrorResponse(statusCode, body);
             } else {
                 try {
                     tensors = processOutput(body, connector, scriptService, parameters);
                 } catch (Exception e) {
                     log.error("Failed to process response body: {}", body, e);
-                    tensors = processErrorResponse(body);
+                    tensors = processErrorResponse(statusCode, body);
                 }
             }
         }
