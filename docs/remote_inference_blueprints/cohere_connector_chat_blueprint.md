@@ -56,7 +56,7 @@ POST /_plugins/_ml/connectors/_create
         "Authorization": "Bearer ${credential.cohere_key}",
         "Request-Source": "unspecified:opensearch"
       },
-      "request_body": "{ \"message\": ${parameters.message}, \"model\": \"${parameters.model}\" }"
+      "request_body": "{ \"message\": \"${parameters.message}\", \"model\": \"${parameters.model}\" }"
     }
   ]
 }
