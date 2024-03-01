@@ -49,7 +49,7 @@ public class HttpConnectorTest {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
-            "\"http_client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000}}";
+            "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000}}";
 
     @Before
     public void setUp() {
@@ -293,7 +293,7 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        ConnectorHttpClientConfig httpClientConfig = new ConnectorHttpClientConfig(30, 30000, 30000);
+        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000);
 
         HttpConnector connector = HttpConnector.builder()
                 .name("test_connector_name")
@@ -305,7 +305,7 @@ public class HttpConnectorTest {
                 .actions(Arrays.asList(action))
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .accessMode(AccessMode.PUBLIC)
-                .httpClientConfig(httpClientConfig)
+                .connectorClientConfig(httpClientConfig)
                 .build();
         return connector;
     }

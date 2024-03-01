@@ -73,14 +73,14 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
-        Duration connectionTimeout = Duration.ofMillis(super.getHttpClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofMillis(super.getHttpClientConfig().getReadTimeout());
+        Duration connectionTimeout = Duration.ofMillis(super.getConnectorClientConfig().getConnectionTimeout());
+        Duration readTimeout = Duration.ofMillis(super.getConnectorClientConfig().getReadTimeout());
         try (
             AttributeMap attributeMap = AttributeMap
                 .builder()
                 .put(SdkHttpConfigurationOption.CONNECTION_TIMEOUT, connectionTimeout)
                 .put(SdkHttpConfigurationOption.READ_TIMEOUT, readTimeout)
-                .put(SdkHttpConfigurationOption.MAX_CONNECTIONS, super.getHttpClientConfig().getMaxConnections())
+                .put(SdkHttpConfigurationOption.MAX_CONNECTIONS, super.getConnectorClientConfig().getMaxConnections())
                 .build()
         ) {
             log
@@ -88,7 +88,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     "Initializing aws connector http client with attributes: connectionTimeout={}, readTimeout={}, maxConnections={}",
                     connectionTimeout,
                     readTimeout,
-                    super.getHttpClientConfig().getMaxConnections()
+                    super.getConnectorClientConfig().getMaxConnections()
                 );
             this.httpClient = new DefaultSdkHttpClientBuilder().buildWithDefaults(attributeMap);
         } catch (RuntimeException e) {

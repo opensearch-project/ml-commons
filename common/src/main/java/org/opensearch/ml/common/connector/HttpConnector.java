@@ -53,7 +53,7 @@ public class HttpConnector extends AbstractConnector {
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
                          List<String> backendRoles, AccessMode accessMode, User owner,
-                         ConnectorHttpClientConfig httpClientConfig) {
+                         ConnectorClientConfig connectorClientConfig) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -65,7 +65,7 @@ public class HttpConnector extends AbstractConnector {
         this.backendRoles = backendRoles;
         this.access = accessMode;
         this.owner = owner;
-        this.httpClientConfig = httpClientConfig;
+        this.connectorClientConfig = connectorClientConfig;
 
     }
 
@@ -124,8 +124,8 @@ public class HttpConnector extends AbstractConnector {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case HTTP_CLIENT_CONFIG_FIELD:
-                    httpClientConfig = ConnectorHttpClientConfig.parse(parser);
+                case CLIENT_CONFIG_FIELD:
+                    connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -173,8 +173,8 @@ public class HttpConnector extends AbstractConnector {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
-        if (httpClientConfig != null) {
-            builder.field(HTTP_CLIENT_CONFIG_FIELD, httpClientConfig);
+        if (connectorClientConfig != null) {
+            builder.field(CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
         builder.endObject();
         return builder;
@@ -217,7 +217,7 @@ public class HttpConnector extends AbstractConnector {
         this.createdTime = input.readOptionalInstant();
         this.lastUpdateTime = input.readOptionalInstant();
         if (input.readBoolean()) {
-            this.httpClientConfig = new ConnectorHttpClientConfig(input);
+            this.connectorClientConfig = new ConnectorClientConfig(input);
         }
     }
 
@@ -263,9 +263,9 @@ public class HttpConnector extends AbstractConnector {
         }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
-        if (httpClientConfig != null) {
+        if (connectorClientConfig != null) {
             out.writeBoolean(true);
-            httpClientConfig.writeTo(out);
+            connectorClientConfig.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -301,8 +301,8 @@ public class HttpConnector extends AbstractConnector {
         if (updateContent.getAccess() != null) {
             this.access = updateContent.getAccess();
         }
-        if (updateContent.getHttpClientConfig() != null) {
-            this.httpClientConfig = updateContent.getHttpClientConfig();
+        if (updateContent.getConnectorClientConfig() != null) {
+            this.connectorClientConfig = updateContent.getConnectorClientConfig();
         }
     }
 

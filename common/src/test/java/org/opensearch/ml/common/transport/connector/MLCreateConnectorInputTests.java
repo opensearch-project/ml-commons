@@ -5,27 +5,15 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Consumer;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -33,16 +21,22 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
-import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.search.SearchModule;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class MLCreateConnectorInputTests {
@@ -60,7 +54,7 @@ public class MLCreateConnectorInputTests {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
-            "\"access_mode\":\"PUBLIC\",\"http_client_config\":{\"max_connection\":20," +
+            "\"access_mode\":\"PUBLIC\",\"client_config\":{\"max_connection\":20," +
             "\"connection_timeout\":10000,\"read_timeout\":10000}}";
 
     @Before
@@ -74,7 +68,7 @@ public class MLCreateConnectorInputTests {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
-        ConnectorHttpClientConfig httpClientConfig = new ConnectorHttpClientConfig(20, 10000, 10000);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000);
 
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
@@ -87,7 +81,7 @@ public class MLCreateConnectorInputTests {
                 .access(AccessMode.PUBLIC)
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .addAllBackendRoles(false)
-                .httpClientConfig(httpClientConfig)
+                .connectorClientConfig(connectorClientConfig)
                 .build();
 
         mlCreateDryRunConnectorInput = MLCreateConnectorInput.builder()
@@ -171,9 +165,9 @@ public class MLCreateConnectorInputTests {
     public void testParse() throws Exception {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
             assertEquals("test_connector_name", parsedInput.getName());
-            assertEquals(20, parsedInput.getHttpClientConfig().getMaxConnections().intValue());
-            assertEquals(10000, parsedInput.getHttpClientConfig().getReadTimeout().intValue());
-            assertEquals(10000, parsedInput.getHttpClientConfig().getConnectionTimeout().intValue());
+            assertEquals(20, parsedInput.getConnectorClientConfig().getMaxConnections().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getReadTimeout().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeout().intValue());
         });
     }
 
@@ -220,7 +214,7 @@ public class MLCreateConnectorInputTests {
         readInputStream(mlCreateMinimalConnectorInput, parsedInput -> {
             assertEquals(mlCreateMinimalConnectorInput.getName(), parsedInput.getName());
             assertNull(parsedInput.getActions());
-            assertNull(parsedInput.getHttpClientConfig());
+            assertNull(parsedInput.getConnectorClientConfig());
         });
     }
 

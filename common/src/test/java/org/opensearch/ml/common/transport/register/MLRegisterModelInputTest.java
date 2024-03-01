@@ -59,7 +59,7 @@ public class MLRegisterModelInputTest {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
-            "\"http_client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
+            "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
             "\"read_timeout\":30000}},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
     private final String modelName = "modelName";
@@ -183,7 +183,7 @@ public class MLRegisterModelInputTest {
                 "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
                 "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
                 "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
-                "\"http_client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
+                "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
                 "\"read_timeout\":30000}},\"is_hidden\":false}";
         input.setUrl(null);
         input.setModelConfig(null);

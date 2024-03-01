@@ -17,14 +17,13 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
-import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -62,7 +61,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private AccessMode access;
     private boolean dryRun;
     private boolean updateConnector;
-    private ConnectorHttpClientConfig httpClientConfig;
+    private ConnectorClientConfig connectorClientConfig;
 
 
     @Builder(toBuilder = true)
@@ -78,7 +77,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   AccessMode access,
                                   boolean dryRun,
                                   boolean updateConnector,
-                                  ConnectorHttpClientConfig httpClientConfig
+                                  ConnectorClientConfig connectorClientConfig
 
     ) {
         if (!dryRun && !updateConnector) {
@@ -104,7 +103,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.access = access;
         this.dryRun = dryRun;
         this.updateConnector = updateConnector;
-        this.httpClientConfig = httpClientConfig;
+        this.connectorClientConfig = connectorClientConfig;
 
     }
 
@@ -124,7 +123,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Boolean addAllBackendRoles = null;
         AccessMode access = null;
         boolean dryRun = false;
-        ConnectorHttpClientConfig connectorHttpClientConfig = null;
+        ConnectorClientConfig connectorClientConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -173,8 +172,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case DRY_RUN_FIELD:
                     dryRun = parser.booleanValue();
                     break;
-                case AbstractConnector.HTTP_CLIENT_CONFIG_FIELD:
-                    connectorHttpClientConfig = ConnectorHttpClientConfig.parse(parser);
+                case AbstractConnector.CLIENT_CONFIG_FIELD:
+                    connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -182,7 +181,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions,
-                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorHttpClientConfig);
+                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorClientConfig);
     }
 
     @Override
@@ -218,8 +217,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (access != null) {
             builder.field(ACCESS_MODE_FIELD, access);
         }
-        if (httpClientConfig != null) {
-            builder.field(AbstractConnector.HTTP_CLIENT_CONFIG_FIELD, httpClientConfig);
+        if (connectorClientConfig != null) {
+            builder.field(AbstractConnector.CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
         builder.endObject();
         return builder;
@@ -267,9 +266,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         output.writeBoolean(dryRun);
         output.writeBoolean(updateConnector);
-        if (httpClientConfig != null) {
+        if (connectorClientConfig != null) {
             output.writeBoolean(true);
-            httpClientConfig.writeTo(output);
+            connectorClientConfig.writeTo(output);
         } else {
             output.writeBoolean(false);
         }
@@ -304,7 +303,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         dryRun = input.readBoolean();
         updateConnector = input.readBoolean();
         if (input.readBoolean()) {
-            this.httpClientConfig = new ConnectorHttpClientConfig(input);
+            this.connectorClientConfig = new ConnectorClientConfig(input);
         }
     }
 }

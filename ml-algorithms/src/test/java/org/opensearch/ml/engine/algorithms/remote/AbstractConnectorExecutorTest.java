@@ -8,13 +8,13 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.connector.AwsConnector;
-import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 
 public class AbstractConnectorExecutorTest {
     @Mock
     private AwsConnector mockConnector;
 
-    private ConnectorHttpClientConfig httpClientConfig;
+    private ConnectorClientConfig connectorClientConfig;
 
     private AbstractConnectorExecutor executor;
 
@@ -22,24 +22,24 @@ public class AbstractConnectorExecutorTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         executor = new AwsConnectorExecutor(mockConnector);
-        httpClientConfig = new ConnectorHttpClientConfig();
+        connectorClientConfig = new ConnectorClientConfig();
     }
 
     @Test
     public void testValidateWithNullConfig() {
-        when(mockConnector.getHttpClientConfig()).thenReturn(null);
+        when(mockConnector.getConnectorClientConfig()).thenReturn(null);
         executor.initialize(mockConnector);
-        assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getHttpClientConfig().getMaxConnections());
-        assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getConnectionTimeout());
-        assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getReadTimeout());
+        assertEquals(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getConnectorClientConfig().getMaxConnections());
+        assertEquals(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getConnectionTimeout());
+        assertEquals(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getReadTimeout());
     }
 
     @Test
     public void testValidateWithNonNullConfigButNullValues() {
-        when(mockConnector.getHttpClientConfig()).thenReturn(httpClientConfig);
+        when(mockConnector.getConnectorClientConfig()).thenReturn(connectorClientConfig);
         executor.initialize(mockConnector);
-        assertEquals(ConnectorHttpClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getHttpClientConfig().getMaxConnections());
-        assertEquals(ConnectorHttpClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getConnectionTimeout());
-        assertEquals(ConnectorHttpClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getHttpClientConfig().getReadTimeout());
+        assertEquals(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE, executor.getConnectorClientConfig().getMaxConnections());
+        assertEquals(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getConnectionTimeout());
+        assertEquals(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE, executor.getConnectorClientConfig().getReadTimeout());
     }
 }

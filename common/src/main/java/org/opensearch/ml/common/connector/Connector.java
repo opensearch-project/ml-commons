@@ -54,7 +54,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     List<ConnectorAction> getActions();
 
-    ConnectorHttpClientConfig getHttpClientConfig();
+    ConnectorClientConfig getConnectorClientConfig();
 
     String getPredictEndpoint(Map<String, String> parameters);
 

@@ -15,11 +15,11 @@ import org.opensearch.ml.common.TestHelper;
 import java.io.IOException;
 import java.util.Collections;
 
-public class ConnectorHttpClientConfigTest {
+public class ConnectorClientConfigTest {
 
     @Test
     public void writeTo_ReadFromStream() throws IOException {
-        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder()
+        ConnectorClientConfig config = ConnectorClientConfig.builder()
                 .maxConnections(10)
                 .connectionTimeout(5000)
                 .readTimeout(3000)
@@ -27,14 +27,14 @@ public class ConnectorHttpClientConfigTest {
 
         BytesStreamOutput output = new BytesStreamOutput();
         config.writeTo(output);
-        ConnectorHttpClientConfig readConfig = new ConnectorHttpClientConfig(output.bytes().streamInput());
+        ConnectorClientConfig readConfig = new ConnectorClientConfig(output.bytes().streamInput());
 
         Assert.assertEquals(config, readConfig);
     }
 
     @Test
     public void toXContent() throws IOException {
-        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder()
+        ConnectorClientConfig config = ConnectorClientConfig.builder()
                 .maxConnections(10)
                 .connectionTimeout(5000)
                 .readTimeout(3000)
@@ -55,7 +55,7 @@ public class ConnectorHttpClientConfigTest {
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
 
-        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.parse(parser);
+        ConnectorClientConfig config = ConnectorClientConfig.parse(parser);
 
         Assert.assertEquals(Integer.valueOf(10), config.getMaxConnections());
         Assert.assertEquals(Integer.valueOf(5000), config.getConnectionTimeout());
@@ -64,7 +64,7 @@ public class ConnectorHttpClientConfigTest {
 
     @Test
     public void testDefaultValues() {
-        ConnectorHttpClientConfig config = ConnectorHttpClientConfig.builder().build();
+        ConnectorClientConfig config = ConnectorClientConfig.builder().build();
 
         Assert.assertNull(config.getMaxConnections());
         Assert.assertNull(config.getConnectionTimeout());

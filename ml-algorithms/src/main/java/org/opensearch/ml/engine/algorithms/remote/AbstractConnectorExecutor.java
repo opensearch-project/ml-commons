@@ -6,7 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.ConnectorHttpClientConfig;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -14,13 +14,13 @@ import lombok.Setter;
 @Setter
 @Getter
 public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor {
-    private ConnectorHttpClientConfig httpClientConfig;
+    private ConnectorClientConfig connectorClientConfig;
 
     public void initialize(Connector connector) {
-        if (connector.getHttpClientConfig() != null) {
-            httpClientConfig = connector.getHttpClientConfig();
+        if (connector.getConnectorClientConfig() != null) {
+            connectorClientConfig = connector.getConnectorClientConfig();
         } else {
-            httpClientConfig = new ConnectorHttpClientConfig();
+            connectorClientConfig = new ConnectorClientConfig();
         }
     }
 }

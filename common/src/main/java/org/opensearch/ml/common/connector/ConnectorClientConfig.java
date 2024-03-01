@@ -16,13 +16,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
 import java.io.IOException;
-import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Getter
 @EqualsAndHashCode
-public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
+public class ConnectorClientConfig implements ToXContentObject, Writeable {
 
     public static final String MAX_CONNECTION_FIELD = "max_connection";
     public static final String CONNECTION_TIMEOUT_FIELD = "connection_timeout";
@@ -37,7 +36,7 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
     private Integer readTimeout;
 
     @Builder(toBuilder = true)
-    public ConnectorHttpClientConfig(
+    public ConnectorClientConfig(
         Integer maxConnections,
         Integer connectionTimeout,
         Integer readTimeout
@@ -48,13 +47,13 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
 
     }
 
-    public ConnectorHttpClientConfig(StreamInput input) throws IOException {
+    public ConnectorClientConfig(StreamInput input) throws IOException {
         this.maxConnections = input.readOptionalInt();
         this.connectionTimeout = input.readOptionalInt();
         this.readTimeout = input.readOptionalInt();
     }
 
-    public ConnectorHttpClientConfig() {
+    public ConnectorClientConfig() {
         this.maxConnections = MAX_CONNECTION_DEFAULT_VALUE;
         this.connectionTimeout = CONNECTION_TIMEOUT_DEFAULT_VALUE;
         this.readTimeout = READ_TIMEOUT_DEFAULT_VALUE;
@@ -83,12 +82,12 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
         return builder.endObject();
     }
 
-    public static ConnectorHttpClientConfig fromStream(StreamInput in) throws IOException {
-        ConnectorHttpClientConfig action = new ConnectorHttpClientConfig(in);
-        return action;
+    public static ConnectorClientConfig fromStream(StreamInput in) throws IOException {
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(in);
+        return connectorClientConfig;
     }
 
-    public static ConnectorHttpClientConfig parse(XContentParser parser) throws IOException {
+    public static ConnectorClientConfig parse(XContentParser parser) throws IOException {
         Integer maxConnections = null;
         Integer connectionTimeout = null;
         Integer readTimeout = null;
@@ -113,7 +112,7 @@ public class ConnectorHttpClientConfig implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return ConnectorHttpClientConfig.builder()
+        return ConnectorClientConfig.builder()
                 .maxConnections(maxConnections)
                 .connectionTimeout(connectionTimeout)
                 .readTimeout(readTimeout)

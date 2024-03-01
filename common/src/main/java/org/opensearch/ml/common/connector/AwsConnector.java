@@ -32,9 +32,9 @@ public class AwsConnector extends HttpConnector {
     public AwsConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
                          List<String> backendRoles, AccessMode accessMode, User owner,
-                         ConnectorHttpClientConfig httpClientConfig) {
+                         ConnectorClientConfig connectorClientConfig) {
         super(name, description, version, protocol, parameters, credential, actions, backendRoles, accessMode,
-                owner, httpClientConfig);
+                owner, connectorClientConfig);
         validate();
     }
 
