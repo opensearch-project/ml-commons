@@ -94,7 +94,7 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector, httpClient);
         executor.invokeRemoteModel(null, null, null, null);
     }
 
@@ -114,7 +114,7 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -125,7 +125,6 @@ public class HttpJsonConnectorExecutorTest {
         when(response.getEntity()).thenReturn(entity);
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
-        when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         ModelTensorOutput modelTensorOutput = executor
             .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -160,13 +159,12 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor
             .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -203,13 +201,12 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
     }
@@ -238,7 +235,7 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -278,7 +275,6 @@ public class HttpJsonConnectorExecutorTest {
         when(response.getStatusLine()).thenReturn(statusLine);
         HttpEntity entity = new StringEntity(modelResponse);
         when(response.getEntity()).thenReturn(entity);
-        when(executor.getHttpClient()).thenReturn(httpClient);
         when(executor.getConnector()).thenReturn(connector);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor
@@ -324,7 +320,7 @@ public class HttpJsonConnectorExecutorTest {
             .parameters(parameters)
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -355,7 +351,6 @@ public class HttpJsonConnectorExecutorTest {
         when(response.getStatusLine()).thenReturn(statusLine);
         HttpEntity entity = new StringEntity(modelResponse);
         when(response.getEntity()).thenReturn(entity);
-        when(executor.getHttpClient()).thenReturn(httpClient);
         when(executor.getConnector()).thenReturn(connector);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor
@@ -399,7 +394,7 @@ public class HttpJsonConnectorExecutorTest {
             .parameters(parameters)
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -430,7 +425,6 @@ public class HttpJsonConnectorExecutorTest {
         when(response.getStatusLine()).thenReturn(statusLine);
         HttpEntity entity = new StringEntity(modelResponse);
         when(response.getEntity()).thenReturn(entity);
-        when(executor.getHttpClient()).thenReturn(httpClient);
         when(executor.getConnector()).thenReturn(connector);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor

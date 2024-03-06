@@ -57,16 +57,17 @@ public class MLConnectorGetResponseTests {
         mlConnectorGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"name\":\"test_connector_name\"," +
-                "\"version\":\"1\",\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
+        assertEquals("{\"name\":\"test_connector_name\",\"version\":\"1\"," +
+                "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
                 "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +
                 "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
                 "\"headers\":{\"api_key\":\"${credential.key}\"}," +
                 "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
                 "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
                 "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-                "\"backend_roles\":[\"role1\",\"role2\"]," +
-                "\"access\":\"public\"}", jsonStr);
+                "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
+                "\"client_config\":{\"max_connection\":30," +
+                "\"connection_timeout\":30000,\"read_timeout\":30000}}", jsonStr);
     }
 
     @Test

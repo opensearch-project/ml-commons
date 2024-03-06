@@ -16,6 +16,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -40,15 +41,17 @@ import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.http.HttpExecuteRequest;
 import software.amazon.awssdk.http.HttpExecuteResponse;
 import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.utils.AttributeMap;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
-public class AwsConnectorExecutor implements RemoteConnectorExecutor {
+public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private AwsConnector connector;
-    private final SdkHttpClient httpClient;
+    private SdkHttpClient httpClient;
     @Setter
     @Getter
     private ScriptService scriptService;
@@ -68,7 +71,33 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
     }
 
     public AwsConnectorExecutor(Connector connector) {
-        this(connector, new DefaultSdkHttpClientBuilder().build());
+        super.initialize(connector);
+        this.connector = (AwsConnector) connector;
+        Duration connectionTimeout = Duration.ofMillis(super.getConnectorClientConfig().getConnectionTimeout());
+        Duration readTimeout = Duration.ofMillis(super.getConnectorClientConfig().getReadTimeout());
+        try (
+            AttributeMap attributeMap = AttributeMap
+                .builder()
+                .put(SdkHttpConfigurationOption.CONNECTION_TIMEOUT, connectionTimeout)
+                .put(SdkHttpConfigurationOption.READ_TIMEOUT, readTimeout)
+                .put(SdkHttpConfigurationOption.MAX_CONNECTIONS, super.getConnectorClientConfig().getMaxConnections())
+                .build()
+        ) {
+            log
+                .info(
+                    "Initializing aws connector http client with attributes: connectionTimeout={}, readTimeout={}, maxConnections={}",
+                    connectionTimeout,
+                    readTimeout,
+                    super.getConnectorClientConfig().getMaxConnections()
+                );
+            this.httpClient = new DefaultSdkHttpClientBuilder().buildWithDefaults(attributeMap);
+        } catch (RuntimeException e) {
+            log.error("Error initializing AWS connector HTTP client.", e);
+            throw e;
+        } catch (Throwable e) {
+            log.error("Error initializing AWS connector HTTP client.", e);
+            throw new MLException(e);
+        }
     }
 
     @Override
@@ -95,9 +124,8 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
                 .contentStreamProvider(request.contentStreamProvider().orElse(null))
                 .build();
 
-            HttpExecuteResponse response = AccessController.doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> {
-                return httpClient.prepareRequest(executeRequest).call();
-            });
+            HttpExecuteResponse response = AccessController
+                .doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> httpClient.prepareRequest(executeRequest).call());
             int statusCode = response.httpResponse().statusCode();
 
             AbortableInputStream body = null;
