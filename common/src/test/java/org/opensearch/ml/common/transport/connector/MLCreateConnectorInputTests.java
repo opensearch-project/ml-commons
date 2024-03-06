@@ -14,7 +14,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -145,7 +145,7 @@ public class MLCreateConnectorInputTests {
 
     @Test
     public void testToXContent_FullFields() throws Exception {
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
@@ -154,7 +154,7 @@ public class MLCreateConnectorInputTests {
 
     @Test
     public void testToXContent_NullFields() throws Exception {
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateDryRunConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
