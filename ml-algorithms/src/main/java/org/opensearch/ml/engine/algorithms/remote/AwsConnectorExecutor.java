@@ -10,6 +10,7 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -37,7 +38,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
-public class AwsConnectorExecutor implements RemoteConnectorExecutor {
+public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private AwsConnector connector;
@@ -60,8 +61,12 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
     private SdkAsyncHttpClient httpClient;
 
     public AwsConnectorExecutor(Connector connector) {
+        super.initialize(connector);
         this.connector = (AwsConnector) connector;
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient();
+        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
 

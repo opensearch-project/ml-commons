@@ -11,6 +11,7 @@ import java.net.UnknownHostException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -21,11 +22,16 @@ import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 @Log4j2
 public class MLHttpClientFactory {
 
-    public static SdkAsyncHttpClient getAsyncHttpClient() {
+    public static SdkAsyncHttpClient getAsyncHttpClient(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
         try {
             return AccessController
                 .doPrivileged(
-                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient.builder().maxConcurrency(100).build()
+                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient
+                        .builder()
+                        .connectionTimeout(connectionTimeout)
+                        .readTimeout(readTimeout)
+                        .maxConcurrency(maxConnections)
+                        .build()
                 );
         } catch (PrivilegedActionException e) {
             return null;

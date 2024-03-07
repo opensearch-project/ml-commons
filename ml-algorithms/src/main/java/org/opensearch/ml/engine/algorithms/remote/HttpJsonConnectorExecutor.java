@@ -11,6 +11,7 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -65,7 +66,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient();
+        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     @SuppressWarnings("removal")
@@ -107,9 +111,5 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             log.error("Fail to execute http connector", e);
             actionListener.onFailure(new MLException("Fail to execute http connector", e));
         }
-    }
-
-    public SdkAsyncHttpClient getHttpClient(int connectionTimeout, int readTimeout, int maxConnections) {
-        return MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnections);
     }
 }
