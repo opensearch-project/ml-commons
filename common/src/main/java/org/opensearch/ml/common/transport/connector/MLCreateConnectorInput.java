@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.connector;
 
 import lombok.Builder;
 import lombok.Data;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -45,7 +46,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
 
-
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = Version.V_2_13_0;
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -226,6 +227,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
+        Version streamOutputVersion = output.getVersion();
         output.writeOptionalString(name);
         output.writeOptionalString(description);
         output.writeOptionalString(version);
@@ -266,16 +268,18 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         output.writeBoolean(dryRun);
         output.writeBoolean(updateConnector);
-        if (connectorClientConfig != null) {
-            output.writeBoolean(true);
-            connectorClientConfig.writeTo(output);
-        } else {
-            output.writeBoolean(false);
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG)) {
+            if (connectorClientConfig != null) {
+                output.writeBoolean(true);
+                connectorClientConfig.writeTo(output);
+            } else {
+                output.writeBoolean(false);
+            }
         }
-
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         name = input.readOptionalString();
         description = input.readOptionalString();
         version = input.readOptionalString();
@@ -302,8 +306,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         dryRun = input.readBoolean();
         updateConnector = input.readBoolean();
-        if (input.readBoolean()) {
-            this.connectorClientConfig = new ConnectorClientConfig(input);
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG)) {
+            if (input.readBoolean()) {
+                this.connectorClientConfig = new ConnectorClientConfig(input);
+            }
         }
+
     }
 }
