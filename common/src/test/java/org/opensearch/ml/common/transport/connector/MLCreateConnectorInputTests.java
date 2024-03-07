@@ -5,11 +5,6 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,9 +28,15 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.search.SearchModule;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class MLCreateConnectorInputTests {
     private MLCreateConnectorInput mlCreateConnectorInput;
@@ -52,7 +53,8 @@ public class MLCreateConnectorInputTests {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
-            "\"access_mode\":\"PUBLIC\"}";
+            "\"access_mode\":\"PUBLIC\",\"client_config\":{\"max_connection\":20," +
+            "\"connection_timeout\":10000,\"read_timeout\":10000}}";
 
     @Before
     public void setUp(){
@@ -65,6 +67,7 @@ public class MLCreateConnectorInputTests {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000);
 
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
@@ -77,6 +80,7 @@ public class MLCreateConnectorInputTests {
                 .access(AccessMode.PUBLIC)
                 .backendRoles(Arrays.asList("role1", "role2"))
                 .addAllBackendRoles(false)
+                .connectorClientConfig(connectorClientConfig)
                 .build();
 
         mlCreateDryRunConnectorInput = MLCreateConnectorInput.builder()
@@ -160,6 +164,9 @@ public class MLCreateConnectorInputTests {
     public void testParse() throws Exception {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
             assertEquals("test_connector_name", parsedInput.getName());
+            assertEquals(20, parsedInput.getConnectorClientConfig().getMaxConnections().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getReadTimeout().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeout().intValue());
         });
     }
 
@@ -206,6 +213,7 @@ public class MLCreateConnectorInputTests {
         readInputStream(mlCreateMinimalConnectorInput, parsedInput -> {
             assertEquals(mlCreateMinimalConnectorInput.getName(), parsedInput.getName());
             assertNull(parsedInput.getActions());
+            assertNull(parsedInput.getConnectorClientConfig());
         });
     }
 
