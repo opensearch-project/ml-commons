@@ -9,6 +9,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.net.MalformedURLException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -31,7 +32,7 @@ public class MLHttpClientFactoryTests {
 
     @Test
     public void test_getSdkAsyncHttpClient_success() {
-        SdkAsyncHttpClient client = MLHttpClientFactory.getAsyncHttpClient();
+        SdkAsyncHttpClient client = MLHttpClientFactory.getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100);
         assertNotNull(client);
     }
 
