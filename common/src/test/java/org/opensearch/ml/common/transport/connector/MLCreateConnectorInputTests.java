@@ -9,6 +9,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -216,6 +217,77 @@ public class MLCreateConnectorInputTests {
             assertNull(parsedInput.getActions());
             assertNull(parsedInput.getConnectorClientConfig());
         });
+    }
+
+    @Test
+    public void testBuilder_NullActions_ShouldNotThrowException() {
+        // Actions can be null for a connector without any specific actions defined.
+        MLCreateConnectorInput input = MLCreateConnectorInput.builder()
+                .name("test_connector_name")
+                .description("this is a test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(Map.of("input", "test input value"))
+                .credential(Map.of("key", "test_key_value"))
+                .actions(null) // Setting actions to null
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList("role1", "role2"))
+                .addAllBackendRoles(false)
+                .build();
+
+        assertNull(input.getActions());
+    }
+
+    @Test
+    public void testParse_MissingNameField_ShouldThrowException() throws IOException {
+        String jsonMissingName = "{\"description\":\"this is a test connector\",\"version\":\"1\",\"protocol\":\"http\"}";
+        XContentParser parser = createParser(jsonMissingName);
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector name is null");
+
+        MLCreateConnectorInput.parse(parser);
+    }
+
+    @Test
+    public void testWriteToVersionCompatibility() throws IOException {
+        MLCreateConnectorInput input = mlCreateConnectorInput; // Assuming mlCreateConnectorInput is already initialized
+
+        // Simulate an older version of OpenSearch that does not support connectorClientConfig
+        Version oldVersion = Version.fromString("2.12.0"); // Change this as per your old version
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(oldVersion);
+
+        input.writeTo(output);
+
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(oldVersion);
+
+        MLCreateConnectorInput deserializedInput = new MLCreateConnectorInput(streamInput);
+
+        // The ConnectorClientConfig should be null as it's not supported in the older version
+        assertNull(deserializedInput.getConnectorClientConfig());
+    }
+
+    @Test
+    public void testDryRunConnectorInput_IgnoreValidation() {
+        MLCreateConnectorInput input = MLCreateConnectorInput.builder()
+                .dryRun(true) // Set dryRun to true
+                .build();
+
+        // No exception for missing mandatory fields when dryRun is true
+        assertTrue(input.isDryRun());
+        assertNull(input.getName()); // Name is not set, but no exception due to dryRun
+    }
+
+    // Helper method to create XContentParser from a JSON string
+    private XContentParser createParser(String jsonString) throws IOException {
+        XContentParser parser = XContentType.JSON.xContent().createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonString);
+        parser.nextToken(); // Move to the first token
+        return parser;
     }
 
     private void testParseFromJsonString(String expectedInputString, Consumer<MLCreateConnectorInput> verify) throws Exception {
