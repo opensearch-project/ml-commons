@@ -150,7 +150,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        assert captor.getValue().getMessage().equals("{\"remote_response\":\"null\"}");
+        assert captor.getValue().getMessage().equals("{\"remote_response\":\"Remote model response is empty!\"}");
     }
 
     @Test
@@ -198,7 +198,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             + "        -0.0011978149\n"
             + "    ]\n"
             + "}";
-        String response2 = "Failed to predict";
+        String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
             new WrappedCountDownLatch(0, count),
@@ -243,13 +243,10 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             }
         };
         mlSdkAsyncHttpResponseHandler2.onStream(stream2);
-        ArgumentCaptor<List<ModelTensors>> captor = ArgumentCaptor.forClass(List.class);
-        verify(actionListener, times(1)).onResponse(captor.capture());
-        assert captor.getValue().size() == 2;
-        assert captor.getValue().get(0).getStatusCode() == 200;
-        assert captor.getValue().get(0).getMlModelTensors().get(0).getData().length == 8;
-        assert captor.getValue().get(1).getMlModelTensors().get(0).getDataAsMap().size() == 1;
-        assert captor.getValue().get(1).getMlModelTensors().get(0).getDataAsMap().get("remote_response").equals("Failed to predict");
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("{\"remote_response\":\"Model current status is: FAILED\"}");
+        assert captor.getValue().status().getStatus() == 500;
     }
 
     @Test
@@ -266,7 +263,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             + "        -0.0011978149\n"
             + "    ]\n"
             + "}";
-        String response2 = "Failed to predict";
+        String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
             new WrappedCountDownLatch(0, count),
@@ -312,13 +309,10 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             }
         };
         mlSdkAsyncHttpResponseHandler1.onStream(stream1);
-        ArgumentCaptor<List<ModelTensors>> captor = ArgumentCaptor.forClass(List.class);
-        verify(actionListener, times(1)).onResponse(captor.capture());
-        assert captor.getValue().size() == 2;
-        assert captor.getValue().get(0).getStatusCode() == 200;
-        assert captor.getValue().get(0).getMlModelTensors().get(0).getData().length == 8;
-        assert captor.getValue().get(1).getMlModelTensors().get(0).getDataAsMap().size() == 1;
-        assert captor.getValue().get(1).getMlModelTensors().get(0).getDataAsMap().get("remote_response").equals("Failed to predict");
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("{\"remote_response\":\"Model current status is: FAILED\"}");
+        assert captor.getValue().status().getStatus() == 500;
     }
 
     @Test
@@ -336,7 +330,14 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         mlSdkAsyncHttpResponseHandler.onStream(stream);
         ArgumentCaptor<List<ModelTensors>> captor = ArgumentCaptor.forClass(List.class);
         verify(actionListener, times(1)).onResponse(captor.capture());
-        assert captor.getValue().get(0).getMlModelTensors().get(0).getDataAsMap().get("remote_response").equals("null");
+        assert captor
+            .getValue()
+            .get(0)
+            .getMlModelTensors()
+            .get(0)
+            .getDataAsMap()
+            .get("remote_response")
+            .equals("Remote model response is empty!");
     }
 
     @Test

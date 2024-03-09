@@ -323,9 +323,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
                         long startTime = System.nanoTime();
                         ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
+                            handleAsyncMLTaskComplete(mlTask);
                             mlModelManager.trackPredictDuration(modelId, startTime);
                             internalListener.onResponse(output);
-                        }, internalListener::onFailure);
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));

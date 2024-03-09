@@ -121,7 +121,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         ModelTensors tensors;
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            tensors = processErrorResponse(statusCode, "null");
+            tensors = processErrorResponse(statusCode, "Remote model response is empty!");
         } else {
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
@@ -145,33 +145,44 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         log.debug("Reordered tensor outputs size is {}", sortedMap.size());
         if (tensorOutputs.size() == 1) {
             // batch API case
-            int status = tensorOutputs.get(0).getStatusCode();
+            ModelTensors singleTensor = tensorOutputs.get(0);
+            int status = singleTensor.getStatusCode();
             if (status == HttpStatus.SC_OK) {
-                modelTensors.add(tensorOutputs.get(0));
+                modelTensors.add(singleTensor);
                 actionListener.onResponse(modelTensors);
             } else {
-                try {
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                AccessController
-                                    .doPrivileged(
-                                        (PrivilegedExceptionAction<String>) () -> GSON
-                                            .toJson(tensorOutputs.get(0).getMlModelTensors().get(0).getDataAsMap())
-                                    ),
-                                RestStatus.fromCode(status)
-                            )
-                        );
-                } catch (PrivilegedActionException e) {
-                    actionListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.fromCode(statusCode)));
-                }
+                actionListener.onFailure(buildOpenSearchStatusException(singleTensor));
             }
         } else {
-            // non batch API.
+            // non batch API. This is to follow the previously code logic. Previously when making multiple requests to remote model,
+            // either one fails, we will return a failure response.
+            OpenSearchStatusException openSearchStatusException = null;
             for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
+                if (entry.getValue().getStatusCode() != HttpStatus.SC_OK) {
+                    openSearchStatusException = buildOpenSearchStatusException(entry.getValue());
+                    break;
+                }
                 modelTensors.add(entry.getKey(), entry.getValue());
             }
-            actionListener.onResponse(modelTensors);
+            if (openSearchStatusException != null) {
+                actionListener.onFailure(openSearchStatusException);
+            } else {
+                actionListener.onResponse(modelTensors);
+            }
+        }
+    }
+
+    private OpenSearchStatusException buildOpenSearchStatusException(ModelTensors modelTensors) {
+        try {
+            return new OpenSearchStatusException(
+                AccessController
+                    .doPrivileged(
+                        (PrivilegedExceptionAction<String>) () -> GSON.toJson(modelTensors.getMlModelTensors().get(0).getDataAsMap())
+                    ),
+                RestStatus.fromCode(modelTensors.getStatusCode())
+            );
+        } catch (PrivilegedActionException e) {
+            return new OpenSearchStatusException(e.getMessage(), RestStatus.fromCode(statusCode));
         }
     }
 
