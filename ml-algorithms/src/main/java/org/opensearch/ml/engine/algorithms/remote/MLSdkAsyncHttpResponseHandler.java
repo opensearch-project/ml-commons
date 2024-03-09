@@ -223,6 +223,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     }
 
     private void response(Map<Integer, ModelTensors> tensors) {
+        // when countdown's count equals to 0 means all responses are received.
         if (countDownLatch.getCountDownLatch().getCount() == 0) {
             reOrderTensorResponses(tensors);
         } else {
