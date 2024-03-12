@@ -183,6 +183,19 @@ public class MLAgentExecutorTest {
         mlAgentExecutor.execute(input, agentActionListener);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void test_NonInputData_ThrowsException() {
+        AgentMLInput agentMLInput = new AgentMLInput("test", FunctionName.AGENT, null);
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void test_NonInputParas_ThrowsException() {
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(null).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", FunctionName.AGENT, inputDataSet);
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+    }
+
     @Test
     public void test_HappyCase_ReturnsResult() {
         ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
