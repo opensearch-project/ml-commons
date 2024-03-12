@@ -2,6 +2,8 @@
 
 > The easiest way for setting up embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
 
+> Another easy way is using python, check [AIConnectorHelper](./AIConnectorHelper.ipynb)
+
 > This tutorial explains detail steps if you want to configure everything manually. 
 
 This doc introduces how to build semantic search in Amazon managed OpenSearch with embedding model running on [Sagemaker](https://aws.amazon.com/sagemaker/).
@@ -272,7 +274,7 @@ Sample output
 POST /_plugins/_ml/models/NxU9Qo0BTaDH9c7t1Bca/_predict
 {
   "parameters": {
-    "inputs": ["hello world", "how are you"]
+    "input": ["hello world", "how are you"]
   }
 }
 ```
