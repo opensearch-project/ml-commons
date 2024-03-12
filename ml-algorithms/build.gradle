@@ -51,8 +51,9 @@ dependencies {
     implementation("ai.djl.onnxruntime:onnxruntime-engine:0.21.0") {
         exclude group: "com.microsoft.onnxruntime", module: "onnxruntime"
     }
-    //arm doesn't support GPU
-    if (System.getProperty("os.arch") == "aarch64") {
+    def os = DefaultNativePlatform.currentOperatingSystem
+    //arm/macos doesn't support GPU
+    if (os.macOsX || System.getProperty("os.arch") == "aarch64") {
         dependencies {
             implementation "com.microsoft.onnxruntime:onnxruntime:1.14.0"
         }
