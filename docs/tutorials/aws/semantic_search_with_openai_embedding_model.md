@@ -1,5 +1,7 @@
 # Topic
 
+> An easy way is using python, check [AIConnectorHelper](./AIConnectorHelper.ipynb)
+
 This doc introduces how to build semantic search in Amazon managed OpenSearch with [OpenAI embedding model](https://platform.openai.com/docs/guides/embeddings).
 If you are not using Amazon OpenSearch, you can refer to [openai_connector_embedding_blueprint](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/openai_connector_embedding_blueprint.md) and [OpenSearch semantic search](https://opensearch.org/docs/latest/search-plugins/semantic-search/).
 
