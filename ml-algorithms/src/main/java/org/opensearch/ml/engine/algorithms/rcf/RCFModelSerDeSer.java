@@ -22,6 +22,7 @@ import io.protostuff.runtime.RuntimeSchema;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
+@SuppressWarnings("removal")
 public class RCFModelSerDeSer {
     private static final int SERIALIZATION_BUFFER_BYTES = 512;
     private static final Schema<RandomCutForestState> rcfSchema = AccessController
@@ -55,12 +56,14 @@ public class RCFModelSerDeSer {
         return deserialize(bytes, trcfSchema);
     }
 
+    @SuppressWarnings("removal")
     private static <T> byte[] serialize(T model, Schema<T> schema) {
         LinkedBuffer buffer = LinkedBuffer.allocate(SERIALIZATION_BUFFER_BYTES);
         byte[] bytes = AccessController.doPrivileged((PrivilegedAction<byte[]>) () -> ProtostuffIOUtil.toByteArray(model, schema, buffer));
         return bytes;
     }
 
+    @SuppressWarnings("removal")
     private static <T> T deserialize(byte[] bytes, Schema<T> schema) {
         T model = schema.newMessage();
         AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
