@@ -20,6 +20,7 @@ public class ErrorMessage {
 
     protected Throwable exception;
 
+    @Getter
     private final int status;
 
     @Getter
