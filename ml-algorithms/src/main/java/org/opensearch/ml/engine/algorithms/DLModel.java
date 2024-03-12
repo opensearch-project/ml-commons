@@ -74,6 +74,7 @@ public abstract class DLModel implements Predictable {
         throw new IllegalArgumentException("model not deployed");
     }
 
+    @SuppressWarnings("removal")
     @Override
     public MLOutput predict(MLInput mlInput) {
         if (modelHelper == null || modelId == null) {
@@ -233,6 +234,7 @@ public abstract class DLModel implements Predictable {
         log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
     }
 
+    @SuppressWarnings("removal")
     protected void loadModel(
         File modelZipFile,
         String modelId,

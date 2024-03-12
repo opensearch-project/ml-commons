@@ -37,6 +37,7 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
         return ML_DISK_CB;
     }
 
+    @SuppressWarnings("removal")
     @Override
     public boolean isOpen() {
         try {

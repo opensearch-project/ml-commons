@@ -229,6 +229,7 @@ public class MLAgentExecutor implements Executable {
         mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
     }
 
+    @SuppressWarnings("removal")
     private ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,
