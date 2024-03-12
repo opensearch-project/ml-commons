@@ -55,6 +55,7 @@ public class ModelHelper {
         this.mlEngine = mlEngine;
     }
 
+    @SuppressWarnings("removal")
     public void downloadPrebuiltModelConfig(
         String taskId,
         MLRegisterModelInput registerModelInput,
@@ -180,6 +181,7 @@ public class ModelHelper {
         return false;
     }
 
+    @SuppressWarnings("removal")
     public List downloadPrebuiltModelMetaList(String taskId, MLRegisterModelInput registerModelInput) throws PrivilegedActionException {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
@@ -213,6 +215,7 @@ public class ModelHelper {
      * @param modelContentHash model content hash value
      * @param listener action listener
      */
+    @SuppressWarnings("removal")
     public void downloadAndSplit(
         MLModelFormat modelFormat,
         String taskId,

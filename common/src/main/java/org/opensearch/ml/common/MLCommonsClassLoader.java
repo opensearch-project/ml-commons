@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Log4j2
+@SuppressWarnings("removal")
 public class MLCommonsClassLoader {
 
     private static Map<Enum<?>, Class<?>> parameterClassMap = new HashMap<>();

@@ -79,6 +79,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         this.httpClient = httpClient;
     }
 
+    @SuppressWarnings("removal")
     @Override
     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
         try {

@@ -110,6 +110,7 @@ public interface Connector extends ToXContentObject, Writeable {
         }
     }
 
+    @SuppressWarnings("removal")
     static Connector createConnector(XContentParser parser) throws IOException {
         Map<String, Object> connectorMap = parser.map();
         String jsonStr;

@@ -356,6 +356,7 @@ public class AgentUtils {
         return null;
     }
 
+    @SuppressWarnings("removal")
     public static String outputToOutputString(Object output) throws PrivilegedActionException {
         String outputString;
         if (output instanceof ModelTensorOutput) {
