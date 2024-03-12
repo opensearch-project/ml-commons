@@ -2,6 +2,8 @@
 
 > The easiest way for setting up embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
 
+> Another easy way is using python, check [AIConnectorHelper](./AIConnectorHelper.ipynb)
+
 > This tutorial explains detail steps if you want to configure everything manually. 
 
 > Bedrock has [quota limit](https://docs.aws.amazon.com/bedrock/latest/userguide/quotas.html). You can purchase [Provisioned Throughput](https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput.html) to increase quota limit.
