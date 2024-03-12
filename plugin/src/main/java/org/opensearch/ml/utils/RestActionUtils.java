@@ -225,6 +225,7 @@ public class RestActionUtils {
     }
 
     // TODO: Integration test needs to be added (MUST)
+    @SuppressWarnings("removal")
     public static boolean isSuperAdminUser(ClusterService clusterService, Client client) {
 
         final List<String> adminDnsA = clusterService.getSettings().getAsList(SECURITY_AUTHCZ_ADMIN_DN, Collections.emptyList());
