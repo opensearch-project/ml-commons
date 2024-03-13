@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -31,6 +32,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -601,13 +603,15 @@ public class TextEmbeddingDenseModelTest {
 
     @Test
     public void test_async_inference() {
-        exceptionRule.expect(IllegalStateException.class);
-        exceptionRule.expectMessage("Method is not implemented");
+        ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
+        ActionListener actionListener = mock(ActionListener.class);
         textEmbeddingDenseModel
             .asyncPredict(
                 MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                mock(ActionListener.class)
+                actionListener
             );
+        verify(actionListener).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("Method is not implemented");
     }
 
     @After
