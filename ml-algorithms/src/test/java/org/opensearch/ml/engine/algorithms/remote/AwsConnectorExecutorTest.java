@@ -281,7 +281,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_nullHttpClient_throwMLException() throws NoSuchFieldException, IllegalAccessException {
+    public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() throws NoSuchFieldException, IllegalAccessException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
@@ -318,5 +318,43 @@ public class AwsConnectorExecutorTest {
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
+    }
+
+    @Test
+    public void executePredict_RemoteInferenceInput_negativeStepSize_throwIllegalArgumentException() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
     }
 }

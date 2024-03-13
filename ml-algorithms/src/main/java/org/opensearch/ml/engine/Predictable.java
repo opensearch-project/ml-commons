@@ -38,7 +38,7 @@ public interface Predictable {
     }
 
     default void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
-        throw new IllegalStateException("Method is not implemented");
+        actionListener.onFailure(new IllegalStateException("Method is not implemented"));
     }
 
     /**
