@@ -223,13 +223,12 @@ public class ConnectorUtils {
             Object filteredResponse = JsonPath.parse(response).read(parameters.get(RESPONSE_FILTER_FIELD));
             connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
         }
-        return ModelTensors.builder().statusCode(RestStatus.OK.getStatus()).mlModelTensors(modelTensors).build();
+        return ModelTensors.builder().mlModelTensors(modelTensors).build();
     }
 
-    public static ModelTensors processErrorResponse(Integer statusCode, String errorResponse) {
+    public static ModelTensors processErrorResponse(String errorResponse) {
         return ModelTensors
             .builder()
-            .statusCode(statusCode)
             .mlModelTensors(List.of(ModelTensor.builder().dataAsMap(Map.of("remote_response", errorResponse)).build()))
             .build();
     }

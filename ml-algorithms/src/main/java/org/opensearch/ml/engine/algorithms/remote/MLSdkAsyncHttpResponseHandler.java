@@ -121,17 +121,17 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         ModelTensors tensors;
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            tensors = processErrorResponse(statusCode, "Remote model response is empty!");
+            tensors = processErrorResponse("Remote model response is empty!");
         } else {
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
-                tensors = processErrorResponse(statusCode, body);
+                tensors = processErrorResponse(body);
             } else {
                 try {
                     tensors = processOutput(body, connector, scriptService, parameters);
                 } catch (Exception e) {
                     log.error("Failed to process response body: {}", body, e);
-                    tensors = processErrorResponse(statusCode, body);
+                    tensors = processErrorResponse(body);
                 }
             }
         }
@@ -158,7 +158,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             // either one fails, we will return a failure response.
             OpenSearchStatusException openSearchStatusException = null;
             for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
-                if (entry.getValue().getStatusCode() != HttpStatus.SC_OK) {
+                if (entry.getValue().getStatusCode() < HttpStatus.SC_OK || entry.getValue().getStatusCode() > HttpStatus.SC_MULTIPLE_CHOICES) {
                     openSearchStatusException = buildOpenSearchStatusException(entry.getValue());
                     break;
                 }
