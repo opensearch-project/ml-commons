@@ -63,6 +63,11 @@ public class ModelTensor implements Writeable, ToXContentObject {
         this.dataAsMap = dataAsMap;
     }
 
+    public ModelTensor(String name, String result) {
+        this.name = name;
+        this.result = result;
+    }
+
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
