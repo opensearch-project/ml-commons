@@ -4,7 +4,10 @@
  */
 package org.opensearch.ml.processor;
 
-import static org.opensearch.ml.processor.MLModelUtil.*;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
 
 import java.util.ArrayList;
 import java.util.HashMap;

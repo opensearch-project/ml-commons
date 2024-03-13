@@ -87,6 +87,7 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.utils.TestData;
@@ -827,11 +828,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return taskId;
     }
 
-    Map parseResponseToMap(Response response) throws IOException {
+    public static Map parseResponseToMap(Response response) throws IOException {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
         String entityString = TestHelper.httpEntityToString(entity);
-        return gson.fromJson(entityString, Map.class);
+        return StringUtils.gson.fromJson(entityString, Map.class);
     }
 
     public Map getModelProfile(String modelId, Consumer verifyFunction) throws IOException {

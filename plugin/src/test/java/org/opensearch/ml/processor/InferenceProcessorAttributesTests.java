@@ -14,7 +14,7 @@ import java.util.Map;
 
 import org.junit.Test;
 
-public class MLModelUtilTests {
+public class InferenceProcessorAttributesTests {
 
     public void testConstructor() {
         String modelId = "my_model";
@@ -31,20 +31,20 @@ public class MLModelUtilTests {
         Map<String, String> modelConfig = new HashMap<>();
         modelConfig.put("config_key", "config_value");
 
-        MLModelUtil mlModelUtil = new MLModelUtil(modelId, inputMap, outputMap, modelConfig);
+        InferenceProcessorAttributes mlModelUtil = new InferenceProcessorAttributes(modelId, inputMap, outputMap, modelConfig);
 
-        assertEquals(modelId, mlModelUtil.getModel_id());
-        assertEquals(inputMap, mlModelUtil.getInput_map());
-        assertEquals(outputMap, mlModelUtil.getOutput_map());
-        assertEquals(modelConfig, mlModelUtil.getModel_config());
+        assertEquals(modelId, mlModelUtil.getModelId());
+        assertEquals(inputMap, mlModelUtil.getOutputMaps());
+        assertEquals(outputMap, mlModelUtil.getOutputMaps());
+        assertEquals(modelConfig, mlModelUtil.getModelConfig());
     }
 
     @Test
     public void testStaticFields() {
-        assertNotNull(MLModelUtil.MODEL_ID);
-        assertNotNull(MLModelUtil.INPUT_MAP);
-        assertNotNull(MLModelUtil.OUTPUT_MAP);
-        assertNotNull(MLModelUtil.MODEL_CONFIG);
-        assertNotNull(MLModelUtil.IGNORE_MISSING);
+        assertNotNull(InferenceProcessorAttributes.MODEL_ID);
+        assertNotNull(InferenceProcessorAttributes.INPUT_MAP);
+        assertNotNull(InferenceProcessorAttributes.OUTPUT_MAP);
+        assertNotNull(InferenceProcessorAttributes.MODEL_CONFIG);
+        assertNotNull(InferenceProcessorAttributes.IGNORE_MISSING);
     }
 }
