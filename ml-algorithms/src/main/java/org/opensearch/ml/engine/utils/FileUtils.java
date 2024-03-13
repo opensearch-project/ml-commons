@@ -153,6 +153,7 @@ public class FileUtils {
         deleteFileQuietly(new File(path.toUri()));
     }
 
+    @SuppressWarnings("removal")
     public static void deleteFileQuietly(File file) {
         if (file.exists()) {
             AccessController.doPrivileged((PrivilegedAction<Void>) () -> {

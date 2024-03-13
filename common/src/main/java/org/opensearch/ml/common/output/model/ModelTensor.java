@@ -228,6 +228,7 @@ public class ModelTensor implements Writeable, ToXContentObject {
         }
     }
 
+    @SuppressWarnings("removal")
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(name);

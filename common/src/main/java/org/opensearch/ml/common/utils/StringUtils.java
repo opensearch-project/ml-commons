@@ -94,6 +94,7 @@ public class StringUtils {
         return result;
     }
 
+    @SuppressWarnings("removal")
     public static Map<String, String> getParameterMap(Map<String, ?> parameterObjs) {
         Map<String, String> parameters = new HashMap<>();
         for (String key : parameterObjs.keySet()) {
@@ -114,6 +115,7 @@ public class StringUtils {
         return parameters;
     }
 
+    @SuppressWarnings("removal")
     public static String toJson(Object value) {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
@@ -128,6 +130,7 @@ public class StringUtils {
         }
     }
 
+    @SuppressWarnings("removal")
     public static Map<String, String> convertScriptStringToJsonString(Map<String, Object> processedInput) {
         Map<String, String> parameterStringMap = new HashMap<>();
         try {

@@ -22,6 +22,7 @@ import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.annotation.Function;
 import org.reflections.Reflections;
 
+@SuppressWarnings("removal")
 public class MLEngineClassLoader {
 
     private static final Logger logger = LogManager.getLogger(MLEngineClassLoader.class);
