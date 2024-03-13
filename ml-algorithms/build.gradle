@@ -63,12 +63,13 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.21.15')
+    implementation platform('software.amazon.awssdk:bom:2.22.12')
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
+    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.22.12'
 }
 
 lombok {

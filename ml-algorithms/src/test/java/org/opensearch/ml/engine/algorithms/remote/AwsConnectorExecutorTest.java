@@ -5,57 +5,48 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
-import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-
-import software.amazon.awssdk.http.AbortableInputStream;
-import software.amazon.awssdk.http.ExecutableHttpRequest;
-import software.amazon.awssdk.http.HttpExecuteResponse;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.SdkHttpResponse;
 
 public class AwsConnectorExecutorTest {
 
@@ -73,16 +64,7 @@ public class AwsConnectorExecutorTest {
     ThreadContext threadContext;
 
     @Mock
-    ScriptService scriptService;
-
-    @Mock
-    SdkHttpClient httpClient;
-
-    @Mock
-    ExecutableHttpRequest httpRequest;
-
-    @Mock
-    HttpExecuteResponse response;
+    ActionListener<MLTaskResponse> actionListener;
 
     Encryptor encryptor;
 
@@ -100,7 +82,7 @@ public class AwsConnectorExecutorTest {
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         AwsConnector
@@ -113,21 +95,12 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_NullResponse() throws IOException {
-        exceptionRule.expect(OpenSearchStatusException.class);
-        exceptionRule.expectMessage("No response from model");
-        when(response.responseBody()).thenReturn(Optional.empty());
-        when(httpRequest.call()).thenReturn(response);
-        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
-        when(httpResponse.statusCode()).thenReturn(200);
-        when(response.httpResponse()).thenReturn(httpResponse);
-        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
-
+    public void executePredict_RemoteInferenceInput_invalidIp() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url("http://test1.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
@@ -143,7 +116,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -151,28 +124,20 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof MLException;
+        assertEquals("Fail to execute predict in aws connector", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_InvalidToken() throws IOException {
-        exceptionRule.expect(OpenSearchStatusException.class);
-        exceptionRule.expectMessage("{\"message\":\"The security token included in the request is invalid\"}");
-        String jsonString = "{\"message\":\"The security token included in the request is invalid\"}";
-        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
-        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
-        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
-        when(httpRequest.call()).thenReturn(response);
-        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
-        when(httpResponse.statusCode()).thenReturn(403);
-        when(response.httpResponse()).thenReturn(httpResponse);
-        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
-
+    public void executePredict_RemoteInferenceInput_EmptyIpAddress() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url("http:///mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
@@ -188,7 +153,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -196,26 +161,20 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Remote inference host name has private ip address: ", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput() throws IOException {
-        String jsonString = "{\"key\":\"value\"}";
-        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
-        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
-        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
-        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
-        when(httpResponse.statusCode()).thenReturn(200);
-        when(response.httpResponse()).thenReturn(httpResponse);
-        when(httpRequest.call()).thenReturn(response);
-        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
-
+    public void executePredict_RemoteInferenceInput_illegalIpAddress() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url("http://localhost/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
@@ -231,7 +190,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -239,32 +198,20 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        ModelTensorOutput modelTensorOutput = executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
-        Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("value", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("key"));
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Remote inference host name has private ip address: localhost", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput() throws IOException {
-        String jsonString = "{\"key\":\"value\"}";
-        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
-        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
-        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
-        when(httpRequest.call()).thenReturn(response);
-        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
-        when(httpResponse.statusCode()).thenReturn(200);
-        when(response.httpResponse()).thenReturn(httpResponse);
-        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
-
+    public void executePredict_TextDocsInferenceInput() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
+            .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
@@ -281,7 +228,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
@@ -289,28 +236,24 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
-        ModelTensorOutput modelTensorOutput = executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
-        Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
-        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("value", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("key"));
+        executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
     }
 
     @Test
-    public void test_initialize() {
+    public void executePredict_TextDocsInferenceInput_withStepSize() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
             .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(20, 30000, 30000);
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -319,13 +262,99 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(httpClientConfig)
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
-        Assert.assertEquals(20, executor.getConnector().getConnectorClientConfig().getMaxConnections().intValue());
-        Assert.assertEquals(30000, executor.getConnector().getConnectorClientConfig().getConnectionTimeout().intValue());
-        Assert.assertEquals(30000, executor.getConnector().getConnectorClientConfig().getReadTimeout().intValue());
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+
+        MLInputDataset inputDataSet1 = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2")).build();
+        executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(), actionListener);
+    }
+
+    @Test
+    public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() throws NoSuchFieldException, IllegalAccessException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor0 = new AwsConnectorExecutor(connector);
+        Field httpClientField = AwsConnectorExecutor.class.getDeclaredField("httpClient");
+        httpClientField.setAccessible(true);
+        httpClientField.set(executor0, null);
+        AwsConnectorExecutor executor = spy(executor0);
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof NullPointerException;
+    }
+
+    @Test
+    public void executePredict_RemoteInferenceInput_negativeStepSize_throwIllegalArgumentException() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
     }
 }

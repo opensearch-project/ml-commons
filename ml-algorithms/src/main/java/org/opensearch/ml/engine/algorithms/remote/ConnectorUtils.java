@@ -15,6 +15,9 @@ import static org.opensearch.ml.common.utils.StringUtils.processTextDocs;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +39,7 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import com.jayway.jsonpath.JsonPath;
@@ -46,7 +50,9 @@ import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.signer.Aws4Signer;
 import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpMethod;
 import software.amazon.awssdk.regions.Region;
 
 @Log4j2
@@ -219,6 +225,13 @@ public class ConnectorUtils {
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
     }
 
+    public static ModelTensors processErrorResponse(String errorResponse) {
+        return ModelTensors
+            .builder()
+            .mlModelTensors(List.of(ModelTensor.builder().dataAsMap(Map.of("remote_response", errorResponse)).build()))
+            .build();
+    }
+
     private static String fillProcessFunctionParameter(Map<String, String> parameters, String processFunction) {
         if (processFunction != null && processFunction.contains("${parameters.")) {
             Map<String, String> tmpParameters = new HashMap<>();
@@ -251,5 +264,48 @@ public class ConnectorUtils {
             .build();
 
         return signer.sign(request, params);
+    }
+
+    public static SdkHttpFullRequest buildSdkRequest(
+        Connector connector,
+        Map<String, String> parameters,
+        String payload,
+        SdkHttpMethod method
+    ) throws Exception {
+        String endpoint = connector.getPredictEndpoint(parameters);
+        URL url = new URL(endpoint);
+        String protocol = url.getProtocol();
+        String host = url.getHost();
+        int port = url.getPort();
+        MLHttpClientFactory.validate(protocol, host, port);
+        String charset = parameters.getOrDefault("charset", "UTF-8");
+        RequestBody requestBody;
+        if (payload != null) {
+            requestBody = RequestBody.fromString(payload, Charset.forName(charset));
+        } else {
+            requestBody = RequestBody.empty();
+        }
+        if (SdkHttpMethod.POST == method && 0 == requestBody.optionalContentLength().get()) {
+            log.error("Content length is 0. Aborting request to remote model");
+            throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
+        }
+        SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
+            .builder()
+            .method(method)
+            .uri(URI.create(endpoint))
+            .contentStreamProvider(requestBody.contentStreamProvider());
+        Map<String, String> headers = connector.getDecryptedHeaders();
+        if (headers != null) {
+            for (String key : headers.keySet()) {
+                builder.putHeader(key, headers.get(key));
+            }
+        }
+        if (builder.matchingHeaders("Content-Type").isEmpty()) {
+            builder.putHeader("Content-Type", "application/json");
+        }
+        if (builder.matchingHeaders("Content-Length").isEmpty()) {
+            builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
+        }
+        return builder.build();
     }
 }

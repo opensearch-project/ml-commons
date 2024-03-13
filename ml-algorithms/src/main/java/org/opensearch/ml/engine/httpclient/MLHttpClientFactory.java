@@ -8,84 +8,69 @@ package org.opensearch.ml.engine.httpclient;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
 import java.util.Arrays;
-
-import org.apache.commons.lang3.math.NumberUtils;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.conn.UnsupportedSchemeException;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.LaxRedirectStrategy;
-import org.apache.http.impl.conn.DefaultSchemePortResolver;
-import org.apache.http.protocol.HttpContext;
-
-import com.google.common.annotations.VisibleForTesting;
+import java.util.Locale;
 
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 
 @Log4j2
 public class MLHttpClientFactory {
 
-    public static CloseableHttpClient getCloseableHttpClient(Integer connectionTimeout, Integer readTimeout, Integer maxConnections) {
-        return createHttpClient(connectionTimeout, readTimeout, maxConnections);
-    }
-
-    private static CloseableHttpClient createHttpClient(Integer connectionTimeout, Integer readTimeout, Integer maxConnections) {
-        HttpClientBuilder builder = HttpClientBuilder.create();
-
-        // Only allow HTTP and HTTPS schemes
-        builder.setSchemePortResolver(new DefaultSchemePortResolver() {
-            @Override
-            public int resolve(HttpHost host) throws UnsupportedSchemeException {
-                validateSchemaAndPort(host);
-                return super.resolve(host);
-            }
-        });
-
-        builder.setDnsResolver(MLHttpClientFactory::validateIp);
-
-        builder.setRedirectStrategy(new LaxRedirectStrategy() {
-            @Override
-            public boolean isRedirected(HttpRequest request, HttpResponse response, HttpContext context) {
-                // Do not follow redirects
-                return false;
-            }
-        });
-        builder.setMaxConnTotal(maxConnections);
-        builder.setMaxConnPerRoute(maxConnections);
-        RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(connectionTimeout).setSocketTimeout(readTimeout).build();
-        builder.setDefaultRequestConfig(requestConfig);
-        return builder.build();
-    }
-
-    @VisibleForTesting
-    protected static void validateSchemaAndPort(HttpHost host) {
-        String scheme = host.getSchemeName();
-        if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
-            String[] hostNamePort = host.getHostName().split(":");
-            if (hostNamePort.length > 1 && NumberUtils.isDigits(hostNamePort[1])) {
-                int port = Integer.parseInt(hostNamePort[1]);
-                if (port < 0 || port > 65536) {
-                    log.error("Remote inference port out of range: " + port);
-                    throw new IllegalArgumentException("Port out of range: " + port);
-                }
-            }
-        } else {
-            log.error("Remote inference scheme not supported: " + scheme);
-            throw new IllegalArgumentException("Unsupported scheme: " + scheme);
+    public static SdkAsyncHttpClient getAsyncHttpClient(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
+        try {
+            return AccessController
+                .doPrivileged(
+                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient
+                        .builder()
+                        .connectionTimeout(connectionTimeout)
+                        .readTimeout(readTimeout)
+                        .maxConcurrency(maxConnections)
+                        .build()
+                );
+        } catch (PrivilegedActionException e) {
+            return null;
         }
     }
 
-    protected static InetAddress[] validateIp(String hostName) throws UnknownHostException {
+    /**
+     * Validate the input parameters, such as protocol, host and port.
+     * @param protocol The protocol supported in remote inference, currently only http and https are supported.
+     * @param host The host name of the remote inference server, host must be a valid ip address or domain name and must not be localhost.
+     * @param port The port number of the remote inference server, port number must be in range [0, 65536].
+     * @throws UnknownHostException
+     */
+    public static void validate(String protocol, String host, int port) throws UnknownHostException {
+        if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
+            log.error("Remote inference protocol is not http or https: " + protocol);
+            throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
+        }
+        // When port is not specified, the default port is -1, and we need to set it to 80 or 443 based on protocol.
+        if (port == -1) {
+            if (protocol == null || "http".equals(protocol.toLowerCase(Locale.getDefault()))) {
+                port = 80;
+            } else {
+                port = 443;
+            }
+        }
+        if (port < 0 || port > 65536) {
+            log.error("Remote inference port out of range: " + port);
+            throw new IllegalArgumentException("Port out of range: " + port);
+        }
+        validateIp(host);
+    }
+
+    private static void validateIp(String hostName) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if (hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: " + hostName);
-            throw new IllegalArgumentException(hostName);
+            throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
-        return addresses;
     }
 
     private static boolean hasPrivateIpAddress(InetAddress[] ipAddress) {

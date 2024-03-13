@@ -5,9 +5,12 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
@@ -18,14 +21,17 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
@@ -61,19 +67,28 @@ public class RemoteModelTest {
 
     @Test
     public void predict_NullConnectorExecutor() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("Model not ready yet");
-        remoteModel.predict(mlInput);
+        ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
+        remoteModel.asyncPredict(mlInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assert argumentCaptor.getValue() instanceof RuntimeException;
+        assertEquals(
+            "Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
     public void predict_ModelDeployed_WrongInput() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("pre_process_function not defined in connector");
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
-        remoteModel.predict(mlInput);
+        ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
+        remoteModel.asyncPredict(mlInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assert argumentCaptor.getValue() instanceof RuntimeException;
+        assertEquals("pre_process_function not defined in connector", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -105,8 +120,8 @@ public class RemoteModelTest {
         Assert.assertNotNull(executor);
         Assert.assertNull(decryptedHeaders);
         Assert.assertNotNull(executor.getConnector().getDecryptedHeaders());
-        Assert.assertEquals(1, executor.getConnector().getDecryptedHeaders().size());
-        Assert.assertEquals("Bearer test_api_key", executor.getConnector().getDecryptedHeaders().get("Authorization"));
+        assertEquals(1, executor.getConnector().getDecryptedHeaders().size());
+        assertEquals("Bearer test_api_key", executor.getConnector().getDecryptedHeaders().get("Authorization"));
 
         remoteModel.close();
         Assert.assertNull(remoteModel.getConnectorExecutor());
