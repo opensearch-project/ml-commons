@@ -606,10 +606,7 @@ public class TextEmbeddingDenseModelTest {
         ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
         ActionListener actionListener = mock(ActionListener.class);
         textEmbeddingDenseModel
-            .asyncPredict(
-                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
-                actionListener
-            );
+            .asyncPredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
         verify(actionListener).onFailure(captor.capture());
         assert captor.getValue().getMessage().equals("Method is not implemented");
     }
