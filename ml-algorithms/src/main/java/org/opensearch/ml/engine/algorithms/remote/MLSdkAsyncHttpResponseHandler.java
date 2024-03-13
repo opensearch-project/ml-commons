@@ -158,7 +158,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             // either one fails, we will return a failure response.
             OpenSearchStatusException openSearchStatusException = null;
             for (Map.Entry<Integer, ModelTensors> entry : sortedMap.entrySet()) {
-                if (entry.getValue().getStatusCode() < HttpStatus.SC_OK || entry.getValue().getStatusCode() > HttpStatus.SC_MULTIPLE_CHOICES) {
+                if (entry.getValue().getStatusCode() < HttpStatus.SC_OK
+                    || entry.getValue().getStatusCode() > HttpStatus.SC_MULTIPLE_CHOICES) {
                     openSearchStatusException = buildOpenSearchStatusException(entry.getValue());
                     break;
                 }

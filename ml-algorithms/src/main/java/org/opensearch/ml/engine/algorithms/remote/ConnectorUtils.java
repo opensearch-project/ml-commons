@@ -27,7 +27,6 @@ import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
