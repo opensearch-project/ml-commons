@@ -44,31 +44,36 @@ public interface RemoteConnectorExecutor {
             actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(r)));
         }, actionListener::onFailure);
         Map<Integer, ModelTensors> modelTensors = new ConcurrentHashMap<>();
-        if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
-            TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-            Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
-            CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
-            int sequence = 0;
-            for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize.v2()) {
-                List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
+        try {
+            if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
+                TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
+                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
+                CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
+                int sequence = 0;
+                for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize
+                    .v2()) {
+                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
+                    preparePayloadAndInvokeRemoteModel(
+                        MLInput
+                            .builder()
+                            .algorithm(FunctionName.TEXT_EMBEDDING)
+                            .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
+                            .build(),
+                        modelTensors,
+                        new WrappedCountDownLatch(sequence++, countDownLatch),
+                        tensorActionListener
+                    );
+                }
+            } else {
                 preparePayloadAndInvokeRemoteModel(
-                    MLInput
-                        .builder()
-                        .algorithm(FunctionName.TEXT_EMBEDDING)
-                        .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
-                        .build(),
+                    mlInput,
                     modelTensors,
-                    new WrappedCountDownLatch(sequence++, countDownLatch),
+                    new WrappedCountDownLatch(0, new CountDownLatch(1)),
                     tensorActionListener
                 );
             }
-        } else {
-            preparePayloadAndInvokeRemoteModel(
-                mlInput,
-                modelTensors,
-                new WrappedCountDownLatch(0, new CountDownLatch(1)),
-                tensorActionListener
-            );
+        } catch (Exception e) {
+            actionListener.onFailure(e);
         }
     }
 
