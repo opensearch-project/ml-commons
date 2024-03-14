@@ -91,13 +91,11 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (name == null) {
             throw new IllegalArgumentException("Agent name can't be null");
         }
-
         if (type == null) {
             throw new IllegalArgumentException("Agent type can't be null");
         } else {
             validateMLAgentType(type);
         }
-
         if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }

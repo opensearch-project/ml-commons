@@ -11,8 +11,11 @@ public enum MLAgentType {
     CONVERSATIONAL_FLOW;
 
     public static MLAgentType from(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("Agent type can't be null");
+        }
         try {
-            return MLAgentType.valueOf(value);
+            return MLAgentType.valueOf(value.toUpperCase());
         } catch (Exception e) {
             throw new IllegalArgumentException("Wrong Agent type");
         }

@@ -44,6 +44,22 @@ public class MLAgentTest {
     }
 
     @Test
+    public void constructor_NullType() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Agent type can't be null");
+
+        MLAgent agent = new MLAgent("test_agent", null, "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), null, null, Instant.EPOCH, Instant.EPOCH, "test", false);
+    }
+
+    @Test
+    public void constructor_NullLLMSpec() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("We need model information for the conversational agent type");
+
+        MLAgent agent = new MLAgent("test_agent", MLAgentType.CONVERSATIONAL.name(), "test", null, List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), null, null, Instant.EPOCH, Instant.EPOCH, "test", false);
+    }
+
+    @Test
     public void constructor_DuplicateTool() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Duplicate tool defined: test_tool_name");
@@ -119,7 +135,7 @@ public class MLAgentTest {
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = "{\"name\":\"test\",\"type\":\"CONVERSATIONAL\",\"description\":\"test\",\"llm\":{\"model_id\":\"test_model\",\"parameters\":{\"test_key\":\"test_value\"}},\"tools\":[{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}],\"parameters\":{\"test\":\"test\"},\"memory\":{\"type\":\"test\",\"window_size\":0,\"session_id\":\"123\"},\"created_time\":0,\"last_updated_time\":0,\"app_type\":\"test\"}";
+        String jsonStr = "{\"name\":\"test\",\"type\":\"CONVERSATIONAL\",\"description\":\"test\",\"llm\":{\"model_id\":\"test_model\",\"parameters\":{\"test_key\":\"test_value\"}},\"tools\":[{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}],\"parameters\":{\"test\":\"test\"},\"memory\":{\"type\":\"test\",\"window_size\":0,\"session_id\":\"123\"},\"created_time\":0,\"last_updated_time\":0,\"app_type\":\"test\",\"is_hidden\":false}";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
@@ -140,6 +156,7 @@ public class MLAgentTest {
         Assert.assertEquals(agent.getAppType(), "test");
         Assert.assertEquals(agent.getMemory().getSessionId(), "123");
         Assert.assertEquals(agent.getParameters(), Map.of("test", "test"));
+        Assert.assertEquals(agent.getIsHidden(), false);
     }
 
     @Test
