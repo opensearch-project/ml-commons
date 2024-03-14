@@ -19,8 +19,12 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -135,6 +139,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         } else {
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
+                                    } else if (functionName == FunctionName.REMOTE) {
+                                        deployAndPredictRemoteModel(modelId, wrappedListener, mlPredictionTaskRequest);
                                     } else {
                                         executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                     }
@@ -178,6 +184,67 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 mlModelManager.getModel(modelId, modelActionListener);
             }
         }
+    }
+
+    private void deployAndPredictRemoteModel(
+        String modelId,
+        ActionListener<MLTaskResponse> wrappedListener,
+        MLPredictionTaskRequest mlPredictionTaskRequest
+    ) {
+        String[] workerNodes = mlModelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
+        if (workerNodes != null && workerNodes.length != 0) {
+            // transport layer deployment finished
+            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+            return;
+        }
+        mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
+            // Obtain the deployment plan
+            String[] workerNodeIds = mlModel.getPlanningWorkerNodes();
+            MLDeployModelRequest deployModelRequest = MLDeployModelRequest
+                .builder()
+                .modelId(modelId)
+                .async(false)
+                .dispatchTask(false)
+                .modelNodeIds(workerNodeIds)
+                .build();
+            deployAndPredict(modelId, deployModelRequest, mlPredictionTaskRequest, wrappedListener);
+        }, exception -> {
+            log.error("Failed to find the remote model in the model index " + modelId, exception);
+            wrappedListener.onFailure(exception);
+        }));
+    }
+
+    private void deployAndPredict(
+        String modelId,
+        MLDeployModelRequest deployModelRequest,
+        MLPredictionTaskRequest mlPredictionTaskRequest,
+        ActionListener<MLTaskResponse> wrappedListener
+    ) {
+        ActionListener<MLDeployModelResponse> deployModelActionListener = ActionListener.wrap(deployModelResponse -> {
+            // Deployment failed, existing
+            if (!deployModelResponse.getStatus().equals(MLTaskState.COMPLETED.name())) {
+                wrappedListener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "Deployment Failed for " + modelId + ", please check your remote model before predicting."
+                        )
+                    );
+                return;
+            }
+            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
+            if (workerNodes == null || workerNodes.length == 0) {
+                // The deployment is kicked off, but not finished yet in this node
+                mlModelManager.deployRemoteModelToLocal(modelId, ActionListener.wrap(r -> {
+                    executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                }, exception -> {
+                    log.error("Failed to deploy model to local node" + modelId, exception);
+                    wrappedListener.onFailure(exception);
+                }));
+            } else {
+                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+            }
+        }, wrappedListener::onFailure);
+        client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, deployModelActionListener);
     }
 
     private void executePredict(

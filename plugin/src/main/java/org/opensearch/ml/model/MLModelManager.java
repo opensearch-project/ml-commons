@@ -1057,6 +1057,26 @@ public class MLModelManager {
         }
     }
 
+    public void deployRemoteModelToLocal(String modelId, ActionListener<String> listener) {
+        String localNodeId = clusterService.localNode().getId();
+        if (modelCacheHelper.isModelDeployed(modelId)) {
+            return;
+        }
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            this.getModel(modelId, ActionListener.wrap(mlModel -> {
+                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
+                deployRemoteOrBuiltInModel(mlModel, 1, wrappedListener);
+            }, exception -> {
+                log.error("Failed to deploy model to local node" + modelId, exception);
+                listener.onFailure(exception);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to deploy model to local node" + modelId, e);
+            listener.onFailure(e);
+        }
+    }
+
     private void deployRemoteOrBuiltInModel(MLModel mlModel, Integer eligibleNodeCount, ActionListener<String> wrappedListener) {
         String modelId = mlModel.getModelId();
         setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
