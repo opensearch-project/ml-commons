@@ -314,7 +314,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.6  //TODO: change this value to 0.7
+                minimum = 0.7  //TODO: change this value to 0.7
             }
         }
         rule {
