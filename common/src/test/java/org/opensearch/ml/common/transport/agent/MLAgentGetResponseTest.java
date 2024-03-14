@@ -68,7 +68,7 @@ public class MLAgentGetResponseTest {
     @Test
     public void writeTo() throws IOException {
         //create ml agent using MLAgent and mlAgentGetResponse
-        mlAgent = new MLAgent("test", "test", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test");
+        mlAgent = new MLAgent("test", "test", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false);
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
                 .mlAgent(mlAgent)
                 .build();
@@ -88,7 +88,7 @@ public class MLAgentGetResponseTest {
 
     @Test
     public void toXContent() throws IOException {
-        mlAgent = new MLAgent("mock", "flow", "test", null, null, null, null, null, null, "test");
+        mlAgent = new MLAgent("mock", "flow", "test", null, null, null, null, null, null, "test", false);
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
                 .mlAgent(mlAgent)
                 .build();

@@ -24,6 +24,9 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -55,12 +58,19 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     private Client client;
     @Mock
     ThreadPool threadPool;
+
+    private ClusterSettings clusterSettings;
+
+    @Mock
+    private ClusterService clusterService;
     @Mock
     private NamedXContentRegistry xContentRegistry;
 
     @Mock
     private TransportService transportService;
 
+    @Mock
+    ClusterState clusterState;
     @Mock
     private ActionFilters actionFilters;
 
@@ -73,11 +83,15 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        getAgentTransportAction = new GetAgentTransportAction(transportService, actionFilters, client, xContentRegistry);
+        getAgentTransportAction = spy(
+            new GetAgentTransportAction(transportService, actionFilters, client, clusterService, xContentRegistry)
+        );
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
 
     }
 
@@ -202,6 +216,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             transportService,
             actionFilters,
             client,
+            clusterService,
             xContentRegistry
         );
         when(client.threadPool()).thenReturn(threadPool);
@@ -220,7 +235,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testDoExecute_NoAgentId() throws IOException {
-        GetResponse getResponse = prepareMLAgent(null);
+        GetResponse getResponse = prepareMLAgent(null, false);
         String agentId = "test-agent-id";
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
@@ -244,7 +259,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     public void testDoExecute_Success() throws IOException {
 
         String agentId = "test-agent-id";
-        GetResponse getResponse = prepareMLAgent(agentId);
+        GetResponse getResponse = prepareMLAgent(agentId, false);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
         MLAgentGetRequest request = new MLAgentGetRequest(agentId);
         Task task = mock(Task.class);
@@ -259,7 +274,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLAgentGetResponse.class));
     }
 
-    public GetResponse prepareMLAgent(String agentId) throws IOException {
+    public GetResponse prepareMLAgent(String agentId, boolean isHidden) throws IOException {
 
         mlAgent = new MLAgent(
             "test",
@@ -271,7 +286,8 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
-            "test"
+            "test",
+            isHidden
         );
 
         XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
@@ -279,5 +295,51 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult("indexName", agentId, 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    @Test
+    public void testRemoveModelIDIfHiddenAndNotSuperUser() throws IOException {
+
+        String agentId = "test-agent-id";
+        GetResponse getResponse = prepareMLAgent(agentId, true);
+        ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(false).when(getAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        getAgentTransportAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<MLAgentGetResponse> captor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
+        verify(actionListener, times(1)).onResponse(captor.capture());
+        MLAgentGetResponse mlAgentGetResponse = captor.getValue();
+        assertNull(mlAgentGetResponse.getMlAgent().getLlm());
+    }
+
+    @Test
+    public void testNotRemoveModelIDIfHiddenAndSuperUser() throws IOException {
+
+        String agentId = "test-agent-id";
+        GetResponse getResponse = prepareMLAgent(agentId, true);
+        ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(true).when(getAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        getAgentTransportAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<MLAgentGetResponse> captor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
+        verify(actionListener, times(1)).onResponse(captor.capture());
+        MLAgentGetResponse mlAgentGetResponse = captor.getValue();
+        assertNotNull(mlAgentGetResponse.getMlAgent().getLlm());
     }
 }

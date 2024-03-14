@@ -15,6 +15,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -26,8 +27,11 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
 import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -40,16 +44,20 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
     Client client;
     NamedXContentRegistry xContentRegistry;
 
+    ClusterService clusterService;
+
     @Inject
     public GetAgentTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        ClusterService clusterService,
         NamedXContentRegistry xContentRegistry
     ) {
         super(MLAgentGetAction.NAME, transportService, actionFilters, MLAgentGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        this.clusterService = clusterService;
     }
 
     @Override
@@ -57,6 +65,7 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
         MLAgentGetRequest mlAgentGetRequest = MLAgentGetRequest.fromActionRequest(request);
         String agentId = mlAgentGetRequest.getAgentId();
         GetRequest getRequest = new GetRequest(ML_AGENT_INDEX).id(agentId);
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
@@ -66,6 +75,9 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLAgent mlAgent = MLAgent.parse(parser);
+                        if (mlAgent.getIsHidden() && !isSuperAdmin) {
+                            mlAgent.removeModelId();
+                        }
                         actionListener.onResponse(MLAgentGetResponse.builder().mlAgent(mlAgent).build());
                     } catch (Exception e) {
                         log.error("Failed to parse ml agent" + r.getId(), e);
@@ -93,5 +105,10 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
             log.error("Failed to get ML agent " + agentId, e);
             actionListener.onFailure(e);
         }
+    }
+
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }

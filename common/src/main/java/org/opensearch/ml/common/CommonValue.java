@@ -416,6 +416,9 @@ public class CommonValue {
                         + MLAgent.MEMORY_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
+                        + MLAgent.IS_HIDDEN_FIELD
+                        + "\": {\"type\": \"boolean\"},\n"
+                        + "      \""
                         + MLAgent.CREATED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""

@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.agents;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -17,6 +19,7 @@ import java.util.HashMap;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.index.IndexResponse;
@@ -27,11 +30,14 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -44,6 +50,9 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLIndicesHandler mlIndicesHandler;
+
+    @Mock
+    private MLModelManager mlModelManager;
 
     @Mock
     private ActionFilters actionFilters;
@@ -74,7 +83,38 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        transportRegisterAgentAction = new TransportRegisterAgentAction(transportService, actionFilters, client, mlIndicesHandler);
+        transportRegisterAgentAction = new TransportRegisterAgentAction(
+            transportService,
+            actionFilters,
+            client,
+            mlIndicesHandler,
+            mlModelManager
+        );
+    }
+
+    // Test handling exception thrown by getModel
+    public void test_execute_registerAgent_GetModelThrowsException() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type("some type")
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("Model retrieval failed"));  // Simulate an exception being thrown
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), any(ActionListener.class));
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Model retrieval failed", argumentCaptor.getValue().getMessage());
     }
 
     public void test_execute_registerAgent_success() {
@@ -87,6 +127,14 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
+
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -117,6 +165,14 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onResponse(false);
@@ -139,6 +195,14 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
+
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -170,6 +234,14 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .build();
         when(request.getMlAgent()).thenReturn(mlAgent);
 
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onFailure(new RuntimeException("agent index initialization failed"));
@@ -181,4 +253,71 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("agent index initialization failed", argumentCaptor.getValue().getMessage());
     }
+
+    public void test_execute_registerAgent_ModelNotHidden() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type("some type")
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getIsHidden()).thenReturn(false); // The model is not hidden
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), any(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true); // Simulate successful index initialization
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(mock(IndexResponse.class)); // Simulating successful indexing
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    public void test_execute_ModelNotFound() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type("some type")
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getIsHidden()).thenReturn(false); // The model is not hidden
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Failed to retrieve the ML model with ID"));
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), any(ActionListener.class));
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+
+        assertNotNull(argumentCaptor.getValue());
+    }
+
 }
