@@ -26,6 +26,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -60,7 +61,7 @@ public class ModelHelperTest {
         modelFormat = MLModelFormat.TORCH_SCRIPT;
         modelId = "model_id";
         encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), encryptor);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), encryptor, Settings.EMPTY);
         modelHelper = new ModelHelper(mlEngine);
     }
 

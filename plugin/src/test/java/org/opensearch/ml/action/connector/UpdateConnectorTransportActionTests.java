@@ -155,7 +155,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         );
 
         Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor, Settings.EMPTY);
 
         updateConnectorTransportAction = new UpdateConnectorTransportAction(
             transportService,
