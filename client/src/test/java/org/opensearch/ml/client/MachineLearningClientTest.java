@@ -29,6 +29,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
@@ -484,7 +485,7 @@ public class MachineLearningClientTest {
 
     @Test
     public void testRegisterAgent() {
-        MLAgent mlAgent = MLAgent.builder().name("Agent name").build();
+        MLAgent mlAgent = MLAgent.builder().name("Agent name").type(MLAgentType.FLOW.name()).build();
         assertEquals(registerAgentResponse, machineLearningClient.registerAgent(mlAgent).actionGet());
     }
 

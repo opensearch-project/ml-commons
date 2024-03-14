@@ -15,6 +15,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 
 import java.io.IOException;
@@ -88,8 +89,19 @@ public class MLAgent implements ToXContentObject, Writeable {
 
     private void validate() {
         if (name == null) {
-            throw new IllegalArgumentException("agent name is null");
+            throw new IllegalArgumentException("Agent name can't be null");
         }
+
+        if (type == null) {
+            throw new IllegalArgumentException("Agent type can't be null");
+        } else {
+            validateMLAgentType(type);
+        }
+
+        if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
+            throw new IllegalArgumentException("We need model information for the conversational agent type");
+        }
+
         Set<String> toolNames = new HashSet<>();
         if (tools != null) {
             for (MLToolSpec toolSpec : tools) {
@@ -100,6 +112,15 @@ public class MLAgent implements ToXContentObject, Writeable {
                     toolNames.add(toolName);
                 }
             }
+        }
+    }
+
+    private void validateMLAgentType(String agentType) {
+        try {
+            MLAgentType.valueOf(agentType.toUpperCase()); // Use toUpperCase() to allow case-insensitive matching
+        } catch (IllegalArgumentException e) {
+            // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
+            throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
         }
     }
 

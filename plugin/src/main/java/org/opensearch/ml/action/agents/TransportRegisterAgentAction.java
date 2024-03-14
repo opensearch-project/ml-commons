@@ -22,6 +22,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
@@ -65,9 +66,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         Instant now = Instant.now();
-        if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
-            final String llmId = agent.getLlm().getModelId();
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        String llmId;
+        if (agent.getType().equalsIgnoreCase(MLAgentType.CONVERSATIONAL.name()) && agent.getLlm() != null) {
+            llmId = agent.getLlm().getModelId();
+        } else {
+            llmId = null;
+        }
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (llmId != null) {
                 String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
                 mlModelManager.getModel(llmId, null, excludes, ActionListener.wrap(mlModel -> {
                     processModelAndRegisterAgent(agent, mlModel.getIsHidden(), now, listener, context);
@@ -75,10 +81,13 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                     log.error("Failed to retrieve the ML model with ID: " + llmId, e);
                     listener.onFailure(e);
                 }));
-            } catch (Exception e) {
-                log.error("Failed to get the model information " + llmId, e);
-                listener.onFailure(e);
+            } else {
+                processModelAndRegisterAgent(agent, false, now, listener, context);
             }
+
+        } catch (Exception e) {
+            log.error("Failed to get the model information " + llmId, e);
+            listener.onFailure(e);
         }
     }
 

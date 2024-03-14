@@ -38,6 +38,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -278,7 +279,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         mlAgent = new MLAgent(
             "test",
-            "test",
+            MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
             List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
