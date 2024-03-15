@@ -76,9 +76,16 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLAgent mlAgent = MLAgent.parse(parser);
                         if (mlAgent.getIsHidden() && !isSuperAdmin) {
-                            mlAgent.removeModelId();
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "User doesn't have privilege to perform this operation on this model",
+                                        RestStatus.FORBIDDEN
+                                    )
+                                );
+                        } else {
+                            actionListener.onResponse(MLAgentGetResponse.builder().mlAgent(mlAgent).build());
                         }
-                        actionListener.onResponse(MLAgentGetResponse.builder().mlAgent(mlAgent).build());
                     } catch (Exception e) {
                         log.error("Failed to parse ml agent" + r.getId(), e);
                         actionListener.onFailure(e);

@@ -215,15 +215,6 @@ public class MLAgentTest {
     }
 
     @Test
-    public void removeModelIdTest() {
-        LLMSpec llmSpec = new LLMSpec("test_model", Map.of("test_key", "test_value"));
-        MLAgent agent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test_description", llmSpec, null, null, null, Instant.EPOCH, Instant.EPOCH, "test", false);
-        assertNotNull(agent.getLlm());
-        agent.removeModelId();
-        assertNull(agent.getLlm());
-    }
-
-    @Test
     public void parse_MissingFields() throws IOException {
         String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\"}";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,

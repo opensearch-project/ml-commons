@@ -66,7 +66,7 @@ public class CommonValue {
         public static final Integer ML_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MAP_RESPONSE_KEY = "response";
         public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
-        public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
+        public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 2;
         public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
         public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";

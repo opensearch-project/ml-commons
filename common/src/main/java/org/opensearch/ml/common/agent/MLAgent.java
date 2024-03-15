@@ -83,6 +83,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
         this.appType = appType;
+        // is_hidden field isn't going to be set by user. It will be set by the code.
         this.isHidden = isHidden;
         validate();
     }
@@ -91,15 +92,10 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (name == null) {
             throw new IllegalArgumentException("Agent name can't be null");
         }
-        if (type == null) {
-            throw new IllegalArgumentException("Agent type can't be null");
-        } else {
-            validateMLAgentType(type);
-        }
+        validateMLAgentType(type);
         if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }
-
         Set<String> toolNames = new HashSet<>();
         if (tools != null) {
             for (MLToolSpec toolSpec : tools) {
@@ -114,11 +110,15 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     private void validateMLAgentType(String agentType) {
-        try {
-            MLAgentType.valueOf(agentType.toUpperCase()); // Use toUpperCase() to allow case-insensitive matching
-        } catch (IllegalArgumentException e) {
-            // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
-            throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
+        if (type == null) {
+            throw new IllegalArgumentException("Agent type can't be null");
+        } else {
+            try {
+                MLAgentType.valueOf(agentType.toUpperCase()); // Use toUpperCase() to allow case-insensitive matching
+            } catch (IllegalArgumentException e) {
+                // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
+                throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
+            }
         }
     }
 
@@ -146,6 +146,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         createdTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
         appType = input.readOptionalString();
+        // is_hidden field isn't going to be set by user. It will be set by the code.
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT)) {
             isHidden = input.readOptionalBoolean();
         }
@@ -187,6 +188,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
         out.writeOptionalString(appType);
+        // is_hidden field isn't going to be set by user. It will be set by the code.
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT)) {
             out.writeOptionalBoolean(isHidden);
         }
@@ -225,6 +227,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (appType != null) {
             builder.field(APP_TYPE_FIELD, appType);
         }
+        // is_hidden field isn't going to be set by user. It will be set by the code.
         if (isHidden != null) {
             builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
         }
@@ -285,6 +288,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case APP_TYPE_FIELD:
                     appType = parser.text();
                     break;
+                // is_hidden field isn't going to be set by user. It will be set by the code.
                 case IS_HIDDEN_FIELD:
                     isHidden = parser.booleanValue();
                     break;
@@ -311,9 +315,5 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static MLAgent fromStream(StreamInput in) throws IOException {
         MLAgent agent = new MLAgent(in);
         return agent;
-    }
-
-    public void removeModelId() {
-        this.llm = null;
     }
 }

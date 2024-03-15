@@ -315,10 +315,10 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         doReturn(false).when(getAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
         getAgentTransportAction.doExecute(task, request, actionListener);
-        ArgumentCaptor<MLAgentGetResponse> captor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
-        verify(actionListener, times(1)).onResponse(captor.capture());
-        MLAgentGetResponse mlAgentGetResponse = captor.getValue();
-        assertNull(mlAgentGetResponse.getMlAgent().getLlm());
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     @Test
