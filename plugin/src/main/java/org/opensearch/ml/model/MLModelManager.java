@@ -51,6 +51,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -1057,20 +1058,18 @@ public class MLModelManager {
         }
     }
 
-    public void deployRemoteModelToLocal(String modelId, ActionListener<String> listener) {
+    public void deployRemoteModelToLocal(String modelId, MLModel mlModel, ActionListener<String> listener) {
         String localNodeId = clusterService.localNode().getId();
         if (modelCacheHelper.isModelDeployed(modelId)) {
+            listener.onResponse("Success");
             return;
         }
+        modelCacheHelper
+            .initModelState(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, new ArrayList<>(), mlModel.isDeployToAllNodes());
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
-            this.getModel(modelId, ActionListener.wrap(mlModel -> {
-                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                deployRemoteOrBuiltInModel(mlModel, 1, wrappedListener);
-            }, exception -> {
-                log.error("Failed to deploy model to local node" + modelId, exception);
-                listener.onFailure(exception);
-            }));
+            modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
+            deployRemoteOrBuiltInModel(mlModel, 1, wrappedListener);
         } catch (Exception e) {
             log.error("Failed to deploy model to local node" + modelId, e);
             listener.onFailure(e);
@@ -1878,4 +1877,7 @@ public class MLModelManager {
         return modelCacheHelper.isModelRunningOnNode(modelId);
     }
 
+    public boolean isModelDeployed(String modelId) {
+        return modelCacheHelper.isModelDeployed(modelId);
+    }
 }

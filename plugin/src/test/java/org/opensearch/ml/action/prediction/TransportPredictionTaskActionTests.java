@@ -128,7 +128,8 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 client,
                 xContentRegistry,
                 mlModelManager,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                settings
             )
         );
 

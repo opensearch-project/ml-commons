@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.prediction;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -12,6 +14,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -41,7 +44,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class TransportPredictionTaskAction extends HandledTransportAction<ActionRequest, MLTaskResponse> {
     MLTaskRunner<MLPredictionTaskRequest, MLTaskResponse> mlPredictTaskRunner;
     TransportService transportService;
@@ -57,6 +60,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     ModelAccessControlHelper modelAccessControlHelper;
 
+    private volatile boolean enableAutomaticDeployment;
+
     @Inject
     public TransportPredictionTaskAction(
         TransportService transportService,
@@ -67,7 +72,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         Client client,
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        Settings settings
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
@@ -78,6 +84,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> enableAutomaticDeployment = it);
     }
 
     @Override
@@ -192,8 +202,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLPredictionTaskRequest mlPredictionTaskRequest
     ) {
         String[] workerNodes = mlModelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
-        if (workerNodes != null && workerNodes.length != 0) {
-            // transport layer deployment finished
+        if (!enableAutomaticDeployment || (mlModelManager.isModelDeployed(modelId) && workerNodes != null && workerNodes.length != 0)) {
+            // model deployment finished, or automatic deployment disallowed
             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
             return;
         }
@@ -207,7 +217,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 .dispatchTask(false)
                 .modelNodeIds(workerNodeIds)
                 .build();
-            deployAndPredict(modelId, deployModelRequest, mlPredictionTaskRequest, wrappedListener);
+            deployAndPredict(modelId, mlModel, deployModelRequest, mlPredictionTaskRequest, wrappedListener);
         }, exception -> {
             log.error("Failed to find the remote model in the model index " + modelId, exception);
             wrappedListener.onFailure(exception);
@@ -216,6 +226,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     private void deployAndPredict(
         String modelId,
+        MLModel mlModel,
         MLDeployModelRequest deployModelRequest,
         MLPredictionTaskRequest mlPredictionTaskRequest,
         ActionListener<MLTaskResponse> wrappedListener
@@ -234,7 +245,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
             if (workerNodes == null || workerNodes.length == 0) {
                 // The deployment is kicked off, but not finished yet in this node
-                mlModelManager.deployRemoteModelToLocal(modelId, ActionListener.wrap(r -> {
+                mlModelManager.deployRemoteModelToLocal(modelId, mlModel, ActionListener.wrap(r -> {
+                    mlPredictionTaskRequest.setDispatchTask(false);
                     executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                 }, exception -> {
                     log.error("Failed to deploy model to local node" + modelId, exception);
