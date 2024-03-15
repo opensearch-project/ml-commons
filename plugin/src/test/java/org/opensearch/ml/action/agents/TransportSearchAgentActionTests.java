@@ -10,6 +10,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -21,6 +23,8 @@ import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -34,9 +38,6 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
     @Mock
     ActionFilters actionFilters;
-
-    @Mock
-    SearchRequest searchRequest;
 
     @Mock
     ActionListener<SearchResponse> actionListener;
@@ -62,8 +63,11 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
             listener.onResponse(mockedSearchResponse);
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
-        transportSearchAgentAction.doExecute(null, searchRequest, actionListener);
-        verify(client, times(1)).search(eq(searchRequest), any());
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        SearchSourceBuilder srcBulder = SearchSourceBuilder.searchSource().ext(List.of(extBuilder));
+        SearchRequest request = new SearchRequest("my_index").source(srcBulder);
+        transportSearchAgentAction.doExecute(null, request, actionListener);
+        verify(client, times(1)).search(eq(request), any());
         verify(actionListener, times(1)).onResponse(eq(mockedSearchResponse));
     }
 
@@ -74,8 +78,11 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
-        transportSearchAgentAction.doExecute(null, searchRequest, actionListener);
-        verify(client, times(1)).search(eq(searchRequest), any());
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        SearchSourceBuilder srcBulder = SearchSourceBuilder.searchSource().ext(List.of(extBuilder));
+        SearchRequest request = new SearchRequest("my_index").source(srcBulder);
+        transportSearchAgentAction.doExecute(null, request, actionListener);
+        verify(client, times(1)).search(eq(request), any());
         verify(actionListener, times(1)).onFailure(any(RuntimeException.class));
     }
 }
