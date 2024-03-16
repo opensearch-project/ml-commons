@@ -265,7 +265,10 @@ public class CommonValue {
                         + MLModel.CONNECTOR_FIELD
                         + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"
                         + USER_FIELD_MAPPING
-                        + "    }\n"
+                        + "    },\n"
+                        + "      \""
+                        + MLModel.GUARDRAILS_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
                         + "}";
 
         public static final String ML_TASK_INDEX_MAPPING = "{\n"

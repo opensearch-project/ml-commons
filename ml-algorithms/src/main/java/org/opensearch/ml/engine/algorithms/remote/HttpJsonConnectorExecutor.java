@@ -32,6 +32,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
@@ -60,6 +61,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private Client client;
+    @Setter
+    @Getter
+    private MLGuard mlGuard;
 
     private CloseableHttpClient httpClient;
 
@@ -134,6 +138,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 return null;
             });
             String modelResponse = responseRef.get();
+            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, 1)) {
+                throw new IllegalArgumentException("guardrails triggered for LLM output");
+            }
             Integer statusCode = statusCodeRef.get();
             if (statusCode < 200 || statusCode >= 300) {
                 throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));

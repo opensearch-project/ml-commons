@@ -17,6 +17,7 @@ import java.util.stream.DoubleStream;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
@@ -45,6 +46,7 @@ public class MLModelCache {
     private final Queue<Double> predictRequestDurationQueue;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationCPU;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationGPU;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLGuard mlGuard;
 
     // In rare case, this could be null, e.g. model info not synced up yet a predict request comes in.
     @Setter
@@ -166,6 +168,7 @@ public class MLModelCache {
         isModelEnabled = null;
         rateLimiter = null;
         userRateLimiterMap = null;
+        mlGuard = null;
     }
 
     public void addModelInferenceDuration(double duration, long maxRequestCount) {

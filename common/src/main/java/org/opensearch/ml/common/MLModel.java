@@ -16,6 +16,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -84,6 +85,7 @@ public class MLModel implements ToXContentObject {
     public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
+    public static final String GUARDRAILS_FIELD = "guardrails";
 
     private String name;
     private String modelGroupId;
@@ -127,6 +129,7 @@ public class MLModel implements ToXContentObject {
     @Setter
     private Connector connector;
     private String connectorId;
+    private Guardrails guardrails;
 
     @Builder(toBuilder = true)
     public MLModel(String name,
@@ -158,7 +161,8 @@ public class MLModel implements ToXContentObject {
             boolean deployToAllNodes,
             Boolean isHidden,
             Connector connector,
-            String connectorId) {
+            String connectorId,
+            Guardrails guardrails) {
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.algorithm = algorithm;
@@ -190,6 +194,7 @@ public class MLModel implements ToXContentObject {
         this.isHidden = isHidden;
         this.connector = connector;
         this.connectorId = connectorId;
+        this.guardrails = guardrails;
     }
 
     public MLModel(StreamInput input) throws IOException {
@@ -243,6 +248,9 @@ public class MLModel implements ToXContentObject {
                 connector = Connector.fromStream(input);
             }
             connectorId = input.readOptionalString();
+            if (input.readBoolean()) {
+                this.guardrails = new Guardrails(input);
+            }
         }
     }
 
@@ -308,6 +316,12 @@ public class MLModel implements ToXContentObject {
             out.writeBoolean(false);
         }
         out.writeOptionalString(connectorId);
+        if (guardrails != null) {
+            out.writeBoolean(true);
+            guardrails.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -406,6 +420,9 @@ public class MLModel implements ToXContentObject {
         if (connectorId != null) {
             builder.field(CONNECTOR_ID_FIELD, connectorId);
         }
+        if (guardrails != null) {
+            builder.field(GUARDRAILS_FIELD, guardrails);
+        }
         builder.endObject();
         return builder;
     }
@@ -448,6 +465,7 @@ public class MLModel implements ToXContentObject {
         boolean isHidden = false;
         Connector connector = null;
         String connectorId = null;
+        Guardrails guardrails = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -571,6 +589,9 @@ public class MLModel implements ToXContentObject {
                 case LAST_UNDEPLOYED_TIME_FIELD:
                     lastUndeployedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case GUARDRAILS_FIELD:
+                    guardrails = Guardrails.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -608,6 +629,7 @@ public class MLModel implements ToXContentObject {
                 .isHidden(isHidden)
                 .connector(connector)
                 .connectorId(connectorId)
+                .guardrails(guardrails)
                 .build();
     }
 
