@@ -236,15 +236,20 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     public static MLAgent parse(XContentParser parser) throws IOException {
-        String name = null;
-        String type = null;
-        String description = null;;
+        return parseCommonFields(parser, true); // true to parse isHidden field
+    }
+
+    public static MLAgent parseFromUserInput(XContentParser parser) throws IOException {
+        return parseCommonFields(parser, false); // false to skip isHidden field
+    }
+
+    private static MLAgent parseCommonFields(XContentParser parser, boolean parseHidden) throws IOException {
+        String name = null, type = null, description = null;
         LLMSpec llm = null;
         List<MLToolSpec> tools = null;
         Map<String, String> parameters = null;
         MLMemorySpec memory = null;
-        Instant createdTime = null;
-        Instant lastUpdateTime = null;
+        Instant createdTime = null, lastUpdateTime = null;
         String appType = null;
         boolean isHidden = false;
 
@@ -254,18 +259,10 @@ public class MLAgent implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case AGENT_NAME_FIELD:
-                    name = parser.text();
-                    break;
-                case AGENT_TYPE_FIELD:
-                    type = parser.text();
-                    break;
-                case DESCRIPTION_FIELD:
-                    description = parser.text();
-                    break;
-                case LLM_FIELD:
-                    llm = LLMSpec.parse(parser);
-                    break;
+                case AGENT_NAME_FIELD: name = parser.text(); break;
+                case AGENT_TYPE_FIELD: type = parser.text(); break;
+                case DESCRIPTION_FIELD: description = parser.text(); break;
+                case LLM_FIELD: llm = LLMSpec.parse(parser); break;
                 case TOOLS_FIELD:
                     tools = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -273,30 +270,18 @@ public class MLAgent implements ToXContentObject, Writeable {
                         tools.add(MLToolSpec.parse(parser));
                     }
                     break;
-                case PARAMETERS_FIELD:
-                    parameters = getParameterMap(parser.map());
-                    break;
-                case MEMORY_FIELD:
-                    memory = MLMemorySpec.parse(parser);
-                    break;
-                case CREATED_TIME_FIELD:
-                    createdTime = Instant.ofEpochMilli(parser.longValue());
-                    break;
-                case LAST_UPDATED_TIME_FIELD:
-                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
-                    break;
-                case APP_TYPE_FIELD:
-                    appType = parser.text();
-                    break;
-                // is_hidden field isn't going to be set by user. It will be set by the code.
+                case PARAMETERS_FIELD: parameters = getParameterMap(parser.map()); break;
+                case MEMORY_FIELD: memory = MLMemorySpec.parse(parser); break;
+                case CREATED_TIME_FIELD: createdTime = Instant.ofEpochMilli(parser.longValue()); break;
+                case LAST_UPDATED_TIME_FIELD: lastUpdateTime = Instant.ofEpochMilli(parser.longValue()); break;
+                case APP_TYPE_FIELD: appType = parser.text(); break;
                 case IS_HIDDEN_FIELD:
-                    isHidden = parser.booleanValue();
+                    if (parseHidden) isHidden = parser.booleanValue();
                     break;
-                default:
-                    parser.skipChildren();
-                    break;
+                default: parser.skipChildren(); break;
             }
         }
+
         return MLAgent.builder()
                 .name(name)
                 .type(type)
@@ -311,7 +296,6 @@ public class MLAgent implements ToXContentObject, Writeable {
                 .isHidden(isHidden)
                 .build();
     }
-
     public static MLAgent fromStream(StreamInput in) throws IOException {
         MLAgent agent = new MLAgent(in);
         return agent;

@@ -79,7 +79,7 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                             actionListener
                                 .onFailure(
                                     new OpenSearchStatusException(
-                                        "User doesn't have privilege to perform this operation on this model",
+                                        "User doesn't have privilege to perform this operation on this agent",
                                         RestStatus.FORBIDDEN
                                     )
                                 );

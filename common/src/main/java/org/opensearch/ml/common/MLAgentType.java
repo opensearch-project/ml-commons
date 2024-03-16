@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common;
 
+import java.util.Locale;
+
 public enum MLAgentType {
     FLOW,
     CONVERSATIONAL,
@@ -15,7 +17,7 @@ public enum MLAgentType {
             throw new IllegalArgumentException("Agent type can't be null");
         }
         try {
-            return MLAgentType.valueOf(value.toUpperCase());
+            return MLAgentType.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (Exception e) {
             throw new IllegalArgumentException("Wrong Agent type");
         }

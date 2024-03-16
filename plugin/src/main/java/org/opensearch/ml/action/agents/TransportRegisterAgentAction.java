@@ -22,7 +22,6 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
@@ -67,7 +66,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         Instant now = Instant.now();
         String llmId;
-        if (agent.getType().equalsIgnoreCase(MLAgentType.CONVERSATIONAL.name()) && agent.getLlm() != null) {
+        if (agent.getLlm() != null) {
             llmId = agent.getLlm().getModelId();
         } else {
             llmId = null;
@@ -75,14 +74,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (llmId != null) {
                 String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
-                mlModelManager.getModel(llmId, null, excludes, ActionListener.wrap(mlModel -> {
-                    processModelAndRegisterAgent(agent, mlModel.getIsHidden(), now, listener, context);
+                mlModelManager.getModel(llmId, null, excludes, ActionListener.runAfter(ActionListener.wrap(mlModel -> {
+                    processModelAndRegisterAgent(agent, mlModel.getIsHidden(), now, listener);
                 }, e -> {
                     log.error("Failed to retrieve the ML model with ID: " + llmId, e);
                     listener.onFailure(e);
-                }));
+                }), context::restore));
             } else {
-                processModelAndRegisterAgent(agent, false, now, listener, context);
+                processModelAndRegisterAgent(agent, false, now, listener);
             }
 
         } catch (Exception e) {
@@ -95,13 +94,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         MLAgent agent,
         Boolean isHiddenModel,
         Instant now,
-        ActionListener<MLRegisterAgentResponse> listener,
-        ThreadContext.StoredContext context
+        ActionListener<MLRegisterAgentResponse> listener
     ) {
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenModel).build();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
-                try (context) { // Using try-with-resources to ensure 'context' is restored
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     IndexRequest indexRequest = new IndexRequest(ML_AGENT_INDEX);
                     XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
                     mlAgent.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -125,5 +123,4 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             listener.onFailure(e);
         }));
     }
-
 }

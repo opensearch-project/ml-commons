@@ -318,7 +318,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have privilege to perform this operation on this agent", argumentCaptor.getValue().getMessage());
     }
 
     @Test
