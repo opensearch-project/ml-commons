@@ -87,7 +87,7 @@ public class MLGuard {
     public Boolean validateRegex(String input, String regex) {
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(input);
-        return matcher.matches();
+        return !matcher.matches();
     }
 
     public Boolean validateStopWords(String input, Map<String, List<String>> stopWordsIndices) {
