@@ -347,6 +347,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     private ScriptService scriptService;
     private Encryptor encryptor;
 
+    public MachineLearningPlugin(Settings settings) {
+        // Handle this here as this feature is tied to Search/Query API, not to a ml-common API
+        // and as such, it can't be lazy-loaded when a ml-commons API is invoked.
+        this.ragSearchPipelineEnabled = MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
+    }
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
