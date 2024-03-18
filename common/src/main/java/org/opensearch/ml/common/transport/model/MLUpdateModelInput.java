@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.model;
 import lombok.Data;
 import lombok.Builder;
 import lombok.Getter;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -46,6 +47,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                                                                               // request
     public static final String GUARDRAILS_FIELD = "guardrails";
 
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS = Version.V_2_13_0;
+
     @Getter
     private String modelId;
     private String description;
@@ -81,6 +84,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         modelId = in.readString();
         description = in.readOptionalString();
         version = in.readOptionalString();
@@ -101,8 +105,10 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             connector = new MLCreateConnectorInput(in);
         }
         lastUpdateTime = in.readOptionalInstant();
-        if (in.readBoolean()) {
-            this.guardrails = new Guardrails(in);
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+            if (in.readBoolean()) {
+                this.guardrails = new Guardrails(in);
+            }
         }
     }
 
@@ -193,6 +199,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(modelId);
         out.writeOptionalString(description);
         out.writeOptionalString(version);
@@ -225,11 +232,13 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalInstant(lastUpdateTime);
-        if (guardrails != null) {
-            out.writeBoolean(true);
-            guardrails.writeTo(out);
-        } else {
-            out.writeBoolean(false);
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+            if (guardrails != null) {
+                out.writeBoolean(true);
+                guardrails.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
         }
     }
 

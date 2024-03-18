@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -54,6 +55,7 @@ public class MLGuardTests {
 
     StopWords stopWords;
     String[] regex;
+    List<Pattern> regexPatterns;
     Guardrail inputGuardrail;
     Guardrail outputGuardrail;
     Guardrails guardrails;
@@ -70,6 +72,7 @@ public class MLGuardTests {
 
         stopWords = new StopWords("test_index", List.of("test_field").toArray(new String[0]));
         regex = List.of("(.|\n)*stop words(.|\n)*").toArray(new String[0]);
+        regexPatterns = List.of(Pattern.compile("(.|\n)*stop words(.|\n)*"));
         inputGuardrail = new Guardrail(List.of(stopWords), regex);
         outputGuardrail = new Guardrail(List.of(stopWords), regex);
         guardrails = new Guardrails("test_type", false, inputGuardrail, outputGuardrail);
@@ -95,8 +98,7 @@ public class MLGuardTests {
     @Test
     public void validateRegexListSuccess() {
         String input = "\n\nHuman:hello good words.\n\nAssistant:";
-        List<String> regexList = List.of(regex);
-        Boolean res = mlGuard.validateRegexList(input, regexList);
+        Boolean res = mlGuard.validateRegexList(input, regexPatterns);
 
         Assert.assertTrue(res);
     }
@@ -104,8 +106,7 @@ public class MLGuardTests {
     @Test
     public void validateRegexListFailed() {
         String input = "\n\nHuman:hello stop words.\n\nAssistant:";
-        List<String> regexList = List.of(regex);
-        Boolean res = mlGuard.validateRegexList(input, regexList);
+        Boolean res = mlGuard.validateRegexList(input, regexPatterns);
 
         Assert.assertFalse(res);
     }
@@ -113,7 +114,7 @@ public class MLGuardTests {
     @Test
     public void validateRegexSuccess() {
         String input = "\n\nHuman:hello good words.\n\nAssistant:";
-        Boolean res = mlGuard.validateRegex(input, regex[0]);
+        Boolean res = mlGuard.validateRegex(input, regexPatterns.get(0));
 
         Assert.assertTrue(res);
     }
@@ -121,7 +122,7 @@ public class MLGuardTests {
     @Test
     public void validateRegexFailed() {
         String input = "\n\nHuman:hello stop words.\n\nAssistant:";
-        Boolean res = mlGuard.validateRegex(input, regex[0]);
+        Boolean res = mlGuard.validateRegex(input, regexPatterns.get(0));
 
         Assert.assertFalse(res);
     }

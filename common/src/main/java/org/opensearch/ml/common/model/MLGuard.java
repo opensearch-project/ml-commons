@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
@@ -47,6 +48,8 @@ public class MLGuard {
     private Map<String, List<String>> stopWordsIndicesOutput = new HashMap<>();
     private List<String> inputRegex;
     private List<String> outputRegex;
+    private List<Pattern> inputRegexPattern;
+    private List<Pattern> outputRegexPattern;
     private NamedXContentRegistry xContentRegistry;
     private Client client;
 
@@ -61,10 +64,12 @@ public class MLGuard {
         if (inputGuardrail != null) {
             fillStopWordsToMap(inputGuardrail, stopWordsIndicesInput);
             inputRegex = inputGuardrail.getRegex() == null ? new ArrayList<>() : Arrays.asList(inputGuardrail.getRegex());
+            inputRegexPattern = inputRegex.stream().map(reg -> Pattern.compile(reg)).collect(Collectors.toList());
         }
         if (outputGuardrail != null) {
             fillStopWordsToMap(outputGuardrail, stopWordsIndicesOutput);
             outputRegex = outputGuardrail.getRegex() == null ? new ArrayList<>() : Arrays.asList(outputGuardrail.getRegex());
+            outputRegexPattern = outputRegex.stream().map(reg -> Pattern.compile(reg)).collect(Collectors.toList());
         }
     }
 
@@ -81,25 +86,24 @@ public class MLGuard {
     public Boolean validate(String input, int type) {
         switch (type) {
             case 0: // validate input
-                return validateRegexList(input, inputRegex) && validateStopWords(input, stopWordsIndicesInput);
+                return validateRegexList(input, inputRegexPattern) && validateStopWords(input, stopWordsIndicesInput);
             case 1: // validate output
-                return validateRegexList(input, outputRegex) && validateStopWords(input, stopWordsIndicesOutput);
+                return validateRegexList(input, outputRegexPattern) && validateStopWords(input, stopWordsIndicesOutput);
             default:
-                return true;
+                throw new IllegalArgumentException("Unsupported type to validate for guardrails.");
         }
     }
 
-    public Boolean validateRegexList(String input, List<String> regexList) {
-        for (String regex : regexList) {
-            if (!validateRegex(input, regex)) {
+    public Boolean validateRegexList(String input, List<Pattern> regexPatterns) {
+        for (Pattern pattern : regexPatterns) {
+            if (!validateRegex(input, pattern)) {
                 return false;
             }
         }
         return true;
     }
 
-    public Boolean validateRegex(String input, String regex) {
-        Pattern pattern = Pattern.compile(regex);
+    public Boolean validateRegex(String input, Pattern pattern) {
         Matcher matcher = pattern.matcher(input);
         return !matcher.matches();
     }
