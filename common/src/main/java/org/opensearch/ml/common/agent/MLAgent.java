@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -114,7 +115,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             throw new IllegalArgumentException("Agent type can't be null");
         } else {
             try {
-                MLAgentType.valueOf(agentType.toUpperCase()); // Use toUpperCase() to allow case-insensitive matching
+                MLAgentType.valueOf(agentType.toUpperCase(Locale.ROOT)); // Use toUpperCase() to allow case-insensitive matching
             } catch (IllegalArgumentException e) {
                 // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
                 throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
