@@ -70,8 +70,10 @@ public class QuestionAnsweringMLInput extends MLInput {
             switch (fieldName) {
                 case QUESTION_FIELD:
                     question = parser.text();
+                    break;
                 case CONTEXT_FIELD:
                     context = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

@@ -294,11 +294,9 @@ public class MLInput implements Input {
         if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.SPARSE_TOKENIZE) {
             ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
-        }
-        if (algorithm == FunctionName.TEXT_SIMILARITY) {
+        } else if (algorithm == FunctionName.TEXT_SIMILARITY) {
             inputDataSet = new TextSimilarityInputDataSet(queryText, textDocs);
-        }
-        if (algorithm == FunctionName.QUESTION_ANSWERING) {
+        } else if (algorithm == FunctionName.QUESTION_ANSWERING) {
             inputDataSet = new QuestionAnsweringInputDataSet(question, context);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);

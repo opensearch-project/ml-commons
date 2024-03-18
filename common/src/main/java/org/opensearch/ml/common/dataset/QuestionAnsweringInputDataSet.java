@@ -37,7 +37,7 @@ public class QuestionAnsweringInputDataSet extends MLInputDataset {
     }
 
     public QuestionAnsweringInputDataSet(StreamInput in) throws IOException {
-        super(MLInputDataType.TEXT_SIMILARITY);
+        super(MLInputDataType.QUESTION_ANSWERING);
         this.question = in.readString();
         this.context = in.readString();
     }

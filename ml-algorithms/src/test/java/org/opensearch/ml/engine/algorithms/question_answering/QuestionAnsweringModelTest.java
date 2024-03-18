@@ -27,7 +27,6 @@ import java.util.UUID;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -156,8 +155,7 @@ public class QuestionAnsweringModelTest {
         questionAnsweringModel.close();
     }
 
-    // ONNX is working fine but the model is too big to upload to git. Trying to find small models
-    @Ignore
+    // ONNX is working fine but the model is too big to upload to git. Trying to find small models @Test
     @Test
     public void initModel_predict_ONNX_QuestionAnswering() throws URISyntaxException {
         model = MLModel
