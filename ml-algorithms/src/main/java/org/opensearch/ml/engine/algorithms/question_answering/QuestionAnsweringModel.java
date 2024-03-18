@@ -12,10 +12,9 @@ import java.util.List;
 
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
@@ -50,15 +49,14 @@ public class QuestionAnsweringModel extends DLModel {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
-        TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
-        ModelResultFilter resultFilter = textDocsInput.getResultFilter();
-        String question = textDocsInput.getDocs().get(0);
-        String context = textDocsInput.getDocs().get(1);
+        QuestionAnsweringInputDataSet qaInputDataSet = (QuestionAnsweringInputDataSet) inputDataSet;
+        String question = qaInputDataSet.getQuestion();
+        String context = qaInputDataSet.getContext();
         Input input = new Input();
         input.add(question);
         input.add(context);
         output = getPredictor().predict(input);
-        tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
+        tensorOutputs.add(parseModelTensorOutput(output, null));
         return new ModelTensorOutput(tensorOutputs);
     }
 

@@ -22,17 +22,16 @@ import ai.djl.ndarray.NDManager;
 import ai.djl.translate.TranslatorContext;
 
 public class QuestionAnsweringTranslator extends SentenceTransformerTranslator {
-    // private static final int[] AXIS = {0};
     private List<String> tokens;
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
         NDManager manager = ctx.getNDManager();
         String question = input.getAsString(0);
-        String paragraph = input.getAsString(1);
+        String context = input.getAsString(1);
         NDList ndList = new NDList();
 
-        Encoding encodings = tokenizer.encode(question, paragraph);
+        Encoding encodings = tokenizer.encode(question, context);
         tokens = Arrays.asList(encodings.getTokens());
         ctx.setAttachment("encoding", encodings);
         long[] indices = encodings.getIds();
@@ -49,7 +48,6 @@ public class QuestionAnsweringTranslator extends SentenceTransformerTranslator {
         return ndList;
     }
 
-    /** {@inheritDoc} */
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
         Output output = new Output(200, "OK");
@@ -67,7 +65,7 @@ public class QuestionAnsweringTranslator extends SentenceTransformerTranslator {
         }
         String answer = tokenizer.buildSentence(tokens.subList(startIdx, endIdx + 1));
 
-        outputs.add(new ModelTensor("answer", answer));
+        outputs.add(new ModelTensor(null, answer));
 
         ModelTensors modelTensorOutput = new ModelTensors(outputs);
         output.add(modelTensorOutput.toBytes());

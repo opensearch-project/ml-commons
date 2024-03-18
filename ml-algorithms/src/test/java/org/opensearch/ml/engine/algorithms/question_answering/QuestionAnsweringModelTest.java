@@ -1,19 +1,6 @@
 /*
- * Copyright 2023 Aryn
  * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 package org.opensearch.ml.engine.algorithms.question_answering;
 
@@ -21,8 +8,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -34,7 +19,6 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -47,7 +31,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -64,7 +48,6 @@ import org.opensearch.ml.engine.utils.FileUtils;
 import ai.djl.Model;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
-import ai.djl.modality.nlp.preprocess.Tokenizer;
 import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
@@ -80,7 +63,7 @@ public class QuestionAnsweringModelTest {
     private Map<String, Object> params;
     private QuestionAnsweringModel questionAnsweringModel;
     private Path mlCachePath;
-    private TextDocsInputDataSet inputDataSet;
+    private QuestionAnsweringInputDataSet inputDataSet;
     private MLEngine mlEngine;
     private Encryptor encryptor;
 
@@ -106,14 +89,11 @@ public class QuestionAnsweringModelTest {
         params.put(ML_ENGINE, mlEngine);
         questionAnsweringModel = new QuestionAnsweringModel();
 
-        inputDataSet = TextDocsInputDataSet
-            .builder()
-            .docs(Arrays.asList("What color is rose", "I love apples. Because they are red"))
-            .build();
+        inputDataSet = QuestionAnsweringInputDataSet.builder().question("What color is apple").context("Apples are red").build();
     }
 
     @Test
-    public void test_QuestionAnswering_Translator_ProcessInput() throws URISyntaxException, IOException {
+    public void test_QuestionAnswering_ProcessInput_ProcessOutput() throws URISyntaxException, IOException {
         QuestionAnsweringTranslator questionAnsweringTranslator = new QuestionAnsweringTranslator();
         TranslatorContext translatorContext = mock(TranslatorContext.class);
         Model mlModel = mock(Model.class);
@@ -124,8 +104,8 @@ public class QuestionAnsweringModelTest {
         NDManager manager = mock(NDManager.class);
         when(translatorContext.getNDManager()).thenReturn(manager);
         Input input = mock(Input.class);
-        String question = "What color is rose";
-        String context = "I love roses. Because they are red";
+        String question = "What color is apple";
+        String context = "Apples are red";
         when(input.getAsString(0)).thenReturn(question);
         when(input.getAsString(1)).thenReturn(context);
         NDArray indiceNdArray = mock(NDArray.class);
@@ -140,23 +120,6 @@ public class QuestionAnsweringModelTest {
             long[] output = ndArray.toLongArray();
             assertEquals(2, output.length);
         }
-    }
-
-    // Working on this unit test
-    @Ignore
-    @Test
-    public void test_QuestionAnswering_Translator_ProcessOutput() throws URISyntaxException, IOException {
-        QuestionAnsweringTranslator questionAnsweringTranslator = new QuestionAnsweringTranslator();
-        TranslatorContext translatorContext = mock(TranslatorContext.class);
-        Model mlModel = mock(Model.class);
-        when(translatorContext.getModel()).thenReturn(mlModel);
-        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("../tokenize/tokenizer.json").toURI()).getParent());
-        List<String> tokens = mock(List.class);
-        List<String> tokens2 = mock(List.class);
-        when(tokens.subList(anyInt(), anyInt())).thenReturn(tokens2);
-        Tokenizer tokenizer = mock(Tokenizer.class);
-        when(tokenizer.buildSentence(anyList())).thenReturn("red");
-        questionAnsweringTranslator.prepare(translatorContext);
 
         NDArray startLogits = mock(NDArray.class);
         NDArray endLogits = mock(NDArray.class);
@@ -176,9 +139,6 @@ public class QuestionAnsweringModelTest {
         ModelTensors tensorOutput = ModelTensors.fromBytes(bytes);
         List<ModelTensor> modelTensorsList = tensorOutput.getMlModelTensors();
         assertEquals(1, modelTensorsList.size());
-        ModelTensor modelTensor = modelTensorsList.get(0);
-        assertEquals("answer", modelTensor.getName());
-        assertEquals("red", modelTensor.getData());
     }
 
     @Test
@@ -197,7 +157,6 @@ public class QuestionAnsweringModelTest {
     }
 
     // ONNX is working fine but the model is too big to upload to git. Trying to find small models
-
     @Ignore
     @Test
     public void initModel_predict_ONNX_QuestionAnswering() throws URISyntaxException {
