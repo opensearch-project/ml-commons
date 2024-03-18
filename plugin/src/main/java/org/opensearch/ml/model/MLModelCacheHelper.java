@@ -33,10 +33,13 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLModelCacheHelper {
     private final Map<String, MLModelCache> modelCaches;
+
+    private final Set<String> localDeployedModels;
     private volatile Long maxRequestCount;
 
     public MLModelCacheHelper(ClusterService clusterService, Settings settings) {
         this.modelCaches = new ConcurrentHashMap<>();
+        this.localDeployedModels = ConcurrentHashMap.newKeySet();
 
         maxRequestCount = ML_COMMONS_MONITORING_REQUEST_COUNT.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MONITORING_REQUEST_COUNT, it -> maxRequestCount = it);
@@ -66,6 +69,14 @@ public class MLModelCacheHelper {
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(deployToAllNodes);
         modelCaches.put(modelId, modelCache);
+    }
+
+    public synchronized void addModelToLocalDeployment(String modelId) {
+        localDeployedModels.add(modelId);
+    }
+
+    public Boolean isModelDeployedLocally(String modelId) {
+        return localDeployedModels.contains(modelId);
     }
 
     /**

@@ -66,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.logging.log4j.util.Strings;
@@ -80,6 +81,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
@@ -1059,7 +1061,6 @@ public class MLModelManager {
     }
 
     public void deployRemoteModelToLocal(String modelId, MLModel mlModel, ActionListener<String> listener) {
-        String localNodeId = clusterService.localNode().getId();
         if (modelCacheHelper.isModelDeployed(modelId)) {
             listener.onResponse("Success");
             return;
@@ -1879,5 +1880,21 @@ public class MLModelManager {
 
     public boolean isModelDeployed(String modelId) {
         return modelCacheHelper.isModelDeployed(modelId);
+    }
+
+    public boolean isNodeEligible(String nodeId, FunctionName functionName) {
+        Set<String> allEligibleNodeIds = Arrays
+            .stream(nodeHelper.getEligibleNodes(functionName))
+            .map(DiscoveryNode::getId)
+            .collect(Collectors.toSet());
+        return allEligibleNodeIds.contains(nodeId);
+    }
+
+    public boolean isModelDeployedLocally(String modelId) {
+        return modelCacheHelper.isModelDeployedLocally(modelId);
+    }
+
+    public void addModelToLocalDeployment(String modelId) {
+        modelCacheHelper.addModelToLocalDeployment(modelId);
     }
 }
