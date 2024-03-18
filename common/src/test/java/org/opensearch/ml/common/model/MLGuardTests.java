@@ -23,7 +23,6 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
@@ -35,16 +34,13 @@ import org.opensearch.threadpool.ThreadPool;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
 public class MLGuardTests {
@@ -73,7 +69,7 @@ public class MLGuardTests {
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
 
         stopWords = new StopWords("test_index", List.of("test_field").toArray(new String[0]));
-        regex = List.of("regex1").toArray(new String[0]);
+        regex = List.of("(.|\n)*stop words(.|\n)*").toArray(new String[0]);
         inputGuardrail = new Guardrail(List.of(stopWords), regex);
         outputGuardrail = new Guardrail(List.of(stopWords), regex);
         guardrails = new Guardrails("test_type", false, inputGuardrail, outputGuardrail);
@@ -81,19 +77,64 @@ public class MLGuardTests {
     }
 
     @Test
-    public void validate() {
+    public void validateInput() {
+        String input = "\n\nHuman:hello stop words.\n\nAssistant:";
+        Boolean res = mlGuard.validate(input, 0);
+
+        Assert.assertFalse(res);
     }
 
     @Test
-    public void validateRegexList() {
+    public void validateOutput() {
+        String input = "\n\nHuman:hello stop words.\n\nAssistant:";
+        Boolean res = mlGuard.validate(input, 1);
+
+        Assert.assertFalse(res);
     }
 
     @Test
-    public void validateRegex() {
+    public void validateRegexListSuccess() {
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        List<String> regexList = List.of(regex);
+        Boolean res = mlGuard.validateRegexList(input, regexList);
+
+        Assert.assertTrue(res);
     }
 
     @Test
-    public void validateStopWords() {
+    public void validateRegexListFailed() {
+        String input = "\n\nHuman:hello stop words.\n\nAssistant:";
+        List<String> regexList = List.of(regex);
+        Boolean res = mlGuard.validateRegexList(input, regexList);
+
+        Assert.assertFalse(res);
+    }
+
+    @Test
+    public void validateRegexSuccess() {
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validateRegex(input, regex[0]);
+
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateRegexFailed() {
+        String input = "\n\nHuman:hello stop words.\n\nAssistant:";
+        Boolean res = mlGuard.validateRegex(input, regex[0]);
+
+        Assert.assertFalse(res);
+    }
+
+    @Test
+    public void validateStopWords() throws IOException {
+        Map<String, List<String>> stopWordsIndices = Map.of("test_index", List.of("test_field"));
+        SearchResponse searchResponse = createSearchResponse(1);
+        ActionFuture<SearchResponse> future = createSearchResponseFuture(searchResponse);
+        when(this.client.search(any())).thenReturn(future);
+
+        Boolean res = mlGuard.validateStopWords("hello world", stopWordsIndices);
+        Assert.assertTrue(res);
     }
 
     @Test
@@ -103,7 +144,7 @@ public class MLGuardTests {
         when(this.client.search(any())).thenReturn(future);
 
         Boolean res = mlGuard.validateStopWordsSingleIndex("hello world", "test_index", List.of("test_field"));
-        Assert.assertFalse(res);
+        Assert.assertTrue(res);
     }
 
     private SearchResponse createSearchResponse(int size) throws IOException {
