@@ -53,6 +53,9 @@ public interface Connector extends ToXContentObject, Writeable {
     Map<String, String> getParameters();
 
     List<ConnectorAction> getActions();
+
+    ConnectorClientConfig getConnectorClientConfig();
+
     String getPredictEndpoint(Map<String, String> parameters);
 
     String getPredictHttpMethod();
@@ -107,6 +110,7 @@ public interface Connector extends ToXContentObject, Writeable {
         }
     }
 
+    @SuppressWarnings("removal")
     static Connector createConnector(XContentParser parser) throws IOException {
         Map<String, Object> connectorMap = parser.map();
         String jsonStr;

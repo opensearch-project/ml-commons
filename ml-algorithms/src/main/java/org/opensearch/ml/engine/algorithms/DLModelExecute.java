@@ -122,6 +122,7 @@ public abstract class DLModelExecute implements MLExecutable {
      * @param version version of the model
      * @param engine engine where model will be run. For now, we are supporting only pytorch engine only.
      */
+    @SuppressWarnings("removal")
     private void loadModel(File modelZipFile, String modelId, String modelName, String version, String engine) {
         try {
             List<Predictor<ai.djl.modality.Input, ai.djl.modality.Output>> predictorList = new ArrayList<>();

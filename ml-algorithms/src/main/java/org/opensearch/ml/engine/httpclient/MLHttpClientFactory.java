@@ -14,6 +14,7 @@ import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.UnsupportedSchemeException;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -28,11 +29,11 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLHttpClientFactory {
 
-    public static CloseableHttpClient getCloseableHttpClient() {
-        return createHttpClient();
+    public static CloseableHttpClient getCloseableHttpClient(Integer connectionTimeout, Integer readTimeout, Integer maxConnections) {
+        return createHttpClient(connectionTimeout, readTimeout, maxConnections);
     }
 
-    private static CloseableHttpClient createHttpClient() {
+    private static CloseableHttpClient createHttpClient(Integer connectionTimeout, Integer readTimeout, Integer maxConnections) {
         HttpClientBuilder builder = HttpClientBuilder.create();
 
         // Only allow HTTP and HTTPS schemes
@@ -53,6 +54,10 @@ public class MLHttpClientFactory {
                 return false;
             }
         });
+        builder.setMaxConnTotal(maxConnections);
+        builder.setMaxConnPerRoute(maxConnections);
+        RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(connectionTimeout).setSocketTimeout(readTimeout).build();
+        builder.setDefaultRequestConfig(requestConfig);
         return builder.build();
     }
 

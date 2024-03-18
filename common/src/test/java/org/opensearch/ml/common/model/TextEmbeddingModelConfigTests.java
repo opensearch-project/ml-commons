@@ -36,6 +36,8 @@ public class TextEmbeddingModelConfigTests {
                 .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
                 .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
                 .embeddingDimension(100)
+                .passagePrefix("passage: ")
+                .queryPrefix("query: ")
                 .build();
         function = parser -> {
             try {
@@ -51,7 +53,7 @@ public class TextEmbeddingModelConfigTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}", configContent);
+        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}", configContent);
     }
 
     @Test
@@ -83,7 +85,7 @@ public class TextEmbeddingModelConfigTests {
 
     @Test
     public void parse() throws IOException {
-        String content = "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
+        String content = "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}";
         TestHelper.testParseFromString(config, content, function);
     }
 

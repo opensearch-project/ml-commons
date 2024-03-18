@@ -36,6 +36,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -295,5 +296,36 @@ public class AwsConnectorExecutorTest {
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
         Assert.assertEquals("value", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("key"));
+    }
+
+    @Test
+    public void test_initialize() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(20, 30000, 30000);
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .connectorClientConfig(httpClientConfig)
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        Assert.assertEquals(20, executor.getConnector().getConnectorClientConfig().getMaxConnections().intValue());
+        Assert.assertEquals(30000, executor.getConnector().getConnectorClientConfig().getConnectionTimeout().intValue());
+        Assert.assertEquals(30000, executor.getConnector().getConnectorClientConfig().getReadTimeout().intValue());
+
     }
 }

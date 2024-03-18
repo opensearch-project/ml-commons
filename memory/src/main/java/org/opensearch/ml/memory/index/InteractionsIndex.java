@@ -18,7 +18,7 @@
 package org.opensearch.ml.memory.index;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
-import static org.opensearch.ml.memory.index.ConversationMetaIndex.INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.INDEX_SETTINGS;
 
 import java.io.IOException;
 import java.time.Instant;

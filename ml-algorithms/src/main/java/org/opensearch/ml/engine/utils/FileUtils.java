@@ -14,6 +14,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -151,9 +153,13 @@ public class FileUtils {
         deleteFileQuietly(new File(path.toUri()));
     }
 
+    @SuppressWarnings("removal")
     public static void deleteFileQuietly(File file) {
         if (file.exists()) {
-            org.apache.commons.io.FileUtils.deleteQuietly(file);
+            AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
+                org.apache.commons.io.FileUtils.deleteQuietly(file);
+                return null;
+            });
         }
     }
 

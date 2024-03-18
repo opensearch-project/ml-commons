@@ -32,6 +32,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.error.ErrorMessage;
 import org.opensearch.ml.utils.error.ErrorMessageFactory;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
@@ -130,7 +131,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
     }
 
     private void reportError(final RestChannel channel, final Exception e, final RestStatus status) {
-        channel.sendResponse(new BytesRestResponse(status, ErrorMessageFactory.createErrorMessage(e, status.getStatus()).toString()));
+        ErrorMessage errorMessage = ErrorMessageFactory.createErrorMessage(e, status.getStatus());
+        channel.sendResponse(new BytesRestResponse(RestStatus.fromCode(errorMessage.getStatus()), errorMessage.toString()));
     }
 
     private boolean isClientError(Exception e) {

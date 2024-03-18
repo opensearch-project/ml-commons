@@ -47,7 +47,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "url": "<PLEASE ADD YOUR Sagemaker MODEL INFERENCE ENDPOINT URL>",
-      "request_body": "${parameters.inputs}",
+      "request_body": "${parameters.input}",
       "pre_process_function": "connector.pre_process.default.embedding",
       "post_process_function": "connector.post_process.default.embedding"
     }

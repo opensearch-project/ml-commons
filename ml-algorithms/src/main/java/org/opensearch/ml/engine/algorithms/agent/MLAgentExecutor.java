@@ -98,8 +98,8 @@ public class MLAgentExecutor implements Executable {
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        if (inputDataSet.getParameters() == null) {
-            throw new IllegalArgumentException("wrong input");
+        if (inputDataSet == null || inputDataSet.getParameters() == null) {
+            throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
         List<ModelTensors> outputs = new ArrayList<>();
@@ -229,6 +229,7 @@ public class MLAgentExecutor implements Executable {
         mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
     }
 
+    @SuppressWarnings("removal")
     private ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,

@@ -58,6 +58,8 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    private String REST_PATH = "/_plugins/_ml/connectors/{connector_id}";
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -92,7 +94,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.PUT, route.getMethod());
-        assertEquals("/_plugins/_ml/connectors/{connector_id}", route.getPath());
+        assertEquals(REST_PATH, route.getPath());
     }
 
     public void testUpdateConnectorRequest() throws Exception {
@@ -109,6 +111,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("test_connectorId", updateConnectorRequest.getConnectorId());
         assertEquals("This is test description", updateConnectorRequest.getUpdateContent().getDescription());
         assertEquals("2", updateConnectorRequest.getUpdateContent().getVersion());
+
     }
 
     public void testUpdateConnectorRequestWithParsingException() throws Exception {
@@ -149,7 +152,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/{connector_id}")
+            .withPath(REST_PATH)
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -163,7 +166,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/{connector_id}")
+            .withPath(REST_PATH)
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -176,7 +179,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/{connector_id}")
+            .withPath(REST_PATH)
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();
@@ -190,7 +193,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/connectors/{connector_id}")
+            .withPath(REST_PATH)
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();

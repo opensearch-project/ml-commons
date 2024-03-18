@@ -58,7 +58,9 @@ public class MLRegisterModelInputTest {
             "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"},\"is_hidden\":false}";
+            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
+            "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
+            "\"read_timeout\":30000}},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
     private final String modelName = "modelName";
     private final String version = "version";
@@ -169,18 +171,20 @@ public class MLRegisterModelInputTest {
 
     @Test
     public void testToXContent_Incomplete() throws Exception {
-        String expectedIncompleteInputStr =
-                "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
-                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\"," +
-                "\"model_content_hash_value\":\"hash_value_test\",\"deploy_model\":true,\"connector\":" +
-                "{\"name\":\"test_connector_name\",\"version\":\"1\",\"description\":\"this is a test connector\"," +
-                "\"protocol\":\"http\",\"parameters\":{\"input\":\"test input value\"}," +
-                "\"credential\":{\"key\":\"test_key_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":" +
-                "\"POST\",\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}," +
-                "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\",\"pre_process_function\":" +
-                "\"connector.pre_process.openai.embedding\",\"post_process_function\":" +
-                "\"connector.post_process.openai.embedding\"}],\"backend_roles\":[\"role1\",\"role2\"]," +
-                "\"access\":\"public\"},\"is_hidden\":false}";
+        String expectedIncompleteInputStr = "{\"function_name\":\"LINEAR_REGRESSION\"," +
+                "\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\"," +
+                "\"description\":\"test description\",\"model_content_hash_value\":\"hash_value_test\"," +
+                "\"deploy_model\":true,\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\"," +
+                "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
+                "\"parameters\":{\"input\":\"test input value\"}," +
+                "\"credential\":{\"key\":\"test_key_value\"},\"actions\":[{\"action_type\":\"PREDICT\"," +
+                "\"method\":\"POST\",\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}," +
+                "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
+                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
+                "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
+                "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
+                "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
+                "\"read_timeout\":30000}},\"is_hidden\":false}";
         input.setUrl(null);
         input.setModelConfig(null);
         input.setModelFormat(null);

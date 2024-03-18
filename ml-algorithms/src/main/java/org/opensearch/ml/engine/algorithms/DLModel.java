@@ -67,11 +67,14 @@ public abstract class DLModel implements Predictable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
+    protected MLModelConfig modelConfig;
+
     @Override
     public MLOutput predict(MLInput mlInput, MLModel model) {
         throw new IllegalArgumentException("model not deployed");
     }
 
+    @SuppressWarnings("removal")
     @Override
     public MLOutput predict(MLInput mlInput) {
         if (modelHelper == null || modelId == null) {
@@ -183,6 +186,7 @@ public abstract class DLModel implements Predictable {
         IOException,
         TranslateException {
         devices = Engine.getEngine(engine).getDevices();
+        this.modelConfig = modelConfig;
         for (int i = 0; i < devices.length; i++) {
             log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
             ZooModel<Input, Output> model;
@@ -230,6 +234,7 @@ public abstract class DLModel implements Predictable {
         log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
     }
 
+    @SuppressWarnings("removal")
     protected void loadModel(
         File modelZipFile,
         String modelId,

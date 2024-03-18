@@ -2,7 +2,11 @@
 
 > The easiest way for setting up embedding model on your Amazon OpenSearch cluster is using [AWS CloudFormation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/cfn-template.html)
 
+> Another easy way is using python, check [AIConnectorHelper](./AIConnectorHelper.ipynb)
+
 > This tutorial explains detail steps if you want to configure everything manually. 
+ 
+> Bedrock has [quota limit](https://docs.aws.amazon.com/bedrock/latest/userguide/quotas.html). You can purchase [Provisioned Throughput](https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput.html) to increase quota limit.
 
 This doc introduces how to build semantic search in Amazon managed OpenSearch with [Bedrock Titan embedding model](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html).
 If you are not using Amazon OpenSearch, you can refer to [bedrock_connector_titan_embedding_blueprint](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/bedrock_connector_titan_embedding_blueprint.md).

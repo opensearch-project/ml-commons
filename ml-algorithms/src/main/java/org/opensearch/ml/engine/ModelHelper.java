@@ -55,6 +55,7 @@ public class ModelHelper {
         this.mlEngine = mlEngine;
     }
 
+    @SuppressWarnings("removal")
     public void downloadPrebuiltModelConfig(
         String taskId,
         MLRegisterModelInput registerModelInput,
@@ -135,6 +136,12 @@ public class ModelHelper {
                                     case TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD:
                                         configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
                                         break;
+                                    case TextEmbeddingModelConfig.QUERY_PREFIX:
+                                        configBuilder.queryPrefix(configEntry.getValue().toString());
+                                        break;
+                                    case TextEmbeddingModelConfig.PASSAGE_PREFIX:
+                                        configBuilder.passagePrefix(configEntry.getValue().toString());
+                                        break;
                                     default:
                                         break;
                                 }
@@ -176,6 +183,7 @@ public class ModelHelper {
         return false;
     }
 
+    @SuppressWarnings("removal")
     public List downloadPrebuiltModelMetaList(String taskId, MLRegisterModelInput registerModelInput) throws PrivilegedActionException {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
@@ -209,6 +217,7 @@ public class ModelHelper {
      * @param modelContentHash model content hash value
      * @param listener action listener
      */
+    @SuppressWarnings("removal")
     public void downloadAndSplit(
         MLModelFormat modelFormat,
         String taskId,

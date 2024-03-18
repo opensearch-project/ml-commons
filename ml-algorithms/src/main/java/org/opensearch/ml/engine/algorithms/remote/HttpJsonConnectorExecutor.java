@@ -43,7 +43,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ConnectorExecutor(HTTP)
-public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
+public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private HttpConnector connector;
@@ -61,10 +61,25 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     @Getter
     private Client client;
 
+    private CloseableHttpClient httpClient;
+
     public HttpJsonConnectorExecutor(Connector connector) {
+        super.initialize(connector);
         this.connector = (HttpConnector) connector;
+        this.httpClient = MLHttpClientFactory
+            .getCloseableHttpClient(
+                super.getConnectorClientConfig().getConnectionTimeout(),
+                super.getConnectorClientConfig().getReadTimeout(),
+                super.getConnectorClientConfig().getMaxConnections()
+            );
     }
 
+    public HttpJsonConnectorExecutor(Connector connector, CloseableHttpClient httpClient) {
+        this(connector);
+        this.httpClient = httpClient;
+    }
+
+    @SuppressWarnings("removal")
     @Override
     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
         try {
@@ -110,7 +125,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = getHttpClient(); CloseableHttpResponse response = httpClient.execute(request)) {
+                try (CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
@@ -137,7 +152,4 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
         }
     }
 
-    public CloseableHttpClient getHttpClient() {
-        return MLHttpClientFactory.getCloseableHttpClient();
-    }
 }
