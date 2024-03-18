@@ -8,12 +8,16 @@ package org.opensearch.ml.common.model;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ResourceNotFoundException;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchHit;
@@ -26,9 +30,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
@@ -106,7 +115,7 @@ public class MLGuard {
 
     public Boolean validateStopWordsSingleIndex(String input, String indexName, List<String> fieldNames) {
         SearchRequest searchRequest;
-        SearchResponse searchResponse;
+        AtomicBoolean hitStopWords = new AtomicBoolean(false);
         String queryBody;
         Map<String, String> documentMap = new HashMap<>();
         for (String field : fieldNames) {
@@ -114,6 +123,7 @@ public class MLGuard {
         }
         Map<String, Object> queryBodyMap = Map
                 .of("query", Map.of("percolate", Map.of("field", "query", "document", documentMap)));
+        CountDownLatch latch = new CountDownLatch(1);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             queryBody = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(queryBodyMap));
@@ -122,17 +132,26 @@ public class MLGuard {
             searchSourceBuilder.parseXContent(queryParser);
             searchSourceBuilder.size(1); //Only need 1 doc returned, if hit.
             searchRequest = new SearchRequest().source(searchSourceBuilder).indices(indexName);
-            searchResponse = client.search(searchRequest).actionGet(1000l * 30);
             context.restore();
+            client.search(searchRequest, ActionListener.runBefore(new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
+                if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                    hitStopWords.set(true);
+                }
+            }, e -> {
+                log.error("Failed to search stop words index {}", indexName, e);
+                hitStopWords.set(true);
+            }), latch), () -> context.restore()));
         } catch (Exception e) {
             log.error("[validateStopWords] Searching stop words index failed.", e);
-            return false;
+            hitStopWords.set(true);
         }
 
-        SearchHit[] hits = searchResponse.getHits().getHits();
-        if (hits != null && hits.length > 0) {
-            return false;
+        try {
+            latch.await(5, SECONDS);
+        } catch (InterruptedException e) {
+            log.error("[validateStopWords] Searching stop words index was timeout.", e);
+            throw new IllegalStateException(e);
         }
-        return true;
+        return hitStopWords.get();
     }
 }
