@@ -29,6 +29,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -62,6 +63,7 @@ public class ModelHelper {
         ActionListener<MLRegisterModelInput> listener
     ) {
         String modelName = registerModelInput.getModelName();
+        FunctionName algorithm = registerModelInput.getFunctionName();
         String version = registerModelInput.getVersion();
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
         Boolean isHidden = registerModelInput.getIsHidden();
@@ -106,47 +108,87 @@ public class ModelHelper {
                             builder.modelFormat(MLModelFormat.from(entry.getValue().toString()));
                             break;
                         case MLRegisterModelInput.MODEL_CONFIG_FIELD:
-                            TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
-                            Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
-                            for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
-                                switch (configEntry.getKey().toString()) {
-                                    case MLModelConfig.MODEL_TYPE_FIELD:
-                                        configBuilder.modelType(configEntry.getValue().toString());
-                                        break;
-                                    case MLModelConfig.ALL_CONFIG_FIELD:
-                                        configBuilder.allConfig(configEntry.getValue().toString());
-                                        break;
-                                    case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
-                                        configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
-                                        break;
-                                    case TextEmbeddingModelConfig.FRAMEWORK_TYPE_FIELD:
-                                        configBuilder
-                                            .frameworkType(TextEmbeddingModelConfig.FrameworkType.from(configEntry.getValue().toString()));
-                                        break;
-                                    case TextEmbeddingModelConfig.POOLING_MODE_FIELD:
-                                        configBuilder
-                                            .poolingMode(
-                                                TextEmbeddingModelConfig.PoolingMode
-                                                    .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
-                                            );
-                                        break;
-                                    case TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD:
-                                        configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
-                                        break;
-                                    case TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD:
-                                        configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
-                                        break;
-                                    case TextEmbeddingModelConfig.QUERY_PREFIX:
-                                        configBuilder.queryPrefix(configEntry.getValue().toString());
-                                        break;
-                                    case TextEmbeddingModelConfig.PASSAGE_PREFIX:
-                                        configBuilder.passagePrefix(configEntry.getValue().toString());
-                                        break;
-                                    default:
-                                        break;
+                            if (FunctionName.QUESTION_ANSWERING.equals(algorithm)) {
+                                QuestionAnsweringModelConfig.QuestionAnsweringModelConfigBuilder configBuilder =
+                                    QuestionAnsweringModelConfig.builder();
+                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
+                                    switch (configEntry.getKey().toString()) {
+                                        case MLModelConfig.MODEL_TYPE_FIELD:
+                                            configBuilder.modelType(configEntry.getValue().toString());
+                                            break;
+                                        case MLModelConfig.ALL_CONFIG_FIELD:
+                                            configBuilder.allConfig(configEntry.getValue().toString());
+                                            break;
+                                        case QuestionAnsweringModelConfig.FRAMEWORK_TYPE_FIELD:
+                                            configBuilder
+                                                .frameworkType(
+                                                    QuestionAnsweringModelConfig.FrameworkType.from(configEntry.getValue().toString())
+                                                );
+                                            break;
+                                        case QuestionAnsweringModelConfig.POOLING_MODE_FIELD:
+                                            configBuilder
+                                                .poolingMode(
+                                                    QuestionAnsweringModelConfig.PoolingMode
+                                                        .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
+                                                );
+                                            break;
+                                        case QuestionAnsweringModelConfig.NORMALIZE_RESULT_FIELD:
+                                            configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
+                                            break;
+                                        case QuestionAnsweringModelConfig.MODEL_MAX_LENGTH_FIELD:
+                                            configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
+                                            break;
+                                        default:
+                                            break;
+                                    }
                                 }
+                                builder.modelConfig(configBuilder.build());
+                            } else {
+                                TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
+                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
+                                    switch (configEntry.getKey().toString()) {
+                                        case MLModelConfig.MODEL_TYPE_FIELD:
+                                            configBuilder.modelType(configEntry.getValue().toString());
+                                            break;
+                                        case MLModelConfig.ALL_CONFIG_FIELD:
+                                            configBuilder.allConfig(configEntry.getValue().toString());
+                                            break;
+                                        case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
+                                            configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
+                                            break;
+                                        case TextEmbeddingModelConfig.FRAMEWORK_TYPE_FIELD:
+                                            configBuilder
+                                                .frameworkType(
+                                                    TextEmbeddingModelConfig.FrameworkType.from(configEntry.getValue().toString())
+                                                );
+                                            break;
+                                        case TextEmbeddingModelConfig.POOLING_MODE_FIELD:
+                                            configBuilder
+                                                .poolingMode(
+                                                    TextEmbeddingModelConfig.PoolingMode
+                                                        .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
+                                                );
+                                            break;
+                                        case TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD:
+                                            configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
+                                            break;
+                                        case TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD:
+                                            configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
+                                            break;
+                                        case TextEmbeddingModelConfig.QUERY_PREFIX:
+                                            configBuilder.queryPrefix(configEntry.getValue().toString());
+                                            break;
+                                        case TextEmbeddingModelConfig.PASSAGE_PREFIX:
+                                            configBuilder.passagePrefix(configEntry.getValue().toString());
+                                            break;
+                                        default:
+                                            break;
+                                    }
+                                }
+                                builder.modelConfig(configBuilder.build());
                             }
-                            builder.modelConfig(configBuilder.build());
                             break;
                         case MLRegisterModelInput.MODEL_CONTENT_HASH_VALUE_FIELD:
                             builder.hashValue(entry.getValue().toString());

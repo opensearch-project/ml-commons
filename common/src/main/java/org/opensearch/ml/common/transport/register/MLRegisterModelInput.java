@@ -23,6 +23,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
@@ -41,6 +42,8 @@ import static org.opensearch.ml.common.connector.Connector.createConnector;
 public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
+    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
+
     public static final String NAME_FIELD = "name";
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     public static final String DESCRIPTION_FIELD = "description";
@@ -166,6 +169,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             if (this.functionName.equals(FunctionName.METRICS_CORRELATION)) {
                 this.modelConfig = new MetricsCorrelationModelConfig(in);
+            } else if (this.functionName.equals(FunctionName.QUESTION_ANSWERING)) {
+                this.modelConfig = new QuestionAnsweringModelConfig(in);
             } else {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
             }
@@ -357,6 +362,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
+                case MODEL_TASK_TYPE_FIELD:
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
@@ -382,7 +388,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case CONNECTOR_FIELD:
                     connector = createConnector(parser);
@@ -456,6 +466,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case MODEL_TASK_TYPE_FIELD:
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
@@ -493,7 +504,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case MODEL_NODE_IDS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);

@@ -21,6 +21,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 
@@ -39,6 +40,7 @@ public class MLModel implements ToXContentObject {
     @Deprecated
     public static final String ALGORITHM_FIELD = "algorithm";
     public static final String FUNCTION_NAME_FIELD = "function_name";
+    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
     public static final String MODEL_NAME_FIELD = "name";
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     // We use int type for version in first release 1.3. In 2.4, we changed to
@@ -219,6 +221,8 @@ public class MLModel implements ToXContentObject {
             if (input.readBoolean()) {
                 if (algorithm.equals(FunctionName.METRICS_CORRELATION)) {
                     modelConfig = new MetricsCorrelationModelConfig(input);
+                } else if (algorithm.equals(FunctionName.QUESTION_ANSWERING)) {
+                    modelConfig = new QuestionAnsweringModelConfig(input);
                 } else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
@@ -499,6 +503,7 @@ public class MLModel implements ToXContentObject {
                 case USER:
                     user = User.parse(parser);
                     break;
+                case MODEL_TASK_TYPE_FIELD:
                 case ALGORITHM_FIELD:
                 case FUNCTION_NAME_FIELD:
                     algorithm = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
@@ -527,6 +532,8 @@ public class MLModel implements ToXContentObject {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.METRICS_CORRELATION.name().equals(algorithmName)) {
                         modelConfig = MetricsCorrelationModelConfig.parse(parser);
+                    } else if (FunctionName.QUESTION_ANSWERING.name().equals(algorithmName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
