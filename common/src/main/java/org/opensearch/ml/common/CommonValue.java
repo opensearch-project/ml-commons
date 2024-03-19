@@ -262,13 +262,13 @@ public class CommonValue {
                         + MLModel.LAST_UNDEPLOYED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
+                        + MLModel.GUARDRAILS_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + MLModel.CONNECTOR_FIELD
                         + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"
                         + USER_FIELD_MAPPING
-                        + "    },\n"
-                        + "      \""
-                        + MLModel.GUARDRAILS_FIELD
-                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "    }\n"
                         + "}";
 
         public static final String ML_TASK_INDEX_MAPPING = "{\n"
