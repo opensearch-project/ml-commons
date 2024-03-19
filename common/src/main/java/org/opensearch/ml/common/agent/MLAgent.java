@@ -245,12 +245,15 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     private static MLAgent parseCommonFields(XContentParser parser, boolean parseHidden) throws IOException {
-        String name = null, type = null, description = null;
+        String name = null;
+        String type = null;
+        String description = null;
         LLMSpec llm = null;
         List<MLToolSpec> tools = null;
         Map<String, String> parameters = null;
         MLMemorySpec memory = null;
-        Instant createdTime = null, lastUpdateTime = null;
+        Instant createdTime = null;
+        Instant lastUpdateTime = null;
         String appType = null;
         boolean isHidden = false;
 
@@ -260,10 +263,18 @@ public class MLAgent implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case AGENT_NAME_FIELD: name = parser.text(); break;
-                case AGENT_TYPE_FIELD: type = parser.text(); break;
-                case DESCRIPTION_FIELD: description = parser.text(); break;
-                case LLM_FIELD: llm = LLMSpec.parse(parser); break;
+                case AGENT_NAME_FIELD:
+                    name = parser.text();
+                    break;
+                case AGENT_TYPE_FIELD:
+                    type = parser.text();
+                    break;
+                case DESCRIPTION_FIELD:
+                    description = parser.text();
+                    break;
+                case LLM_FIELD:
+                    llm = LLMSpec.parse(parser);
+                    break;
                 case TOOLS_FIELD:
                     tools = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -271,15 +282,27 @@ public class MLAgent implements ToXContentObject, Writeable {
                         tools.add(MLToolSpec.parse(parser));
                     }
                     break;
-                case PARAMETERS_FIELD: parameters = getParameterMap(parser.map()); break;
-                case MEMORY_FIELD: memory = MLMemorySpec.parse(parser); break;
-                case CREATED_TIME_FIELD: createdTime = Instant.ofEpochMilli(parser.longValue()); break;
-                case LAST_UPDATED_TIME_FIELD: lastUpdateTime = Instant.ofEpochMilli(parser.longValue()); break;
-                case APP_TYPE_FIELD: appType = parser.text(); break;
+                case PARAMETERS_FIELD:
+                    parameters = getParameterMap(parser.map());
+                    break;
+                case MEMORY_FIELD:
+                    memory = MLMemorySpec.parse(parser);
+                    break;
+                case CREATED_TIME_FIELD:
+                    createdTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case APP_TYPE_FIELD:
+                    appType = parser.text();
+                    break;
                 case IS_HIDDEN_FIELD:
                     if (parseHidden) isHidden = parser.booleanValue();
                     break;
-                default: parser.skipChildren(); break;
+                default:
+                    parser.skipChildren();
+                    break;
             }
         }
 

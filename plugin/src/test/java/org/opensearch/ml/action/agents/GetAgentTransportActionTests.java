@@ -102,7 +102,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
 
         Task task = mock(Task.class);
 
@@ -126,7 +126,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
 
         Task task = mock(Task.class);
 
@@ -150,7 +150,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
 
         Task task = mock(Task.class);
 
@@ -177,7 +177,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         Task task = mock(Task.class);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("Failed to get ML agent " + agentId));
@@ -194,7 +194,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id-NullResponse";
         Task task = mock(Task.class);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(null);
@@ -211,7 +211,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id";
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
         Task task = mock(Task.class);
         GetAgentTransportAction getAgentTransportActionNullContext = new GetAgentTransportAction(
             transportService,
@@ -240,7 +240,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id";
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -262,7 +262,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id";
         GetResponse getResponse = prepareMLAgent(agentId, false);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -304,7 +304,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id";
         GetResponse getResponse = prepareMLAgent(agentId, true);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -327,7 +327,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id";
         GetResponse getResponse = prepareMLAgent(agentId, true);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {

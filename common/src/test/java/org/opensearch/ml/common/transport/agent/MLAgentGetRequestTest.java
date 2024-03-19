@@ -22,15 +22,16 @@ public class MLAgentGetRequestTest {
     @Test
     public void constructor_AgentId() {
         agentId = "test-abc";
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
         assertEquals(mLAgentGetRequest.getAgentId(),agentId);
+        assertEquals(mLAgentGetRequest.isUserInitiatedGetRequest(),true);
     }
 
     @Test
     public void writeTo() throws IOException {
         agentId = "test-hij";
 
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
         BytesStreamOutput output = new BytesStreamOutput();
         mLAgentGetRequest.writeTo(output);
 
@@ -38,12 +39,13 @@ public class MLAgentGetRequestTest {
 
         assertEquals(mLAgentGetRequest1.getAgentId(), mLAgentGetRequest.getAgentId());
         assertEquals(mLAgentGetRequest1.getAgentId(), agentId);
+        assertEquals(mLAgentGetRequest.isUserInitiatedGetRequest(), true);
     }
 
     @Test
     public void validate_Success() {
         agentId = "not-null";
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
 
         assertEquals(null, mLAgentGetRequest.validate());
     }
@@ -51,7 +53,7 @@ public class MLAgentGetRequestTest {
     @Test
     public void validate_Failure() {
         agentId = null;
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
         assertEquals(null,mLAgentGetRequest.agentId);
 
         ActionRequestValidationException exception = addValidationError("ML agent id can't be null", null);
@@ -60,14 +62,14 @@ public class MLAgentGetRequestTest {
     @Test
     public void fromActionRequest_Success()  throws IOException {
         agentId = "test-lmn";
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
         assertEquals(mLAgentGetRequest.fromActionRequest(mLAgentGetRequest), mLAgentGetRequest);
     }
 
     @Test
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
         agentId = "test-opq";
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
 
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -86,7 +88,7 @@ public class MLAgentGetRequestTest {
     @Test(expected = UncheckedIOException.class)
     public void fromActionRequest_IOException() {
         agentId = "test-rst";
-        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId);
+        MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
