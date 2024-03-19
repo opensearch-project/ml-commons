@@ -42,8 +42,6 @@ import static org.opensearch.ml.common.connector.Connector.createConnector;
 public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
-    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
-
     public static final String NAME_FIELD = "name";
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     public static final String DESCRIPTION_FIELD = "description";
@@ -362,7 +360,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case MODEL_TASK_TYPE_FIELD:
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
@@ -466,7 +463,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case MODEL_TASK_TYPE_FIELD:
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;

@@ -22,7 +22,6 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
@@ -37,7 +36,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
-    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
     public static final String MODEL_NAME_FIELD = "name"; // mandatory
     public static final String DESCRIPTION_FIELD = "description"; // optional
     public static final String IS_ENABLED_FIELD = "is_enabled"; // optional
@@ -305,7 +303,6 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 case MODEL_NAME_FIELD:
                     name = parser.text();
                     break;
-                case MODEL_TASK_TYPE_FIELD:
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text());
                     break;

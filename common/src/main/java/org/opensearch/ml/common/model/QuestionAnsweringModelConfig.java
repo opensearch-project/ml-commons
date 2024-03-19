@@ -31,24 +31,20 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
             it -> parse(it)
     );
     public static final String FRAMEWORK_TYPE_FIELD = "framework_type";
-    public static final String POOLING_MODE_FIELD = "pooling_mode";
     public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
     public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
 
     private final FrameworkType frameworkType;
-    private final PoolingMode poolingMode;
     private final boolean normalizeResult;
     private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
-    public QuestionAnsweringModelConfig(String modelType, FrameworkType frameworkType, String allConfig,
-                                        PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength) {
+    public QuestionAnsweringModelConfig(String modelType, FrameworkType frameworkType, String allConfig, boolean normalizeResult, Integer modelMaxLength) {
         super(modelType, allConfig);
         if (frameworkType == null) {
             throw new IllegalArgumentException("framework type is null");
         }
         this.frameworkType = frameworkType;
-        this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelMaxLength = modelMaxLength;
     }
@@ -57,7 +53,6 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
         String modelType = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
-        PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
 
@@ -76,9 +71,6 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
                     break;
-                case POOLING_MODE_FIELD:
-                    poolingMode = PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
-                    break;
                 case NORMALIZE_RESULT_FIELD:
                     normalizeResult = parser.booleanValue();
                     break;
@@ -90,7 +82,7 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
                     break;
             }
         }
-        return new QuestionAnsweringModelConfig(modelType, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength);
+        return new QuestionAnsweringModelConfig(modelType, frameworkType, allConfig, normalizeResult, modelMaxLength);
     }
 
     @Override
@@ -101,11 +93,6 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
     public QuestionAnsweringModelConfig(StreamInput in) throws IOException{
         super(in);
         frameworkType = in.readEnum(FrameworkType.class);
-        if (in.readBoolean()) {
-            poolingMode = in.readEnum(PoolingMode.class);
-        } else {
-            poolingMode = null;
-        }
         normalizeResult = in.readBoolean();
         modelMaxLength = in.readOptionalInt();
     }
@@ -114,12 +101,6 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeEnum(frameworkType);
-        if (poolingMode != null) {
-            out.writeBoolean(true);
-            out.writeEnum(poolingMode);
-        } else {
-            out.writeBoolean(false);
-        }
         out.writeBoolean(normalizeResult);
         out.writeOptionalInt(modelMaxLength);
     }
@@ -139,40 +120,11 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
         if (modelMaxLength != null) {
             builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
         }
-        if (poolingMode != null) {
-            builder.field(POOLING_MODE_FIELD, poolingMode);
-        }
         if (normalizeResult) {
             builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
         }
         builder.endObject();
         return builder;
-    }
-
-    public enum PoolingMode {
-        MEAN("mean"),
-        MEAN_SQRT_LEN("mean_sqrt_len"),
-        MAX("max"),
-        WEIGHTED_MEAN("weightedmean"),
-        CLS("cls"),
-        LAST_TOKEN("lasttoken");
-
-        private String name;
-
-        public String getName() {
-            return name;
-        }
-        PoolingMode(String name) {
-            this.name = name;
-        }
-
-        public static PoolingMode from(String value) {
-            try {
-                return PoolingMode.valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong pooling method");
-            }
-        }
     }
     public enum FrameworkType {
         HUGGINGFACE_TRANSFORMERS,

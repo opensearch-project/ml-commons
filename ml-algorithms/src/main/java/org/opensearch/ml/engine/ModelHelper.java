@@ -92,6 +92,10 @@ public class ModelHelper {
 
                 MLRegisterModelInput.MLRegisterModelInputBuilder builder = MLRegisterModelInput.builder();
 
+                String functionName = config.containsKey("function_name")
+                    ? (String) config.get("function_name")
+                    : (String) config.get("model_task_type");
+
                 builder
                     .modelName(modelName)
                     .version(version)
@@ -100,7 +104,7 @@ public class ModelHelper {
                     .modelNodeIds(modelNodeIds)
                     .isHidden(isHidden)
                     .modelGroupId(modelGroupId)
-                    .functionName(FunctionName.from((String) config.get("model_task_type")));
+                    .functionName(FunctionName.from((functionName)));
 
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
@@ -125,19 +129,6 @@ public class ModelHelper {
                                                 .frameworkType(
                                                     QuestionAnsweringModelConfig.FrameworkType.from(configEntry.getValue().toString())
                                                 );
-                                            break;
-                                        case QuestionAnsweringModelConfig.POOLING_MODE_FIELD:
-                                            configBuilder
-                                                .poolingMode(
-                                                    QuestionAnsweringModelConfig.PoolingMode
-                                                        .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
-                                                );
-                                            break;
-                                        case QuestionAnsweringModelConfig.NORMALIZE_RESULT_FIELD:
-                                            configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
-                                            break;
-                                        case QuestionAnsweringModelConfig.MODEL_MAX_LENGTH_FIELD:
-                                            configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
                                             break;
                                         default:
                                             break;

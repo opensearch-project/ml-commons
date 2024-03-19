@@ -40,7 +40,6 @@ public class MLModel implements ToXContentObject {
     @Deprecated
     public static final String ALGORITHM_FIELD = "algorithm";
     public static final String FUNCTION_NAME_FIELD = "function_name";
-    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
     public static final String MODEL_NAME_FIELD = "name";
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     // We use int type for version in first release 1.3. In 2.4, we changed to
@@ -503,7 +502,6 @@ public class MLModel implements ToXContentObject {
                 case USER:
                     user = User.parse(parser);
                     break;
-                case MODEL_TASK_TYPE_FIELD:
                 case ALGORITHM_FIELD:
                 case FUNCTION_NAME_FIELD:
                     algorithm = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));

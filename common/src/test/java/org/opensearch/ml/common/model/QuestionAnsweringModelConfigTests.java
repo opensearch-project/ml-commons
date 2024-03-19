@@ -34,6 +34,7 @@ public class QuestionAnsweringModelConfigTests {
         config = QuestionAnsweringModelConfig.builder()
                 .modelType("testModelType")
                 .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .normalizeResult(false)
                 .frameworkType(QuestionAnsweringModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
                 .build();
         function = parser -> {
@@ -72,7 +73,7 @@ public class QuestionAnsweringModelConfigTests {
 
     @Test
     public void parse() throws IOException {
-        String content = "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
+        String content = "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"normalize_result\":false,\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
         TestHelper.testParseFromString(config, content, function);
     }
 
