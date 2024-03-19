@@ -332,6 +332,10 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 TestHelper.toHttpEntity(TestData.IRIS_DATA.replaceAll("iris_data", indexName)),
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
+
+        statsResponse = TestHelper.makeRequest(client(), "GET", indexName, ImmutableMap.of(), "", null);
+        assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
+
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
         return bulkResponse;
     }
