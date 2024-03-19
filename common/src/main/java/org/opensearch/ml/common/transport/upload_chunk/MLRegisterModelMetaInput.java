@@ -22,6 +22,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
@@ -144,7 +145,11 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         this.modelContentSizeInBytes = in.readOptionalLong();
         this.modelContentHashValue = in.readString();
         if (in.readBoolean()) {
-            modelConfig = new TextEmbeddingModelConfig(in);
+            if (this.functionName.equals(FunctionName.QUESTION_ANSWERING)) {
+                this.modelConfig = new QuestionAnsweringModelConfig(in);
+            } else {
+                this.modelConfig = new TextEmbeddingModelConfig(in);
+            }
         }
         this.totalChunks = in.readInt();
         this.backendRoles = in.readOptionalStringList();
@@ -329,7 +334,11 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                     modelContentHashValue = parser.text();
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case TOTAL_CHUNKS_FIELD:
                     totalChunks = parser.intValue(false);

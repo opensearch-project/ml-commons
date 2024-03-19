@@ -13,5 +13,6 @@ public enum MLInputDataType {
     DATA_FRAME,
     TEXT_DOCS,
     REMOTE,
-    TEXT_SIMILARITY
+    TEXT_SIMILARITY,
+    QUESTION_ANSWERING
 }
