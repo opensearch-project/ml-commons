@@ -51,6 +51,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -65,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.logging.log4j.util.Strings;
@@ -79,6 +81,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
@@ -941,6 +944,7 @@ public class MLModelManager {
         String modelContentHash,
         FunctionName functionName,
         boolean deployToAllNodes,
+        boolean autoDeployModel,
         MLTask mlTask,
         ActionListener<String> listener
     ) {
@@ -950,7 +954,7 @@ public class MLModelManager {
         mlStats.createModelCounterStatIfAbsent(modelId, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
-            if (workerNodes != null && workerNodes.size() > 0) {
+            if (!autoDeployModel && workerNodes != null && workerNodes.size() > 0) {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
                 modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
@@ -963,10 +967,20 @@ public class MLModelManager {
             return;
         }
         int eligibleNodeCount = workerNodes.size();
-        modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
+        if (!autoDeployModel) {
+            modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
+        } else {
+            modelCacheHelper.initModelStateLocal(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
+        }
+
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
-            checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
+                context.restore();
+                modelCacheHelper.removeAutoDeployModel(modelId);
+            });
+            if (!autoDeployModel) {
+                checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
+            }
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
@@ -1054,6 +1068,23 @@ public class MLModelManager {
             handleDeployModelException(modelId, functionName, listener, e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
+        }
+    }
+
+    public void deployRemoteModelToLocal(String modelId, MLModel mlModel, ActionListener<String> listener) {
+        if (modelCacheHelper.isModelDeployed(modelId)) {
+            listener.onResponse("Success");
+            return;
+        }
+        modelCacheHelper
+            .initModelState(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, new ArrayList<>(), mlModel.isDeployToAllNodes());
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
+            deployRemoteOrBuiltInModel(mlModel, 1, wrappedListener);
+        } catch (Exception e) {
+            log.error("Failed to deploy model to local node" + modelId, e);
+            listener.onFailure(e);
         }
     }
 
@@ -1858,4 +1889,23 @@ public class MLModelManager {
         return modelCacheHelper.isModelRunningOnNode(modelId);
     }
 
+    public boolean isModelDeployed(String modelId) {
+        return modelCacheHelper.isModelDeployed(modelId);
+    }
+
+    public boolean isNodeEligible(String nodeId, FunctionName functionName) {
+        Set<String> allEligibleNodeIds = Arrays
+            .stream(nodeHelper.getEligibleNodes(functionName))
+            .map(DiscoveryNode::getId)
+            .collect(Collectors.toSet());
+        return allEligibleNodeIds.contains(nodeId);
+    }
+
+    public MLModel addModelToAutoDeployCache(String modelId, MLModel model) {
+        return modelCacheHelper.addModelToAutoDeployCache(modelId, model);
+    }
+
+    public void removeAutoDeployModel(String modelId) {
+        modelCacheHelper.removeAutoDeployModel(modelId);
+    }
 }

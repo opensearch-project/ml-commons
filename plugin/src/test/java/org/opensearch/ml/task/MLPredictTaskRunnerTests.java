@@ -9,9 +9,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +30,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -145,6 +149,10 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         stats.put(MLNodeLevelStat.ML_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
+
+        Settings settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.getKey(), true).build();
+        ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE)));
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         this.mlStats = new MLStats(stats);
         mlInputDatasetHandler = spy(new MLInputDatasetHandler(client));
         taskRunner = spy(
@@ -160,7 +168,8 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 xContentRegistry(),
                 mlModelManager,
                 nodeHelper,
-                mlEngine
+                mlEngine,
+                settings
             )
         );
 
@@ -188,7 +197,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         requestWithQuery = MLPredictionTaskRequest.builder().modelId("111").mlInput(mlInputWithQuery).build();
 
         when(client.threadPool()).thenReturn(threadPool);
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);

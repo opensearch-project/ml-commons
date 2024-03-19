@@ -11,9 +11,12 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -25,6 +28,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -117,7 +121,15 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
         mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).user(user).build();
 
-        Settings settings = Settings.builder().build();
+        Settings settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.getKey(), true).build();
+        ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE)));
+
+        threadContext = new ThreadContext(settings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+
         transportPredictionTaskAction = spy(
             new TransportPredictionTaskAction(
                 transportService,
@@ -128,14 +140,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 client,
                 xContentRegistry,
                 mlModelManager,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                settings
             )
         );
-
-        threadContext = new ThreadContext(settings);
-        when(clusterService.getSettings()).thenReturn(settings);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     public void testPrediction_default_exception() {

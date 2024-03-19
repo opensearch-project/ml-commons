@@ -12,8 +12,10 @@ import static org.opensearch.ml.permission.AccessController.checkUserPermissions
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.UUID;
 
 import org.opensearch.OpenSearchException;
@@ -25,6 +27,7 @@ import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -45,6 +48,8 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -76,6 +81,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLModelManager mlModelManager;
     private final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
+    private volatile boolean autoDeploymentEnabled;
 
     public MLPredictTaskRunner(
         ThreadPool threadPool,
@@ -89,7 +95,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
         DiscoveryNodeHelper nodeHelper,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        Settings settings
     ) {
         super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -100,6 +107,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
+        autoDeploymentEnabled = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> autoDeploymentEnabled = it);
     }
 
     @Override
@@ -134,7 +145,35 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             }, e -> { listener.onFailure(e); });
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
             if (workerNodes == null || workerNodes.length == 0) {
-                if (functionName == FunctionName.TEXT_EMBEDDING || functionName == FunctionName.REMOTE) {
+                if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
+                    try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                        mlModelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(model -> {
+                            String[] planningWorkerNodes = model.getPlanningWorkerNodes();
+                            MLModel modelBeingAutoDeployed = mlModelManager.addModelToAutoDeployCache(modelId, model);
+                            if (modelBeingAutoDeployed == model) {
+                                log.info("Automatically deploy model {}", modelId);
+                                MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(
+                                    modelId,
+                                    planningWorkerNodes,
+                                    false,
+                                    true,
+                                    false
+                                );
+                                client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, ActionListener.wrap(r -> {
+                                    log.info("Auto deployment action triggered for model {}", modelId);
+                                }, e -> { log.error("Auto deployment action failed for model " + modelId, e); }));
+                            }
+                            if (planningWorkerNodes == null || planningWorkerNodes.length == 0) {
+                                planningWorkerNodes = nodeHelper.getEligibleNodeIds(functionName);
+                            }
+                            mlTaskDispatcher.dispatchPredictTask(planningWorkerNodes, actionListener);
+                        }, e -> {
+                            log.error("Failed to get model " + modelId, e);
+                            listener.onFailure(e);
+                        }), context::restore));
+                    }
+                    return;
+                } else if (FunctionName.needDeployFirst(functionName)) {
                     listener
                         .onFailure(
                             new IllegalArgumentException(
@@ -145,6 +184,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 } else {
                     workerNodes = nodeHelper.getEligibleNodeIds(functionName);
                 }
+            } else {
+                mlModelManager.removeAutoDeployModel(modelId);
             }
             mlTaskDispatcher.dispatchPredictTask(workerNodes, actionListener);
         } catch (Exception e) {
@@ -218,7 +259,42 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
 
-        FunctionName algorithm = mlInput.getAlgorithm();
+        FunctionName functionName = mlInput.getFunctionName();
+        Predictable predictor = mlModelManager.getPredictor(modelId);
+        boolean modelReady = predictor != null && predictor.isModelReady();
+        if (!modelReady && FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
+            log.info("Auto deploy model {} to local node", modelId);
+            Instant now = Instant.now();
+            MLTask mlDeployTask = MLTask
+                .builder()
+                .taskId(UUID.randomUUID().toString())
+                .functionName(functionName)
+                .async(false)
+                .taskType(MLTaskType.DEPLOY_MODEL)
+                .createTime(now)
+                .lastUpdateTime(now)
+                .state(MLTaskState.RUNNING)
+                .workerNodes(Arrays.asList(clusterService.localNode().getId()))
+                .build();
+            mlModelManager.deployModel(modelId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
+                runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+            }, e -> {
+                log.error("Failed to auto deploy model " + modelId, e);
+                internalListener.onFailure(e);
+            }));
+            return;
+        }
+
+        runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+    }
+
+    private void runPredict(
+        String modelId,
+        MLTask mlTask,
+        MLInput mlInput,
+        FunctionName algorithm,
+        ActionListener<MLTaskResponse> internalListener
+    ) {
         // run predict
         if (modelId != null) {
             Predictable predictor = mlModelManager.getPredictor(modelId);
@@ -241,7 +317,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     handlePredictFailure(mlTask, internalListener, e, false, modelId);
                     return;
                 }
-            } else if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
+            } else if (FunctionName.needDeployFirst(algorithm)) {
                 throw new IllegalArgumentException("Model not ready to be used: " + modelId);
             }
 
