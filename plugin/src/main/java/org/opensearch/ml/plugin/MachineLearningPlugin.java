@@ -302,6 +302,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+    public static final String REMOTE_PREDICT_THREAD_POOL = "opensearch_ml_predict_remote";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
     public static final String ML_BASE_URI = "/_plugins/_ml";
@@ -825,9 +826,25 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder remotePredictThreadPool = new FixedExecutorBuilder(
+            settings,
+            REMOTE_PREDICT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + REMOTE_PREDICT_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
-            .of(generalThreadPool, registerModelThreadPool, deployModelThreadPool, executeThreadPool, trainThreadPool, predictThreadPool);
+            .of(
+                generalThreadPool,
+                registerModelThreadPool,
+                deployModelThreadPool,
+                executeThreadPool,
+                trainThreadPool,
+                predictThreadPool,
+                remotePredictThreadPool
+            );
     }
 
     @Override
