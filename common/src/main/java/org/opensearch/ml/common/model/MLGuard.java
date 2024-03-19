@@ -147,6 +147,7 @@ public class MLGuard {
             }), latch), () -> context.restore()));
         } catch (Exception e) {
             log.error("[validateStopWords] Searching stop words index failed.", e);
+            latch.countDown();
             hitStopWords.set(true);
         }
 
