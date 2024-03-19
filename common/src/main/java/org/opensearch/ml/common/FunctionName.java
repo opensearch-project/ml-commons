@@ -52,4 +52,12 @@ public enum FunctionName {
     public static boolean isDLModel(FunctionName functionName) {
         return DL_MODELS.contains(functionName);
     }
+
+    public static boolean needDeployFirst(FunctionName functionName) {
+        return DL_MODELS.contains(functionName) || functionName == REMOTE;
+    }
+
+    public static boolean isAutoDeployEnabled(boolean autoDeploymentEnabled, FunctionName functionName) {
+        return autoDeploymentEnabled && functionName == FunctionName.REMOTE;
+    }
 }

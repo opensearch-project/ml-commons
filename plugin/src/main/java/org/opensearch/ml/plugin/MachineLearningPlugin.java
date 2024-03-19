@@ -523,7 +523,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             xContentRegistry,
             mlModelManager,
             nodeHelper,
-            mlEngine
+            mlEngine,
+            settings
         );
         mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
             threadPool,

@@ -34,12 +34,12 @@ import lombok.extern.log4j.Log4j2;
 public class MLModelCacheHelper {
     private final Map<String, MLModelCache> modelCaches;
 
-    private final Set<String> localDeployedModels;
+    private final Map<String, MLModel> autoDeployModels;
     private volatile Long maxRequestCount;
 
     public MLModelCacheHelper(ClusterService clusterService, Settings settings) {
         this.modelCaches = new ConcurrentHashMap<>();
-        this.localDeployedModels = ConcurrentHashMap.newKeySet();
+        this.autoDeployModels = new ConcurrentHashMap<>();
 
         maxRequestCount = ML_COMMONS_MONITORING_REQUEST_COUNT.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MONITORING_REQUEST_COUNT, it -> maxRequestCount = it);
@@ -71,12 +71,23 @@ public class MLModelCacheHelper {
         modelCaches.put(modelId, modelCache);
     }
 
-    public synchronized void addModelToLocalDeployment(String modelId) {
-        localDeployedModels.add(modelId);
-    }
-
-    public Boolean isModelDeployedLocally(String modelId) {
-        return localDeployedModels.contains(modelId);
+    public synchronized void initModelStateLocal(
+        String modelId,
+        MLModelState state,
+        FunctionName functionName,
+        List<String> targetWorkerNodes
+    ) {
+        log.debug("init local model deployment state for model {}, state: {}", modelId, state);
+        if (isModelRunningOnNode(modelId)) {
+            // model state initialized
+            return;
+        }
+        MLModelCache modelCache = new MLModelCache();
+        modelCache.setModelState(state);
+        modelCache.setFunctionName(functionName);
+        modelCache.setTargetWorkerNodes(targetWorkerNodes);
+        modelCache.setDeployToAllNodes(false);
+        modelCaches.put(modelId, modelCache);
     }
 
     /**
@@ -404,6 +415,7 @@ public class MLModelCacheHelper {
             modelCache.clear();
             modelCaches.remove(modelId);
         }
+        autoDeployModels.remove(modelId);
     }
 
     /**
@@ -636,4 +648,18 @@ public class MLModelCacheHelper {
         return modelCaches.computeIfAbsent(modelId, it -> new MLModelCache());
     }
 
+    public MLModel addModelToAutoDeployCache(String modelId, MLModel model) {
+        MLModel addedModel = autoDeployModels.computeIfAbsent(modelId, key -> model);
+        if (addedModel == model) {
+            log.info("Add model {} to auto deploy cache", modelId);
+        }
+        return addedModel;
+    }
+
+    public void removeAutoDeployModel(String modelId) {
+        MLModel removedModel = autoDeployModels.remove(modelId);
+        if (removedModel != null) {
+            log.info("Remove model {} from auto deploy cache", modelId);
+        }
+    }
 }
