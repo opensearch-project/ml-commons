@@ -28,6 +28,7 @@ public enum FunctionName {
     SPARSE_ENCODING,
     SPARSE_TOKENIZE,
     TEXT_SIMILARITY,
+    QUESTION_ANSWERING,
     AGENT;
 
     public static FunctionName from(String value) {
@@ -42,7 +43,8 @@ public enum FunctionName {
         TEXT_EMBEDDING,
         TEXT_SIMILARITY,
         SPARSE_ENCODING,
-        SPARSE_TOKENIZE
+        SPARSE_TOKENIZE,
+        QUESTION_ANSWERING
     ));
 
     /**

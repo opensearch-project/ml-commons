@@ -23,6 +23,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
@@ -166,6 +167,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             if (this.functionName.equals(FunctionName.METRICS_CORRELATION)) {
                 this.modelConfig = new MetricsCorrelationModelConfig(in);
+            } else if (this.functionName.equals(FunctionName.QUESTION_ANSWERING)) {
+                this.modelConfig = new QuestionAnsweringModelConfig(in);
             } else {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
             }
@@ -382,7 +385,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case CONNECTOR_FIELD:
                     connector = createConnector(parser);
@@ -493,7 +500,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case MODEL_NODE_IDS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
