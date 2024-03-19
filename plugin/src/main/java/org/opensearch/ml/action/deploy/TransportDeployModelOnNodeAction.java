@@ -222,11 +222,19 @@ public class TransportDeployModelOnNodeAction extends
         try {
             log.debug("start deploying model {}", modelId);
             mlModelManager
-                .deployModel(modelId, modelContentHash, functionName, deployToAllNodes, mlTask, ActionListener.runBefore(listener, () -> {
-                    if (!coordinatingNodeId.equals(localNodeId)) {
-                        mlTaskManager.remove(mlTask.getTaskId());
-                    }
-                }));
+                .deployModel(
+                    modelId,
+                    modelContentHash,
+                    functionName,
+                    deployToAllNodes,
+                    false,
+                    mlTask,
+                    ActionListener.runBefore(listener, () -> {
+                        if (!coordinatingNodeId.equals(localNodeId)) {
+                            mlTaskManager.remove(mlTask.getTaskId());
+                        }
+                    })
+                );
         } catch (Exception e) {
             logException("Failed to deploy model " + modelId, e, log);
             listener.onFailure(e);

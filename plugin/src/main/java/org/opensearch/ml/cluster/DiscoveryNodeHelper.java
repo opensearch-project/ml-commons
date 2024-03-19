@@ -74,21 +74,21 @@ public class DiscoveryNodeHelper {
                 continue;
             }
             if (functionName == FunctionName.REMOTE) {// remote model
-                getEligibleNodes(remoteModelEligibleNodeRoles, eligibleNodes, node);
+                getEligibleNode(remoteModelEligibleNodeRoles, eligibleNodes, node);
             } else { // local model
                 if (onlyRunOnMLNode) {
                     if (MLNodeUtils.isMLNode(node)) {
                         eligibleNodes.add(node);
                     }
                 } else {
-                    getEligibleNodes(localModelEligibleNodeRoles, eligibleNodes, node);
+                    getEligibleNode(localModelEligibleNodeRoles, eligibleNodes, node);
                 }
             }
         }
         return eligibleNodes.toArray(new DiscoveryNode[0]);
     }
 
-    private void getEligibleNodes(Set<String> allowedNodeRoles, Set<DiscoveryNode> eligibleNodes, DiscoveryNode node) {
+    private void getEligibleNode(Set<String> allowedNodeRoles, Set<DiscoveryNode> eligibleNodes, DiscoveryNode node) {
         if (allowedNodeRoles.contains("data") && isEligibleDataNode(node)) {
             eligibleNodes.add(node);
         }

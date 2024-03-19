@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.prediction;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -12,6 +14,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -37,7 +40,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class TransportPredictionTaskAction extends HandledTransportAction<ActionRequest, MLTaskResponse> {
     MLTaskRunner<MLPredictionTaskRequest, MLTaskResponse> mlPredictTaskRunner;
     TransportService transportService;
@@ -53,6 +56,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     ModelAccessControlHelper modelAccessControlHelper;
 
+    private volatile boolean enableAutomaticDeployment;
+
     @Inject
     public TransportPredictionTaskAction(
         TransportService transportService,
@@ -63,7 +68,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         Client client,
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        Settings settings
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
@@ -74,6 +80,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> enableAutomaticDeployment = it);
     }
 
     @Override
