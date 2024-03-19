@@ -21,6 +21,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 
@@ -219,6 +220,8 @@ public class MLModel implements ToXContentObject {
             if (input.readBoolean()) {
                 if (algorithm.equals(FunctionName.METRICS_CORRELATION)) {
                     modelConfig = new MetricsCorrelationModelConfig(input);
+                } else if (algorithm.equals(FunctionName.QUESTION_ANSWERING)) {
+                    modelConfig = new QuestionAnsweringModelConfig(input);
                 } else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
@@ -527,6 +530,8 @@ public class MLModel implements ToXContentObject {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.METRICS_CORRELATION.name().equals(algorithmName)) {
                         modelConfig = MetricsCorrelationModelConfig.parse(parser);
+                    } else if (FunctionName.QUESTION_ANSWERING.name().equals(algorithmName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
