@@ -31,6 +31,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -38,6 +39,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.memory.MemoryTestUtil;
@@ -116,6 +118,21 @@ public class DeleteConversationTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<DeleteConversationResponse> argCaptor = ArgumentCaptor.forClass(DeleteConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         assert (argCaptor.getValue().wasSuccessful());
+    }
+
+    public void testDeleteConversation_NoAccess() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> al = invocation.getArgument(1);
+            al
+                .onFailure(
+                    new OpenSearchStatusException("Resources not found. Failed to delete the memory for " + "test", RestStatus.NOT_FOUND)
+                );
+            return null;
+        }).when(cmHandler).deleteConversation(any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<OpenSearchStatusException> argCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Resources not found. Failed to delete the memory for test"));
     }
 
     public void testDeleteFails_thenFail() {
