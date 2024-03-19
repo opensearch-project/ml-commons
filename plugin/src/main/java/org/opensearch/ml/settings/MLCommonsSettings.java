@@ -82,6 +82,9 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN = Setting
         .boolSetting("plugins.ml_commons.allow_custom_deployment_plan", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE = Setting
+        .boolSetting("plugins.ml_commons.model_auto_deploy.enable", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE = Setting
         .boolSetting("plugins.ml_commons.model_auto_redeploy.enable", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 

@@ -118,7 +118,6 @@ public class MLModel implements ToXContentObject {
     private Integer totalChunks; // model chunk doc only
     private Integer planningWorkerNodeCount; // plan to deploy model to how many nodes
     private Integer currentWorkerNodeCount; // model is deployed to how many nodes
-
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
 

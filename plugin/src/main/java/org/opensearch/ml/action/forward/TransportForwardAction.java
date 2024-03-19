@@ -20,12 +20,14 @@ import java.util.Set;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -163,7 +165,16 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             updateFields.put(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, 0);
                         }
                         log.info("deploy model done with state: {}, model id: {}", modelState, modelId);
-                        mlModelManager.updateModel(modelId, updateFields);
+                        ActionListener updateModelListener = ActionListener.<UpdateResponse>wrap(response -> {
+                            if (response.status() == RestStatus.OK) {
+                                log.debug("Updated ML model successfully: {}, model id: {}", response.status(), modelId);
+                            } else {
+                                log.error("Failed to update ML model {}, status: {}", modelId, response.status());
+                            }
+                        }, e -> { log.error("Failed to update ML model: " + modelId, e); });
+                        mlModelManager.updateModel(modelId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
+                            mlModelManager.removeAutoDeployModel(modelId);
+                        }));
                     }
                     listener.onResponse(new MLForwardResponse("ok", null));
                     break;

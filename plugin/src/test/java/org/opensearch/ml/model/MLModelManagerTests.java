@@ -576,7 +576,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
         mock_client_ThreadContext(client, threadPool, threadContext);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -617,7 +617,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -658,7 +658,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NotExist(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -703,7 +703,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModel(model);
         setUpMock_GetModel(modelChunk0);
         setUpMock_GetModel(modelChunk0);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -753,7 +753,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModelChunks(model);
         // setUpMock_GetModel(modelChunk0);
         // setUpMock_GetModel(modelChunk1);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -769,7 +769,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testDeployModel_ModelAlreadyDeployed() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         ArgumentCaptor<String> response = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(response.capture());
         assertEquals("successful", response.getValue());
@@ -784,7 +784,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(models);
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Exceed max local model per node limit", failure.getValue().getMessage());
@@ -819,7 +819,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
@@ -978,7 +978,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
         verify(mlStats).getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT));
