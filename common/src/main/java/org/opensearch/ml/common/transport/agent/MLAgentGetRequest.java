@@ -25,21 +25,28 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLAgentGetRequest extends ActionRequest {
 
     String agentId;
+    // This is to identify if the get request is initiated by user or not. Sometimes during
+    // delete/update options, we also perform get operation. This field is to distinguish between
+    // these two situations.
+    boolean isUserInitiatedGetRequest;
 
     @Builder
-    public MLAgentGetRequest(String agentId) {
+    public MLAgentGetRequest(String agentId, boolean isUserInitiatedGetRequest) {
         this.agentId = agentId;
+        this.isUserInitiatedGetRequest = isUserInitiatedGetRequest;
     }
 
     public MLAgentGetRequest(StreamInput in) throws IOException {
         super(in);
         this.agentId = in.readString();
+        this.isUserInitiatedGetRequest = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.agentId);
+        out.writeBoolean(isUserInitiatedGetRequest);
     }
 
     @Override
