@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -32,6 +33,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
@@ -325,7 +327,14 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
                 }, listener::onFailure);
 
             } else {
-                listener.onResponse(false);
+                log.error("No access to delete the memory for " + conversationId);
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Resources not found. Failed to delete the memory for " + conversationId,
+                            RestStatus.NOT_FOUND
+                        )
+                    );
             }
         }, listener::onFailure);
     }
