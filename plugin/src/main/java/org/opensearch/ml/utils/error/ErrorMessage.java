@@ -75,8 +75,9 @@ public class ErrorMessage {
 
     private String decorateMessage(Throwable t) {
         if (t instanceof ActionTransportException) {
-            String regexIPPort = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(:\\d{1,5})?";
-            return emptyStringIfNull(t.getLocalizedMessage()).replaceAll(regexIPPort, "x.x.x.x:x");
+            String regexIPv4 = "\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(:\\d{1,5})?";
+            String regexIPv6 = "\\[?((?:[\\da-fA-F]{0,4}:[\\da-fA-F]{0,4}){2,7})(?:[\\/\\\\%](\\d{1,3}))?\\]?(:\\d{1,5})?";
+            return emptyStringIfNull(t.getLocalizedMessage()).replaceAll(regexIPv4, "x.x.x.x:x").replaceAll(regexIPv6, "x.x.x.x.x.x:x");
         }
         return "";
     }
