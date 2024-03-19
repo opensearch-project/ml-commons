@@ -35,7 +35,7 @@ public class GenerativeSearchResponse extends SearchResponse {
     private static final String EXT_SECTION_NAME = "ext";
     private static final String GENERATIVE_QA_ANSWER_FIELD_NAME = "answer";
     private static final String GENERATIVE_QA_ERROR_FIELD_NAME = "error";
-    private static final String INTERACTION_ID_FIELD_NAME = "interaction_id";
+    private static final String INTERACTION_ID_FIELD_NAME = "message_id";
 
     private final String answer;
     private String errorMessage;

@@ -34,6 +34,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.client.Client;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
@@ -47,7 +48,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.ext.Generativ
 
 public class MachineLearningPluginTests {
 
-    MachineLearningPlugin plugin = new MachineLearningPlugin();
+    MachineLearningPlugin plugin = new MachineLearningPlugin(Settings.EMPTY);
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
