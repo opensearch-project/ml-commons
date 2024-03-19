@@ -208,30 +208,6 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
     @Before
     public void init() throws Exception {
 
-        /*
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.rag_pipeline_feature_enabled\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, DEFAULT_USER_AGENT))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
-        
-        response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.memory_feature_enabled\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, DEFAULT_USER_AGENT))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
-        */
-
         Response response = TestHelper
             .makeRequest(
                 client(),
