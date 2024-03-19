@@ -219,7 +219,6 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                     + "            \"^https://runtime\\\\.sagemaker\\\\..*\\\\.amazonaws\\\\.com/.*$\",\n"
                     + "            \"^https://api\\\\.openai\\\\.com/.*$\",\n"
                     + "            \"^https://api\\\\.cohere\\\\.ai/.*$\",\n"
-                    + "            \"^http://127.0.0.1:1323/.*$\",\n"
                     + "            \"^https://bedrock.*\\\\.amazonaws.com/.*$\"\n"
                     + "        ]\n"
                     + "    }}",
