@@ -66,7 +66,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
-        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(true).build();
+        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
