@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.model;
 import lombok.Data;
 import lombok.Builder;
 import lombok.Getter;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -15,6 +16,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -43,6 +45,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String CONNECTOR_FIELD = "connector"; // optional
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set when sending update
                                                                               // request
+    public static final String GUARDRAILS_FIELD = "guardrails";
+
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS = Version.V_2_13_0;
 
     @Getter
     private String modelId;
@@ -57,11 +62,12 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String connectorId;
     private MLCreateConnectorInput connector;
     private Instant lastUpdateTime;
+    private Guardrails guardrails;
 
     @Builder(toBuilder = true)
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
             Boolean isEnabled, MLRateLimiter rateLimiter, MLModelConfig modelConfig,
-            Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime) {
+            Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime, Guardrails guardrails) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
@@ -74,9 +80,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.connectorId = connectorId;
         this.connector = connector;
         this.lastUpdateTime = lastUpdateTime;
+        this.guardrails = guardrails;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         modelId = in.readString();
         description = in.readOptionalString();
         version = in.readOptionalString();
@@ -97,6 +105,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             connector = new MLCreateConnectorInput(in);
         }
         lastUpdateTime = in.readOptionalInstant();
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+            if (in.readBoolean()) {
+                this.guardrails = new Guardrails(in);
+            }
+        }
     }
 
     @Override
@@ -136,6 +149,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
+        if (guardrails != null) {
+            builder.field(GUARDRAILS_FIELD, guardrails);
+        }
         builder.endObject();
         return builder;
     }
@@ -174,12 +190,16 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
+        if (guardrails != null) {
+            builder.field(GUARDRAILS_FIELD, guardrails);
+        }
         builder.endObject();
         return builder;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(modelId);
         out.writeOptionalString(description);
         out.writeOptionalString(version);
@@ -212,6 +232,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalInstant(lastUpdateTime);
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+            if (guardrails != null) {
+                out.writeBoolean(true);
+                guardrails.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -227,6 +255,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         String connectorId = null;
         MLCreateConnectorInput connector = null;
         Instant lastUpdateTime = null;
+        Guardrails guardrails = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -257,6 +286,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case CONNECTOR_FIELD:
                     connector = MLCreateConnectorInput.parse(parser, true);
                     break;
+                case GUARDRAILS_FIELD:
+                    guardrails = Guardrails.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -265,6 +297,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         // Model ID can only be set through RestRequest. Model version can only be set
         // automatically.
         return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, rateLimiter,
-                modelConfig, updatedConnector, connectorId, connector, lastUpdateTime);
+                modelConfig, updatedConnector, connectorId, connector, lastUpdateTime, guardrails);
     }
 }

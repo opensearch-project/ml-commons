@@ -206,11 +206,13 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
         boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
         // This flag is used to decide if we need to re-deploy the predictor(model) when updating the model cache.
-        // If one of the internal connector, stand-alone connector id, model quota flag, as well as the model rate limiter needs update, we
+        // If one of the internal connector, stand-alone connector id, model quota flag, as well as the model rate limiter and guardrails
+        // need update, we
         // need to perform a re-deploy.
         boolean isPredictorUpdate = (updateModelInput.getConnector() != null)
             || (newConnectorId != null)
-            || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled());
+            || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled())
+            || (updateModelInput.getGuardrails() != null);
         if (MLRateLimiter.updateValidityPreCheck(mlModel.getRateLimiter(), updateModelInput.getRateLimiter())) {
             MLRateLimiter updatedRateLimiterConfig = MLRateLimiter.update(mlModel.getRateLimiter(), updateModelInput.getRateLimiter());
             updateModelInput.setRateLimiter(updatedRateLimiterConfig);

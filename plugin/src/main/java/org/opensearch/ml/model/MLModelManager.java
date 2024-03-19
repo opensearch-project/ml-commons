@@ -26,6 +26,7 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
@@ -106,6 +107,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.model.Guardrails;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -527,6 +530,7 @@ public class MLModelManager {
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .isHidden(registerModelInput.getIsHidden())
+                    .guardrails(registerModelInput.getGuardrails())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
@@ -591,6 +595,7 @@ public class MLModelManager {
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .isHidden(registerModelInput.getIsHidden())
+                    .guardrails(registerModelInput.getGuardrails())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
@@ -655,6 +660,7 @@ public class MLModelManager {
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .isHidden(registerModelInput.getIsHidden())
+                    .guardrails(registerModelInput.getGuardrails())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
@@ -738,6 +744,7 @@ public class MLModelManager {
                             .createdTime(now)
                             .lastUpdateTime(now)
                             .isHidden(registerModelInput.getIsHidden())
+                            .guardrails(registerModelInput.getGuardrails())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                         if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
@@ -991,6 +998,7 @@ public class MLModelManager {
                 }
 
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
+                setupMLGuard(modelId, mlModel.getGuardrails());
                 deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
@@ -1052,6 +1060,7 @@ public class MLModelManager {
     private void deployRemoteOrBuiltInModel(MLModel mlModel, Integer eligibleNodeCount, ActionListener<String> wrappedListener) {
         String modelId = mlModel.getModelId();
         setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
+        setupMLGuard(modelId, mlModel.getGuardrails());
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
@@ -1079,6 +1088,7 @@ public class MLModelManager {
     private Map<String, Object> setUpParameterMap(String modelId) {
         TokenBucket rateLimiter = getRateLimiter(modelId);
         Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
+        MLGuard mlGuard = getMLGuard(modelId);
 
         Map<String, Object> params = new HashMap<>();
         params.put(ML_ENGINE, mlEngine);
@@ -1089,21 +1099,24 @@ public class MLModelManager {
 
         if (rateLimiter == null && userRateLimiterMap == null) {
             log.info("Setting up basic ML predictor parameters.");
-            return Collections.unmodifiableMap(params);
         } else if (rateLimiter != null && userRateLimiterMap == null) {
             params.put(RATE_LIMITER, rateLimiter);
             log.info("Setting up basic ML predictor parameters with model level throttling.");
-            return Collections.unmodifiableMap(params);
         } else if (rateLimiter == null) {
             params.put(USER_RATE_LIMITER_MAP, userRateLimiterMap);
             log.info("Setting up basic ML predictor parameters with user level throttling.");
-            return Collections.unmodifiableMap(params);
         } else {
             params.put(RATE_LIMITER, rateLimiter);
             params.put(USER_RATE_LIMITER_MAP, userRateLimiterMap);
             log.info("Setting up basic ML predictor parameters with both model and user level throttling.");
-            return Collections.unmodifiableMap(params);
         }
+
+        if (mlGuard != null) {
+            params.put(GUARDRAILS, mlGuard);
+            log.info("Setting up ML guard parameter for ML predictor.");
+        }
+
+        return Collections.unmodifiableMap(params);
     }
 
     private void handleDeployModelException(String modelId, FunctionName functionName, ActionListener<String> listener, Exception e) {
@@ -1125,6 +1138,7 @@ public class MLModelManager {
                 int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
+                setupMLGuard(modelId, mlModel.getGuardrails());
                 if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
                     if (mlModel.getConnector() != null) {
                         setupParamsAndPredictable(modelId, mlModel);
@@ -1419,6 +1433,29 @@ public class MLModelManager {
      */
     public Map<String, TokenBucket> getUserRateLimiterMap(String modelId) {
         return modelCacheHelper.getUserRateLimiterMap(modelId);
+    }
+
+    private void setupMLGuard(String modelId, Guardrails guardrails) {
+        if (guardrails != null) {
+            modelCacheHelper.setMLGuard(modelId, createMLGuard(guardrails, xContentRegistry, client));
+        } else {
+            modelCacheHelper.removeMLGuard(modelId);
+        }
+    }
+
+    private MLGuard createMLGuard(Guardrails guardrails, NamedXContentRegistry xContentRegistry, Client client) {
+
+        return new MLGuard(guardrails, xContentRegistry, client);
+    }
+
+    /**
+     * Get ML guard with model id.
+     *
+     * @param modelId model id
+     * @return a ML guard
+     */
+    public MLGuard getMLGuard(String modelId) {
+        return modelCacheHelper.getMLGuard(modelId);
     }
 
     /**
