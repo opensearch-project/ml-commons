@@ -12,6 +12,7 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.*;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -36,7 +37,7 @@ public class MLAgentGetResponseTest {
         mlAgent = MLAgent.builder()
                 .name("test_agent")
                 .appType("test_app")
-                .type("flow")
+                .type(MLAgentType.FLOW.name())
                 .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
                 .build();
     }
@@ -68,7 +69,7 @@ public class MLAgentGetResponseTest {
     @Test
     public void writeTo() throws IOException {
         //create ml agent using MLAgent and mlAgentGetResponse
-        mlAgent = new MLAgent("test", "test", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test");
+        mlAgent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false);
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
                 .mlAgent(mlAgent)
                 .build();
@@ -88,7 +89,7 @@ public class MLAgentGetResponseTest {
 
     @Test
     public void toXContent() throws IOException {
-        mlAgent = new MLAgent("mock", "flow", "test", null, null, null, null, null, null, "test");
+        mlAgent = new MLAgent("mock", MLAgentType.FLOW.name(), "test", null, null, null, null, null, null, "test", false);
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
                 .mlAgent(mlAgent)
                 .build();

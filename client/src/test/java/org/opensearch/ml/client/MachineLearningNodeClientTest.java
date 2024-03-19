@@ -56,6 +56,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -869,7 +870,7 @@ public class MachineLearningNodeClientTest {
         }).when(client).execute(eq(MLRegisterAgentAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
-        MLAgent mlAgent = MLAgent.builder().name("Agent name").build();
+        MLAgent mlAgent = MLAgent.builder().name("Agent name").type(MLAgentType.FLOW.name()).build();
 
         machineLearningNodeClient.registerAgent(mlAgent, registerAgentResponseActionListener);
 

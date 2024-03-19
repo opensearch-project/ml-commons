@@ -40,6 +40,7 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
@@ -89,7 +90,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
                                     AGENT_NAME_FIELD,
                                     "agent-name",
                                     AGENT_TYPE_FIELD,
-                                    "agent-type",
+                                    MLAgentType.CONVERSATIONAL.name(),
                                     DESCRIPTION_FIELD,
                                     "description",
                                     LLM_FIELD,
@@ -120,7 +121,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLRegisterAgentRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentRequest.class);
         verify(client, times(1)).execute(eq(MLRegisterAgentAction.INSTANCE), argumentCaptor.capture(), any());
         assert (argumentCaptor.getValue().getMlAgent().getName().equals("agent-name"));
-        assert (argumentCaptor.getValue().getMlAgent().getType().equals("agent-type"));
+        assert (argumentCaptor.getValue().getMlAgent().getType().equals(MLAgentType.CONVERSATIONAL.name()));
         assert (argumentCaptor.getValue().getMlAgent().getDescription().equals("description"));
         assert (argumentCaptor.getValue().getMlAgent().getTools().equals(new ArrayList<>()));
         assert (argumentCaptor.getValue().getMlAgent().getLlm().getModelId().equals("id"));

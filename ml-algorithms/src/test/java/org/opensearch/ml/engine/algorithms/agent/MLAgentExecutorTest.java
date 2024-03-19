@@ -43,6 +43,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.conversation.Interaction;
@@ -480,7 +482,8 @@ public class MLAgentExecutorTest {
 
     @Test
     public void test_CreateChatAgent() {
-        MLAgent mlAgent = MLAgent.builder().name("test_agent").type("conversational").build();
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent.builder().name("test_agent").type(MLAgentType.CONVERSATIONAL.name()).llm(llmSpec).build();
         MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent);
         Assert.assertTrue(mlAgentRunner instanceof MLChatAgentRunner);
     }

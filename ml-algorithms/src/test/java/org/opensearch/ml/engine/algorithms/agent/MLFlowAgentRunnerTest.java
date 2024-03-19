@@ -46,6 +46,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -183,6 +184,7 @@ public class MLFlowAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
@@ -205,7 +207,7 @@ public class MLFlowAgentRunnerTest {
         final Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
-        final MLAgent mlAgent = MLAgent.builder().name("TestAgent").memory(mlMemorySpec).build();
+        final MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).memory(mlMemorySpec).build();
         mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(agentActionListener).onFailure(argCaptor.capture());
@@ -236,6 +238,7 @@ public class MLFlowAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
@@ -264,6 +267,7 @@ public class MLFlowAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
@@ -394,6 +398,7 @@ public class MLFlowAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
             .memory(null)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
@@ -456,6 +461,7 @@ public class MLFlowAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();

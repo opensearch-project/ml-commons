@@ -66,6 +66,6 @@ public class RestMLGetAgentAction extends BaseRestHandler {
         }
         String agentId = getParameterId(request, PARAMETER_AGENT_ID);
 
-        return new MLAgentGetRequest(agentId);
+        return new MLAgentGetRequest(agentId, true);
     }
 }
