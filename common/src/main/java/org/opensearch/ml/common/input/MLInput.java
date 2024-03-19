@@ -17,6 +17,7 @@ import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -62,6 +63,12 @@ public class MLInput implements Input {
     // Input query text to compare against for text similarity model
     public static final String QUERY_TEXT_FIELD = "query_text";
     public static final String PARAMETERS_FIELD = "parameters";
+
+    // Input question in question answering model
+    public static final String QUESTION_FIELD = "question";
+
+    // Input context in question answering model
+    public static final String CONTEXT_FIELD = "context";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -178,6 +185,13 @@ public class MLInput implements Input {
                         builder.endArray();
                     }
                     break;
+                case QUESTION_ANSWERING:
+                    QuestionAnsweringInputDataSet qaInputDataSet = (QuestionAnsweringInputDataSet) this.inputDataset;
+                    String question = qaInputDataSet.getQuestion();
+                    String context = qaInputDataSet.getContext();
+                    builder.field(QUESTION_FIELD, question);
+                    builder.field(CONTEXT_FIELD, context);
+                    break;
                 case REMOTE:
                     RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) this.inputDataset;
                     Map<String, String> parameters = remoteInferenceInputDataSet.getParameters();
@@ -213,6 +227,8 @@ public class MLInput implements Input {
         List<Integer> targetResponsePositions = new ArrayList<>();
         List<String> textDocs = new ArrayList<>();
         String queryText = null;
+        String question = null;
+        String context = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -263,6 +279,12 @@ public class MLInput implements Input {
                 case QUERY_TEXT_FIELD:
                     queryText = parser.text();
                     break;
+                case QUESTION_FIELD:
+                    question = parser.text();
+                    break;
+                case CONTEXT_FIELD:
+                    context = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -272,9 +294,10 @@ public class MLInput implements Input {
         if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.SPARSE_TOKENIZE) {
             ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
-        }
-        if (algorithm == FunctionName.TEXT_SIMILARITY) {
+        } else if (algorithm == FunctionName.TEXT_SIMILARITY) {
             inputDataSet = new TextSimilarityInputDataSet(queryText, textDocs);
+        } else if (algorithm == FunctionName.QUESTION_ANSWERING) {
+            inputDataSet = new QuestionAnsweringInputDataSet(question, context);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }
