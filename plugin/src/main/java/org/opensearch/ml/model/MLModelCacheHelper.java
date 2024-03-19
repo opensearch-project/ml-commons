@@ -21,6 +21,7 @@ import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
@@ -158,6 +159,40 @@ public class MLModelCacheHelper {
             return null;
         }
         return userRateLimiterMap.get(user);
+    }
+
+    /**
+     * Set a ml guard
+     *
+     * @param modelId     model id
+     * @param mlGuard mlGuard
+     */
+    public synchronized void setMLGuard(String modelId, MLGuard mlGuard) {
+        log.debug("Setting ML guard {} for Model {}", mlGuard, modelId);
+        getExistingModelCache(modelId).setMlGuard(mlGuard);
+    }
+
+    /**
+     * Get the current ML guard for the model.
+     *
+     * @param modelId model id
+     */
+    public MLGuard getMLGuard(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getMlGuard();
+    }
+
+    /**
+     * Remove the ML guard from cache
+     *
+     * @param modelId model id
+     */
+    public synchronized void removeMLGuard(String modelId) {
+        log.debug("Removing the ML guard from Model {}", modelId);
+        getExistingModelCache(modelId).setMlGuard(null);
     }
 
     /**

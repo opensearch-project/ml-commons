@@ -28,6 +28,7 @@ import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.script.ScriptService;
@@ -64,6 +65,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private Client client;
+    @Setter
+    @Getter
+    private MLGuard mlGuard;
 
     public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
         this.connector = (AwsConnector) connector;
@@ -146,6 +150,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
             }
             String modelResponse = responseBuilder.toString();
+            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, 1)) {
+                throw new IllegalArgumentException("guardrails triggered for LLM output");
+            }
             if (statusCode < 200 || statusCode >= 300) {
                 throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
             }
