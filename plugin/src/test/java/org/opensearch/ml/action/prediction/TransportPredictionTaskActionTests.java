@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,6 +49,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -83,6 +85,8 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
     ActionFilters actionFilters;
@@ -129,6 +133,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
 
         transportPredictionTaskAction = spy(
             new TransportPredictionTaskAction(
@@ -141,6 +146,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 mlModelManager,
                 modelAccessControlHelper,
+                mlFeatureEnabledSetting,
                 settings
             )
         );
@@ -166,6 +172,21 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to Validate Access for ModelId test_id", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testPrediction_local_model_not_exception() {
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+
+        IllegalStateException e = assertThrows(
+                IllegalStateException.class,
+                () -> transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener)
+        );
+        assertEquals(
+                e.getMessage(),
+                LOCAL_MODEL_DISABLED_ERR_MSG
+        );
     }
 
     public void testPrediction_OpenSearchStatusException() {

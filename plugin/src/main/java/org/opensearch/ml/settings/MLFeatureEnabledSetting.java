@@ -55,7 +55,7 @@ public class MLFeatureEnabledSetting {
 
     /**
      * Whether the local model feature is enabled. If disabled, APIs in ml-commons will block local model inference.
-     * @return whether the agent framework is enabled.
+     * @return whether the local inference is enabled.
      */
     public boolean isLocalModelInferenceEnabled() {
         return isLocalModelInferenceEnabled;

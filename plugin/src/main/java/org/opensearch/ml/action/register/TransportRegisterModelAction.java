@@ -11,6 +11,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODE
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
@@ -56,6 +57,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -94,6 +96,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportRegisterModelAction(
@@ -112,7 +115,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         MLStats mlStats,
         ModelAccessControlHelper modelAccessControlHelper,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        MLModelGroupManager mlModelGroupManager
+        MLModelGroupManager mlModelGroupManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLRegisterModelAction.NAME, transportService, actionFilters, MLRegisterModelRequest::new);
         this.transportService = transportService;
@@ -129,6 +133,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.settings = settings;
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
@@ -147,6 +152,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+        }
         if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
