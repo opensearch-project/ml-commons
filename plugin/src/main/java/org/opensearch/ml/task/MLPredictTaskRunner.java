@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -162,13 +163,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();
         String modelId = request.getModelId();
+        FunctionName functionName = request.getMlInput().getFunctionName();
         MLTask mlTask = MLTask
             .builder()
             .taskId(UUID.randomUUID().toString())
             .modelId(modelId)
             .taskType(MLTaskType.PREDICTION)
             .inputType(inputDataType)
-            .functionName(request.getMlInput().getFunctionName())
+            .functionName(functionName)
             .state(MLTaskState.CREATED)
             .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
             .createTime(now)
@@ -186,14 +188,20 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     handleAsyncMLTaskFailure(mlTask, e);
                     listener.onFailure(e);
                 });
-                mlInputDatasetHandler.parseSearchQueryInput(mlInput.getInputDataset(), threadedActionListener(dataFrameActionListener));
+                mlInputDatasetHandler
+                    .parseSearchQueryInput(mlInput.getInputDataset(), threadedActionListener(functionName, dataFrameActionListener));
                 break;
             case DATA_FRAME:
             case TEXT_DOCS:
             default:
-                threadPool.executor(PREDICT_THREAD_POOL).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
+                String threadPoolName = getPredictThreadPool(functionName);
+                threadPool.executor(threadPoolName).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
                 break;
         }
+    }
+
+    private String getPredictThreadPool(FunctionName functionName) {
+        return functionName == FunctionName.REMOTE ? REMOTE_PREDICT_THREAD_POOL : PREDICT_THREAD_POOL;
     }
 
     private void predict(String modelId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
@@ -287,7 +295,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     handlePredictFailure(mlTask, internalListener, e, true, modelId);
                 });
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
-                client.get(getRequest, threadedActionListener(ActionListener.runBefore(getModelListener, () -> context.restore())));
+                client
+                    .get(
+                        getRequest,
+                        threadedActionListener(
+                            mlTask.getFunctionName(),
+                            ActionListener.runBefore(getModelListener, () -> context.restore())
+                        )
+                    );
             } catch (Exception e) {
                 log.error("Failed to get model " + mlTask.getModelId(), e);
                 handlePredictFailure(mlTask, internalListener, e, true, modelId);
@@ -299,8 +314,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         }
     }
 
-    private <T> ThreadedActionListener<T> threadedActionListener(ActionListener<T> listener) {
-        return new ThreadedActionListener<>(log, threadPool, PREDICT_THREAD_POOL, listener, false);
+    private <T> ThreadedActionListener<T> threadedActionListener(FunctionName functionName, ActionListener<T> listener) {
+        String threadPoolName = getPredictThreadPool(functionName);
+        return new ThreadedActionListener<>(log, threadPool, threadPoolName, listener, false);
     }
 
     private void handlePredictFailure(
