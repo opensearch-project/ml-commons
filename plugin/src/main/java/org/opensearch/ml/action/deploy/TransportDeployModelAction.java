@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 
 import java.time.Instant;
@@ -143,6 +144,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+                } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
                 }
                 if (!isUserInitiatedDeployRequest) {
                     deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);

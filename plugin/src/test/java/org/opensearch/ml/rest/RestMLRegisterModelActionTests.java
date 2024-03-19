@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -79,6 +80,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
         restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -159,7 +161,16 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         exceptionRule.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
-        RestRequest request = getRestRequestWithNullModelId();
+        RestRequest request = getRestRequestWithNullModelId(FunctionName.REMOTE);
+        restMLRegisterModelAction.handleRequest(request, channel, client);
+    }
+
+    public void testRegisterModelRequestLocalInferenceDisabled() throws Exception {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
+
+        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        RestRequest request = getRestRequestWithNullModelId(FunctionName.TEXT_EMBEDDING);
         restMLRegisterModelAction.handleRequest(request, channel, client);
     }
 
@@ -189,7 +200,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testRegisterModelRequestWithNullModelID() throws Exception {
-        RestRequest request = getRestRequestWithNullModelId();
+        RestRequest request = getRestRequestWithNullModelId(FunctionName.REMOTE);
         restMLRegisterModelAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
         verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
@@ -271,7 +282,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         return request;
     }
 
-    private RestRequest getRestRequestWithNullModelId() {
+    private RestRequest getRestRequestWithNullModelId(FunctionName functionName) {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
             .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
@@ -290,7 +301,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
                 "model_config",
                 modelConfig,
                 "function_name",
-                FunctionName.REMOTE
+                functionName
             );
         String requestContent = new Gson().toJson(model).toString();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

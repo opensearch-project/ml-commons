@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.TestHelper.getKMeansRestRequest;
@@ -67,6 +68,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         when(modelManager.getOptionalModelFunctionName(anyString())).thenReturn(Optional.empty());
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
         restMLPredictionAction = new RestMLPredictionAction(modelManager, mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -120,6 +122,16 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.REMOTE.name(), request);
+    }
+
+    public void testGetRequest_LocalModelInferenceDisabled() throws IOException {
+        thrown.expect(IllegalStateException.class);
+        thrown.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
+
+        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest_PredictModel();
+        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
+            .getRequest("modelId", FunctionName.TEXT_EMBEDDING.name(), request);
     }
 
     public void testPrepareRequest() throws Exception {
