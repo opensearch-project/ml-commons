@@ -29,6 +29,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -280,10 +281,11 @@ public class MLAgentExecutor implements Executable {
 
     @VisibleForTesting
     protected MLAgentRunner getAgentRunner(MLAgent mlAgent) {
-        switch (mlAgent.getType()) {
-            case "flow":
+        final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase());
+        switch (agentType) {
+            case FLOW:
                 return new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
-            case "conversational_flow":
+            case CONVERSATIONAL_FLOW:
                 return new MLConversationalFlowAgentRunner(
                     client,
                     settings,
@@ -292,7 +294,7 @@ public class MLAgentExecutor implements Executable {
                     toolFactories,
                     memoryFactoryMap
                 );
-            case "conversational":
+            case CONVERSATIONAL:
                 return new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());

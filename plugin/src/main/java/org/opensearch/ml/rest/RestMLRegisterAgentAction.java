@@ -66,7 +66,7 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAgent mlAgent = MLAgent.parse(parser);
+        MLAgent mlAgent = MLAgent.parseFromUserInput(parser);
         return new MLRegisterAgentRequest(mlAgent);
     }
 }
