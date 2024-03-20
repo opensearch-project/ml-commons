@@ -34,6 +34,7 @@ import java.util.function.BooleanSupplier;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
@@ -106,7 +107,16 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         SearchRequest request = new SearchRequest(); // mock(SearchRequest.class);
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder(); // mock(SearchSourceBuilder.class);
-        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.", null, null, null);
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "You are kind.",
+            "system_prompt",
+            "user_instructions",
+            null,
+            null,
+            null
+        );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(params);
         request.source(sourceBuilder);
@@ -170,7 +180,16 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         SearchRequest request = new SearchRequest();
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.", null, null, null);
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "You are kind.",
+            "system_promt",
+            "user_insturctions",
+            null,
+            null,
+            null
+        );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(params);
         request.source(sourceBuilder);
@@ -198,6 +217,90 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         ChatCompletionOutput output = mock(ChatCompletionOutput.class);
         when(llm.doChatCompletion(any())).thenReturn(output);
         when(output.getAnswers()).thenReturn(List.of("foo"));
+        processor.setLlm(llm);
+
+        ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
+        SearchResponse res = processor.processResponse(request, response);
+        verify(llm).doChatCompletion(captor.capture());
+        ChatCompletionInput input = captor.getValue();
+        assertTrue(input instanceof ChatCompletionInput);
+        List<String> passages = ((ChatCompletionInput) input).getContexts();
+        assertEquals("passage0", passages.get(0));
+        assertEquals("passage1", passages.get(1));
+        assertEquals(numHits, passages.size());
+        assertTrue(res instanceof GenerativeSearchResponse);
+    }
+
+    public void testProcessResponseWithErrorFromLlm() throws Exception {
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
+            client,
+            alwaysOn
+        ).create(null, "tag", "desc", true, config, null);
+
+        ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
+        when(memoryClient.getInteractions(any(), anyInt()))
+            .thenReturn(
+                List
+                    .of(
+                        new Interaction(
+                            "0",
+                            Instant.now(),
+                            "1",
+                            "question",
+                            "",
+                            "answer",
+                            "foo",
+                            Collections.singletonMap("meta data", "some meta")
+                        )
+                    )
+            );
+        processor.setMemoryClient(memoryClient);
+
+        SearchRequest request = new SearchRequest();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "You are kind.",
+            "system_promt",
+            "user_insturctions",
+            null,
+            null,
+            null
+        );
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(params);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 10;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            XContentBuilder sourceContent = JsonXContent
+                .contentBuilder()
+                .startObject()
+                .field("_id", String.valueOf(i))
+                .field("text", "passage" + i)
+                .field("title", "This is the title for document " + i)
+                .endObject();
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+            hitsArray[i].sourceRef(BytesReference.bytes(sourceContent));
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
+
+        Llm llm = mock(Llm.class);
+        ChatCompletionOutput output = mock(ChatCompletionOutput.class);
+        when(llm.doChatCompletion(any())).thenReturn(output);
+        when(output.isErrorOccurred()).thenReturn(true);
+        when(output.getErrors()).thenReturn(List.of("something bad has occurred."));
         processor.setLlm(llm);
 
         ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
@@ -245,7 +348,16 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         SearchRequest request = new SearchRequest();
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         int contextSize = 5;
-        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.", contextSize, null, null);
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "You are kind.",
+            "system_prompt",
+            "user_instructions",
+            contextSize,
+            null,
+            null
+        );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(params);
         request.source(sourceBuilder);
@@ -319,7 +431,16 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         SearchRequest request = new SearchRequest();
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.", null, null, null);
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "You are kind.",
+            "system_prompt",
+            "user_instructions",
+            null,
+            null,
+            null
+        );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(params);
         request.source(sourceBuilder);
@@ -431,7 +552,16 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         SearchRequest request = new SearchRequest();
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         int contextSize = 5;
-        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.", contextSize, null, null);
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "llm_model",
+            "Question",
+            "You are kind.",
+            null,
+            contextSize,
+            null,
+            null
+        );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(params);
         request.source(sourceBuilder);
@@ -457,6 +587,130 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         Llm llm = mock(Llm.class);
         when(llm.doChatCompletion(any())).thenThrow(new NullPointerException("Null Pointer in Interactions"));
+        processor.setLlm(llm);
+
+        SearchResponse res = processor.processResponse(request, response);
+    }
+
+    public void testProcessResponseIllegalArgument() throws Exception {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("llm_model cannot be null.");
+
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
+            client,
+            alwaysOn
+        ).create(null, "tag", "desc", true, config, null);
+
+        ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
+        when(memoryClient.getInteractions(any(), anyInt()))
+            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", null, null, null, null, null)));
+        processor.setMemoryClient(memoryClient);
+
+        SearchRequest request = new SearchRequest();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        int contextSize = 5;
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            null,
+            "Question",
+            "You are kind.",
+            null,
+            contextSize,
+            null,
+            null
+        );
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(params);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 10;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            XContentBuilder sourceContent = JsonXContent
+                .contentBuilder()
+                .startObject()
+                .field("_id", String.valueOf(i))
+                .field("text", "passage" + i)
+                .field("title", "This is the title for document " + i)
+                .endObject();
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+            hitsArray[i].sourceRef(BytesReference.bytes(sourceContent));
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
+
+        Llm llm = mock(Llm.class);
+        // when(llm.doChatCompletion(any())).thenThrow(new NullPointerException("Null Pointer in Interactions"));
+        processor.setLlm(llm);
+
+        SearchResponse res = processor.processResponse(request, response);
+    }
+
+    public void testProcessResponseOpenSearchException() throws Exception {
+        exceptionRule.expect(OpenSearchException.class);
+        exceptionRule.expectMessage("GenerativeQAResponseProcessor failed in precessing response");
+
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
+            client,
+            alwaysOn
+        ).create(null, "tag", "desc", true, config, null);
+
+        ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
+        when(memoryClient.getInteractions(any(), anyInt()))
+            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", null, null, null, null, null)));
+        processor.setMemoryClient(memoryClient);
+
+        SearchRequest request = new SearchRequest();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        int contextSize = 5;
+        GenerativeQAParameters params = new GenerativeQAParameters(
+            "12345",
+            "model",
+            "Question",
+            "You are kind.",
+            null,
+            contextSize,
+            null,
+            null
+        );
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(params);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 10;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            XContentBuilder sourceContent = JsonXContent
+                .contentBuilder()
+                .startObject()
+                .field("_id", String.valueOf(i))
+                .field("text", "passage" + i)
+                .field("title", "This is the title for document " + i)
+                .endObject();
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+            hitsArray[i].sourceRef(BytesReference.bytes(sourceContent));
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
+
+        Llm llm = mock(Llm.class);
+        when(llm.doChatCompletion(any())).thenThrow(new RuntimeException());
         processor.setLlm(llm);
 
         SearchResponse res = processor.processResponse(request, response);
