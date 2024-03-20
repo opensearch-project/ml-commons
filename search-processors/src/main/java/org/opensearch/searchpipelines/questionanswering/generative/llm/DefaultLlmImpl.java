@@ -121,7 +121,11 @@ public class DefaultLlmImpl implements Llm {
                         )
                 );
         } else {
-            throw new IllegalArgumentException("Unknown/unsupported model provider: " + chatCompletionInput.getModelProvider());
+            throw new IllegalArgumentException(
+                "Unknown/unsupported model provider: "
+                    + chatCompletionInput.getModelProvider()
+                    + ".  You must provide a valid model provider or llm_response_field."
+            );
         }
 
         // log.info("LLM input parameters: {}", inputParameters.toString());

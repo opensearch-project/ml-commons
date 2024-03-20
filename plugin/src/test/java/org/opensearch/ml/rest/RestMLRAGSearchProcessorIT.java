@@ -173,15 +173,6 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "                \"Request-Source\": \"unspecified:opensearch\"\n"
         + "            },\n"
         + "            \"request_body\": \"{ \\\"message\\\": \\\"${parameters.inputs}\\\", \\\"model\\\": \\\"${parameters.model}\\\" }\" \n"
-        // + " \"post_process_function\": \"\\n String escape(def input) { \\n if (input.contains(\\\"\\\\\\\\\\\")) {\\n input =
-        // input.replace(\\\"\\\\\\\\\\\", \\\"\\\\\\\\\\\\\\\\\\\");\\n }\\n if (input.contains(\\\"\\\\\\\"\\\")) {\\n input =
-        // input.replace(\\\"\\\\\\\"\\\", \\\"\\\\\\\\\\\\\\\"\\\");\\n }\\n if (input.contains('\\r')) {\\n input = input =
-        // input.replace('\\r', '\\\\\\\\r');\\n }\\n if (input.contains(\\\"\\\\\\\\t\\\")) {\\n input = input.replace(\\\"\\\\\\\\t\\\",
-        // \\\"\\\\\\\\\\\\\\\\\\\\\\\\t\\\");\\n }\\n if (input.contains('\\n')) {\\n input = input.replace('\\n', '\\\\\\\\n');\\n }\\n if
-        // (input.contains('\\b')) {\\n input = input.replace('\\b', '\\\\\\\\b');\\n }\\n if (input.contains('\\f')) {\\n input =
-        // input.replace('\\f', '\\\\\\\\f');\\n }\\n return input;\\n }\\n def name = 'response';\\n def result = params.text;\\n def json
-        // = '{ \\\"name\\\": \\\"' + name + '\\\",' +\\n '\\\"dataAsMap\\\": { \\\"completion\\\": \\\"' + escape(result) +\\n '\\\"}}';\\n
-        // return json;\\n \\n \"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
