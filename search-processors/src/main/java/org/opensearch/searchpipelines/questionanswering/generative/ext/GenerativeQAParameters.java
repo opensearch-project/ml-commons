@@ -71,17 +71,15 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     // from a remote inference endpoint before timing out the request.
     private static final ParseField TIMEOUT = new ParseField("timeout");
 
+    // Optional parameter: this parameter allows request-level customization of the "system" (role) prompt.
     private static final ParseField SYSTEM_PROMPT = new ParseField(GenerativeQAProcessorConstants.CONFIG_NAME_SYSTEM_PROMPT);
 
+    // Optional parameter: this parameter allows request-level customization of the "user" (role) prompt.
     private static final ParseField USER_INSTRUCTIONS = new ParseField(GenerativeQAProcessorConstants.CONFIG_NAME_USER_INSTRUCTIONS);
 
     // Optional parameter; this parameter indicates the name of the field in the LLM response
     // that contains the chat completion text, i.e. "answer".
     private static final ParseField LLM_RESPONSE_FIELD = new ParseField("llm_response_field");
-    
-    private static final ParseField SYSTEM_PROMPT = new ParseField(GenerativeQAProcessorConstants.CONFIG_NAME_SYSTEM_PROMPT);
-
-    private static final ParseField USER_INSTRUCTIONS = new ParseField(GenerativeQAProcessorConstants.CONFIG_NAME_USER_INSTRUCTIONS);
 
     public static final int SIZE_NULL_VALUE = -1;
 
@@ -129,18 +127,10 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     @Setter
     @Getter
     private String userInstructions;
-    
+
     @Setter
     @Getter
     private String llmResponseField;
-
-    @Setter
-    @Getter
-    private String systemPrompt;
-
-    @Setter
-    @Getter
-    private String userInstructions;
 
     public GenerativeQAParameters(
         String conversationId,

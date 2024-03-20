@@ -90,6 +90,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
     public void testMiscMethods() throws IOException {
         GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null);
+        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d", "s", "u", null, null, null, null);
         GenerativeQAParamExtBuilder builder1 = new GenerativeQAParamExtBuilder();
         GenerativeQAParamExtBuilder builder2 = new GenerativeQAParamExtBuilder();
         builder1.setParams(param1);
@@ -101,7 +102,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
         StreamOutput so = mock(StreamOutput.class);
         builder1.writeTo(so);
-        verify(so, times(4)).writeOptionalString(any());
+        verify(so, times(5)).writeOptionalString(any());
         verify(so, times(1)).writeString(any());
     }
 

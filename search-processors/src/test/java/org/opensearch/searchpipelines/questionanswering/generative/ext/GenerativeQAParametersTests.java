@@ -128,11 +128,13 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         StreamOutput output = new DummyStreamOutput();
         parameters.writeTo(output);
         List<String> actual = ((DummyStreamOutput) output).getList();
-        assertEquals(5, actual.size());
+        assertEquals(6, actual.size());
         assertEquals(conversationId, actual.get(0));
         assertEquals(llmModel, actual.get(1));
         assertEquals(llmQuestion, actual.get(2));
-        assertEquals(llmResponseField, actual.get(3));
+        assertEquals(systemPrompt, actual.get(3));
+        assertEquals(userInstructions, actual.get(4));
+        assertEquals(llmResponseField, actual.get(5));
         List<Integer> intValues = ((DummyStreamOutput) output).getIntValues();
         assertTrue(contextSize == intValues.get(0));
         assertTrue(interactionSize == intValues.get(1));

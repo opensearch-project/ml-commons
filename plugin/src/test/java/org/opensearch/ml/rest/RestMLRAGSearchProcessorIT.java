@@ -676,23 +676,22 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                     requestParameters.timeout,
                     requestParameters.llmResponseField
                 )
-            :
-            (requestParameters.conversationId == null)
-            ? String
-                .format(
-                    Locale.ROOT,
-                    BM25_SEARCH_REQUEST_TEMPLATE,
-                    requestParameters.source,
-                    requestParameters.source,
-                    requestParameters.match,
-                    requestParameters.llmModel,
-                    requestParameters.llmQuestion,
-                    requestParameters.systemPrompt,
-                    requestParameters.userInstructions,
-                    requestParameters.contextSize,
-                    requestParameters.interactionSize,
-                    requestParameters.timeout
-                )
+            : (requestParameters.conversationId == null)
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout
+                    )
             : String
                 .format(
                     Locale.ROOT,

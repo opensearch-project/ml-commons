@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -151,6 +152,138 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         MLInput mlInput = captor.getValue();
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
         assertEquals("answer", (String) output.getAnswers().get(0));
+    }
+
+    public void testChatCompletionApiForCohere() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        Map<String, String> messageMap = Map.of("role", "agent", "content", "answer");
+        Map<String, ?> dataAsMap = Map.of("text", "answer");
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "cohere/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.COHERE,
+            null
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertEquals("answer", (String) output.getAnswers().get(0));
+    }
+
+    public void testChatCompletionApiForCohereWithError() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        String errorMessage = "throttled";
+        Map<String, String> messageMap = Map.of("message", errorMessage);
+        Map<String, ?> dataAsMap = Map.of("error", messageMap);
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "cohere/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.COHERE,
+            null
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals(errorMessage, (String) output.getErrors().get(0));
+    }
+
+    public void testChatCompletionApiForFoo() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        String llmRespondField = UUID.randomUUID().toString();
+
+        Map<String, String> messageMap = Map.of("role", "agent", "content", "answer");
+        Map<String, ?> dataAsMap = Map.of(llmRespondField, "answer");
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model_foo",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            null,
+            llmRespondField
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertEquals("answer", (String) output.getAnswers().get(0));
+    }
+
+    public void testChatCompletionApiForFooWithError() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        String llmRespondField = UUID.randomUUID().toString();
+
+        String errorMessage = "throttled";
+        Map<String, String> messageMap = Map.of("message", errorMessage);
+        Map<String, ?> dataAsMap = Map.of("error", messageMap);
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model_foo",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            null,
+            llmRespondField
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals(errorMessage, (String) output.getErrors().get(0));
     }
 
     public void testChatCompletionThrowingError() throws Exception {
