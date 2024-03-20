@@ -26,9 +26,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.hc.core5.http.HttpHeaders;
-import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.http.message.BasicHeader;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.util.EntityUtils;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
