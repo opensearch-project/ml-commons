@@ -117,8 +117,8 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_REMOTE_INFERENCE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.remote_inference.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_INFERENCE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.local_model_inference_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.model_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);

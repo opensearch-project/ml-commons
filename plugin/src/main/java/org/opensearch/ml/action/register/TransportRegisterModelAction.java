@@ -152,7 +152,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
-        if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+        if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
         if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {

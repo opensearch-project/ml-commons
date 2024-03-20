@@ -177,7 +177,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(true);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
 
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT))).thenReturn(mlStat);
@@ -385,7 +385,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);

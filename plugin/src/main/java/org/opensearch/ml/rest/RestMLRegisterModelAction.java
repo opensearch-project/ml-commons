@@ -99,7 +99,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(mlInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+        } else if (FunctionName.isDLModel(mlInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
         return new MLRegisterModelRequest(mlInput);

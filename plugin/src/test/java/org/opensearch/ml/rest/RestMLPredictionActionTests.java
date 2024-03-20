@@ -68,7 +68,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         when(modelManager.getOptionalModelFunctionName(anyString())).thenReturn(Optional.empty());
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
         restMLPredictionAction = new RestMLPredictionAction(modelManager, mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -128,7 +128,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
 
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
             .getRequest("modelId", FunctionName.TEXT_EMBEDDING.name(), request);

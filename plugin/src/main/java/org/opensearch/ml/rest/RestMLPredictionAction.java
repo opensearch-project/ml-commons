@@ -122,7 +122,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(FunctionName.from(algorithm)) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+        } else if (FunctionName.isDLModel(FunctionName.from(algorithm)) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
         XContentParser parser = request.contentParser();

@@ -113,7 +113,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     context.restore();
                     modelCacheHelper.setModelInfo(modelId, mlModel);
                     FunctionName functionName = mlModel.getAlgorithm();
-                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
                         throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);

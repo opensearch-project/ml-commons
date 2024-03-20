@@ -222,7 +222,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
 
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
 
         when(clusterService.localNode()).thenReturn(node2);
         when(node2.getId()).thenReturn("node2Id");
@@ -235,7 +235,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecute_LocalModelDisabledException() {
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
 
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
                 .builder()

@@ -80,7 +80,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
         restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -169,7 +169,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
 
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
         RestRequest request = getRestRequestWithNullModelId(FunctionName.TEXT_EMBEDDING);
         restMLRegisterModelAction.handleRequest(request, channel, client);
     }

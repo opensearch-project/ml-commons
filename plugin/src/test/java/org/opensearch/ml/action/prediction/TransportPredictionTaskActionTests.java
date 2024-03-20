@@ -133,7 +133,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
 
         transportPredictionTaskAction = spy(
             new TransportPredictionTaskAction(
@@ -177,7 +177,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     public void testPrediction_local_model_not_exception() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
-        when(mlFeatureEnabledSetting.isLocalModelInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
 
         IllegalStateException e = assertThrows(
                 IllegalStateException.class,

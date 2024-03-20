@@ -8,7 +8,7 @@
 package org.opensearch.ml.settings;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_INFERENCE_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 
 import org.opensearch.cluster.service.ClusterService;
@@ -19,12 +19,12 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isRemoteInferenceEnabled;
     private volatile Boolean isAgentFrameworkEnabled;
 
-    private volatile Boolean isLocalModelInferenceEnabled;
+    private volatile Boolean isLocalModelEnabled;
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
-        isLocalModelInferenceEnabled = ML_COMMONS_LOCAL_MODEL_INFERENCE_ENABLED.get(settings);
+        isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -32,9 +32,7 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_INFERENCE_ENABLED, it -> isLocalModelInferenceEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
     }
 
     /**
@@ -57,8 +55,8 @@ public class MLFeatureEnabledSetting {
      * Whether the local model feature is enabled. If disabled, APIs in ml-commons will block local model inference.
      * @return whether the local inference is enabled.
      */
-    public boolean isLocalModelInferenceEnabled() {
-        return isLocalModelInferenceEnabled;
+    public boolean isLocalModelEnabled() {
+        return isLocalModelEnabled;
     }
 
 }

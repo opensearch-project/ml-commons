@@ -144,7 +144,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-                } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelInferenceEnabled()) {
+                } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
                     throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
                 }
                 if (!isUserInitiatedDeployRequest) {
