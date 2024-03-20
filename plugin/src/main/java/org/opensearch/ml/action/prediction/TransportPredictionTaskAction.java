@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.prediction;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -29,6 +30,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -58,6 +60,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     private volatile boolean enableAutomaticDeployment;
 
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public TransportPredictionTaskAction(
         TransportService transportService,
@@ -69,6 +73,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
@@ -80,6 +85,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()
@@ -107,6 +113,9 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     context.restore();
                     modelCacheHelper.setModelInfo(modelId, mlModel);
                     FunctionName functionName = mlModel.getAlgorithm();
+                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                    }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     modelAccessControlHelper
                         .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
