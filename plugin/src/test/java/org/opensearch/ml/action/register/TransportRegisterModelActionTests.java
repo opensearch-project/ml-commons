@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -60,6 +61,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -150,6 +152,9 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -184,7 +189,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             mlStats,
             modelAccessControlHelper,
             connectorAccessControlHelper,
-            mlModelGroupManager
+            mlModelGroupManager,
+            mlFeatureEnabledSetting
         );
         assertNotNull(transportRegisterModelAction);
 
@@ -216,6 +222,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
 
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
+
         when(clusterService.localNode()).thenReturn(node2);
         when(node2.getId()).thenReturn("node2Id");
 
@@ -224,6 +232,42 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+    }
+
+    public void testDoExecute_LocalModelDisabledException() {
+        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
+
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+                .builder()
+                .functionName(FunctionName.TEXT_EMBEDDING)
+                .deployModel(true)
+                .modelGroupId("modelGroupID")
+                .modelName("Test Model")
+                .modelConfig(
+                        new TextEmbeddingModelConfig(
+                                "CUSTOM",
+                                123,
+                                TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+                                "all config",
+                                TextEmbeddingModelConfig.PoolingMode.MEAN,
+                                true,
+                                512
+                        )
+                )
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .url("http://test_url")
+                .build();
+
+        MLRegisterModelRequest mlRegisterModelRequest = new MLRegisterModelRequest(registerModelInput);
+
+        IllegalStateException e = assertThrows(
+                IllegalStateException.class,
+                () -> transportRegisterModelAction.doExecute(task, mlRegisterModelRequest, actionListener)
+        );
+        assertEquals(
+                e.getMessage(),
+                LOCAL_MODEL_DISABLED_ERR_MSG
+        );
     }
 
     public void testDoExecute_userHasNoAccessException() {
@@ -328,7 +372,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             mlStats,
             modelAccessControlHelper,
             connectorAccessControlHelper,
-            mlModelGroupManager
+            mlModelGroupManager,
+            mlFeatureEnabledSetting
         );
 
         IllegalArgumentException e = assertThrows(
