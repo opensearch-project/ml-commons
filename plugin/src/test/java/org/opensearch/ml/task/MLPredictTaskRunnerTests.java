@@ -127,6 +127,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     MLInput mlInputWithDataFrame;
     MLEngine mlEngine;
     Encryptor encryptor;
+    MLModel mlModel;
 
     @Before
     public void setup() throws IOException {
@@ -202,7 +203,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        MLModel mlModel = MLModel
+        mlModel = MLModel
             .builder()
             .user(User.parse(USER_STRING))
             .version("1.1.1")
@@ -227,18 +228,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         verify(mlTaskManager).remove(anyString());
     }
 
-    public void testExecuteTask_OnLocalNode_RemoteModel() {
-        setupMocks(true, false, false, false);
-
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
-        verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue().getMessage().contains("Model not ready yet."));
-        verify(mlTaskManager, never()).add(any(MLTask.class));
-        verify(client, never()).get(any(), any());
-    }
-
     public void testExecuteTask_OnLocalNode_QueryInput() {
         setupMocks(true, false, false, false);
 
@@ -247,6 +236,19 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
+    }
+
+    public void testExecuteTask_OnLocalNode_RemoteModelAutoDeploy() {
+        setupMocks(true, false, false, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(any(), any());
+        when(mlModelManager.addModelToAutoDeployCache("111", mlModel)).thenReturn(mlModel);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        verify(client).execute(any(), any(), any());
+        verify(mlTaskDispatcher).dispatchPredictTask(any(), any());
     }
 
     public void testExecuteTask_OnLocalNode_QueryInput_Failure() {
