@@ -34,6 +34,7 @@ import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -147,6 +148,35 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
     private static final String BEDROCK_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
         ? BEDROCK_CONNECTOR_BLUEPRINT2
         : BEDROCK_CONNECTOR_BLUEPRINT1;
+
+    private static final String COHERE_API_KEY = System.getenv("COHERE_API_KEY");
+    private static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
+        + "    \"name\": \"Cohere Chat Model\",\n"
+        + "    \"description\": \"The connector to Cohere's public chat API\",\n"
+        + "    \"version\": \"1\",\n"
+        + "    \"protocol\": \"http\",\n"
+        + "    \"credential\": {\n"
+        + "        \"cohere_key\": \""
+        + COHERE_API_KEY
+        + "\"\n"
+        + "    },\n"
+        + "    \"parameters\": {\n"
+        + "        \"model\": \"command\"\n"
+        + "    },\n"
+        + "    \"actions\": [\n"
+        + "        {\n"
+        + "            \"action_type\": \"predict\",\n"
+        + "            \"method\": \"POST\",\n"
+        + "            \"url\": \"https://api.cohere.ai/v1/chat\",\n"
+        + "            \"headers\": {\n"
+        + "                \"Authorization\": \"Bearer ${credential.cohere_key}\",\n"
+        + "                \"Request-Source\": \"unspecified:opensearch\"\n"
+        + "            },\n"
+        + "            \"request_body\": \"{ \\\"message\\\": \\\"${parameters.inputs}\\\", \\\"model\\\": \\\"${parameters.model}\\\" }\" \n"
+        + "        }\n"
+        + "    ]\n"
+        + "}";
+
     private static final String PIPELINE_TEMPLATE = "{\n"
         + "  \"response_processors\": [\n"
         + "    {\n"
@@ -195,6 +225,23 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "        \"context_size\": %d,\n"
         + "        \"message_size\": %d,\n"
         + "        \"timeout\": %d\n"
+        + "      }\n"
+        + "  }\n"
+        + "}";
+
+    private static final String BM25_SEARCH_REQUEST_WITH_LLM_RESPONSE_FIELD_TEMPLATE = "{\n"
+        + "  \"_source\": [\"%s\"],\n"
+        + "  \"query\" : {\n"
+        + "    \"match\": {\"%s\": \"%s\"}\n"
+        + "  },\n"
+        + "   \"ext\": {\n"
+        + "      \"generative_qa_parameters\": {\n"
+        + "        \"llm_model\": \"%s\",\n"
+        + "        \"llm_question\": \"%s\",\n"
+        + "        \"context_size\": %d,\n"
+        + "        \"message_size\": %d,\n"
+        + "        \"timeout\": %d,\n"
+        + "        \"llm_response_field\": \"%s\"\n"
         + "      }\n"
         + "  }\n"
         + "}";
@@ -472,6 +519,111 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         assertNotNull(interactionId);
     }
 
+    public void testBM25WithCohere() throws Exception {
+        // Skip test if key is null
+        if (COHERE_API_KEY == null) {
+            return;
+        }
+        Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("Cohere Chat Completion v1", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        PipelineParameters pipelineParameters = new PipelineParameters();
+        pipelineParameters.tag = "testBM25WithCohere";
+        pipelineParameters.description = "desc";
+        pipelineParameters.modelId = modelId;
+        pipelineParameters.systemPrompt = "You are a helpful assistant";
+        pipelineParameters.userInstructions = "none";
+        pipelineParameters.context_field = "text";
+        Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
+        assertEquals(200, response1.getStatusLine().getStatusCode());
+
+        SearchRequestParameters requestParameters = new SearchRequestParameters();
+        requestParameters.source = "text";
+        requestParameters.match = "president";
+        requestParameters.llmModel = LlmIOUtil.COHERE_PROVIDER_PREFIX + "command";
+        requestParameters.llmQuestion = "who is lincoln";
+        requestParameters.contextSize = 5;
+        requestParameters.interactionSize = 5;
+        requestParameters.timeout = 60;
+        Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
+        assertEquals(200, response2.getStatusLine().getStatusCode());
+
+        Map responseMap2 = parseResponseToMap(response2);
+        Map ext = (Map) responseMap2.get("ext");
+        assertNotNull(ext);
+        Map rag = (Map) ext.get("retrieval_augmented_generation");
+        assertNotNull(rag);
+
+        // TODO handle errors such as throttling
+        String answer = (String) rag.get("answer");
+        assertNotNull(answer);
+    }
+
+    public void testBM25WithCohereUsingLlmResponseField() throws Exception {
+        // Skip test if key is null
+        if (COHERE_API_KEY == null) {
+            return;
+        }
+        Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("Cohere Chat Completion v1", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        PipelineParameters pipelineParameters = new PipelineParameters();
+        pipelineParameters.tag = "testBM25WithCohereLlmResponseField";
+        pipelineParameters.description = "desc";
+        pipelineParameters.modelId = modelId;
+        pipelineParameters.systemPrompt = "You are a helpful assistant";
+        pipelineParameters.userInstructions = "none";
+        pipelineParameters.context_field = "text";
+        Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
+        assertEquals(200, response1.getStatusLine().getStatusCode());
+
+        SearchRequestParameters requestParameters = new SearchRequestParameters();
+        requestParameters.source = "text";
+        requestParameters.match = "president";
+        requestParameters.llmModel = "command";
+        requestParameters.llmQuestion = "who is lincoln";
+        requestParameters.contextSize = 5;
+        requestParameters.interactionSize = 5;
+        requestParameters.timeout = 60;
+        requestParameters.llmResponseField = "text";
+        Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
+        assertEquals(200, response2.getStatusLine().getStatusCode());
+
+        Map responseMap2 = parseResponseToMap(response2);
+        Map ext = (Map) responseMap2.get("ext");
+        assertNotNull(ext);
+        Map rag = (Map) ext.get("retrieval_augmented_generation");
+        assertNotNull(rag);
+
+        // TODO handle errors such as throttling
+        String answer = (String) rag.get("answer");
+        assertNotNull(answer);
+    }
+
     private Response createSearchPipeline(String pipeline, PipelineParameters parameters) throws Exception {
         return makeRequest(
             client(),
@@ -498,11 +650,11 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
     private Response performSearch(String indexName, String pipeline, int size, SearchRequestParameters requestParameters)
         throws Exception {
 
-        String httpEntity = (requestParameters.conversationId == null)
+        String httpEntity = requestParameters.llmResponseField != null
             ? String
                 .format(
                     Locale.ROOT,
-                    BM25_SEARCH_REQUEST_TEMPLATE,
+                    BM25_SEARCH_REQUEST_WITH_LLM_RESPONSE_FIELD_TEMPLATE,
                     requestParameters.source,
                     requestParameters.source,
                     requestParameters.match,
@@ -512,8 +664,25 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                     requestParameters.userInstructions,
                     requestParameters.contextSize,
                     requestParameters.interactionSize,
-                    requestParameters.timeout
+                    requestParameters.timeout,
+                    requestParameters.llmResponseField
                 )
+            : (requestParameters.conversationId == null)
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout
+                    )
             : String
                 .format(
                     Locale.ROOT,
@@ -572,5 +741,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         int interactionSize;
         int timeout;
         String conversationId;
+
+        String llmResponseField;
     }
 }

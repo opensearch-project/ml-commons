@@ -27,14 +27,16 @@ import org.opensearch.searchpipelines.questionanswering.generative.prompt.Prompt
  */
 public class LlmIOUtil {
 
-    private static final String BEDROCK_PROVIDER_PREFIX = "bedrock/";
+    public static final String BEDROCK_PROVIDER_PREFIX = "bedrock/";
+    public static final String COHERE_PROVIDER_PREFIX = "cohere/";
 
     public static ChatCompletionInput createChatCompletionInput(
         String llmModel,
         String question,
         List<Interaction> chatHistory,
         List<String> contexts,
-        int timeoutInSeconds
+        int timeoutInSeconds,
+        String llmResponseField
     ) {
 
         // TODO pick the right subclass based on the modelId.
@@ -46,7 +48,8 @@ public class LlmIOUtil {
             question,
             chatHistory,
             contexts,
-            timeoutInSeconds
+            timeoutInSeconds,
+            llmResponseField
         );
     }
 
@@ -57,11 +60,19 @@ public class LlmIOUtil {
         String question,
         List<Interaction> chatHistory,
         List<String> contexts,
-        int timeoutInSeconds
+        int timeoutInSeconds,
+        String llmResponseField
     ) {
-        Llm.ModelProvider provider = Llm.ModelProvider.OPENAI;
-        if (llmModel != null && llmModel.startsWith(BEDROCK_PROVIDER_PREFIX)) {
-            provider = Llm.ModelProvider.BEDROCK;
+        Llm.ModelProvider provider = null;
+        if (llmResponseField == null) {
+            provider = Llm.ModelProvider.OPENAI;
+            if (llmModel != null) {
+                if (llmModel.startsWith(BEDROCK_PROVIDER_PREFIX)) {
+                    provider = Llm.ModelProvider.BEDROCK;
+                } else if (llmModel.startsWith(COHERE_PROVIDER_PREFIX)) {
+                    provider = Llm.ModelProvider.COHERE;
+                }
+            }
         }
         return new ChatCompletionInput(
             llmModel,
@@ -71,7 +82,8 @@ public class LlmIOUtil {
             timeoutInSeconds,
             systemPrompt,
             userInstructions,
-            provider
+            provider,
+            llmResponseField
         );
     }
 }

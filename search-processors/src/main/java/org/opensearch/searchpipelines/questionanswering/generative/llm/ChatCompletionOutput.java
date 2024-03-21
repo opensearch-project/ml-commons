@@ -19,6 +19,8 @@ package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
 import java.util.List;
 
+import org.opensearch.core.common.util.CollectionUtils;
+
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
@@ -38,19 +40,12 @@ public class ChatCompletionOutput {
 
     public ChatCompletionOutput(List<Object> answers, List<String> errors) {
 
-        if (answers == null && errors == null) {
+        if (CollectionUtils.isEmpty(answers) && CollectionUtils.isEmpty(errors)) {
             throw new IllegalArgumentException("answers and errors can't both be null.");
         }
 
-        if (answers == null) {
-            if (errors.isEmpty()) {
-                throw new IllegalArgumentException("If answers is not provided, one or more errors must be provided.");
-            }
+        if (CollectionUtils.isEmpty(answers)) {
             this.errorOccurred = true;
-        } else if (errors == null) {
-            if (answers.isEmpty()) {
-                throw new IllegalArgumentException("If errors is not provided, one or more answers must be provided.");
-            }
         }
 
         this.answers = answers;

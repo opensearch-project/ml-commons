@@ -17,7 +17,6 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Rule;
@@ -44,17 +43,5 @@ public class ChatCompletionOutputTests extends OpenSearchTestCase {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("answers and errors can't both be null.");
         new ChatCompletionOutput(null, null);
-    }
-
-    public void testIllegalArgument2() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("If answers is not provided, one or more errors must be provided.");
-        new ChatCompletionOutput(null, new ArrayList<>());
-    }
-
-    public void testIllegalArgument3() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("If errors is not provided, one or more answers must be provided.");
-        new ChatCompletionOutput(new ArrayList<>(), null);
     }
 }
