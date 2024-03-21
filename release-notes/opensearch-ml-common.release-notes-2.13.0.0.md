@@ -20,6 +20,7 @@ Compatible with OpenSearch 2.13.0
 * add remote predict thread pool ([#2207](https://github.com/opensearch-project/ml-commons/pull/2207))
 * add local inference enabling/disabling setting ([#2232](https://github.com/opensearch-project/ml-commons/pull/2232))
 * Add request level parameters for system_prompt and user_instructions ([#2236](https://github.com/opensearch-project/ml-commons/pull/2236))
+* Add support for Cohere and other chat model input/outputs in the RAG pipeline ([#2238](https://github.com/opensearch-project/ml-commons/pull/2238))
 
 ### Infrastructure
 * Add integration tests for the RAG pipeline covering OpenAI and Bedrock ([#2213](https://github.com/opensearch-project/ml-commons/pull/2213))
