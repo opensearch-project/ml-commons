@@ -71,9 +71,15 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     // from a remote inference endpoint before timing out the request.
     private static final ParseField TIMEOUT = new ParseField("timeout");
 
+    // Optional parameter: this parameter allows request-level customization of the "system" (role) prompt.
     private static final ParseField SYSTEM_PROMPT = new ParseField(GenerativeQAProcessorConstants.CONFIG_NAME_SYSTEM_PROMPT);
 
+    // Optional parameter: this parameter allows request-level customization of the "user" (role) prompt.
     private static final ParseField USER_INSTRUCTIONS = new ParseField(GenerativeQAProcessorConstants.CONFIG_NAME_USER_INSTRUCTIONS);
+
+    // Optional parameter; this parameter indicates the name of the field in the LLM response
+    // that contains the chat completion text, i.e. "answer".
+    private static final ParseField LLM_RESPONSE_FIELD = new ParseField("llm_response_field");
 
     public static final int SIZE_NULL_VALUE = -1;
 
@@ -87,6 +93,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         PARSER.declareIntOrNull(GenerativeQAParameters::setContextSize, SIZE_NULL_VALUE, CONTEXT_SIZE);
         PARSER.declareIntOrNull(GenerativeQAParameters::setInteractionSize, SIZE_NULL_VALUE, INTERACTION_SIZE);
         PARSER.declareIntOrNull(GenerativeQAParameters::setTimeout, SIZE_NULL_VALUE, TIMEOUT);
+        PARSER.declareStringOrNull(GenerativeQAParameters::setLlmResponseField, LLM_RESPONSE_FIELD);
     }
 
     @Setter
@@ -121,6 +128,10 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     @Getter
     private String userInstructions;
 
+    @Setter
+    @Getter
+    private String llmResponseField;
+
     public GenerativeQAParameters(
         String conversationId,
         String llmModel,
@@ -129,7 +140,8 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         String userInstructions,
         Integer contextSize,
         Integer interactionSize,
-        Integer timeout
+        Integer timeout,
+        String llmResponseField
     ) {
         this.conversationId = conversationId;
         this.llmModel = llmModel;
@@ -143,6 +155,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         this.contextSize = (contextSize == null) ? SIZE_NULL_VALUE : contextSize;
         this.interactionSize = (interactionSize == null) ? SIZE_NULL_VALUE : interactionSize;
         this.timeout = (timeout == null) ? SIZE_NULL_VALUE : timeout;
+        this.llmResponseField = llmResponseField;
     }
 
     public GenerativeQAParameters(StreamInput input) throws IOException {
@@ -154,6 +167,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         this.contextSize = input.readInt();
         this.interactionSize = input.readInt();
         this.timeout = input.readInt();
+        this.llmResponseField = input.readOptionalString();
     }
 
     @Override
@@ -166,7 +180,8 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             .field(USER_INSTRUCTIONS.getPreferredName(), this.userInstructions)
             .field(CONTEXT_SIZE.getPreferredName(), this.contextSize)
             .field(INTERACTION_SIZE.getPreferredName(), this.interactionSize)
-            .field(TIMEOUT.getPreferredName(), this.timeout);
+            .field(TIMEOUT.getPreferredName(), this.timeout)
+            .field(LLM_RESPONSE_FIELD.getPreferredName(), this.llmResponseField);
     }
 
     @Override
@@ -181,6 +196,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         out.writeInt(contextSize);
         out.writeInt(interactionSize);
         out.writeInt(timeout);
+        out.writeOptionalString(llmResponseField);
     }
 
     public static GenerativeQAParameters parse(XContentParser parser) throws IOException {
@@ -204,6 +220,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             && Objects.equals(this.userInstructions, other.getUserInstructions())
             && (this.contextSize == other.getContextSize())
             && (this.interactionSize == other.getInteractionSize())
-            && (this.timeout == other.getTimeout());
+            && (this.timeout == other.getTimeout())
+            && Objects.equals(this.llmResponseField, other.getLlmResponseField());
     }
 }
