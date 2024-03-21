@@ -115,6 +115,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             "user_instructions",
             null,
             null,
+            null,
             null
         );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
@@ -186,6 +187,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             "You are kind.",
             "system_promt",
             "user_insturctions",
+            null,
             null,
             null,
             null
@@ -269,6 +271,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             "You are kind.",
             "system_promt",
             "user_insturctions",
+            null,
             null,
             null,
             null
@@ -356,6 +359,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             "user_instructions",
             contextSize,
             null,
+            null,
             null
         );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
@@ -437,6 +441,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             "You are kind.",
             "system_prompt",
             "user_instructions",
+            null,
             null,
             null,
             null
@@ -560,6 +565,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             null,
             contextSize,
             null,
+            null,
             null
         );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
@@ -622,6 +628,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             null,
             contextSize,
             null,
+            null,
             null
         );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
@@ -683,6 +690,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             "You are kind.",
             null,
             contextSize,
+            null,
             null,
             null
         );

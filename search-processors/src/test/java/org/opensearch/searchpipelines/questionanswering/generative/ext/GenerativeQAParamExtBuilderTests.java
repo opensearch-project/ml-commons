@@ -47,6 +47,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
             "user_instructions",
             null,
             null,
+            null,
             null
         );
         builder.setParams(parameters);
@@ -88,8 +89,8 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testMiscMethods() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null);
-        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d", "s", "u", null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null);
+        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d", "s", "u", null, null, null, null);
         GenerativeQAParamExtBuilder builder1 = new GenerativeQAParamExtBuilder();
         GenerativeQAParamExtBuilder builder2 = new GenerativeQAParamExtBuilder();
         builder1.setParams(param1);
@@ -101,7 +102,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
         StreamOutput so = mock(StreamOutput.class);
         builder1.writeTo(so);
-        verify(so, times(4)).writeOptionalString(any());
+        verify(so, times(5)).writeOptionalString(any());
         verify(so, times(1)).writeString(any());
     }
 
@@ -114,7 +115,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());
@@ -129,7 +130,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTripAllValues() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());
@@ -140,7 +141,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testStreamRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         BytesStreamOutput bso = new BytesStreamOutput();
@@ -154,7 +155,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testStreamRoundTripAllValues() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         BytesStreamOutput bso = new BytesStreamOutput();
