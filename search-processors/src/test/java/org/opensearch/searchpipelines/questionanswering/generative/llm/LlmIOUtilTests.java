@@ -31,11 +31,34 @@ public class LlmIOUtilTests extends OpenSearchTestCase {
         ChatCompletionInput input = LlmIOUtil
             .createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList(), 0, null);
         assertTrue(input instanceof ChatCompletionInput);
+        assertEquals(Llm.ModelProvider.OPENAI, input.getModelProvider());
     }
 
     public void testChatCompletionInputForBedrock() {
         ChatCompletionInput input = LlmIOUtil
-            .createChatCompletionInput("bedrock/model", "question", Collections.emptyList(), Collections.emptyList(), 0, null);
+            .createChatCompletionInput(
+                LlmIOUtil.BEDROCK_PROVIDER_PREFIX + "model",
+                "question",
+                Collections.emptyList(),
+                Collections.emptyList(),
+                0,
+                null
+            );
         assertTrue(input instanceof ChatCompletionInput);
+        assertEquals(Llm.ModelProvider.BEDROCK, input.getModelProvider());
+    }
+
+    public void testChatCompletionInputForCohere() {
+        ChatCompletionInput input = LlmIOUtil
+            .createChatCompletionInput(
+                LlmIOUtil.COHERE_PROVIDER_PREFIX + "model",
+                "question",
+                Collections.emptyList(),
+                Collections.emptyList(),
+                0,
+                null
+            );
+        assertTrue(input instanceof ChatCompletionInput);
+        assertEquals(Llm.ModelProvider.COHERE, input.getModelProvider());
     }
 }

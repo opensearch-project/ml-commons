@@ -429,7 +429,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
 
     public void testIllegalArgument1() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unknown/unsupported model provider: null.  You must provide a valid model provider or llm_response_field.");
+        exceptionRule
+            .expectMessage("Unknown/unsupported model provider: null.  You must provide a valid model provider or llm_response_field.");
         MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
@@ -459,7 +460,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
 
     public void testIllegalArgument2() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unknown/unsupported model provider: null.  You must provide a valid model provider or llm_response_field.");
+        exceptionRule
+            .expectMessage("Unknown/unsupported model provider: null.  You must provide a valid model provider or llm_response_field.");
         MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
