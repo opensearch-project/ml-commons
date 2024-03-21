@@ -19,6 +19,7 @@ package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,21 +135,16 @@ public class DefaultLlmImpl implements Llm {
 
     protected ChatCompletionOutput buildChatCompletionOutput(ModelProvider provider, Map<String, ?> dataAsMap, String llmResponseField) {
 
-        List<Object> answers = null;
-        List<String> errors = null;
+        List<Object> answers = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+
+        String answerField = null;
+        String errorField = "error";
+        String defaultErrorMessageField = "message";
 
         if (llmResponseField != null) {
-            String response = (String) dataAsMap.get(llmResponseField);
-            if (response != null) {
-                answers = List.of(response);
-            } else {
-                Map error = (Map) dataAsMap.get("error");
-                if (error != null) {
-                    errors = List.of((String) error.get("message"));
-                } else {
-                    errors = List.of("Unknown error or response.");
-                }
-            }
+            answerField = llmResponseField;
+            fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
         } else if (provider == ModelProvider.OPENAI) {
             List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
             if (choices == null) {
@@ -168,34 +164,39 @@ public class DefaultLlmImpl implements Llm {
                 answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
             }
         } else if (provider == ModelProvider.BEDROCK) {
-            String response = (String) dataAsMap.get("completion");
-            if (response != null) {
-                answers = List.of(response);
-            } else {
-                Map error = (Map) dataAsMap.get("error");
-                if (error != null) {
-                    errors = List.of((String) error.get("message"));
-                } else {
-                    errors = List.of("Unknown error or response.");
-                }
-            }
+            answerField = "completion";
+            fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
         } else if (provider == ModelProvider.COHERE) {
-            String response = (String) dataAsMap.get("text");
-            if (response != null) {
-                answers = List.of(response);
-            } else {
-                Map error = (Map) dataAsMap.get("error");
-                if (error != null) {
-                    errors = List.of((String) error.get("message"));
-                } else {
-                    errors = List.of("Unknown error or response.");
-                    log.error("{}", dataAsMap);
-                }
-            }
+            answerField = "text";
+            fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
         } else {
-            throw new IllegalArgumentException("Unknown/unsupported model provider: " + provider);
+            throw new IllegalArgumentException(
+                "Unknown/unsupported model provider: " + provider + ".  You must provide a valid model provider or llm_response_field."
+            );
         }
 
         return new ChatCompletionOutput(answers, errors);
+    }
+
+    private void fillAnswersOrErrors(
+        final Map<String, ?> dataAsMap,
+        List<Object> answers,
+        List<String> errors,
+        String answerField,
+        String errorField,
+        String defaultErrorMessageField
+    ) {
+        String response = (String) dataAsMap.get(answerField);
+        if (response != null) {
+            answers.add(response);
+        } else {
+            Map error = (Map) dataAsMap.get(errorField);
+            if (error != null && error.get(defaultErrorMessageField) != null) {
+                errors.add((String) error.get(defaultErrorMessageField));
+            } else {
+                errors.add("Unknown error or response.");
+                log.error("{}", dataAsMap);
+            }
+        }
     }
 }
