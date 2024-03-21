@@ -44,6 +44,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             "user_instructions",
             null,
             null,
+            null,
             null
         );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
@@ -112,6 +113,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         int contextSize = 1;
         int interactionSize = 2;
         int timeout = 10;
+        String llmResponseField = "text";
         GenerativeQAParameters parameters = new GenerativeQAParameters(
             conversationId,
             llmModel,
@@ -120,15 +122,19 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             userInstructions,
             contextSize,
             interactionSize,
-            timeout
+            timeout,
+            llmResponseField
         );
         StreamOutput output = new DummyStreamOutput();
         parameters.writeTo(output);
         List<String> actual = ((DummyStreamOutput) output).getList();
-        assertEquals(5, actual.size());
+        assertEquals(6, actual.size());
         assertEquals(conversationId, actual.get(0));
         assertEquals(llmModel, actual.get(1));
         assertEquals(llmQuestion, actual.get(2));
+        assertEquals(systemPrompt, actual.get(3));
+        assertEquals(userInstructions, actual.get(4));
+        assertEquals(llmResponseField, actual.get(5));
         List<Integer> intValues = ((DummyStreamOutput) output).getIntValues();
         assertTrue(contextSize == intValues.get(0));
         assertTrue(interactionSize == intValues.get(1));
@@ -149,21 +155,22 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             userInstructions,
             null,
             null,
+            null,
             null
         );
         assertNotEquals(parameters, null);
         assertNotEquals(parameters, "foo");
         assertEquals(
             parameters,
-            new GenerativeQAParameters(conversationId, llmModel, llmQuestion, systemPrompt, userInstructions, null, null, null)
+            new GenerativeQAParameters(conversationId, llmModel, llmQuestion, systemPrompt, userInstructions, null, null, null, null)
         );
         assertNotEquals(
             parameters,
-            new GenerativeQAParameters("", llmModel, llmQuestion, systemPrompt, userInstructions, null, null, null)
+            new GenerativeQAParameters("", llmModel, llmQuestion, systemPrompt, userInstructions, null, null, null, null)
         );
         assertNotEquals(
             parameters,
-            new GenerativeQAParameters(conversationId, "", llmQuestion, systemPrompt, userInstructions, null, null, null)
+            new GenerativeQAParameters(conversationId, "", llmQuestion, systemPrompt, userInstructions, null, null, null, null)
         );
         // assertNotEquals(parameters, new GenerativeQAParameters(conversationId, llmModel, "", null));
     }
@@ -180,6 +187,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             llmQuestion,
             systemPrompt,
             userInstructions,
+            null,
             null,
             null,
             null
@@ -201,6 +209,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         int contextSize = 1;
         int interactionSize = 2;
         int timeout = 10;
+        String llmResponseField = "text";
         GenerativeQAParameters parameters = new GenerativeQAParameters(
             conversationId,
             llmModel,
@@ -209,7 +218,8 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             userInstructions,
             contextSize,
             interactionSize,
-            timeout
+            timeout,
+            llmResponseField
         );
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
