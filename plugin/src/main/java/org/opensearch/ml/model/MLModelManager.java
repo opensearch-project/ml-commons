@@ -346,8 +346,8 @@ public class MLModelManager {
         MLTask mlTask,
         ActionListener<MLRegisterModelResponse> listener
     ) {
-        checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
             mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
