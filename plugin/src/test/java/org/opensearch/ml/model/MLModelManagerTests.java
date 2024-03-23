@@ -451,7 +451,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testRegisterMLRemoteModel_WhenMemoryCBOpen_ThenFail() throws PrivilegedActionException {
+    public void testRegisterMLRemoteModel_WhenMemoryCBOpen_ThenFail() {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         MemoryCircuitBreaker memCB = new MemoryCircuitBreaker(mock(JvmService.class));
         String memCBIsOpenMessage = memCB.getName() + " is open, please check your resources!";
