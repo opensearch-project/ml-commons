@@ -13,46 +13,24 @@ PUT /_cluster/settings
 }
 ```
 
-## 2. Create connector for VertexAI embedding model:
+## 2. Generate access-token to access Vertex AI
 
-Refer to [VertexAI Service REST API reference - Embedding](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings#get_text_embeddings_for_a_snippet_of_text).
+Vertex AI API can be only accessed by using the access tokens, you can generate the short-live or long live (upto 12h)
 
-If you are using self-managed Opensearch, you should supply GCP Token key:
+short live token can be generated using below command:
 
-
-```json
-POST /_plugins/_ml/connectors/_create
-{
-  "name": "VertexAI Connector",
-  "description": "The connector to public vertextAI model service for text embedding",
-  "version": 1,
-  "protocol": "http",
-  "parameters": {
-    "project": "<YOUR EMBEDDING MODEL ID>",
-    "model_id": "<YOUR PROJECT ID>"
-  },
-  "credential": {
-    "vertexAI_key": "" // NOT Needed as gcp vertex AI based on access token
-  },
-  "actions": [
-    {
-      "action_type": "predict",
-      "method": "POST",
-      "headers": {
-        "Authorization": "Bearer <YOUR ACCESS TOKEN>"
-      },
-      "url": "https://us-central1-aiplatform.googleapis.com/v1/projects/${parameters.project}/locations/us-central1/publishers/google/models/${parameters.model_id}:predict",
-      "request_body": "{\"instances\": [{ \"content\": \"${parameters.prompt}\"}],}"
-    }
-  ]
-}
+```
+gcloud auth print-access-token
 ```
 
-Sample response:
-```json
-{
-  "connector_id": "qQsgEo4BP0vcvNcheNWx"
-}
+Longer expriration token upto 12h, can be generated using the below command:
+
+```
+# Authenticate using service account key
+gcloud auth activate-service-account --key-file=/path/to/service-account-key.json
+
+# Obtain access token
+gcloud auth print-access-token
 ```
 
 ## 3. Create model group:
@@ -60,7 +38,7 @@ Sample response:
 ```json
 POST /_plugins/_ml/model_groups/_register
 {
-    "name": "remote_model_group",
+    "name": "remote_model_group_gcp",
     "description": "This is an example group for embedding models"
 }
 ```
@@ -73,40 +51,124 @@ Sample response:
 }
 ```
 
-## 4. Register model to model group & deploy model:
+
+## 3. Register model for VertexAI embedding model:
+
+Refer to [VertexAI Service REST API reference - Embedding](https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings#get_text_embeddings_for_a_snippet_of_text).
+
+In order to use this, you need to supply the values for the below attributes
+
+* Project Id
+* Model Id
+* Access token
+
 
 ```json
 POST /_plugins/_ml/models/_register
 {
-  "name": "VertexAI: text embeddings model",
-  "function_name": "remote",
-  "model_group_id": "BPtPEIwBqYi_Zeg-SR7R",
-  "description": "vertex AI text embedding model",
-  "connector_id": "qQsgEo4BP0vcvNcheNWx"
+    "name": "vertexAI: model to generate embeddings",
+    "function_name": "remote",
+    "model_group_id": "BPtPEIwBqYi_Zeg-SR7R",
+    "description": "test vertexAI model",
+    "connector": {
+        "name": "VertexAI Connector",
+        "description": "The connector to public vertextAI model service for text embedding",
+        "version": 1,
+        "protocol": "http",
+        "parameters": {
+            "project": "<YOUR PROJECT_ID>",
+            "model_id": "<YOUR MODEL_ID>"
+        },
+        "credential": {
+            "vertexAI_token": "<YOUR ACCESS TOKEN>"
+        },
+        "actions": [
+            {
+                "action_type": "predict",
+                "method": "POST",
+                "url": "https://us-central1-aiplatform.googleapis.com/v1/projects/${parameters.project}/locations/us-central1/publishers/google/models/${parameters.model_id}:predict",
+                "headers": {
+                    "Authorization": "Bearer ${credential.vertexAI_token}"
+                },
+                "request_body": "{\"instances\": [{ \"content\": \"${parameters.prompt}\"}]}"
+            }
+        ]
+    }
 }
 ```
-
 
 Sample response:
 ```json
 {
-  "task_id": "rAshEo4BP0vcvNchOtWu",
-  "status": "CREATED"
+  "task_id": "pX8scY4B2QHLlv0i6LYZ",
+  "status": "CREATED",
+  "model_id": "pn8scY4B2QHLlv0i6LZB"
 }
 ```
-Get model id from task
+
+## 4. Check the model registration
 ```json
-GET /_plugins/_ml/tasks/rAshEo4BP0vcvNchOtWu
+GET /_plugins/_ml/tasks/pX8scY4B2QHLlv0i6LYZ
 ```
-Deploy model, in this demo the model id is `qwshEo4BP0vcvNchDtVA`
-```json
-POST /_plugins/_ml/models/qwshEo4BP0vcvNchDtVA/_deploy
+Sample response:
+
+
+```Response:
+{
+  "model_id": "pn8scY4B2QHLlv0i6LZB",
+  "task_type": "REGISTER_MODEL",
+  "function_name": "REMOTE",
+  "state": "COMPLETED",
+  "worker_node": [
+    "pQg-fbRpSm-x-V-0ICQpQw"
+  ],
+  "create_time": 1711295752216,
+  "last_update_time": 1711295752273,
+  "is_async": false
+}
 ```
 
-## 5. Test model inference
+## 5. Deploy the model
 
 ```json
-POST /_plugins/_ml/models/qwshEo4BP0vcvNchDtVA/_predict
+POST /_plugins/_ml/models/pX8scY4B2QHLlv0i6LYZ/_deploy
+```
+Sample response:
+
+```Response:
+{
+  "task_id": "p38xcY4B2QHLlv0iSbb_",
+  "task_type": "DEPLOY_MODEL",
+  "status": "COMPLETED"
+}
+```
+
+## 6. Check model deployment
+```json
+GET /_plugins/_ml/tasks/pX8scY4B2QHLlv0i6LYZ
+```
+
+Sample response:
+```
+{
+  "model_id": "pn8scY4B2QHLlv0i6LZB",
+  "task_type": "REGISTER_MODEL",
+  "function_name": "REMOTE",
+  "state": "COMPLETED",
+  "worker_node": [
+    "pQg-fbRpSm-x-V-0ICQpQw"
+  ],
+  "create_time": 1711295752216,
+  "last_update_time": 1711295752273,
+  "is_async": false
+}
+```
+
+
+## 7. Test model inference
+
+```json
+POST /_plugins/_ml/models/pn8scY4B2QHLlv0i6LZB/_predict
 {
   "parameters": {
     "prompt": "Hello World form vertex AI!"
@@ -168,3 +230,38 @@ Response:
 }
 ```
 
+
+## 8. Update the access token
+
+This requirement arises because the Vertex API can only be accessed using the GCP access token, which has a limited lifespan. Applications are responsible for refreshing this token as needed. 
+
+Note:  This update feature is only avaialable in 2.12 or later
+
+```json
+POST /_plugins/_ml/models/qwshEo4BP0vcvNchDtVA
+{
+  "connector": {
+    "credential": {
+      "vertexAI_token": "<YOUR REFRESHED ACCESS TOKEN>"
+    }
+  }
+}
+```
+
+Response:
+```json
+{
+  "_index": ".plugins-ml-model",
+  "_id": "qwshEo4BP0vcvNchDtVA",
+  "_version": 5,
+  "result": "updated",
+  "forced_refresh": true,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "failed": 0
+  },
+  "_seq_no": 36,
+  "_primary_term": 3
+}
+```
