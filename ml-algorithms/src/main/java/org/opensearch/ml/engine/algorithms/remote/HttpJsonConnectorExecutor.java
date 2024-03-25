@@ -139,7 +139,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 return null;
             });
             String modelResponse = responseRef.get();
-            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, 1)) {
+            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, MLGuard.Type.OUTPUT)) {
                 throw new IllegalArgumentException("guardrails triggered for LLM output");
             }
             Integer statusCode = statusCodeRef.get();

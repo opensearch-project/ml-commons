@@ -75,14 +75,14 @@ public class MLGuardTests {
         regexPatterns = List.of(Pattern.compile("(.|\n)*stop words(.|\n)*"));
         inputGuardrail = new Guardrail(List.of(stopWords), regex);
         outputGuardrail = new Guardrail(List.of(stopWords), regex);
-        guardrails = new Guardrails("test_type", false, inputGuardrail, outputGuardrail);
+        guardrails = new Guardrails("test_type", inputGuardrail, outputGuardrail);
         mlGuard = new MLGuard(guardrails, xContentRegistry, client);
     }
 
     @Test
     public void validateInput() {
         String input = "\n\nHuman:hello stop words.\n\nAssistant:";
-        Boolean res = mlGuard.validate(input, 0);
+        Boolean res = mlGuard.validate(input, MLGuard.Type.INPUT);
 
         Assert.assertFalse(res);
     }
@@ -90,7 +90,7 @@ public class MLGuardTests {
     @Test
     public void validateOutput() {
         String input = "\n\nHuman:hello stop words.\n\nAssistant:";
-        Boolean res = mlGuard.validate(input, 1);
+        Boolean res = mlGuard.validate(input, MLGuard.Type.OUTPUT);
 
         Assert.assertFalse(res);
     }

@@ -440,4 +440,11 @@ public class TestData {
         String matchAllQuery = "{\"query\": {" + "\"match_all\": {}" + "}" + "}";
         return matchAllQuery;
     }
+
+    public static final String STOP_WORDS_DATA = "{ \"index\" : { \"_index\" : \"stop_words\" } }\n"
+        + "{\"query\": {\"query_string\": {\"query\": \"title: \\\"stop word\\\"\"}}}\n"
+        + "{ \"index\" : { \"_index\" : \"stop_words\" } }\n"
+        + "{\"query\": {\"query_string\": {\"query\": \"title: \\\"stop-word\\\"\"}}}\n"
+        + "{ \"index\" : { \"_index\" : \"stop_words\" } }\n"
+        + "{\"query\": {\"query_string\": {\"query\": \"title: \\\"stop & word\\\"\"}}}\n";
 }
