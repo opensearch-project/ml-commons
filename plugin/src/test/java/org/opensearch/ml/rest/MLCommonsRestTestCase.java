@@ -73,6 +73,8 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -744,6 +746,47 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     public String registerModel(String input) throws IOException {
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, input, null);
         return parseTaskIdFromResponse(response);
+    }
+
+    public void registerMLAgent(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/agents/_register", null, input, null);
+        verifyResponse(function, response);
+    }
+
+    public void executeAgent(RestClient client, String agentId, String input, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, input, null);
+        verifyResponse(function, response);
+    }
+
+    public void getAgent(RestClient client, String agentId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/agents/" + agentId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void searchAgent(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/agents/_search", null, input, null);
+        verifyResponse(function, response);
+    }
+
+    public void deleteAgent(RestClient client, String agentId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/agents/" + agentId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public MLAgent createCatIndexToolMLAgent() {
+        MLToolSpec catIndexTool = MLToolSpec
+            .builder()
+            .type("CatIndexTool")
+            .name("DemoCatIndexTool")
+            .parameters(Map.of("input", "${parameters.question}"))
+            .build();
+        return MLAgent
+            .builder()
+            .name("Test_Agent_For_CatIndex_tool")
+            .type("flow")
+            .description("this is a test agent for the CatIndexTool")
+            .tools(List.of(catIndexTool))
+            .build();
     }
 
     public void deployModel(RestClient client, MLRegisterModelInput registerModelInput, Consumer<Map<String, Object>> function)
