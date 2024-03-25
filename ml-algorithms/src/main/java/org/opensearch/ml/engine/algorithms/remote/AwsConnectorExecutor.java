@@ -150,7 +150,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
             }
             String modelResponse = responseBuilder.toString();
-            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, 1)) {
+            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, MLGuard.Type.OUTPUT)) {
                 throw new IllegalArgumentException("guardrails triggered for LLM output");
             }
             if (statusCode < 200 || statusCode >= 300) {
