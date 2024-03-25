@@ -83,11 +83,11 @@ public class MLGuard {
         }
     }
 
-    public Boolean validate(String input, int type) {
+    public Boolean validate(String input, Type type) {
         switch (type) {
-            case 0: // validate input
+            case INPUT: // validate input
                 return validateRegexList(input, inputRegexPattern) && validateStopWords(input, stopWordsIndicesInput);
-            case 1: // validate output
+            case OUTPUT: // validate output
                 return validateRegexList(input, outputRegexPattern) && validateStopWords(input, stopWordsIndicesOutput);
             default:
                 throw new IllegalArgumentException("Unsupported type to validate for guardrails.");
@@ -158,5 +158,10 @@ public class MLGuard {
             throw new IllegalStateException(e);
         }
         return hitStopWords.get();
+    }
+
+    public enum Type {
+        INPUT,
+        OUTPUT
     }
 }
