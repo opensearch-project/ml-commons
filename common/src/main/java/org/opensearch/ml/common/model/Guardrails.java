@@ -22,26 +22,22 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @Getter
 public class Guardrails implements ToXContentObject {
     public static final String TYPE_FIELD = "type";
-    public static final String ENGLISH_DETECTION_ENABLED_FIELD = "english_detection_enabled";
     public static final String INPUT_GUARDRAIL_FIELD = "input_guardrail";
     public static final String OUTPUT_GUARDRAIL_FIELD = "output_guardrail";
 
     private String type;
-    private Boolean engDetectionEnabled;
     private Guardrail inputGuardrail;
     private Guardrail outputGuardrail;
 
     @Builder(toBuilder = true)
-    public Guardrails(String type, Boolean engDetectionEnabled, Guardrail inputGuardrail, Guardrail outputGuardrail) {
+    public Guardrails(String type, Guardrail inputGuardrail, Guardrail outputGuardrail) {
         this.type = type;
-        this.engDetectionEnabled = engDetectionEnabled;
         this.inputGuardrail = inputGuardrail;
         this.outputGuardrail = outputGuardrail;
     }
 
     public Guardrails(StreamInput input) throws IOException {
         type = input.readString();
-        engDetectionEnabled = input.readBoolean();
         if (input.readBoolean()) {
             inputGuardrail = new Guardrail(input);
         }
@@ -52,7 +48,6 @@ public class Guardrails implements ToXContentObject {
 
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(type);
-        out.writeBoolean(engDetectionEnabled);
         if (inputGuardrail != null) {
             out.writeBoolean(true);
             inputGuardrail.writeTo(out);
@@ -73,9 +68,6 @@ public class Guardrails implements ToXContentObject {
         if (type != null) {
             builder.field(TYPE_FIELD, type);
         }
-        if (engDetectionEnabled != null) {
-            builder.field(ENGLISH_DETECTION_ENABLED_FIELD, engDetectionEnabled);
-        }
         if (inputGuardrail != null) {
             builder.field(INPUT_GUARDRAIL_FIELD, inputGuardrail);
         }
@@ -88,7 +80,6 @@ public class Guardrails implements ToXContentObject {
 
     public static Guardrails parse(XContentParser parser) throws IOException {
         String type = null;
-        Boolean engDetectionEnabled = null;
         Guardrail inputGuardrail = null;
         Guardrail outputGuardrail = null;
 
@@ -100,9 +91,6 @@ public class Guardrails implements ToXContentObject {
             switch (fieldName) {
                 case TYPE_FIELD:
                     type = parser.text();
-                    break;
-                case ENGLISH_DETECTION_ENABLED_FIELD:
-                    engDetectionEnabled = parser.booleanValue();
                     break;
                 case INPUT_GUARDRAIL_FIELD:
                     inputGuardrail = Guardrail.parse(parser);
@@ -117,7 +105,6 @@ public class Guardrails implements ToXContentObject {
         }
         return Guardrails.builder()
                 .type(type)
-                .engDetectionEnabled(engDetectionEnabled)
                 .inputGuardrail(inputGuardrail)
                 .outputGuardrail(outputGuardrail)
                 .build();
