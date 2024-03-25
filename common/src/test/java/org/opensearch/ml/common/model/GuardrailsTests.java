@@ -40,26 +40,24 @@ public class GuardrailsTests {
 
     @Test
     public void writeTo() throws IOException {
-        Guardrails guardrails = new Guardrails("test_type", false, inputGuardrail, outputGuardrail);
+        Guardrails guardrails = new Guardrails("test_type", inputGuardrail, outputGuardrail);
         BytesStreamOutput output = new BytesStreamOutput();
         guardrails.writeTo(output);
         Guardrails guardrails1 = new Guardrails(output.bytes().streamInput());
 
         Assert.assertEquals(guardrails.getType(), guardrails1.getType());
-        Assert.assertEquals(guardrails.getEngDetectionEnabled(), guardrails1.getEngDetectionEnabled());
         Assert.assertEquals(guardrails.getInputGuardrail(), guardrails1.getInputGuardrail());
         Assert.assertEquals(guardrails.getOutputGuardrail(), guardrails1.getOutputGuardrail());
     }
 
     @Test
     public void toXContent() throws IOException {
-        Guardrails guardrails = new Guardrails("test_type", false, inputGuardrail, outputGuardrail);
+        Guardrails guardrails = new Guardrails("test_type", inputGuardrail, outputGuardrail);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         guardrails.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
         Assert.assertEquals("{\"type\":\"test_type\"," +
-                "\"english_detection_enabled\":false," +
                 "\"input_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]}," +
                 "\"output_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]}}",
                 content);
@@ -68,7 +66,6 @@ public class GuardrailsTests {
     @Test
     public void parse() throws IOException {
         String jsonStr = "{\"type\":\"test_type\"," +
-                "\"english_detection_enabled\":false," +
                 "\"input_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]}," +
                 "\"output_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]}}";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
@@ -77,7 +74,6 @@ public class GuardrailsTests {
         Guardrails guardrails = Guardrails.parse(parser);
 
         Assert.assertEquals(guardrails.getType(), "test_type");
-        Assert.assertEquals(guardrails.getEngDetectionEnabled(), false);
         Assert.assertEquals(guardrails.getInputGuardrail(), inputGuardrail);
         Assert.assertEquals(guardrails.getOutputGuardrail(), outputGuardrail);
     }
