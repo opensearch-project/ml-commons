@@ -26,7 +26,11 @@ import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
@@ -58,6 +62,8 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private String modelGroupId;
+
+    private MLAgent mlAgent;
 
     /**
      * Create an unguessable password. Simple password are weak due to https://tinyurl.com/383em9zk
@@ -151,6 +157,8 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             this.modelGroupId = (String) registerModelGroupResult.get("model_group_id");
         });
         mlRegisterModelInput = createRegisterModelInput(modelGroupId);
+
+        mlAgent = createCatIndexToolMLAgent();
     }
 
     @After
@@ -246,6 +254,150 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             String status = (String) deployModelResult.get("status");
             assertEquals(MLTaskState.CREATED.name(), status);
         });
+    }
+
+    public void testExecuteAgentWithFullAccess() throws IOException {
+        registerMLAgent(mlFullAccessClient, TestHelper.toJsonString(mlAgent), registerMLAgentResult -> {
+            assertNotNull(registerMLAgentResult);
+            assertTrue(registerMLAgentResult.containsKey("agent_id"));
+            String agentId = (String) registerMLAgentResult.get("agent_id");
+            try {
+                AgentMLInput agentMLInput = AgentMLInput
+                    .AgentMLInputBuilder()
+                    .agentId(agentId)
+                    .functionName(FunctionName.AGENT)
+                    .inputDataset(
+                        RemoteInferenceInputDataSet.builder().parameters(Map.of("question", "How many indices do I have?")).build()
+                    )
+                    .build();
+
+                executeAgent(mlFullAccessClient, agentId, TestHelper.toJsonString(agentMLInput), mlExecuteTaskResponse -> {
+                    assertNotNull(mlExecuteTaskResponse);
+                    assertTrue(mlExecuteTaskResponse.containsKey("inference_results"));
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        });
+    }
+
+    public void testExecuteAgentWithReadOnlyAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.toString();
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/execute]");
+        AgentMLInput agentMLInput = AgentMLInput
+            .AgentMLInputBuilder()
+            .agentId("test-agent")
+            .functionName(FunctionName.AGENT)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("question", "How many indices do I have?")).build())
+            .build();
+
+        executeAgent(mlReadOnlyClient, "test-agent", TestHelper.toJsonString(agentMLInput), mlExecuteTaskResponse -> {
+            assertNotNull(mlExecuteTaskResponse);
+            assertTrue(mlExecuteTaskResponse.containsKey("inference_results"));
+        });
+    }
+
+    public void testGetAgentWithFullAccess() throws IOException {
+        registerMLAgent(mlFullAccessClient, TestHelper.toJsonString(mlAgent), registerMLAgentResult -> {
+            assertNotNull(registerMLAgentResult);
+            assertTrue(registerMLAgentResult.containsKey("agent_id"));
+            String agentId = (String) registerMLAgentResult.get("agent_id");
+            try {
+                MLAgentGetRequest mlAgentGetRequest = MLAgentGetRequest.builder().agentId(agentId).build();
+                getAgent(mlFullAccessClient, agentId, mlGetAgentResponse -> {
+                    assertNotNull(mlGetAgentResponse);
+                    assertTrue(mlGetAgentResponse.containsKey("name"));
+                    assertEquals(mlGetAgentResponse.get("name"), "Test_Agent_For_CatIndex_tool");
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        });
+    }
+
+    public void testGetAgentWithNoAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/agents/get]");
+
+        getAgent(mlNoAccessClient, "test-agent", mlExecuteTaskResponse -> {
+            assertNotNull(mlExecuteTaskResponse);
+            assertTrue(mlExecuteTaskResponse.containsKey("inference_results"));
+        });
+    }
+
+    public void testSearchAgentWithFullAccess() throws IOException {
+        registerMLAgent(mlFullAccessClient, TestHelper.toJsonString(mlAgent), registerMLAgentResult -> {
+            assertNotNull(registerMLAgentResult);
+            assertTrue(registerMLAgentResult.containsKey("agent_id"));
+            try {
+                searchAgent(
+                    mlFullAccessClient,
+                    "{\n" + "    \"query\": {\n" + "        \"match_all\": {}\n" + "    }\n" + "}",
+                    mlSearchAgentResponse -> {
+                        assertNotNull(mlSearchAgentResponse);
+                        assertTrue(mlSearchAgentResponse.containsKey("hits"));
+                    }
+                );
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        });
+    }
+
+    public void testSearchAgentWithNoAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/agents/search]");
+
+        searchAgent(
+            mlNoAccessClient,
+            "{\n" + "    \"query\": {\n" + "        \"match_all\": {}\n" + "    }\n" + "}",
+            mlSearchAgentResponse -> {
+                assertNotNull(mlSearchAgentResponse);
+                assertTrue(mlSearchAgentResponse.containsKey("hits"));
+            }
+        );
+    }
+
+    public void testDeleteAgentWithFullAccess() throws IOException {
+        registerMLAgent(mlFullAccessClient, TestHelper.toJsonString(mlAgent), registerMLAgentResult -> {
+            assertNotNull(registerMLAgentResult);
+            assertTrue(registerMLAgentResult.containsKey("agent_id"));
+            String agentId = (String) registerMLAgentResult.get("agent_id");
+            try {
+                deleteAgent(mlFullAccessClient, agentId, mlSearchAgentResponse -> {
+                    assertNotNull(mlSearchAgentResponse);
+                    assertTrue(mlSearchAgentResponse.containsKey("result"));
+                    assertEquals(mlSearchAgentResponse.get("result"), "deleted");
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        });
+    }
+
+    public void testDeleteAgentWithNoAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/agents/delete]");
+
+        deleteAgent(mlReadOnlyClient, "agentId", mlSearchAgentResponse -> {
+            assertNotNull(mlSearchAgentResponse);
+            assertTrue(mlSearchAgentResponse.containsKey("result"));
+            assertEquals(mlSearchAgentResponse.get("result"), "deleted");
+        });
+    }
+
+    public void testRegisterAgentWithFullAccess() throws IOException {
+        registerMLAgent(mlFullAccessClient, TestHelper.toJsonString(mlAgent), registerMLAgentResult -> {
+            assertNotNull(registerMLAgentResult);
+            assertTrue(registerMLAgentResult.containsKey("agent_id"));
+        });
+    }
+
+    public void testRegisterAgentWithReadOnlyMLAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/agents/register]");
+        registerMLAgent(mlReadOnlyClient, TestHelper.toJsonString(mlAgent), null);
     }
 
     public void testTrainWithReadOnlyMLAccess() throws IOException {

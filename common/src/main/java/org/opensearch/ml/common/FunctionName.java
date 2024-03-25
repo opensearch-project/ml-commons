@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 // Please strictly add new FunctionName to the last line
@@ -33,7 +34,7 @@ public enum FunctionName {
 
     public static FunctionName from(String value) {
         try {
-            return FunctionName.valueOf(value);
+            return FunctionName.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (Exception e) {
             throw new IllegalArgumentException("Wrong function name");
         }
