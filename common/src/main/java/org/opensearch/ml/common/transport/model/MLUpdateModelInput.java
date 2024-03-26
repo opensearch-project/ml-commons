@@ -17,10 +17,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.Guardrails;
+import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -39,6 +41,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String IS_ENABLED_FIELD = "is_enabled"; // optional
     public static final String RATE_LIMITER_FIELD = "rate_limiter"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
+    public static final String DEPLOY_SETTING_FIELD = "deploy_setting"; // optional
     public static final String UPDATED_CONNECTOR_FIELD = "updated_connector"; // passively set when updating the
                                                                               // internal connector
     public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
@@ -46,8 +49,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set when sending update
                                                                               // request
     public static final String GUARDRAILS_FIELD = "guardrails";
-
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS = Version.V_2_13_0;
 
     @Getter
     private String modelId;
@@ -58,6 +59,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private Boolean isEnabled;
     private MLRateLimiter rateLimiter;
     private MLModelConfig modelConfig;
+    private MLDeploySetting deploySetting;
     private Connector updatedConnector;
     private String connectorId;
     private MLCreateConnectorInput connector;
@@ -66,7 +68,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
-            Boolean isEnabled, MLRateLimiter rateLimiter, MLModelConfig modelConfig,
+            Boolean isEnabled, MLRateLimiter rateLimiter, MLModelConfig modelConfig, MLDeploySetting deploySetting,
             Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime, Guardrails guardrails) {
         this.modelId = modelId;
         this.description = description;
@@ -76,6 +78,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.isEnabled = isEnabled;
         this.rateLimiter = rateLimiter;
         this.modelConfig = modelConfig;
+        this.deploySetting = deploySetting;
         this.updatedConnector = updatedConnector;
         this.connectorId = connectorId;
         this.connector = connector;
@@ -105,9 +108,12 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             connector = new MLCreateConnectorInput(in);
         }
         lastUpdateTime = in.readOptionalInstant();
-        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY)) {
             if (in.readBoolean()) {
                 this.guardrails = new Guardrails(in);
+            }
+            if (in.readBoolean()) {
+                this.deploySetting = new MLDeploySetting(in);
             }
         }
     }
@@ -136,6 +142,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
+        }
+        if (deploySetting != null) {
+            builder.field(DEPLOY_SETTING_FIELD, deploySetting);
         }
         if (updatedConnector != null) {
             builder.field(UPDATED_CONNECTOR_FIELD, updatedConnector);
@@ -179,6 +188,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
+        }
+        if (deploySetting != null) {
+            builder.field(DEPLOY_SETTING_FIELD, deploySetting);
         }
         // Notice that we serialize the updatedConnector to the connector field, in order to be compatible with original internal connector field format.
         if (updatedConnector != null) {
@@ -232,10 +244,16 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalInstant(lastUpdateTime);
-        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY)) {
             if (guardrails != null) {
                 out.writeBoolean(true);
                 guardrails.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+            if (deploySetting != null) {
+                out.writeBoolean(true);
+                deploySetting.writeTo(out);
             } else {
                 out.writeBoolean(false);
             }
@@ -251,6 +269,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Boolean isEnabled = null;
         MLRateLimiter rateLimiter = null;
         MLModelConfig modelConfig = null;
+        MLDeploySetting deploySetting = null;
         Connector updatedConnector = null;
         String connectorId = null;
         MLCreateConnectorInput connector = null;
@@ -280,6 +299,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
+                case DEPLOY_SETTING_FIELD:
+                    deploySetting = MLDeploySetting.parse(parser);
+                    break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
                     break;
@@ -297,6 +319,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         // Model ID can only be set through RestRequest. Model version can only be set
         // automatically.
         return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, rateLimiter,
-                modelConfig, updatedConnector, connectorId, connector, lastUpdateTime, guardrails);
+                modelConfig, deploySetting, updatedConnector, connectorId, connector, lastUpdateTime, guardrails);
     }
 }

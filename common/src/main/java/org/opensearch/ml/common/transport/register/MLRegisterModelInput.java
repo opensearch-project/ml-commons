@@ -20,6 +20,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
@@ -51,6 +52,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String URL_FIELD = "url";
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_CONFIG_FIELD = "model_config";
+    public static final String DEPLOY_SETTING_FIELD = "deploy_setting";
     public static final String DEPLOY_MODEL_FIELD = "deploy_model";
     public static final String MODEL_NODE_IDS_FIELD = "model_node_ids";
     public static final String CONNECTOR_FIELD = "connector";
@@ -62,9 +64,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
     public static final String GUARDRAILS_FIELD = "guardrails";
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.V_2_12_0;
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS = Version.V_2_13_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.V_2_12_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY = Version.V_2_13_0;
 
     private FunctionName functionName;
     private String modelName;
@@ -77,6 +79,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private String hashValue;
     private MLModelFormat modelFormat;
     private MLModelConfig modelConfig;
+    private MLDeploySetting deploySetting;
 
     private boolean deployModel;
     private String[] modelNodeIds;
@@ -104,6 +107,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             String hashValue,
             MLModelFormat modelFormat,
             MLModelConfig modelConfig,
+            MLDeploySetting deploySetting,
             boolean deployModel,
             String[] modelNodeIds,
             Connector connector,
@@ -140,6 +144,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.hashValue = hashValue;
         this.modelFormat = modelFormat;
         this.modelConfig = modelConfig;
+        this.deploySetting = deploySetting;
         this.deployModel = deployModel;
         this.modelNodeIds = modelNodeIds;
         this.connector = connector;
@@ -186,19 +191,22 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.accessMode = in.readEnum(AccessMode.class);
         }
-        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
             this.doesVersionCreateModelGroup = in.readOptionalBoolean();
         }
-        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
             this.isEnabled = in.readOptionalBoolean();
             if (in.readBoolean()) {
                 this.rateLimiter = new MLRateLimiter(in);
             }
             this.isHidden = in.readOptionalBoolean();
         }
-        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY)) {
             if (in.readBoolean()) {
                 this.guardrails = new Guardrails(in);
+            }
+            if (in.readBoolean()) {
+                this.deploySetting = new MLDeploySetting(in);
             }
         }
     }
@@ -247,10 +255,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP)) {
             out.writeOptionalBoolean(doesVersionCreateModelGroup);
         }
-        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
             out.writeOptionalBoolean(isEnabled);
             if (rateLimiter != null) {
                 out.writeBoolean(true);
@@ -260,10 +268,16 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
             out.writeOptionalBoolean(isHidden);
         }
-        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY)) {
             if (guardrails != null) {
                 out.writeBoolean(true);
                 guardrails.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+            if (deploySetting != null) {
+                out.writeBoolean(true);
+                deploySetting.writeTo(out);
             } else {
                 out.writeBoolean(false);
             }
@@ -301,6 +315,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
+        }
+        if (deploySetting != null) {
+            builder.field(DEPLOY_SETTING_FIELD, deploySetting);
         }
         builder.field(DEPLOY_MODEL_FIELD, deployModel);
         if (modelNodeIds != null) {
@@ -345,6 +362,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String description = null;
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
+        MLDeploySetting deploySetting = null;
         List<String> modelNodeIds = new ArrayList<>();
         Connector connector = null;
         String connectorId = null;
@@ -391,6 +409,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
                     break;
+                case DEPLOY_SETTING_FIELD:
+                    deploySetting = MLDeploySetting.parse(parser);
+                    break;
                 case CONNECTOR_FIELD:
                     connector = createConnector(parser);
                     break;
@@ -430,7 +451,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
         }
         return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, isEnabled,
-                rateLimiter, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]),
+                rateLimiter, url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]),
                 connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
                 isHidden, guardrails);
     }
@@ -447,6 +468,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String description = null;
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
+        MLDeploySetting deploySetting = null;
         List<String> modelNodeIds = new ArrayList<>();
         Connector connector = null;
         String connectorId = null;
@@ -506,6 +528,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
                     break;
+                case DEPLOY_SETTING_FIELD:
+                    deploySetting = MLDeploySetting.parse(parser);
+                    break;
                 case MODEL_NODE_IDS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
@@ -539,7 +564,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
         }
         return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, isEnabled, rateLimiter,
-                url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector,
+                url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]), connector,
                 connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden, guardrails);
     }
 }
