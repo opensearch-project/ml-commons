@@ -263,7 +263,44 @@ public class CommonValue {
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
                         + MLModel.GUARDRAILS_FIELD
-                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "\" : {\n" +
+                "          \"properties\": {\n" +
+                "            \"input_guardrail\": {\n" +
+                "              \"properties\": {\n" +
+                "                \"regex\": {\n" +
+                "                  \"type\": \"text\"\n" +
+                "                },\n" +
+                "                \"stop_words\": {\n" +
+                "                  \"properties\": {\n" +
+                "                    \"index_name\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    },\n" +
+                "                    \"source_fields\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    }\n" +
+                "                  }\n" +
+                "                }\n" +
+                "              }\n" +
+                "            },\n" +
+                "            \"output_guardrail\": {\n" +
+                "              \"properties\": {\n" +
+                "                \"regex\": {\n" +
+                "                  \"type\": \"text\"\n" +
+                "                },\n" +
+                "                \"stop_words\": {\n" +
+                "                  \"properties\": {\n" +
+                "                    \"index_name\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    },\n" +
+                "                    \"source_fields\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    }\n" +
+                "                  }\n" +
+                "                }\n" +
+                "              }\n" +
+                "            }\n" +
+                "          }\n" +
+                "        },\n"
                         + "      \""
                         + MLModel.CONNECTOR_FIELD
                         + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"
