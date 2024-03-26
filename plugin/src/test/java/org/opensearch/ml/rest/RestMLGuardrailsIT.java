@@ -9,9 +9,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hc.core5.http.HttpEntity;
-import org.apache.hc.core5.http.HttpHeaders;
-import org.apache.hc.core5.http.message.BasicHeader;
+import org.apache.http.HttpEntity;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -22,7 +20,6 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
@@ -159,7 +156,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
                 "_bulk?refresh=true",
                 null,
                 TestHelper.toHttpEntity(TestData.STOP_WORDS_DATA.replaceAll("stop_words", indexName)),
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                null
             );
 
         Response statsResponse = TestHelper.makeRequest(client(), "GET", indexName, ImmutableMap.of(), "", null);
@@ -255,7 +252,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":false, \"plugins.ml_commons.sync_up_job_interval_in_seconds\":3}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                null
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
