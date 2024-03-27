@@ -21,6 +21,7 @@ import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
@@ -32,10 +33,13 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLModelCacheHelper {
     private final Map<String, MLModelCache> modelCaches;
+
+    private final Map<String, MLModel> autoDeployModels;
     private volatile Long maxRequestCount;
 
     public MLModelCacheHelper(ClusterService clusterService, Settings settings) {
         this.modelCaches = new ConcurrentHashMap<>();
+        this.autoDeployModels = new ConcurrentHashMap<>();
 
         maxRequestCount = ML_COMMONS_MONITORING_REQUEST_COUNT.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MONITORING_REQUEST_COUNT, it -> maxRequestCount = it);
@@ -64,6 +68,25 @@ public class MLModelCacheHelper {
         modelCache.setFunctionName(functionName);
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(deployToAllNodes);
+        modelCaches.put(modelId, modelCache);
+    }
+
+    public synchronized void initModelStateLocal(
+        String modelId,
+        MLModelState state,
+        FunctionName functionName,
+        List<String> targetWorkerNodes
+    ) {
+        log.debug("init local model deployment state for model {}, state: {}", modelId, state);
+        if (isModelRunningOnNode(modelId)) {
+            // model state initialized
+            return;
+        }
+        MLModelCache modelCache = new MLModelCache();
+        modelCache.setModelState(state);
+        modelCache.setFunctionName(functionName);
+        modelCache.setTargetWorkerNodes(targetWorkerNodes);
+        modelCache.setDeployToAllNodes(false);
         modelCaches.put(modelId, modelCache);
     }
 
@@ -158,6 +181,40 @@ public class MLModelCacheHelper {
             return null;
         }
         return userRateLimiterMap.get(user);
+    }
+
+    /**
+     * Set a ml guard
+     *
+     * @param modelId     model id
+     * @param mlGuard mlGuard
+     */
+    public synchronized void setMLGuard(String modelId, MLGuard mlGuard) {
+        log.debug("Setting ML guard {} for Model {}", mlGuard, modelId);
+        getExistingModelCache(modelId).setMlGuard(mlGuard);
+    }
+
+    /**
+     * Get the current ML guard for the model.
+     *
+     * @param modelId model id
+     */
+    public MLGuard getMLGuard(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getMlGuard();
+    }
+
+    /**
+     * Remove the ML guard from cache
+     *
+     * @param modelId model id
+     */
+    public synchronized void removeMLGuard(String modelId) {
+        log.debug("Removing the ML guard from Model {}", modelId);
+        getExistingModelCache(modelId).setMlGuard(null);
     }
 
     /**
@@ -358,6 +415,7 @@ public class MLModelCacheHelper {
             modelCache.clear();
             modelCaches.remove(modelId);
         }
+        autoDeployModels.remove(modelId);
     }
 
     /**
@@ -590,4 +648,18 @@ public class MLModelCacheHelper {
         return modelCaches.computeIfAbsent(modelId, it -> new MLModelCache());
     }
 
+    public MLModel addModelToAutoDeployCache(String modelId, MLModel model) {
+        MLModel addedModel = autoDeployModels.computeIfAbsent(modelId, key -> model);
+        if (addedModel == model) {
+            log.info("Add model {} to auto deploy cache", modelId);
+        }
+        return addedModel;
+    }
+
+    public void removeAutoDeployModel(String modelId) {
+        MLModel removedModel = autoDeployModels.remove(modelId);
+        if (removedModel != null) {
+            log.info("Remove model {} from auto deploy cache", modelId);
+        }
+    }
 }

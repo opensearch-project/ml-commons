@@ -60,10 +60,15 @@ public class MLIndicesHandlerTest {
     Metadata metadata;
 
     @Mock
-    IndexMetadata indexMetadata;
+    IndexMetadata agentindexMetadata;
+    @Mock
+    IndexMetadata memorymetaindexMetadata;
 
     @Mock
-    MappingMetadata mappingMetadata;
+    MappingMetadata agentmappingMetadata;
+
+    @Mock
+    MappingMetadata memorymappingMetadata;
 
     @Mock
     private ThreadPool threadPool;
@@ -87,9 +92,11 @@ public class MLIndicesHandlerTest {
         when(clusterState.metadata()).thenReturn(metadata);
         when(clusterState.getMetadata()).thenReturn(metadata);
         when(metadata.hasIndex(anyString())).thenReturn(true);
-        when(metadata.indices()).thenReturn(Map.of(ML_AGENT_INDEX, indexMetadata, ML_MEMORY_META_INDEX, indexMetadata));
-        when(indexMetadata.mapping()).thenReturn(mappingMetadata);
-        when(mappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, Integer.valueOf(1))));
+        when(metadata.indices()).thenReturn(Map.of(ML_AGENT_INDEX, agentindexMetadata, ML_MEMORY_META_INDEX, memorymetaindexMetadata));
+        when(agentindexMetadata.mapping()).thenReturn(agentmappingMetadata);
+        when(memorymetaindexMetadata.mapping()).thenReturn(memorymappingMetadata);
+        when(agentmappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, Integer.valueOf(2))));
+        when(memorymappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, Integer.valueOf(1))));
         settings = Settings.builder().put("test_key", 10).build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);

@@ -18,10 +18,12 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
@@ -58,9 +60,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
+    public static final String GUARDRAILS_FIELD = "guardrails";
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.V_2_12_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS = Version.V_2_13_0;
 
     private FunctionName functionName;
     private String modelName;
@@ -86,6 +90,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private Boolean doesVersionCreateModelGroup;
 
     private Boolean isHidden;
+    private Guardrails guardrails;
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
@@ -107,7 +112,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             Boolean addAllBackendRoles,
             AccessMode accessMode,
             Boolean doesVersionCreateModelGroup,
-            Boolean isHidden) {
+            Boolean isHidden,
+            Guardrails guardrails) {
         this.functionName = Objects.requireNonNullElse(functionName, FunctionName.TEXT_EMBEDDING);
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
@@ -143,6 +149,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.accessMode = accessMode;
         this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
         this.isHidden = isHidden;
+        this.guardrails = guardrails;
     }
 
     public MLRegisterModelInput(StreamInput in) throws IOException {
@@ -160,6 +167,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             if (this.functionName.equals(FunctionName.METRICS_CORRELATION)) {
                 this.modelConfig = new MetricsCorrelationModelConfig(in);
+            } else if (this.functionName.equals(FunctionName.QUESTION_ANSWERING)) {
+                this.modelConfig = new QuestionAnsweringModelConfig(in);
             } else {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
             }
@@ -186,6 +195,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 this.rateLimiter = new MLRateLimiter(in);
             }
             this.isHidden = in.readOptionalBoolean();
+        }
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+            if (in.readBoolean()) {
+                this.guardrails = new Guardrails(in);
+            }
         }
     }
 
@@ -246,6 +260,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
             out.writeOptionalBoolean(isHidden);
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS)) {
+            if (guardrails != null) {
+                out.writeBoolean(true);
+                guardrails.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -305,6 +327,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (isHidden != null) {
             builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
         }
+        if (guardrails != null) {
+            builder.field(GUARDRAILS_FIELD, guardrails);
+        }
         builder.endObject();
         return builder;
     }
@@ -328,6 +353,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         AccessMode accessMode = null;
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
+        Guardrails guardrails = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -359,7 +385,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case CONNECTOR_FIELD:
                     connector = createConnector(parser);
@@ -391,6 +421,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case DOES_VERSION_CREATE_MODEL_GROUP:
                     doesVersionCreateModelGroup = parser.booleanValue();
                     break;
+                case GUARDRAILS_FIELD:
+                    guardrails = Guardrails.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -399,7 +432,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, isEnabled,
                 rateLimiter, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]),
                 connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
-                isHidden);
+                isHidden, guardrails);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -422,6 +455,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean addAllBackendRoles = null;
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
+        Guardrails guardrails = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -466,7 +500,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
+                        modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case MODEL_NODE_IDS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -492,6 +530,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MLModel.IS_HIDDEN_FIELD:
                     isHidden = parser.booleanValue();
                     break;
+                case GUARDRAILS_FIELD:
+                    guardrails = Guardrails.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -499,6 +540,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, isEnabled, rateLimiter,
                 url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector,
-                connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden);
+                connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden, guardrails);
     }
 }

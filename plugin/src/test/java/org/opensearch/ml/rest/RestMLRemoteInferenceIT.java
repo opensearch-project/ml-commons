@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
@@ -24,10 +25,10 @@ import com.google.common.collect.ImmutableList;
 
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
-    private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
-    private final String COHERE_KEY = System.getenv("COHERE_KEY");
+    final String OPENAI_KEY = System.getenv("OPENAI_KEY");
+    final String COHERE_KEY = System.getenv("COHERE_KEY");
 
-    private final String completionModelConnectorEntity = "{\n"
+    final String completionModelConnectorEntity = "{\n"
         + "\"name\": \"OpenAI Connector\",\n"
         + "\"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
         + "\"version\": 1,\n"
@@ -69,6 +70,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException, InterruptedException {
         disableClusterConnectorAccessControl();
+        // TODO Do we really need to wait this long? This adds 20s to every test case run.
+        // Can we instead check the cluster state and move on?
         Thread.sleep(20000);
     }
 
@@ -735,11 +738,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(responseList.isEmpty());
     }
 
-    private Response createConnector(String input) throws IOException {
+    protected Response createConnector(String input) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
     }
 
-    private Response registerRemoteModel(String name, String connectorId) throws IOException {
+    protected Response registerRemoteModel(String name, String connectorId) throws IOException {
         String registerModelGroupEntity = "{\n"
             + "  \"name\": \"remote_model_group\",\n"
             + "  \"description\": \"This is an example description\"\n"
@@ -775,15 +778,15 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
     }
 
-    private Response deployRemoteModel(String modelId) throws IOException {
+    protected Response deployRemoteModel(String modelId) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_deploy", null, "", null);
     }
 
-    private Response predictRemoteModel(String modelId, String input) throws IOException {
+    protected Response predictRemoteModel(String modelId, String input) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, input, null);
     }
 
-    private Response undeployRemoteModel(String modelId) throws IOException {
+    protected Response undeployRemoteModel(String modelId) throws IOException {
         String undeployEntity = "{\n"
             + "  \"SYqCMdsFTumUwoHZcsgiUg\": {\n"
             + "    \"stats\": {\n"
@@ -796,13 +799,20 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_undeploy", null, undeployEntity, null);
     }
 
-    private boolean checkThrottlingOpenAI(Map responseMap) {
+    protected boolean checkThrottlingOpenAI(Map responseMap) {
         Map map = (Map) responseMap.get("error");
         String message = (String) map.get("message");
         return message.equals("You exceeded your current quota, please check your plan and billing details.");
     }
 
-    private void disableClusterConnectorAccessControl() throws IOException {
+    protected Map parseResponseToMap(Response response) throws IOException {
+        HttpEntity entity = response.getEntity();
+        assertNotNull(response);
+        String entityString = TestHelper.httpEntityToString(entity);
+        return gson.fromJson(entityString, Map.class);
+    }
+
+    protected void disableClusterConnectorAccessControl() throws IOException {
         Response response = TestHelper
             .makeRequest(
                 client(),
@@ -815,7 +825,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
-    private Response getTask(String taskId) throws IOException {
+    protected Response getTask(String taskId) throws IOException {
         return TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
     }
 

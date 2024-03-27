@@ -44,6 +44,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -355,6 +356,7 @@ public class MLChatAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
@@ -384,6 +386,7 @@ public class MLChatAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
@@ -417,6 +420,7 @@ public class MLChatAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
@@ -455,6 +459,7 @@ public class MLChatAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .description("mlagent description")
@@ -510,6 +515,7 @@ public class MLChatAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .description("mlagent description")
@@ -542,6 +548,7 @@ public class MLChatAgentRunnerTest {
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
@@ -609,7 +616,13 @@ public class MLChatAgentRunnerTest {
     public void testToolNotFound() {
         // Create an MLAgent without tools
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLAgent mlAgent = MLAgent.builder().memory(mlMemorySpec).llm(llmSpec).name("TestAgent").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .name("TestAgent")
+            .build();
 
         // Create parameters for the agent with a non-existent tool
         Map<String, String> params = createAgentParamsWithAction("nonExistentTool", "someInput");
@@ -763,7 +776,14 @@ public class MLChatAgentRunnerTest {
             .type(FIRST_TOOL)
             .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
             .build();
-        return MLAgent.builder().name("TestAgent").tools(Arrays.asList(firstToolSpec)).memory(mlMemorySpec).llm(llmSpec).build();
+        return MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .tools(Arrays.asList(firstToolSpec))
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .build();
     }
 
     private Map<String, String> createAgentParamsWithAction(String action, String actionInput) {

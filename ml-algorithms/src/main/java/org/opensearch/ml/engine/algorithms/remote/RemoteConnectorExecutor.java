@@ -27,6 +27,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
@@ -87,6 +88,8 @@ public interface RemoteConnectorExecutor {
 
     Map<String, TokenBucket> getUserRateLimiterMap();
 
+    MLGuard getMlGuard();
+
     Client getClient();
 
     default void setClient(Client client) {}
@@ -98,6 +101,8 @@ public interface RemoteConnectorExecutor {
     default void setRateLimiter(TokenBucket rateLimiter) {}
 
     default void setUserRateLimiterMap(Map<String, TokenBucket> userRateLimiterMap) {}
+
+    default void setMlGuard(MLGuard mlGuard) {}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
@@ -137,6 +142,9 @@ public interface RemoteConnectorExecutor {
                 RestStatus.TOO_MANY_REQUESTS
             );
         } else {
+            if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT)) {
+                throw new IllegalArgumentException("guardrails triggered for user input");
+            }
             invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
         }
     }

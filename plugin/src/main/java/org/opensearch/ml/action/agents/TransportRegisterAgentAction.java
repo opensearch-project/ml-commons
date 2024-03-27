@@ -15,6 +15,7 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
@@ -38,16 +39,20 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     MLIndicesHandler mlIndicesHandler;
     Client client;
 
+    ClusterService clusterService;
+
     @Inject
     public TransportRegisterAgentAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        MLIndicesHandler mlIndicesHandler
+        MLIndicesHandler mlIndicesHandler,
+        ClusterService clusterService
     ) {
         super(MLRegisterAgentAction.NAME, transportService, actionFilters, MLRegisterAgentRequest::new);
         this.client = client;
         this.mlIndicesHandler = mlIndicesHandler;
+        this.clusterService = clusterService;
     }
 
     @Override
@@ -60,7 +65,8 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         Instant now = Instant.now();
-        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).build();
+        boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
+        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -87,5 +93,4 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             listener.onFailure(e);
         }));
     }
-
 }

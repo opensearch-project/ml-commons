@@ -33,6 +33,7 @@ import java.util.List;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -201,9 +202,9 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> deleteListener = mock(ActionListener.class);
         cmHandler.deleteConversation("cid", deleteListener);
-        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
-        verify(deleteListener, times(1)).onResponse(argCaptor.capture());
-        assert (!argCaptor.getValue());
+        ArgumentCaptor<OpenSearchStatusException> argCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(deleteListener).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Resources not found. Failed to delete the memory for cid"));
     }
 
     public void testDelete_ConversationMetaDeleteFalse_ThenFalse() {

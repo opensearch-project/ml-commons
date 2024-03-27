@@ -82,6 +82,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.breaker.MemoryCircuitBreaker;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -112,6 +113,7 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -449,6 +451,23 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
+    public void testRegisterMLRemoteModel_WhenMemoryCBOpen_ThenFail() {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        MemoryCircuitBreaker memCB = new MemoryCircuitBreaker(mock(JvmService.class));
+        String memCBIsOpenMessage = memCB.getName() + " is open, please check your resources!";
+        when(mlCircuitBreakerService.checkOpenCB()).thenThrow(new MLLimitExceededException(memCBIsOpenMessage));
+
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(argCaptor.capture());
+        Exception e = argCaptor.getValue();
+        assertTrue(e instanceof MLLimitExceededException);
+        assertEquals(memCBIsOpenMessage, e.getMessage());
+    }
+
     public void testIndexRemoteModel() throws PrivilegedActionException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
@@ -576,7 +595,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
         mock_client_ThreadContext(client, threadPool, threadContext);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -617,7 +636,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -658,7 +677,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NotExist(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -703,7 +722,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModel(model);
         setUpMock_GetModel(modelChunk0);
         setUpMock_GetModel(modelChunk0);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -753,7 +772,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModelChunks(model);
         // setUpMock_GetModel(modelChunk0);
         // setUpMock_GetModel(modelChunk1);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -769,7 +788,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testDeployModel_ModelAlreadyDeployed() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         ArgumentCaptor<String> response = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(response.capture());
         assertEquals("successful", response.getValue());
@@ -784,7 +803,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(models);
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Exceed max local model per node limit", failure.getValue().getMessage());
@@ -819,7 +838,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
@@ -978,7 +997,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
         verify(mlStats).getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT));

@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 // Please strictly add new FunctionName to the last line
@@ -28,11 +29,12 @@ public enum FunctionName {
     SPARSE_ENCODING,
     SPARSE_TOKENIZE,
     TEXT_SIMILARITY,
+    QUESTION_ANSWERING,
     AGENT;
 
     public static FunctionName from(String value) {
         try {
-            return FunctionName.valueOf(value);
+            return FunctionName.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (Exception e) {
             throw new IllegalArgumentException("Wrong function name");
         }
@@ -42,7 +44,8 @@ public enum FunctionName {
         TEXT_EMBEDDING,
         TEXT_SIMILARITY,
         SPARSE_ENCODING,
-        SPARSE_TOKENIZE
+        SPARSE_TOKENIZE,
+        QUESTION_ANSWERING
     ));
 
     /**
@@ -51,5 +54,13 @@ public enum FunctionName {
      */
     public static boolean isDLModel(FunctionName functionName) {
         return DL_MODELS.contains(functionName);
+    }
+
+    public static boolean needDeployFirst(FunctionName functionName) {
+        return DL_MODELS.contains(functionName) || functionName == REMOTE;
+    }
+
+    public static boolean isAutoDeployEnabled(boolean autoDeploymentEnabled, FunctionName functionName) {
+        return autoDeploymentEnabled && functionName == FunctionName.REMOTE;
     }
 }

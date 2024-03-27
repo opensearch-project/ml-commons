@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 
 import java.time.Instant;
@@ -143,6 +144,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+                } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
                 }
                 if (!isUserInitiatedDeployRequest) {
                     deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
@@ -210,12 +213,12 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         Set<String> allEligibleNodeIds = Arrays.stream(allEligibleNodes).map(DiscoveryNode::getId).collect(Collectors.toSet());
 
         List<DiscoveryNode> eligibleNodes = new ArrayList<>();
-        List<String> nodeIds = new ArrayList<>();
+        List<String> eligibleNodeIds = new ArrayList<>();
         if (!deployToAllNodes) {
             for (String nodeId : targetNodeIds) {
                 if (allEligibleNodeIds.contains(nodeId)) {
                     eligibleNodes.add(nodeMapping.get(nodeId));
-                    nodeIds.add(nodeId);
+                    eligibleNodeIds.add(nodeId);
                 }
             }
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
@@ -237,15 +240,15 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 }
             }
         } else {
-            nodeIds.addAll(allEligibleNodeIds);
+            eligibleNodeIds.addAll(allEligibleNodeIds);
             eligibleNodes.addAll(Arrays.asList(allEligibleNodes));
         }
-        if (nodeIds.size() == 0) {
+        if (eligibleNodeIds.size() == 0) {
             wrappedListener.onFailure(new IllegalArgumentException("no eligible node found"));
             return;
         }
 
-        log.info("Will deploy model on these nodes: {}", String.join(",", nodeIds));
+        log.info("Will deploy model on these nodes: {}", String.join(",", eligibleNodeIds));
         String localNodeId = clusterService.localNode().getId();
 
         FunctionName algorithm = mlModel.getAlgorithm();
@@ -261,18 +264,18 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             .createTime(Instant.now())
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
-            .workerNodes(nodeIds)
+            .workerNodes(eligibleNodeIds)
             .build();
         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
             String taskId = response.getId();
             mlTask.setTaskId(taskId);
             if (algorithm == FunctionName.REMOTE) {
-                mlTaskManager.add(mlTask, nodeIds);
+                mlTaskManager.add(mlTask, eligibleNodeIds);
                 deployRemoteModel(mlModel, mlTask, localNodeId, eligibleNodes, deployToAllNodes, listener);
                 return;
             }
             try {
-                mlTaskManager.add(mlTask, nodeIds);
+                mlTaskManager.add(mlTask, eligibleNodeIds);
                 wrappedListener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.CREATED.name()));
                 threadPool
                     .executor(DEPLOY_THREAD_POOL)

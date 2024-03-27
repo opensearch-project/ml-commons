@@ -56,17 +56,17 @@ public class CommonValue {
         public static final String ML_MODEL_INDEX = ".plugins-ml-model";
         public static final String ML_TASK_INDEX = ".plugins-ml-task";
         public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
-        public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 9;
+        public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 10;
         public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
         public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
-        public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 2;
+        public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
         public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
         public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
         public static final String ML_CONTROLLER_INDEX = ".plugins-ml-controller";
         public static final Integer ML_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MAP_RESPONSE_KEY = "response";
         public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
-        public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
+        public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 2;
         public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
         public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
@@ -262,6 +262,46 @@ public class CommonValue {
                         + MLModel.LAST_UNDEPLOYED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
+                        + MLModel.GUARDRAILS_FIELD
+                        + "\" : {\n" +
+                "          \"properties\": {\n" +
+                "            \"input_guardrail\": {\n" +
+                "              \"properties\": {\n" +
+                "                \"regex\": {\n" +
+                "                  \"type\": \"text\"\n" +
+                "                },\n" +
+                "                \"stop_words\": {\n" +
+                "                  \"properties\": {\n" +
+                "                    \"index_name\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    },\n" +
+                "                    \"source_fields\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    }\n" +
+                "                  }\n" +
+                "                }\n" +
+                "              }\n" +
+                "            },\n" +
+                "            \"output_guardrail\": {\n" +
+                "              \"properties\": {\n" +
+                "                \"regex\": {\n" +
+                "                  \"type\": \"text\"\n" +
+                "                },\n" +
+                "                \"stop_words\": {\n" +
+                "                  \"properties\": {\n" +
+                "                    \"index_name\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    },\n" +
+                "                    \"source_fields\": {\n" +
+                "                      \"type\": \"text\"\n" +
+                "                    }\n" +
+                "                  }\n" +
+                "                }\n" +
+                "              }\n" +
+                "            }\n" +
+                "          }\n" +
+                "        },\n"
+                        + "      \""
                         + MLModel.CONNECTOR_FIELD
                         + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"
                         + USER_FIELD_MAPPING
@@ -415,6 +455,9 @@ public class CommonValue {
                         + "      \""
                         + MLAgent.MEMORY_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
+                        + MLAgent.IS_HIDDEN_FIELD
+                        + "\": {\"type\": \"boolean\"},\n"
                         + "      \""
                         + MLAgent.CREATED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"

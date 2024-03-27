@@ -9,9 +9,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +30,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -123,6 +127,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     MLInput mlInputWithDataFrame;
     MLEngine mlEngine;
     Encryptor encryptor;
+    MLModel mlModel;
 
     @Before
     public void setup() throws IOException {
@@ -145,6 +150,10 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         stats.put(MLNodeLevelStat.ML_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
+
+        Settings settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.getKey(), true).build();
+        ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE)));
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         this.mlStats = new MLStats(stats);
         mlInputDatasetHandler = spy(new MLInputDatasetHandler(client));
         taskRunner = spy(
@@ -160,7 +169,8 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 xContentRegistry(),
                 mlModelManager,
                 nodeHelper,
-                mlEngine
+                mlEngine,
+                settings
             )
         );
 
@@ -188,13 +198,12 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         requestWithQuery = MLPredictionTaskRequest.builder().modelId("111").mlInput(mlInputWithQuery).build();
 
         when(client.threadPool()).thenReturn(threadPool);
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        MLModel mlModel = MLModel
+        mlModel = MLModel
             .builder()
             .user(User.parse(USER_STRING))
             .version("1.1.1")
@@ -219,18 +228,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         verify(mlTaskManager).remove(anyString());
     }
 
-    public void testExecuteTask_OnLocalNode_RemoteModel() {
-        setupMocks(true, false, false, false);
-
-        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
-        verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue().getMessage().contains("Model not ready yet."));
-        verify(mlTaskManager, never()).add(any(MLTask.class));
-        verify(client, never()).get(any(), any());
-    }
-
     public void testExecuteTask_OnLocalNode_QueryInput() {
         setupMocks(true, false, false, false);
 
@@ -239,6 +236,19 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
+    }
+
+    public void testExecuteTask_OnLocalNode_RemoteModelAutoDeploy() {
+        setupMocks(true, false, false, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(any(), any());
+        when(mlModelManager.addModelToAutoDeployCache("111", mlModel)).thenReturn(mlModel);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
+        verify(client).execute(any(), any(), any());
+        verify(mlTaskDispatcher).dispatchPredictTask(any(), any());
     }
 
     public void testExecuteTask_OnLocalNode_QueryInput_Failure() {

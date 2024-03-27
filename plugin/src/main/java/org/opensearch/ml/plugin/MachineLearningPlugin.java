@@ -302,6 +302,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+    public static final String REMOTE_PREDICT_THREAD_POOL = "opensearch_ml_predict_remote";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
     public static final String ML_BASE_URI = "/_plugins/_ml";
@@ -346,6 +347,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     private Map<String, Tool.Factory> toolFactories;
     private ScriptService scriptService;
     private Encryptor encryptor;
+
+    public MachineLearningPlugin(Settings settings) {
+        // Handle this here as this feature is tied to Search/Query API, not to a ml-common API
+        // and as such, it can't be lazy-loaded when a ml-commons API is invoked.
+        this.ragSearchPipelineEnabled = MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
+    }
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
@@ -522,7 +529,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             xContentRegistry,
             mlModelManager,
             nodeHelper,
-            mlEngine
+            mlEngine,
+            settings
         );
         mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
             threadPool,
@@ -824,9 +832,25 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder remotePredictThreadPool = new FixedExecutorBuilder(
+            settings,
+            REMOTE_PREDICT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + REMOTE_PREDICT_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
-            .of(generalThreadPool, registerModelThreadPool, deployModelThreadPool, executeThreadPool, trainThreadPool, predictThreadPool);
+            .of(
+                generalThreadPool,
+                registerModelThreadPool,
+                deployModelThreadPool,
+                executeThreadPool,
+                trainThreadPool,
+                predictThreadPool,
+                remotePredictThreadPool
+            );
     }
 
     @Override
@@ -879,9 +903,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED
+                MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE
             );
         return settings;
     }

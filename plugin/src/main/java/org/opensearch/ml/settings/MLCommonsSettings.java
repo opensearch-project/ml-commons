@@ -82,6 +82,9 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN = Setting
         .boolSetting("plugins.ml_commons.allow_custom_deployment_plan", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE = Setting
+        .boolSetting("plugins.ml_commons.model_auto_deploy.enable", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE = Setting
         .boolSetting("plugins.ml_commons.model_auto_redeploy.enable", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
@@ -113,6 +116,9 @@ public final class MLCommonsSettings {
     // This setting is to enable/disable Create Connector API and Register/Deploy/Predict Model APIs for remote models
     public static final Setting<Boolean> ML_COMMONS_REMOTE_INFERENCE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.remote_inference.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.model_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
@@ -177,5 +183,5 @@ public final class MLCommonsSettings {
 
     // This setting is to enable/disable agent related API register/execute/delete/get/search agent.
     public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.agent_framework_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

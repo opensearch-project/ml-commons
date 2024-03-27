@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.HashMap;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -22,11 +23,13 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
@@ -52,6 +55,9 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     private TransportService transportService;
 
     @Mock
+    private ClusterService clusterService;
+
+    @Mock
     private Task task;
 
     @Mock
@@ -74,15 +80,23 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        transportRegisterAgentAction = new TransportRegisterAgentAction(transportService, actionFilters, client, mlIndicesHandler);
+        when(clusterService.getSettings()).thenReturn(settings);
+        transportRegisterAgentAction = new TransportRegisterAgentAction(
+            transportService,
+            actionFilters,
+            client,
+            mlIndicesHandler,
+            clusterService
+        );
     }
 
+    @Test
     public void test_execute_registerAgent_success() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
             .builder()
             .name("agent")
-            .type("some type")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
@@ -106,12 +120,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    @Test
     public void test_execute_registerAgent_AgentIndexNotInitialized() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
             .builder()
             .name("agent")
-            .type("some type")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
@@ -129,12 +144,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to create ML agent index", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_registerAgent_IndexFailure() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
             .builder()
             .name("agent")
-            .type("some type")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
@@ -159,12 +175,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertEquals("index failure", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_registerAgent_InitAgentIndexFailure() {
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         MLAgent mlAgent = MLAgent
             .builder()
             .name("agent")
-            .type("some type")
+            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
@@ -181,4 +198,83 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("agent index initialization failed", argumentCaptor.getValue().getMessage());
     }
+
+    @Test
+    public void test_execute_registerAgent_ModelNotHidden() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true); // Simulate successful index initialization
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(mock(IndexResponse.class)); // Simulating successful indexing
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    @Test
+    public void test_execute_registerAgent_Othertype() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent.builder().name("agent").type(MLAgentType.FLOW.name()).description("description").build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true); // Simulate successful index initialization
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(mock(IndexResponse.class)); // Simulating successful indexing
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    // @Test
+    // public void test_execute_ModelNotFound() {
+    // MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+    // MLAgent mlAgent = MLAgent
+    // .builder()
+    // .name("agent")
+    // .type(MLAgentType.CONVERSATIONAL.name())
+    // .description("description")
+    // .llm(new LLMSpec("model_id", new HashMap<>()))
+    // .build();
+    // when(request.getMlAgent()).thenReturn(mlAgent);
+    //
+    // transportRegisterAgentAction.doExecute(task, request, actionListener);
+    //
+    // ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+    // verify(actionListener).onFailure(argumentCaptor.capture());
+    //
+    // assertNotNull(argumentCaptor.getValue());
+    // }
+
 }
