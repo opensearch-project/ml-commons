@@ -275,6 +275,15 @@ public interface ModelExecutor {
         return StringUtils.toJson(originalFieldValue);
     }
 
+    default boolean hasField(Object json, String path) {
+        Object value = JsonPath.using(suppressExceptionConfiguration).parse(json).read(path);
+
+        if (value != null) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Writes a new dot path for a nested object within the given JSON object.
      * This method is useful when dealing with arrays or nested objects in the JSON structure.
@@ -313,8 +322,25 @@ public interface ModelExecutor {
      * @return the converted dot path notation string
      */
     default String convertToDotPath(String path) {
-
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
     }
 
+    /**
+     * Checks if a given list contains all null elements or is empty.
+     *
+     * @param list the list to be checked
+     * @return true if the list contains all null elements or is empty, false otherwise
+     */
+    default boolean isEmptyOrNullList(List list) {
+        if (list == null || list.isEmpty()) {
+            return true; // An empty list is considered to contain all null elements
+        }
+
+        for (Object obj : list) {
+            if (obj != null) {
+                return false; // If any element is not null, return false
+            }
+        }
+        return true; // If all elements are null, return true
+    }
 }
