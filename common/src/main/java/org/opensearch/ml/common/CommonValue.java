@@ -232,6 +232,9 @@ public class CommonValue {
                         + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
                         + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
                         + "      \""
+                        + MLModel.DEPLOY_SETTING_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + MLModel.IS_ENABLED_FIELD
                         + "\" : {\"type\": \"boolean\"},\n"
                         + "      \""
