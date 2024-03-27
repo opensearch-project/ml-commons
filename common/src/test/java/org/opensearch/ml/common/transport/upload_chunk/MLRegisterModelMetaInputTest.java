@@ -44,7 +44,7 @@ public class MLRegisterModelMetaInputTest {
 				TextEmbeddingModelConfig.PoolingMode.MEAN, true, 512);
 		mLRegisterModelMetaInput = new MLRegisterModelMetaInput("Model Name", FunctionName.BATCH_RCF, "model_group_id", "1.0",
 				"Model Description", null, null, MLModelFormat.TORCH_SCRIPT, MLModelState.DEPLOYING,
-				200L, "123", config, 2,
+				200L, "123", config, null, 2,
 				null, null, false, false, false);
 	}
 
