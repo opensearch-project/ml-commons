@@ -148,6 +148,16 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                         mlModelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(model -> {
+                            if (!checkModelAutoDeployEnabled(model)) {
+                                log.info("Auto deployment disabled for model {}, please deploy model first", modelId);
+                                listener
+                                    .onFailure(
+                                        new IllegalArgumentException(
+                                            "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + modelId + "/_deploy"
+                                        )
+                                    );
+                                return;
+                            }
                             String[] planningWorkerNodes = model.getPlanningWorkerNodes();
                             MLModel modelBeingAutoDeployed = mlModelManager.addModelToAutoDeployCache(modelId, model);
                             if (modelBeingAutoDeployed == model) {
@@ -239,6 +249,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 threadPool.executor(threadPoolName).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
                 break;
         }
+    }
+
+    private boolean checkModelAutoDeployEnabled(MLModel mlModel) {
+        if (mlModel.getDeploySetting() == null) {
+            return true;
+        }
+        return mlModel.getDeploySetting().getIsAutoDeployEnabled();
     }
 
     private String getPredictThreadPool(FunctionName functionName) {
