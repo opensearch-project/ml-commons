@@ -34,7 +34,7 @@ public class MLHttpClientFactoryTests {
     @Test
     public void test_validateIp_invalidIp_throwException() throws UnknownHostException {
         expectedException.expect(UnknownHostException.class);
-        MLHttpClientFactory.validateIp("www.zaniu.com");
+        MLHttpClientFactory.validateIp("www.makesureitisaunknownhost.com");
     }
 
     @Test
