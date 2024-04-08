@@ -73,7 +73,7 @@ public class DiscoveryNodeHelper {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
             }
-            if (functionName == FunctionName.REMOTE || functionName == FunctionName.AGENT) {// remote model
+            if (functionName == FunctionName.REMOTE || functionName == FunctionName.AGENT) {// non-local model (remote model, agent)
                 getEligibleNode(remoteModelEligibleNodeRoles, eligibleNodes, node);
             } else { // local model
                 if (onlyRunOnMLNode) {
