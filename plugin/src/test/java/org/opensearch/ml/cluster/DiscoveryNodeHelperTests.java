@@ -182,6 +182,19 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
         assertFalse(nodeIds.contains(warmDataNode1.getId()));
     }
 
+    public void testGetEligibleNodes_MLNode_Agent() {
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.AGENT);
+        assertEquals(5, eligibleNodes.length);
+        Set<String> nodeIds = new HashSet<>();
+        nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
+        assertTrue(nodeIds.contains(mlNode1.getId()));
+        assertTrue(nodeIds.contains(mlNode2.getId()));
+        assertTrue(nodeIds.contains(dataNode1.getId()));
+        assertTrue(nodeIds.contains(dataNode2.getId()));
+        assertTrue(nodeIds.contains(allRoleNode.getId()));
+        assertFalse(nodeIds.contains(warmDataNode1.getId()));
+    }
+
     public void testGetEligibleNodes_MLNode_LocalModel() {
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING);
         assertEquals(3, eligibleNodes.length);
