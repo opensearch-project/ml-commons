@@ -93,6 +93,9 @@ public class MLGuard {
     }
 
     public Boolean validateRegexList(String input, List<Pattern> regexPatterns) {
+        if (regexPatterns == null || regexPatterns.isEmpty()) {
+            return true;
+        }
         for (Pattern pattern : regexPatterns) {
             if (!validateRegex(input, pattern)) {
                 return false;
@@ -107,6 +110,9 @@ public class MLGuard {
     }
 
     public Boolean validateStopWords(String input, Map<String, List<String>> stopWordsIndices) {
+        if (stopWordsIndices == null || stopWordsIndices.isEmpty()) {
+            return true;
+        }
         for (Map.Entry entry : stopWordsIndices.entrySet()) {
             if (!validateStopWordsSingleIndex(input, (String) entry.getKey(), (List<String>) entry.getValue())) {
                 return false;
