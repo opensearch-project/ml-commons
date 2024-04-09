@@ -112,6 +112,22 @@ public class MLGuardTests {
     }
 
     @Test
+    public void validateRegexListNull() {
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validateRegexList(input, null);
+
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateRegexListEmpty() {
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validateRegexList(input, List.of());
+
+        Assert.assertTrue(res);
+    }
+
+    @Test
     public void validateRegexSuccess() {
         String input = "\n\nHuman:hello good words.\n\nAssistant:";
         Boolean res = mlGuard.validateRegex(input, regexPatterns.get(0));
@@ -135,6 +151,18 @@ public class MLGuardTests {
         when(this.client.search(any())).thenReturn(future);
 
         Boolean res = mlGuard.validateStopWords("hello world", stopWordsIndices);
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateStopWordsNull() {
+        Boolean res = mlGuard.validateStopWords("hello world", null);
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateStopWordsEmpty() {
+        Boolean res = mlGuard.validateStopWords("hello world", Map.of());
         Assert.assertTrue(res);
     }
 
