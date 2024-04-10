@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
@@ -176,7 +177,13 @@ public class MLStatsNodesTransportAction extends
             }
             // Wait for all asynchronous calls to complete
             try {
-                latch.await();
+                long timeoutInSeconds = 120; // Default timeout: 120 seconds
+                boolean allCompleted = latch.await(timeoutInSeconds, TimeUnit.SECONDS);
+
+                if (!allCompleted) {
+                    // Handle the case where not all calls completed within the timeout
+                    log.warn("Not all asynchronous calls completed within the specified timeout of 120 seconds");
+                }
             } catch (InterruptedException e) {
                 // Handle interruption if necessary
                 Thread.currentThread().interrupt();
@@ -187,9 +194,9 @@ public class MLStatsNodesTransportAction extends
 
     private void validateAccess(String modelId, ActionListener<Boolean> listener) {
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
-        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
+        String[] includes = new String[] { MLModel.IS_HIDDEN_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, includes, null, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
                 Boolean isHidden = mlModel.getIsHidden();
                 if (isHidden != null && isHidden) {
                     if (isSuperAdmin) {
