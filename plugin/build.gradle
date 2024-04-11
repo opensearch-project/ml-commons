@@ -14,7 +14,6 @@ plugins {
     id 'jacoco'
     id 'java-library'
     id 'com.diffplug.spotless' version '6.23.0'
-    id 'checkstyle'
 }
 
 ext {
@@ -29,10 +28,6 @@ ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
     noticeFile = rootProject.file('NOTICE')
-}
-
-checkstyle {
-    toolVersion = '10.12.2'
 }
 
 lombok {
@@ -65,8 +60,6 @@ dependencies {
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.15.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
-
-    checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 
 publishing {
@@ -111,14 +104,12 @@ compileJava {
 //TODO: check which one should be enabled
 licenseHeaders.enabled = true
 testingConventions.enabled = false
-checkstyleTest.enabled = false
 forbiddenApis.ignoreFailures = false
 dependencyLicenses.enabled = false
 thirdPartyAudit.enabled = false
 forbiddenApisTest.ignoreFailures = true
 forbiddenApisMain.ignoreFailures = true
 validateNebulaPom.enabled = false
-checkstyleMain.enabled = false
 loggerUsageCheck.enabled = false
 
 def _numNodes = findProperty('numNodes') as Integer ?: 1
