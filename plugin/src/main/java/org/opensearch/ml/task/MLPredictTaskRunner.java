@@ -335,7 +335,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
-                        listener.onResponse(new MLTaskResponse(output));
+                        internalListener.onResponse(new MLTaskResponse(output));
                     }
                     return;
                 } catch (Exception e) {

@@ -100,7 +100,15 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .request(request)
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
-                    new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService)
+                    new MLSdkAsyncHttpResponseHandler(
+                        countDownLatch,
+                        actionListener,
+                        parameters,
+                        tensorOutputs,
+                        connector,
+                        scriptService,
+                        mlGuard
+                    )
                 )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));

@@ -37,6 +37,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
@@ -185,10 +186,14 @@ public class ConnectorUtils {
         String modelResponse,
         Connector connector,
         ScriptService scriptService,
-        Map<String, String> parameters
+        Map<String, String> parameters,
+        MLGuard mlGuard
     ) throws IOException {
         if (modelResponse == null) {
             throw new IllegalArgumentException("model response is null");
+        }
+        if (mlGuard != null && mlGuard.validate(modelResponse, MLGuard.Type.OUTPUT)) {
+            throw new IllegalArgumentException("guardrails triggered for LLM output");
         }
         List<ModelTensor> modelTensors = new ArrayList<>();
         Optional<ConnectorAction> predictAction = connector.findPredictAction();

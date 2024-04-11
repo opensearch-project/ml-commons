@@ -27,14 +27,15 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -49,19 +50,21 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Getter
     private final StringBuilder responseBody = new StringBuilder();
 
-    private WrappedCountDownLatch countDownLatch;
+    private final WrappedCountDownLatch countDownLatch;
 
-    private ActionListener<List<ModelTensors>> actionListener;
+    private final ActionListener<List<ModelTensors>> actionListener;
 
-    private Map<String, String> parameters;
+    private final Map<String, String> parameters;
 
-    private Map<Integer, ModelTensors> tensorOutputs;
+    private final Map<Integer, ModelTensors> tensorOutputs;
 
-    private Connector connector;
+    private final Connector connector;
 
-    private ScriptService scriptService;
+    private final ScriptService scriptService;
 
-    private final static Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+    private final MLGuard mlGuard;
+
+    private final static Gson GSON = StringUtils.gson;
 
     public MLSdkAsyncHttpResponseHandler(
         WrappedCountDownLatch countDownLatch,
@@ -69,7 +72,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         Map<String, String> parameters,
         Map<Integer, ModelTensors> tensorOutputs,
         Connector connector,
-        ScriptService scriptService
+        ScriptService scriptService,
+        MLGuard mlGuard
     ) {
         this.countDownLatch = countDownLatch;
         this.actionListener = actionListener;
@@ -77,6 +81,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         this.tensorOutputs = tensorOutputs;
         this.connector = connector;
         this.scriptService = scriptService;
+        this.mlGuard = mlGuard;
     }
 
     @Override
@@ -128,7 +133,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                 actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
             } else {
                 try {
-                    ModelTensors tensors = processOutput(body, connector, scriptService, parameters);
+                    ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
                     tensors.setStatusCode(statusCode);
                     tensorOutputs.put(countDownLatch.getSequence(), tensors);
                 } catch (Exception e) {

@@ -100,7 +100,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             tensorOutputs,
             connector,
-            scriptService
+            scriptService,
+            null
         );
         responseSubscriber = mlSdkAsyncHttpResponseHandler.new MLResponseSubscriber();
     }
@@ -159,7 +160,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             tensorOutputs,
             noProcessFunctionConnector,
-            scriptService
+            scriptService,
+            null
         );
         noProcessFunctionMlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
         noProcessFunctionMlSdkAsyncHttpResponseHandler.onStream(stream);
@@ -262,7 +264,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             tensorOutputs,
             connector,
-            scriptService
+            scriptService,
+            null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
             new WrappedCountDownLatch(1, count),
@@ -270,7 +273,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             tensorOutputs,
             connector,
-            scriptService
+            scriptService,
+            null
         );
         SdkHttpFullResponse sdkHttpResponse1 = mock(SdkHttpFullResponse.class);
         when(sdkHttpResponse1.statusCode()).thenReturn(200);
@@ -327,7 +331,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             tensorOutputs,
             connector,
-            scriptService
+            scriptService,
+            null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
             new WrappedCountDownLatch(1, count),
@@ -335,7 +340,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             tensorOutputs,
             connector,
-            scriptService
+            scriptService,
+            null
         );
 
         SdkHttpFullResponse sdkHttpResponse2 = mock(SdkHttpFullResponse.class);

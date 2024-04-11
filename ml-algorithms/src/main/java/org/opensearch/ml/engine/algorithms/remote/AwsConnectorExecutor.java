@@ -69,7 +69,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
-
     @SuppressWarnings("removal")
     @Override
     public void invokeRemoteModel(
@@ -87,7 +86,15 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .request(signRequest(request))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
-                    new MLSdkAsyncHttpResponseHandler(countDownLatch, actionListener, parameters, tensorOutputs, connector, scriptService)
+                    new MLSdkAsyncHttpResponseHandler(
+                        countDownLatch,
+                        actionListener,
+                        parameters,
+                        tensorOutputs,
+                        connector,
+                        scriptService,
+                        mlGuard
+                    )
                 )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
