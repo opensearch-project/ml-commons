@@ -6,9 +6,12 @@
 package org.opensearch.ml.action.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +31,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
@@ -237,6 +241,31 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateControllerWithModelAccessControlNoPermissionHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "User doesn't have privilege to perform this operation on this model controller",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
     public void testUpdateControllerWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -248,6 +277,31 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateControllerWithModelAccessControlOtherExceptionHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("Permission denied: Unable to create the model controller for the model. Details: "));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Permission denied: Unable to create the model controller for the model. Details: ",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -264,6 +318,32 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
             "Model controller haven't been created for the model. Consider calling create model controller api instead. Model ID: testModelId",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateControllerWithControllerEnabledNullHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<MLController> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
+            return null;
+        }).when(mlModelManager).getController(eq("testModelId"), isA(ActionListener.class));
+        when(mlModel.getIsControllerEnabled()).thenReturn(null);
+
+        updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model controller haven't been created for the model. Consider calling create model controller api instead. ",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -421,6 +501,38 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateControllerWithUndeploySuccessPartiallyFailuresHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        when(mlModel.getModelId()).thenReturn("testModelId");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> mllistener = invocation.getArgument(3);
+            mllistener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        List<FailedNodeException> failures = List
+            .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLDeployControllerNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlDeployControllerNodesResponse);
+            return null;
+        }).when(client).execute(eq(MLDeployControllerAction.INSTANCE), any(), any());
+        when(mlDeployControllerNodesResponse.failures()).thenReturn(failures);
+
+        updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Successfully update model controller index "
+                + "but deploy model controller to cache was failed on following nodes [foo1], please retry.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
     public void testUpdateControllerWithUndeployNullResponse() {
         when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
@@ -437,6 +549,36 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
                 "Successfully update model controller index with model ID testModelId " +
                         "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
                 argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateControllerWithUndeployNullResponseHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        when(mlModel.getModelId()).thenReturn("testModelId");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> mllistener = invocation.getArgument(3);
+            mllistener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLDeployControllerNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(null);
+            return null;
+        }).when(client).execute(eq(MLDeployControllerAction.INSTANCE), any(), any());
+
+        updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Successfully update model controller index "
+                + "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -457,6 +599,32 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         assertEquals(
                 "Exception occurred. Please check log for more details.",
                 argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateControllerWithUndeployOtherExceptionHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        when(mlModel.getModelId()).thenReturn("testModelId");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> mllistener = invocation.getArgument(3);
+            mllistener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLDeployControllerNodesResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
+            return null;
+        }).when(client).execute(eq(MLDeployControllerAction.INSTANCE), any(), any());
+
+        updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
     }
 
 }
