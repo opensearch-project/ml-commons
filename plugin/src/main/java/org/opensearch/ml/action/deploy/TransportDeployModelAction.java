@@ -176,17 +176,21 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                 deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
                             }
                         }, e -> {
-                            log.error("Failed to Validate Access for ModelId " + modelId, e);
+                            if (isHidden) {
+                                log.error("Failed to Validate Access for the given model", e);
+                            } else {
+                                log.error("Failed to Validate Access for ModelId " + modelId, e);
+                            }
                             wrappedListener.onFailure(e);
                         }));
                 }
 
             }, e -> {
-                log.error("Failed to retrieve the ML model with ID: " + modelId, e);
+                log.error("Failed to retrieve the ML model with the given ID", e);
                 wrappedListener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to deploy the ML model with ID " + modelId, e);
+            log.error("Failed to deploy the ML model", e);
             listener.onFailure(e);
         }
 

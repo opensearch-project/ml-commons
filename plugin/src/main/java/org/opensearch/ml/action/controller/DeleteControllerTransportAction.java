@@ -86,6 +86,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                Boolean isHidden = mlModel.getIsHidden();
                 modelAccessControlHelper
                     .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                         if (hasPermission) {
@@ -94,7 +95,11 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                                     modelId,
                                     ActionListener
                                         .wrap(
-                                            controller -> deleteControllerWithDeployedModel(modelId, wrappedListener),
+                                            controller -> deleteControllerWithDeployedModel(
+                                                modelId,
+                                                mlModel.getIsHidden(),
+                                                wrappedListener
+                                            ),
                                             deleteException -> {
                                                 log.error(deleteException);
                                                 wrappedListener.onFailure(deleteException);
@@ -102,48 +107,72 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                                         )
                                 );
                         } else {
-                            wrappedListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        "User doesn't have privilege to perform this operation on this model controller, model ID: "
-                                            + modelId,
-                                        RestStatus.FORBIDDEN
-                                    )
-                                );
+                            if (isHidden) {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model controller",
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model controller, model ID: "
+                                                + modelId,
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            }
+
                         }
                     }, exception -> {
-                        log
-                            .error(
-                                "Permission denied: Unable to delete the model controller with the provided model id {}. Details: {}",
-                                modelId,
-                                exception
-                            );
+                        if (isHidden) {
+                            log
+                                .error(
+                                    "Permission denied: Unable to delete the model controller with the provided model. Details: ",
+                                    exception
+                                );
+
+                        } else {
+                            log
+                                .error(
+                                    "Permission denied: Unable to delete the model controller with the provided model id {}. Details: ",
+                                    modelId,
+                                    exception
+                                );
+                        }
+
                         wrappedListener.onFailure(exception);
                     }));
             }, e -> {
                 log
                     .warn(
-                        "Failed to find corresponding model during deleting the model controller. Now trying to delete the model controller alone. Model ID: "
-                            + modelId
+                        "Failed to find corresponding model during deleting the model controller. Now trying to delete the model controller alone."
                     );
                 mlModelManager
                     .getController(
                         modelId,
-                        ActionListener.wrap(controller -> deleteControllerWithDeployedModel(modelId, wrappedListener), deleteException -> {
-                            log.error(deleteException);
-                            wrappedListener.onFailure(deleteException);
-                        })
+                        ActionListener
+                            .wrap(
+                                controller -> deleteControllerWithDeployedModel(modelId, Boolean.TRUE, wrappedListener),
+                                deleteException -> {
+                                    log.error(deleteException);
+                                    wrappedListener.onFailure(deleteException);
+                                }
+                            )
                     );
             }));
         } catch (Exception e) {
-            log.error("Failed to delete model controller for model" + modelId, e);
+            log.error("Failed to delete model controller for the given model", e);
             actionListener.onFailure(e);
         }
     }
 
     // This method is used to handle the condition if we need to undeploy the model
     // controller before deleting it from the index or not.
-    private void deleteControllerWithDeployedModel(String modelId, ActionListener<DeleteResponse> actionListener) {
+    private void deleteControllerWithDeployedModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId))) {
                 log.info("Model has already been deployed in ML cache, need undeploy model controller before sending delete request.");
@@ -158,38 +187,67 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                         undeployControllerNodesRequest,
                         ActionListener.runBefore(ActionListener.wrap(nodesResponse -> {
                             if (nodesResponse != null && isUndeployControllerSuccessOnAllNodes(nodesResponse)) {
-                                log
-                                    .info(
-                                        "Successfully undeploy model controller from cache. Start to delete the model controller for model {}",
-                                        modelId
-                                    );
+                                if (isHidden) {
+                                    log.info("Successfully undeploy model controller from cache. Start to delete the model controller");
+                                } else {
+                                    log
+                                        .info(
+                                            "Successfully undeploy model controller from cache. Start to delete the model controller for model {}",
+                                            modelId
+                                        );
+                                }
+
                                 deleteController(modelId, actionListener);
                             } else {
                                 String[] nodeIds = getUndeployControllerFailedNodesList(nodesResponse);
-                                log
-                                    .error(
-                                        "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
-                                        modelId,
-                                        Arrays.toString(nodeIds)
-                                    );
-                                actionListener
-                                    .onFailure(
-                                        new RuntimeException(
-                                            "Failed to undeploy model controller with model ID "
-                                                + modelId
-                                                + " on following nodes "
-                                                + Arrays.toString(nodeIds)
-                                                + ", deletion is aborted. Please retry or undeploy the model manually and then perform the deletion."
-                                        )
-                                    );
+                                if (isHidden) {
+                                    log
+                                        .error(
+                                            "Failed to undeploy model controller with the given model on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+                                            Arrays.toString(nodeIds)
+                                        );
+                                    actionListener
+                                        .onFailure(
+                                            new RuntimeException(
+                                                "Failed to undeploy model controller with the given model ID on following nodes "
+                                                    + Arrays.toString(nodeIds)
+                                                    + ", deletion is aborted. Please retry or undeploy the model manually and then perform the deletion."
+                                            )
+                                        );
+
+                                } else {
+                                    log
+                                        .error(
+                                            "Failed to undeploy model controller with model ID {} on following nodes {}, deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+                                            modelId,
+                                            Arrays.toString(nodeIds)
+                                        );
+                                    actionListener
+                                        .onFailure(
+                                            new RuntimeException(
+                                                "Failed to undeploy model controller with model ID "
+                                                    + modelId
+                                                    + " on following nodes "
+                                                    + Arrays.toString(nodeIds)
+                                                    + ", deletion is aborted. Please retry or undeploy the model manually and then perform the deletion."
+                                            )
+                                        );
+                                }
+
                             }
                         }, e -> {
-                            log
-                                .error(
-                                    "Failed to undeploy model controller from cache and delete the model controller for model {}",
-                                    modelId,
-                                    e
-                                );
+                            if (isHidden) {
+                                log.error("Failed to undeploy model controller from cache and delete the model controller", e);
+
+                            } else {
+                                log
+                                    .error(
+                                        "Failed to undeploy model controller from cache and delete the model controller for model {}",
+                                        modelId,
+                                        e
+                                    );
+                            }
+
                             actionListener.onFailure(e);
                         }), context::restore)
                     );

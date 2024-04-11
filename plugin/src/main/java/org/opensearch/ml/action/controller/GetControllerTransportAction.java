@@ -85,49 +85,71 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLController controller = MLController.parse(parser);
                         mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                            Boolean isHidden = mlModel.getIsHidden();
                             modelAccessControlHelper
                                 .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                                     if (hasPermission) {
                                         wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
                                     } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "User doesn't have privilege to perform this operation on this model controller, model ID: "
-                                                        + modelId,
-                                                    RestStatus.FORBIDDEN
-                                                )
-                                            );
+                                        if (isHidden) {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "User doesn't have privilege to perform this operation on this model controller",
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "User doesn't have privilege to perform this operation on this model controller, model ID: "
+                                                            + modelId,
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+                                        }
+
                                     }
                                 }, exception -> {
-                                    log
-                                        .error(
-                                            "Permission denied: Unable to create the model controller for the model with ID {}. Details: {}",
-                                            modelId,
-                                            exception
-                                        );
+                                    if (isHidden) {
+                                        log
+                                            .error(
+                                                "Permission denied: Unable to create the model controller for the given model.",
+                                                exception
+                                            );
+
+                                    } else {
+                                        log
+                                            .error(
+                                                "Permission denied: Unable to create the model controller for the model with ID {}. Details: ",
+                                                modelId,
+                                                exception
+                                            );
+                                    }
+
                                     wrappedListener.onFailure(exception);
                                 }));
                         },
                             e -> wrappedListener
                                 .onFailure(
                                     new OpenSearchStatusException(
-                                        "Failed to find model to get the corresponding model controller with the provided model ID: "
-                                            + modelId,
+                                        "Failed to find model to get the corresponding model controller with the provided model ID",
                                         RestStatus.NOT_FOUND
                                     )
                                 )
                         ));
 
                     } catch (Exception e) {
-                        log.error("Failed to parse model controller with model ID: " + r.getId(), e);
+                        log.error("Failed to find model controller with the provided model ID", e);
                         wrappedListener.onFailure(e);
                     }
                 } else {
                     wrappedListener
                         .onFailure(
                             new OpenSearchStatusException(
-                                "Failed to find model controller with the provided model ID: " + modelId,
+                                "Failed to find model controller with the provided model ID",
                                 RestStatus.NOT_FOUND
                             )
                         );
@@ -137,12 +159,12 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                     log.error("Failed to get model controller index", e);
                     wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model controller", RestStatus.NOT_FOUND));
                 } else {
-                    log.error("Failed to get model controller " + modelId, e);
+                    log.error("Failed to get model controller for the provided model ID", e);
                     wrappedListener.onFailure(e);
                 }
             }));
         } catch (Exception e) {
-            log.error("Failed to get model controller " + modelId, e);
+            log.error("Failed to get model controller ", e);
             actionListener.onFailure(e);
         }
     }

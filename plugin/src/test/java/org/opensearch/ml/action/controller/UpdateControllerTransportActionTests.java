@@ -325,7 +325,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Failed to find model to create the corresponding model controller with the provided model ID: testModelId",
+            "Failed to find model to create the corresponding model controller with the provided model ID",
             argumentCaptor.getValue().getMessage()
         );
     }

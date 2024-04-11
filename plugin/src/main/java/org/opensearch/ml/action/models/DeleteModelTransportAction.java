@@ -244,21 +244,21 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             bothDeleted.compareAndSet(true, b);
             if (countDownLatch.getCount() == 0) {
                 if (bothDeleted.get()) {
-                    log.debug("model chunks and model controller for model {} deleted successfully", modelId);
+                    log.debug("model chunks and model controller for the provided model deleted successfully");
                     if (deleteResponse != null) {
                         actionListener.onResponse(deleteResponse);
                     } else {
                         actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                     }
                 } else {
-                    actionListener.onFailure(new IllegalStateException("Model is not all cleaned up, please try again: " + modelId));
+                    actionListener.onFailure(new IllegalStateException("Model is not all cleaned up, please try again: "));
                 }
             }
         }, e -> {
             countDownLatch.countDown();
             bothDeleted.compareAndSet(true, false);
             if (countDownLatch.getCount() == 0) {
-                actionListener.onFailure(new IllegalStateException("Model is not all cleaned up, please try again: " + modelId, e));
+                actionListener.onFailure(new IllegalStateException("Model is not all cleaned up, please try again: ", e));
             }
         });
         deleteModelChunks(modelId, countDownActionListener);
@@ -276,17 +276,17 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
-                log.info("Model controller for model {} successfully deleted from index, result: {}", modelId, deleteResponse.getResult());
+                log.info("Model controller for the provided model successfully deleted from index, result: {}", deleteResponse.getResult());
                 actionListener.onResponse(true);
             }
 
             @Override
             public void onFailure(Exception e) {
                 if (e instanceof ResourceNotFoundException) {
-                    log.info("Model controller not deleted due to no model controller found for model: " + modelId);
+                    log.info("Model controller not deleted due to no model controller found for the given model.");
                     actionListener.onResponse(true); // we consider this as success
                 } else {
-                    log.error("Failed to delete model controller for model: " + modelId, e);
+                    log.error("Failed to delete model controller for the given model", e);
                     actionListener.onFailure(e);
                 }
             }

@@ -92,6 +92,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
+                Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
                         .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
@@ -102,37 +103,60 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                                     updateController(mlModel, controller, isDeployRequiredAfterUpdate, wrappedListener);
                                 }, e -> {
                                     if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "Model controller haven't been created for the model. Consider calling create model controller api instead. Model ID: "
-                                                        + modelId,
-                                                    RestStatus.CONFLICT
-                                                )
-                                            );
-                                        log.error("Model controller haven't been created for the model: " + modelId, e);
+                                        final String errorMsg =
+                                            "Model controller haven't been created for the model. Consider calling create model controller api instead. ";
+                                        if (isHidden) {
+                                            wrappedListener.onFailure(new OpenSearchStatusException(errorMsg, RestStatus.CONFLICT));
+                                            log.error(errorMsg, e);
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(errorMsg + "Model ID: " + modelId, RestStatus.CONFLICT)
+                                                );
+                                            log.error(errorMsg + "Model ID: " + modelId, e);
+
+                                        }
+
                                     } else {
                                         log.error(e);
                                         wrappedListener.onFailure(e);
                                     }
                                 }));
                             } else {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model controller, model ID: "
-                                                + modelId,
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
+                                if (isHidden) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model controller",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+
+                                } else {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model controller, model ID: "
+                                                    + modelId,
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
+
                             }
                         }, exception -> {
-                            log
-                                .error(
-                                    "Permission denied: Unable to create the model controller for the model with ID {}. Details: {}",
-                                    modelId,
-                                    exception
-                                );
+                            if (isHidden) {
+                                log.error("Permission denied: Unable to create the model controller for the model. Details: ", exception);
+
+                            } else {
+                                log
+                                    .error(
+                                        "Permission denied: Unable to create the model controller for the model with ID {}. Details: ",
+                                        modelId,
+                                        exception
+                                    );
+                            }
+
                             wrappedListener.onFailure(exception);
                         }));
                 } else {
@@ -150,13 +174,13 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                 e -> wrappedListener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "Failed to find model to create the corresponding model controller with the provided model ID: " + modelId,
+                            "Failed to find model to create the corresponding model controller with the provided model ID",
                             RestStatus.NOT_FOUND
                         )
                     )
             ));
         } catch (Exception e) {
-            log.error("Failed to create model controller for " + modelId, e);
+            log.error("Failed to create model controller for the provided model", e);
             actionListener.onFailure(e);
         }
     }
@@ -169,20 +193,35 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
     ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             String modelId = mlModel.getModelId();
+            Boolean isHidden = mlModel.getIsHidden();
             ActionListener<UpdateResponse> updateResponseListener = ActionListener.wrap(updateResponse -> {
                 if (updateResponse != null && updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                    log
-                        .info(
-                            "Model controller for model {} successfully updated to index, result: {}",
-                            modelId,
-                            updateResponse.getResult()
-                        );
-                    if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId)) && isDeployRequiredAfterUpdate) {
+                    if (isHidden) {
+                        log.info("Model controller successfully updated to index, result: {}", updateResponse.getResult());
+
+                    } else {
                         log
                             .info(
-                                "Model {} is deployed and the user rate limiter config is constructable. Start to deploy the model controller into cache.",
-                                modelId
+                                "Model controller for model {} successfully updated to index, result: {}",
+                                modelId,
+                                updateResponse.getResult()
                             );
+                    }
+
+                    if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId)) && isDeployRequiredAfterUpdate) {
+                        if (isHidden) {
+                            log
+                                .info(
+                                    "The model is deployed and the user rate limiter config is constructable. Start to deploy the model controller into cache."
+                                );
+                        } else {
+                            log
+                                .info(
+                                    "Model {} is deployed and the user rate limiter config is constructable. Start to deploy the model controller into cache.",
+                                    modelId
+                                );
+                        }
+
                         String[] targetNodeIds = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
                         MLDeployControllerNodesRequest deployControllerNodesRequest = new MLDeployControllerNodesRequest(
                             targetNodeIds,
@@ -191,29 +230,56 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                         client
                             .execute(MLDeployControllerAction.INSTANCE, deployControllerNodesRequest, ActionListener.wrap(nodesResponse -> {
                                 if (nodesResponse != null && isDeployControllerSuccessOnAllNodes(nodesResponse)) {
-                                    log.info("Successfully update model controller and deploy it into cache with model ID {}", modelId);
+                                    if (isHidden) {
+                                        log.info("Successfully update model controller and deploy it into cache");
+                                    } else {
+                                        log.info("Successfully update model controller and deploy it into cache with model ID {}", modelId);
+                                    }
                                     actionListener.onResponse(updateResponse);
                                 } else {
                                     String[] nodeIds = getDeployControllerFailedNodesList(nodesResponse);
-                                    log
-                                        .error(
-                                            "Successfully update model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
-                                            modelId,
-                                            Arrays.toString(nodeIds)
-                                        );
-                                    actionListener
-                                        .onFailure(
-                                            new RuntimeException(
-                                                "Successfully update model controller index with model ID "
-                                                    + modelId
-                                                    + " but deploy model controller to cache was failed on following nodes "
-                                                    + Arrays.toString(nodeIds)
-                                                    + ", please retry."
-                                            )
-                                        );
+                                    if (isHidden) {
+                                        log
+                                            .error(
+                                                "Successfully update model controller index but deploy model controller to cache was failed on following nodes {}, please retry.",
+                                                Arrays.toString(nodeIds)
+                                            );
+                                        actionListener
+                                            .onFailure(
+                                                new RuntimeException(
+                                                    "Successfully update model controller index"
+                                                        + " but deploy model controller to cache was failed on following nodes "
+                                                        + Arrays.toString(nodeIds)
+                                                        + ", please retry."
+                                                )
+                                            );
+
+                                    } else {
+                                        log
+                                            .error(
+                                                "Successfully update model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
+                                                modelId,
+                                                Arrays.toString(nodeIds)
+                                            );
+                                        actionListener
+                                            .onFailure(
+                                                new RuntimeException(
+                                                    "Successfully update model controller index with model ID "
+                                                        + modelId
+                                                        + " but deploy model controller to cache was failed on following nodes "
+                                                        + Arrays.toString(nodeIds)
+                                                        + ", please retry."
+                                                )
+                                            );
+                                    }
+
                                 }
                             }, e -> {
-                                log.error("Failed to deploy model controller for model: {}" + modelId, e);
+                                if (isHidden) {
+                                    log.error("Failed to deploy model controller for model", e);
+                                } else {
+                                    log.error("Failed to deploy model controller for model: {}", modelId, e);
+                                }
                                 actionListener.onFailure(e);
                             }));
                     } else {
@@ -222,16 +288,33 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                 } else if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
                     // The update response returned an unexpected status may indicate a failed
                     // update
-                    log
-                        .warn(
-                            "Update model controller for model {} got a result status other than update, result status: {}",
-                            modelId,
-                            updateResponse.getResult()
-                        );
+                    if (isHidden) {
+                        log
+                            .warn(
+                                "Update model controller got a result status other than update, result status: {}",
+                                updateResponse.getResult()
+                            );
+
+                    } else {
+                        log
+                            .warn(
+                                "Update model controller for model {} got a result status other than update, result status: {}",
+                                modelId,
+                                updateResponse.getResult()
+                            );
+                    }
+
                     actionListener.onResponse(updateResponse);
                 } else {
-                    log.error("Failed to update model controller with model ID: " + modelId);
-                    actionListener.onFailure(new RuntimeException("Failed to update model controller with model ID: " + modelId));
+                    if (isHidden) {
+                        log.error("Failed to update model controller");
+                        actionListener.onFailure(new RuntimeException("Failed to update model controller"));
+
+                    } else {
+                        log.error("Failed to update model controller with model ID: " + modelId);
+                        actionListener.onFailure(new RuntimeException("Failed to update model controller with model ID: " + modelId));
+                    }
+
                 }
             }, actionListener::onFailure);
             UpdateRequest updateRequest = new UpdateRequest(ML_CONTROLLER_INDEX, modelId);
