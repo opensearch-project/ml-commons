@@ -49,6 +49,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     private Map<Integer, ModelTensors> tensorOutputs = new ConcurrentHashMap<>();
     private Connector connector;
 
+    private Connector noProcessFunctionConnector;
+
     @Mock
     private SdkHttpFullResponse sdkHttpResponse;
     @Mock
@@ -77,6 +79,21 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
+
+        ConnectorAction noProcessFunctionPredictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        noProcessFunctionConnector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(noProcessFunctionPredictAction))
+            .build();
         mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
             countDownLatch,
             actionListener,
@@ -95,11 +112,23 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     }
 
     @Test
-    public void test_OnStream() {
+    public void test_OnStream_with_postProcessFunction_bedRock() {
+        String response = "{\n"
+            + "    \"embedding\": [\n"
+            + "        0.46484375,\n"
+            + "        -0.017822266,\n"
+            + "        0.17382812,\n"
+            + "        0.10595703,\n"
+            + "        0.875,\n"
+            + "        0.19140625,\n"
+            + "        -0.36914062,\n"
+            + "        -0.0011978149\n"
+            + "    ]\n"
+            + "}";
         Publisher<ByteBuffer> stream = s -> {
             try {
                 s.onSubscribe(mock(Subscription.class));
-                s.onNext(ByteBuffer.wrap("hello world".getBytes()));
+                s.onNext(ByteBuffer.wrap(response.getBytes()));
                 s.onComplete();
             } catch (Throwable e) {
                 s.onError(e);
@@ -110,7 +139,34 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<List<ModelTensors>> captor = ArgumentCaptor.forClass(List.class);
         verify(actionListener).onResponse(captor.capture());
         assert captor.getValue().size() == 1;
-        assert captor.getValue().get(0).getMlModelTensors().get(0).getDataAsMap().get("remote_response").equals("hello world");
+        assert captor.getValue().get(0).getMlModelTensors().get(0).getData().length == 8;
+    }
+
+    @Test
+    public void test_OnStream_without_postProcessFunction() {
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap("{\"key\": \"hello world\"}".getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        MLSdkAsyncHttpResponseHandler noProcessFunctionMlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
+            countDownLatch,
+            actionListener,
+            parameters,
+            tensorOutputs,
+            noProcessFunctionConnector,
+            scriptService
+        );
+        noProcessFunctionMlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
+        noProcessFunctionMlSdkAsyncHttpResponseHandler.onStream(stream);
+        ArgumentCaptor<List<ModelTensors>> captor = ArgumentCaptor.forClass(List.class);
+        verify(actionListener).onResponse(captor.capture());
+        assert captor.getValue().size() == 1;
+        assert captor.getValue().get(0).getMlModelTensors().get(0).getDataAsMap().get("key").equals("hello world");
     }
 
     @Test
@@ -150,7 +206,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        assert captor.getValue().getMessage().equals("{\"remote_response\":\"Remote model response is empty!\"}");
+        assert captor.getValue().getMessage().equals("No response from model");
     }
 
     @Test
@@ -245,7 +301,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         mlSdkAsyncHttpResponseHandler2.onStream(stream2);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("{\"remote_response\":\"Model current status is: FAILED\"}");
+        assert captor.getValue().getMessage().equals("Error from remote service: Model current status is: FAILED");
         assert captor.getValue().status().getStatus() == 500;
     }
 
@@ -311,7 +367,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         mlSdkAsyncHttpResponseHandler1.onStream(stream1);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("{\"remote_response\":\"Model current status is: FAILED\"}");
+        assert captor.getValue().getMessage().equals("Error from remote service: Model current status is: FAILED");
         assert captor.getValue().status().getStatus() == 500;
     }
 
@@ -328,16 +384,9 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             }
         };
         mlSdkAsyncHttpResponseHandler.onStream(stream);
-        ArgumentCaptor<List<ModelTensors>> captor = ArgumentCaptor.forClass(List.class);
-        verify(actionListener, times(1)).onResponse(captor.capture());
-        assert captor
-            .getValue()
-            .get(0)
-            .getMlModelTensors()
-            .get(0)
-            .getDataAsMap()
-            .get("remote_response")
-            .equals("Remote model response is empty!");
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("No response from model");
     }
 
     @Test

@@ -7,7 +7,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processErrorResponse;
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 import java.nio.ByteBuffer;
@@ -26,6 +26,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
@@ -118,25 +119,24 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         Map<String, String> parameters,
         Map<Integer, ModelTensors> tensorOutputs
     ) {
-        ModelTensors tensors;
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            tensors = processErrorResponse("Remote model response is empty!");
+            actionListener.onFailure(new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
         } else {
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
-                tensors = processErrorResponse(body);
+                actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
             } else {
                 try {
-                    tensors = processOutput(body, connector, scriptService, parameters);
+                    ModelTensors tensors = processOutput(body, connector, scriptService, parameters);
+                    tensors.setStatusCode(statusCode);
+                    tensorOutputs.put(countDownLatch.getSequence(), tensors);
                 } catch (Exception e) {
                     log.error("Failed to process response body: {}", body, e);
-                    tensors = processErrorResponse(body);
+                    actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
                 }
             }
         }
-        tensors.setStatusCode(statusCode);
-        tensorOutputs.put(countDownLatch.getSequence(), tensors);
     }
 
     private void reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
