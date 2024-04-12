@@ -88,6 +88,21 @@ public class MLGuardTests {
     }
 
     @Test
+    public void validateInitializedStopWordsEmpty() {
+        stopWords = new StopWords(null, null);
+        regex = List.of("(.|\n)*stop words(.|\n)*").toArray(new String[0]);
+        regexPatterns = List.of(Pattern.compile("(.|\n)*stop words(.|\n)*"));
+        inputGuardrail = new Guardrail(List.of(stopWords), regex);
+        outputGuardrail = new Guardrail(List.of(stopWords), regex);
+        guardrails = new Guardrails("test_type", inputGuardrail, outputGuardrail);
+        mlGuard = new MLGuard(guardrails, xContentRegistry, client);
+
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validate(input, MLGuard.Type.INPUT);
+        Assert.assertTrue(res);
+    }
+
+    @Test
     public void validateOutput() {
         String input = "\n\nHuman:hello stop words.\n\nAssistant:";
         Boolean res = mlGuard.validate(input, MLGuard.Type.OUTPUT);
