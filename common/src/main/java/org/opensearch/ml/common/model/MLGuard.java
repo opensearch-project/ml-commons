@@ -77,7 +77,9 @@ public class MLGuard {
             return;
         }
         for (StopWords e : stopWords) {
-            map.put(e.getIndex(), Arrays.asList(e.getSourceFields()));
+            if (e.getIndex() != null && e.getSourceFields() != null) {
+                map.put(e.getIndex(), Arrays.asList(e.getSourceFields()));
+            }
         }
     }
 
