@@ -172,9 +172,7 @@ public class MLStatsNodesTransportAction extends
                         }
                     }
                 }
-            }, e -> {
-                throw new OpenSearchStatusException("Model search wasn't successful", RestStatus.INTERNAL_SERVER_ERROR);
-            }));
+            }, e -> { throw new OpenSearchStatusException("Model search wasn't successful", RestStatus.INTERNAL_SERVER_ERROR); }));
         }
         return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats, modelStats);
     }
