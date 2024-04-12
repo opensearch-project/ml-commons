@@ -192,7 +192,7 @@ public class ConnectorUtils {
         if (modelResponse == null) {
             throw new IllegalArgumentException("model response is null");
         }
-        if (mlGuard != null && mlGuard.validate(modelResponse, MLGuard.Type.OUTPUT)) {
+        if (mlGuard != null && !mlGuard.validate(modelResponse, MLGuard.Type.OUTPUT)) {
             throw new IllegalArgumentException("guardrails triggered for LLM output");
         }
         List<ModelTensor> modelTensors = new ArrayList<>();
