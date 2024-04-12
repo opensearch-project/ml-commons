@@ -179,12 +179,13 @@ public class MLStatsNodesTransportAction extends
 
     @VisibleForTesting
     void searchHiddenModels(ActionListener<Set<String>> listener) {
-        SearchRequest searchRequest = buildSearchRequest();
+        SearchRequest searchRequest = buildHiddenModelSearchRequest();
         // Use a try-with-resources block to ensure resources are properly released
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             // Wrap the listener to restore thread context before calling it
-            ActionListener<Set<String>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            ActionListener<Set<String>> internalListener = ActionListener.runBefore(listener, threadContext::restore);
             // Wrap the search response handler to handle success and failure cases
+            // Notify the listener of any search failures
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
                 // Initialize the result set
                 Set<String> result = new HashSet<>(response.getHits().getHits().length); // Set initial capacity to the number of hits
@@ -195,10 +196,7 @@ public class MLStatsNodesTransportAction extends
                 }
                 // Notify the listener of the search results
                 internalListener.onResponse(result);
-            }, e -> {
-                // Notify the listener of any search failures
-                internalListener.onFailure(e);
-            });
+            }, internalListener::onFailure);
 
             // Execute the search request asynchronously
             client.search(searchRequest, al);
@@ -208,7 +206,7 @@ public class MLStatsNodesTransportAction extends
         }
     }
 
-    private SearchRequest buildSearchRequest() {
+    private SearchRequest buildHiddenModelSearchRequest() {
         SearchRequest searchRequest = new SearchRequest(CommonValue.ML_MODEL_INDEX);
         // Build the query
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
