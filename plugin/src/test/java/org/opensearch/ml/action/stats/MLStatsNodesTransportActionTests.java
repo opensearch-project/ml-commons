@@ -5,34 +5,49 @@
 
 package org.opensearch.ml.action.stats;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_ML_VERSION;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_JVM_HEAP_USAGE;
-import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
+import static org.opensearch.ml.utils.TestHelper.builder;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.env.Environment;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -50,6 +65,12 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.search.profile.SearchProfileShardResults;
+import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -114,6 +135,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         );
     }
 
+    @Test
     public void testNewNodeRequest() {
         String nodeId = "nodeId1";
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
@@ -124,6 +146,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertEquals(mlStatsNodeRequest1.getMlStatsNodesRequest(), mlStatsNodeRequest2.getMlStatsNodesRequest());
     }
 
+    @Test
     public void testNewNodeResponse() throws IOException {
         Map<MLNodeLevelStat, Object> statValues = new HashMap<>();
         DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
@@ -136,6 +159,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         Assert.assertEquals(statsNodeResponse.getNodeLevelStatSize(), newStatsNodeResponse.getModelStatSize());
     }
 
+    @Test
     public void testNodeOperation() {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
@@ -149,6 +173,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertNotNull(response.getNodeLevelStat(nodeStatName1));
     }
 
+    @Test
     public void testNodeOperationWithJvmHeapUsage() {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
@@ -163,6 +188,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertNotNull(response.getNodeLevelStat(ML_JVM_HEAP_USAGE));
     }
 
+    @Test
     public void testNodeOperation_NoNodeLevelStat() {
         String nodeId = clusterService().localNode().getId();
         MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
@@ -173,43 +199,36 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertEquals(0, response.getNodeLevelStatSize());
     }
 
-    public void testNodeOperation_NoNodeLevelStat_AlgoStat() {
+    @Test
+    public void testNodeOperation_NoNodeLevelStat_AlgoStatWithoutHiddenModel() {
         MLStats mlStats = new MLStats(statsMap);
         mlStats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
 
-        MLStatsNodesTransportAction action = new MLStatsNodesTransportAction(
-            client().threadPool(),
-            clusterService(),
-            mock(TransportService.class),
-            mock(ActionFilters.class),
-            mlStats,
-            environment,
-            client,
-            mlModelManager
-        );
+        MLStatsNodesTransportAction action = Mockito
+            .spy(
+                new MLStatsNodesTransportAction(
+                    client().threadPool(),
+                    clusterService(),
+                    mock(TransportService.class),
+                    mock(ActionFilters.class),
+                    mlStats,
+                    environment,
+                    client,
+                    mlModelManager
+                )
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<Set<String>> listener = invocation.getArgument(0);
+            Set<String> result = new HashSet<>();
+            listener.onResponse(result);
+            return null;
+        }).when(action).searchHiddenModels(isA(ActionListener.class));
 
         String nodeId = clusterService().localNode().getId();
         MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, mlStatsInput);
-
-        MLModel mlModel = MLModel
-            .builder()
-            .user(User.parse(USER_STRING))
-            .modelGroupId("111")
-            .version("111")
-            .name("Test Model")
-            .modelId(modelId)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .content("content")
-            .totalChunks(2)
-            .isHidden(false)
-            .build();
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mlModel);
-            return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
@@ -229,43 +248,37 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertEquals(1l, actionStats.getActionStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
     }
 
+    @Test
     public void testNodeOperation_NoNodeLevelStat_AlgoStat_hiddenModel() {
         MLStats mlStats = new MLStats(statsMap);
         mlStats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
 
-        MLStatsNodesTransportAction action = new MLStatsNodesTransportAction(
-            client().threadPool(),
-            clusterService(),
-            mock(TransportService.class),
-            mock(ActionFilters.class),
-            mlStats,
-            environment,
-            client,
-            mlModelManager
-        );
+        MLStatsNodesTransportAction action = Mockito
+            .spy(
+                new MLStatsNodesTransportAction(
+                    client().threadPool(),
+                    clusterService(),
+                    mock(TransportService.class),
+                    mock(ActionFilters.class),
+                    mlStats,
+                    environment,
+                    client,
+                    mlModelManager
+                )
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<Set<String>> listener = invocation.getArgument(0);
+            Set<String> result = new HashSet<>();
+            result.add(modelId);
+            listener.onResponse(result);
+            return null;
+        }).when(action).searchHiddenModels(isA(ActionListener.class));
 
         String nodeId = clusterService().localNode().getId();
         MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, mlStatsInput);
-
-        MLModel mlModel = MLModel
-            .builder()
-            .user(User.parse(USER_STRING))
-            .modelGroupId("111")
-            .version("111")
-            .name("Test Model")
-            .modelId(modelId)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .content("content")
-            .totalChunks(2)
-            .isHidden(true)
-            .build();
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
-            listener.onResponse(mlModel);
-            return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
@@ -280,6 +293,62 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
 
         MLModelStats modelStats = response.getModelStats(modelId);
         assertNull(modelStats);
+    }
+
+    @Test
+    public void testSearchHiddenModels_successfulSearch() throws IOException {
+
+        SearchResponse response = createSearchModelResponse();
+
+        ActionListener<Set<String>> mockListener = mock(ActionListener.class);
+        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).search(captor.capture(), any());
+
+        action.searchHiddenModels(mockListener);
+
+        ArgumentCaptor<Set<String>> argumentCaptor = ArgumentCaptor.forClass(Set.class);
+
+        verify(mockListener).onResponse(argumentCaptor.capture());
+        Set<String> capturedSet = argumentCaptor.getValue();
+        assertEquals(argumentCaptor.getValue().size(), 1);
+        assertTrue("Expected set to contain modelId", capturedSet.contains(modelId));
+        verify(client).search(any(SearchRequest.class), any(ActionListener.class));
+    }
+
+    private SearchResponse createSearchModelResponse() throws IOException {
+        XContentBuilder content = builder();
+        content.startObject();
+        content.field(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name());
+        content.field(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION);
+        content.field(MLModel.MODEL_ID_FIELD, modelId);
+        content.endObject();
+
+        SearchHit[] hits = new SearchHit[1];
+        hits[0] = new SearchHit(0, modelId, null, null).sourceRef(BytesReference.bytes(content));
+
+        return new SearchResponse(
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            5,
+            5,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
     }
 
 }

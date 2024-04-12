@@ -7,12 +7,15 @@ package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.Set;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.client.Client;
@@ -21,7 +24,11 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.env.Environment;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.model.MLModelManager;
@@ -35,6 +42,7 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.monitor.jvm.JvmService;
+import org.opensearch.search.SearchHit;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -48,9 +56,9 @@ public class MLStatsNodesTransportAction extends
     private MLStats mlStats;
     private final JvmService jvmService;
 
-    Client client;
+    private final Client client;
 
-    MLModelManager mlModelManager;
+    private final MLModelManager mlModelManager;
 
     /**
      * Constructor
@@ -147,14 +155,12 @@ public class MLStatsNodesTransportAction extends
             }
         }
 
-        CountDownLatch latch = new CountDownLatch(mlStats.getAllModels().length);
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         Map<String, MLModelStats> modelStats = new HashMap<>();
-        // return model level stats
         if (mlStatsInput.includeModelStats()) {
-            for (String modelId : mlStats.getAllModels()) {
-                // Add action listener to retrieve model details
-                validateAccess(modelId, ActionListener.wrap(hasPermissionToShowStat -> {
-                    if (hasPermissionToShowStat) {
+            searchHiddenModels(ActionListener.wrap(hiddenModels -> {
+                for (String modelId : mlStats.getAllModels()) {
+                    if (isSuperAdmin || !hiddenModels.contains(modelId)) {
                         if (mlStatsInput.retrieveStatsForModel(modelId)) {
                             Map<ActionName, MLActionStats> actionStatsMap = new HashMap<>();
                             for (Map.Entry<ActionName, MLActionStats> entry : mlStats.getModelStats(modelId).entrySet()) {
@@ -165,56 +171,62 @@ public class MLStatsNodesTransportAction extends
                             modelStats.put(modelId, new MLModelStats(actionStatsMap));
                         }
                     }
-                    // Count down the latch after each asynchronous call completes
-                    latch.countDown();
-                }, e -> {
-                    // Handle failure case here
-                    // For example, log the error
-                    log.error("Failed to retrieve model details for model ID: " + modelId, e);
-                    // Count down the latch even in case of failure to ensure proper synchronization
-                    latch.countDown();
-                }));
-            }
-            // Wait for all asynchronous calls to complete
-            try {
-                long timeoutInSeconds = 120; // Default timeout: 120 seconds
-                boolean allCompleted = latch.await(timeoutInSeconds, TimeUnit.SECONDS);
-
-                if (!allCompleted) {
-                    // Handle the case where not all calls completed within the timeout
-                    log.warn("Not all asynchronous calls completed within the specified timeout of 120 seconds");
                 }
-            } catch (InterruptedException e) {
-                // Handle interruption if necessary
-                Thread.currentThread().interrupt();
-            }
+            }, e -> {
+                throw new OpenSearchStatusException("Model search wasn't successful", RestStatus.INTERNAL_SERVER_ERROR);
+            }));
         }
         return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats, modelStats);
     }
 
-    private void validateAccess(String modelId, ActionListener<Boolean> listener) {
-        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
-        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
-                Boolean isHidden = mlModel.getIsHidden();
-                if (isHidden != null && isHidden) {
-                    if (isSuperAdmin) {
-                        listener.onResponse(true);
-                    } else {
-                        listener.onResponse(false);
-                    }
-                } else {
-                    listener.onResponse(true);
+    @VisibleForTesting
+    void searchHiddenModels(ActionListener<Set<String>> listener) {
+        SearchRequest searchRequest = buildSearchRequest();
+        // Use a try-with-resources block to ensure resources are properly released
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            // Wrap the listener to restore thread context before calling it
+            ActionListener<Set<String>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            // Wrap the search response handler to handle success and failure cases
+            ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
+                // Initialize the result set
+                Set<String> result = new HashSet<>(response.getHits().getHits().length); // Set initial capacity to the number of hits
+
+                // Iterate over the search hits and add their IDs to the result set
+                for (SearchHit hit : response.getHits()) {
+                    result.add(hit.getId());
                 }
+                // Notify the listener of the search results
+                internalListener.onResponse(result);
             }, e -> {
-                log.error("Failed to find Model", e);
-                listener.onFailure(e);
-            }), context::restore));
+                // Notify the listener of any search failures
+                internalListener.onFailure(e);
+            });
+
+            // Execute the search request asynchronously
+            client.search(searchRequest, al);
         } catch (Exception e) {
-            log.error("Failed to find ML model");
+            // Notify the listener of any unexpected errors
             listener.onFailure(e);
         }
+    }
+
+    private SearchRequest buildSearchRequest() {
+        SearchRequest searchRequest = new SearchRequest(CommonValue.ML_MODEL_INDEX);
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder
+            .filter(
+                QueryBuilders
+                    .boolQuery()
+                    .must(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, true))
+                    // Add the additional filter to exclude documents where "chunk_number" exists
+                    .mustNot(QueryBuilders.existsQuery("chunk_number"))
+            );
+        searchRequest.source().query(boolQueryBuilder);
+        // Specify the fields to include in the search results (only the "_id" field)
+        // No fields to exclude
+        searchRequest.source().fetchSource(new String[] { "_id" }, new String[] {});
+        return searchRequest;
     }
 
     @VisibleForTesting
