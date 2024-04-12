@@ -195,7 +195,7 @@ public class MLStatsNodesTransportAction extends
         // Use a try-with-resources block to ensure resources are properly released
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             // Wrap the listener to restore thread context before calling it
-            ActionListener<Set<String>> internalListener = ActionListener.runBefore(listener, threadContext::restore);
+            ActionListener<Set<String>> internalListener = ActionListener.runAfter(listener, () -> threadContext.restore());
             // Wrap the search response handler to handle success and failure cases
             // Notify the listener of any search failures
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
