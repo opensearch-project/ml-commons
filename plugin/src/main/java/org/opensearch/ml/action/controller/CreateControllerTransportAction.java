@@ -193,7 +193,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                     }
 
                     if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                        mlModelManager.updateModel(modelId, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, true));
+                        mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, true));
                     }
                     if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId))) {
                         if (isHidden) {

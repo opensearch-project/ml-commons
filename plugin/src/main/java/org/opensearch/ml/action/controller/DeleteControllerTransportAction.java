@@ -197,7 +197,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                                         );
                                 }
 
-                                deleteController(modelId, actionListener);
+                                deleteController(modelId, isHidden, actionListener);
                             } else {
                                 String[] nodeIds = getUndeployControllerFailedNodesList(nodesResponse);
                                 if (isHidden) {
@@ -252,7 +252,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                         }), context::restore)
                     );
             } else {
-                deleteController(modelId, actionListener);
+                deleteController(modelId, isHidden, actionListener);
             }
         } catch (Exception e) {
             log.error("Failed to delete model controller", e);
@@ -260,19 +260,33 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         }
     }
 
-    private void deleteController(String modelId, ActionListener<DeleteResponse> actionListener) {
+    private void deleteController(String modelId, boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
-                log.info("Model controller for model {} successfully deleted from index, result: {}", modelId, deleteResponse.getResult());
-                mlModelManager.updateModel(modelId, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, false));
+                if (isHidden) {
+                    log.info("Model controller for the provided successfully deleted from index, result: {}", deleteResponse.getResult());
+                } else {
+                    log
+                        .info(
+                            "Model controller for model {} successfully deleted from index, result: {}",
+                            modelId,
+                            deleteResponse.getResult()
+                        );
+                }
+
+                mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, false));
                 actionListener.onResponse(deleteResponse);
             }
 
             @Override
             public void onFailure(Exception e) {
-                log.error("Failed to delete model controller for model: " + modelId, e);
+                if (isHidden) {
+                    log.error("Failed to delete model controller for the provided model.", e);
+                } else {
+                    log.error("Failed to delete model controller for model: " + modelId, e);
+                }
                 actionListener.onFailure(e);
             }
         });

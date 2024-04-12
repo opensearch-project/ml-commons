@@ -306,7 +306,12 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 wrappedListener.onFailure(ex);
             }
         }, exception -> {
-            log.error("Failed to create deploy model task for " + modelId, exception);
+            if (mlModel.getIsHidden()) {
+                log.error("Failed to create deploy model task for the provided model", exception);
+            } else {
+                log.error("Failed to create deploy model task for " + modelId, exception);
+            }
+
             wrappedListener.onFailure(exception);
         }));
     }
@@ -338,6 +343,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         ActionListener<MLDeployModelNodesResponse> actionListener = deployModelNodesResponseListener(
             mlTask.getTaskId(),
             mlModel.getModelId(),
+            mlModel.getIsHidden(),
             listener
         );
         List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
@@ -366,6 +372,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     private ActionListener<MLDeployModelNodesResponse> deployModelNodesResponseListener(
         String taskId,
         String modelId,
+        boolean isHidden,
         ActionListener<MLDeployModelResponse> listener
     ) {
         return ActionListener.wrap(r -> {
@@ -382,7 +389,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
             listener.onFailure(e);
         });
     }
@@ -423,7 +430,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager.updateModel(modelId, mlModel.getIsHidden(), Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
         });
 
         List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
