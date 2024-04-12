@@ -11,6 +11,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.FailedNodeException;
@@ -155,9 +157,10 @@ public class MLStatsNodesTransportAction extends
             }
         }
 
-        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         Map<String, MLModelStats> modelStats = new HashMap<>();
         if (mlStatsInput.includeModelStats()) {
+            CountDownLatch latch = new CountDownLatch(1);
+            boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
             searchHiddenModels(ActionListener.wrap(hiddenModels -> {
                 for (String modelId : mlStats.getAllModels()) {
                     if (isSuperAdmin || !hiddenModels.contains(modelId)) {
@@ -172,7 +175,18 @@ public class MLStatsNodesTransportAction extends
                         }
                     }
                 }
-            }, e -> { throw new OpenSearchStatusException("Model search wasn't successful", RestStatus.INTERNAL_SERVER_ERROR); }));
+                latch.countDown();
+            }, e -> {
+                log.error("Search Hidden model wasn't successful");
+                latch.countDown();
+            }));
+            // Wait for the asynchronous call to complete
+            try {
+                latch.await(120, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                // Handle interruption if necessary
+                Thread.currentThread().interrupt();
+            }
         }
         return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats, modelStats);
     }
