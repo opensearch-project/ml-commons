@@ -66,6 +66,13 @@ public class RemoteModelTest {
     }
 
     @Test
+    public void test_predict_throw_IllegalStateException() {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage("Method is not implemented");
+        remoteModel.predict(mlInput);
+    }
+
+    @Test
     public void predict_NullConnectorExecutor() {
         ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
         remoteModel.asyncPredict(mlInput, actionListener);
