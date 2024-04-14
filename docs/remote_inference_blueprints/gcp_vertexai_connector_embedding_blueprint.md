@@ -145,7 +145,7 @@ Sample response:
 
 ## 6. Check model deployment
 ```json
-GET /_plugins/_ml/tasks/pX8scY4B2QHLlv0i6LYZ
+GET /_plugins/_ml/tasks/p38xcY4B2QHLlv0iSbb_
 ```
 
 Sample response:
@@ -238,7 +238,7 @@ This requirement arises because the Vertex API can only be accessed using the GC
 Note:  This update feature is only avaialable in 2.12 or later
 
 ```json
-POST /_plugins/_ml/models/qwshEo4BP0vcvNchDtVA
+POST /_plugins/_ml/models/pn8scY4B2QHLlv0i6LZB
 {
   "connector": {
     "credential": {
