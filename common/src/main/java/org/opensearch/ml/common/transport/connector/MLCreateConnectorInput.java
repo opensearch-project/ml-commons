@@ -150,7 +150,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     parameters = getParameterMap(parser.map());
                     break;
                 case CONNECTOR_CREDENTIAL_FIELD:
-                    // We need to filter out any key string that is trying to imitate the subfield of the secretArn of the credential map
+                    // We need to filter out any key string that is trying to imitate the subfield of any kind of ARN of the credential map
                     credential = new HashMap<>();
                     Map<String, String> credentialKeyToAdd = parser.mapStrings();
                     Pattern pattern = Pattern.compile("[a-zA-Z]+Arn\\.");
