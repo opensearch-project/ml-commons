@@ -196,7 +196,9 @@ public class MLCreateConnectorInputTests {
     public void testParse_SecretArnPrefix() throws Exception {
         String expectedInputStr = "{\"name\":\"test_connector_name\"," +
                 "\"description\":\"this is a test connector\",\"version\":\"1\",\"protocol\":\"http\"," +
-                "\"parameters\":{\"input\":[\"test input value\"]},\"credential\":{\"key\":\"test_key_value\", \"secretArn\":\"test_secretArn_value\", \"secretArn.key\":\"test_key_value\"}," +
+                "\"parameters\":{\"input\":[\"test input value\"]},\"credential\":{\"key\":\"test_key_value\"," +
+                "\"secretArn\":\"test_secretArn_value\", \"secretArn.key\":\"test_key_value\"," +
+                "\"roleArn\":\"test_roleArn_value\", \"roleArn.subfield\":\"test_subfield_value\",\"test_Arn_test\":\"test_value\"}," +
                 "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
                 "\"headers\":{\"api_key\":\"${credential.key}\"}," +
                 "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
@@ -204,10 +206,11 @@ public class MLCreateConnectorInputTests {
                 "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
                 "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
                 "\"access_mode\":\"PUBLIC\"}";
-        HashSet<String> expectedCredentialKeys = new HashSet<>(Arrays.asList("key", "secretArn"));
+        HashSet<String> expectedCredentialKeys = new HashSet<>(Arrays.asList("key", "secretArn", "roleArn","test_Arn_test"));
         testParseFromJsonString(expectedInputStr, parsedInput -> {
             assertEquals(expectedCredentialKeys, parsedInput.getCredential().keySet());
             assertEquals("test_secretArn_value", parsedInput.getCredential().get("secretArn"));
+            assertEquals("test_roleArn_value", parsedInput.getCredential().get("roleArn"));
         });
     }
 

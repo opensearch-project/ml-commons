@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -151,8 +153,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     // We need to filter out any key string that is trying to imitate the subfield of the secretArn of the credential map
                     credential = new HashMap<>();
                     Map<String, String> credentialKeyToAdd = parser.mapStrings();
+                    Pattern pattern = Pattern.compile("[a-zA-Z]+Arn\\.");
                     for (String key : credentialKeyToAdd.keySet()) {
-                        if (!key.startsWith("secretArn.")) {
+                        Matcher matcher = pattern.matcher(key);
+                        boolean matchFound = matcher.find();
+                        if (!matchFound) {
                             credential.put(key, credentialKeyToAdd.get(key));
                         }
                     }
