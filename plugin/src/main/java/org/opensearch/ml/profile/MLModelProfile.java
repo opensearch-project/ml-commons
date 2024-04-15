@@ -16,6 +16,7 @@ import org.opensearch.ml.common.model.MLModelState;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Getter
@@ -30,6 +31,8 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
     private final MLPredictRequestStats predictRequestStats;
     private final Long memSizeEstimationCPU;
     private final Long memSizeEstimationGPU;
+    @Setter
+    private Boolean isHidden;
 
     @Builder
     public MLModelProfile(
@@ -79,6 +82,9 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         if (memSizeEstimationGPU != null) {
             builder.field("memory_size_estimation_gpu", memSizeEstimationGPU);
         }
+        if (isHidden != null) {
+            builder.field("is_hidden", isHidden);
+        }
         builder.endObject();
         return builder;
     }
@@ -104,6 +110,7 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         this.memSizeEstimationCPU = in.readOptionalLong();
         this.memSizeEstimationGPU = in.readOptionalLong();
+        this.isHidden = in.readOptionalBoolean();
     }
 
     @Override
@@ -131,5 +138,6 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         out.writeOptionalLong(memSizeEstimationCPU);
         out.writeOptionalLong(memSizeEstimationGPU);
+        out.writeOptionalBoolean(isHidden);
     }
 }
