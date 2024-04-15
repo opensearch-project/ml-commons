@@ -5,13 +5,6 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -20,9 +13,9 @@ import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -33,6 +26,15 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.search.SearchModule;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -187,6 +189,28 @@ public class MLCreateConnectorInputTests {
             assertEquals("test_connector_name", parsedInput.getName());
             assertEquals(1, parsedInput.getParameters().size());
             assertEquals("[\"test input value\"]", parsedInput.getParameters().get("input"));
+        });
+    }
+
+    @Test
+    public void testParse_SecretArnPrefix() throws Exception {
+        String expectedInputStr = "{\"name\":\"test_connector_name\"," +
+                "\"description\":\"this is a test connector\",\"version\":\"1\",\"protocol\":\"http\"," +
+                "\"parameters\":{\"input\":[\"test input value\"]},\"credential\":{\"key\":\"test_key_value\"," +
+                "\"secretArn\":\"test_secretArn_value\", \"secretArn.key\":\"test_key_value\"," +
+                "\"roleArn\":\"test_roleArn_value\", \"roleArn.subfield\":\"test_subfield_value\",\"test_Arn_test\":\"test_value\"}," +
+                "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
+                "\"headers\":{\"api_key\":\"${credential.key}\"}," +
+                "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
+                "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
+                "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
+                "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
+                "\"access_mode\":\"PUBLIC\"}";
+        HashSet<String> expectedCredentialKeys = new HashSet<>(Arrays.asList("key", "secretArn", "roleArn","test_Arn_test"));
+        testParseFromJsonString(expectedInputStr, parsedInput -> {
+            assertEquals(expectedCredentialKeys, parsedInput.getCredential().keySet());
+            assertEquals("test_secretArn_value", parsedInput.getCredential().get("secretArn"));
+            assertEquals("test_roleArn_value", parsedInput.getCredential().get("roleArn"));
         });
     }
 
