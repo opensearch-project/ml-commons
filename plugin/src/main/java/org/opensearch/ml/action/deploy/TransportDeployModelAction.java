@@ -8,6 +8,7 @@ package org.opensearch.ml.action.deploy;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
@@ -176,11 +177,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                 deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
                             }
                         }, e -> {
-                            if (isHidden) {
-                                log.error("Failed to Validate Access for the given model", e);
-                            } else {
-                                log.error("Failed to Validate Access for ModelId " + modelId, e);
-                            }
+                            log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
                             wrappedListener.onFailure(e);
                         }));
                 }

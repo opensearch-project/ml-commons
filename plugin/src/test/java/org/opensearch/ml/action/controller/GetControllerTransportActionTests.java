@@ -148,7 +148,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller, model ID: testModelId",
+            "User doesn't have privilege to perform this operation on this model controller. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }

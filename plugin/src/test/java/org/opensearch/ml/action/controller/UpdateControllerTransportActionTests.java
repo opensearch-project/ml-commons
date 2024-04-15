@@ -235,7 +235,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller, model ID: testModelId",
+            "User doesn't have privilege to perform this operation on this model controller. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -260,7 +260,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller",
+            "User doesn't have privilege to perform this operation on this model controller.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -343,7 +343,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Model controller haven't been created for the model. Consider calling create model controller api instead. ",
+            "Model controller haven't been created for the model. Consider calling create model controller api instead.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -428,7 +428,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to update model controller with model ID: testModelId", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to update model controller. Model ID: testModelId", argumentCaptor.getValue().getMessage());
 
     }
 
@@ -494,8 +494,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Successfully update model controller index with model ID testModelId "
-                + "but deploy model controller to cache was failed on following nodes [foo1], please retry.",
+            "Successfully update model controller index but deploy model controller to cache was failed on following nodes [foo1], please retry. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -546,8 +545,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Successfully update model controller index with model ID testModelId " +
-                        "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
+                "Successfully update model controller index but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry. Model ID: testModelId",
                 argumentCaptor.getValue().getMessage());
     }
 

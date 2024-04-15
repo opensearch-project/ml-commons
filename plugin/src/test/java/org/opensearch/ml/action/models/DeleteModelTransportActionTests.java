@@ -212,7 +212,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is not all cleaned up, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteLocalModel_deleteModelController_failed() throws IOException {
@@ -243,7 +243,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is not all cleaned up, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteRemoteModel_deleteModelChunks_failed() throws IOException {
@@ -269,7 +269,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is not all cleaned up, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteHiddenModel_Success() throws IOException {

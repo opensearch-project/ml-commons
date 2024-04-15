@@ -7,6 +7,7 @@ package org.opensearch.ml.action.controller;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -91,44 +92,28 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                                     if (hasPermission) {
                                         wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
                                     } else {
-                                        if (isHidden) {
-                                            wrappedListener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        "User doesn't have privilege to perform this operation on this model controller",
-                                                        RestStatus.FORBIDDEN
-                                                    )
-                                                );
-
-                                        } else {
-                                            wrappedListener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        "User doesn't have privilege to perform this operation on this model controller, model ID: "
-                                                            + modelId,
-                                                        RestStatus.FORBIDDEN
-                                                    )
-                                                );
-                                        }
-
+                                        wrappedListener
+                                            .onFailure(
+                                                new OpenSearchStatusException(
+                                                    getErrorMessage(
+                                                        "User doesn't have privilege to perform this operation on this model controller.",
+                                                        modelId,
+                                                        isHidden
+                                                    ),
+                                                    RestStatus.FORBIDDEN
+                                                )
+                                            );
                                     }
                                 }, exception -> {
-                                    if (isHidden) {
-                                        log
-                                            .error(
+                                    log
+                                        .error(
+                                            getErrorMessage(
                                                 "Permission denied: Unable to create the model controller for the given model.",
-                                                exception
-                                            );
-
-                                    } else {
-                                        log
-                                            .error(
-                                                "Permission denied: Unable to create the model controller for the model with ID {}. Details: ",
                                                 modelId,
-                                                exception
-                                            );
-                                    }
-
+                                                isHidden
+                                            ),
+                                            exception
+                                        );
                                     wrappedListener.onFailure(exception);
                                 }));
                         },

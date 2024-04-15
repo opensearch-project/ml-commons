@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
@@ -1645,26 +1646,11 @@ public class MLModelManager {
     public void updateModel(String modelId, boolean isHidden, Map<String, Object> updatedFields) {
         updateModel(modelId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
-                if (isHidden) {
-                    log.debug("Updated ML model successfully: {}", response.status());
-                } else {
-                    log.debug("Updated ML model successfully: {}, model id: {}", response.status(), modelId);
-                }
+                log.debug(getErrorMessage("Updated ML model successfully: {}", modelId, isHidden), response.status());
             } else {
-                if (isHidden) {
-                    log.error("Failed to update provided ML model, status: {}", response.status());
-                } else {
-                    log.error("Failed to update ML model {}, status: {}", modelId, response.status());
-                }
-
+                log.error(getErrorMessage("Failed to update provided ML model, status: {}", modelId, isHidden), response.status());
             }
-        }, e -> {
-            if (isHidden) {
-                log.error("Failed to update the provided ML model", e);
-            } else {
-                log.error("Failed to update ML model: " + modelId, e);
-            }
-        }));
+        }, e -> { log.error(getErrorMessage("Failed to update the provided ML model", modelId, isHidden), e); }));
     }
 
     /**

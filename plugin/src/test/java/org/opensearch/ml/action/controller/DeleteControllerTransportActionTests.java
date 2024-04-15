@@ -205,7 +205,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller, model ID: testModelId",
+            "User doesn't have privilege to perform this operation on this model controller. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -230,7 +230,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller",
+            "User doesn't have privilege to perform this operation on this model controller.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -384,7 +384,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Failed to undeploy model controller with model ID testModelId on following nodes [foo1], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+            "Failed to undeploy model controller with the given model on following nodes [foo1], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -403,7 +403,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Failed to undeploy model controller with model ID testModelId on following nodes [foo1, foo2], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+                "Failed to undeploy model controller with the given model on following nodes [foo1, foo2], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion. Model ID: testModelId",
                 argumentCaptor.getValue().getMessage());
     }
 
