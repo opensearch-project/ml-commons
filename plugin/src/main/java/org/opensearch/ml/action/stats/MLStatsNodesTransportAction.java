@@ -173,14 +173,10 @@ public class MLStatsNodesTransportAction extends
                         }
                     }
                 }
-                latch.countDown();
-            }, e -> {
-                log.error("Search Hidden model wasn't successful");
-                latch.countDown();
-            }));
+            }, e -> { log.error("Search Hidden model wasn't successful"); }), latch);
             // Wait for the asynchronous call to complete
             try {
-                latch.await(120, TimeUnit.SECONDS);
+                latch.await(10, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 // Handle interruption if necessary
                 Thread.currentThread().interrupt();
@@ -190,12 +186,15 @@ public class MLStatsNodesTransportAction extends
     }
 
     @VisibleForTesting
-    void searchHiddenModels(ActionListener<Set<String>> listener) {
+    void searchHiddenModels(ActionListener<Set<String>> listener, CountDownLatch latch) {
         SearchRequest searchRequest = buildHiddenModelSearchRequest();
         // Use a try-with-resources block to ensure resources are properly released
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             // Wrap the listener to restore thread context before calling it
-            ActionListener<Set<String>> internalListener = ActionListener.runAfter(listener, () -> threadContext.restore());
+            ActionListener<Set<String>> internalListener = ActionListener.runAfter(listener, () -> {
+                latch.countDown();
+                threadContext.restore();
+            });
             // Wrap the search response handler to handle success and failure cases
             // Notify the listener of any search failures
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {

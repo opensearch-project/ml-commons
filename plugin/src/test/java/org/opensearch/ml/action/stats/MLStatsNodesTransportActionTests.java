@@ -5,24 +5,16 @@
 
 package org.opensearch.ml.action.stats;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_ML_VERSION;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_JVM_HEAP_USAGE;
 import static org.opensearch.ml.utils.TestHelper.builder;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
@@ -50,17 +42,7 @@ import org.opensearch.env.Environment;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.stats.ActionName;
-import org.opensearch.ml.stats.MLActionLevelStat;
-import org.opensearch.ml.stats.MLActionStats;
-import org.opensearch.ml.stats.MLAlgoStats;
-import org.opensearch.ml.stats.MLClusterLevelStat;
-import org.opensearch.ml.stats.MLModelStats;
-import org.opensearch.ml.stats.MLNodeLevelStat;
-import org.opensearch.ml.stats.MLStat;
-import org.opensearch.ml.stats.MLStatLevel;
-import org.opensearch.ml.stats.MLStats;
-import org.opensearch.ml.stats.MLStatsInput;
+import org.opensearch.ml.stats.*;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
 import org.opensearch.search.SearchHit;
@@ -221,8 +203,10 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
             ActionListener<Set<String>> listener = invocation.getArgument(0);
             Set<String> result = new HashSet<>();
             listener.onResponse(result);
+            CountDownLatch latch = invocation.getArgument(1);
+            latch.countDown(); // Ensure the latch is counted down after the listener is notified
             return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class));
+        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
 
         String nodeId = clusterService().localNode().getId();
         MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
@@ -271,8 +255,10 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
             Set<String> result = new HashSet<>();
             result.add(modelId);
             listener.onResponse(result);
+            CountDownLatch latch = invocation.getArgument(1);
+            latch.countDown(); // Ensure the latch is counted down after the listener is notified
             return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class));
+        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
 
         String nodeId = clusterService().localNode().getId();
         MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
@@ -299,6 +285,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         SearchResponse response = createSearchModelResponse();
 
         ActionListener<Set<String>> mockListener = mock(ActionListener.class);
+        CountDownLatch latch = mock(CountDownLatch.class);
         ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
 
         doAnswer(invocation -> {
@@ -307,7 +294,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
             return null;
         }).when(client).search(captor.capture(), any());
 
-        action.searchHiddenModels(mockListener);
+        action.searchHiddenModels(mockListener, latch);
 
         ArgumentCaptor<Set<String>> argumentCaptor = ArgumentCaptor.forClass(Set.class);
 
