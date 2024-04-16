@@ -148,7 +148,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller, model ID: testModelId",
+            "User doesn't have privilege to perform this operation on this model controller. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -179,7 +179,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Failed to find model to get the corresponding model controller with the provided model ID: testModelId",
+            "Failed to find model to get the corresponding model controller with the provided model ID",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -196,7 +196,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Failed to find model to get the corresponding model controller with the provided model ID: testModelId",
+            "Failed to find model to get the corresponding model controller with the provided model ID",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -226,7 +226,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find model controller with the provided model ID: testModelId", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model controller with the provided model ID", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -235,7 +235,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find model controller with the provided model ID: testModelId", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model controller with the provided model ID", argumentCaptor.getValue().getMessage());
     }
 
     @Test

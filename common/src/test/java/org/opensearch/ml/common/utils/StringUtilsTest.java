@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+
 public class StringUtilsTest {
 
     @Test
@@ -59,41 +61,41 @@ public class StringUtilsTest {
     @Test
     public void fromJson_SimpleMap() {
         Map<String, Object> response = StringUtils.fromJson("{\"key\": \"value\"}", "response");
-        Assert.assertEquals(1, response.size());
-        Assert.assertEquals("value", response.get("key"));
+        assertEquals(1, response.size());
+        assertEquals("value", response.get("key"));
     }
 
     @Test
     public void fromJson_NestedMap() {
         Map<String, Object> response = StringUtils.fromJson("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "response");
-        Assert.assertEquals(1, response.size());
+        assertEquals(1, response.size());
         Assert.assertTrue(response.get("key") instanceof Map);
         Map nestedMap = (Map)response.get("key");
-        Assert.assertEquals("nested_value", nestedMap.get("nested_key"));
+        assertEquals("nested_value", nestedMap.get("nested_key"));
         List list = (List)nestedMap.get("nested_array");
-        Assert.assertEquals(2, list.size());
-        Assert.assertEquals(1.0, list.get(0));
-        Assert.assertEquals("a", list.get(1));
+        assertEquals(2, list.size());
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
     }
 
     @Test
     public void fromJson_SimpleList() {
         Map<String, Object> response = StringUtils.fromJson("[1, \"a\"]", "response");
-        Assert.assertEquals(1, response.size());
+        assertEquals(1, response.size());
         Assert.assertTrue(response.get("response") instanceof List);
         List list = (List)response.get("response");
-        Assert.assertEquals(1.0, list.get(0));
-        Assert.assertEquals("a", list.get(1));
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
     }
 
     @Test
     public void fromJson_NestedList() {
         Map<String, Object> response = StringUtils.fromJson("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "response");
-        Assert.assertEquals(1, response.size());
+        assertEquals(1, response.size());
         Assert.assertTrue(response.get("response") instanceof List);
         List list = (List)response.get("response");
-        Assert.assertEquals(1.0, list.get(0));
-        Assert.assertEquals("a", list.get(1));
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
         Assert.assertTrue(list.get(2) instanceof List);
         Assert.assertTrue(list.get(3) instanceof Map);
     }
@@ -107,21 +109,21 @@ public class StringUtilsTest {
         parameters.put("key4", new int[]{10, 20});
         parameters.put("key5", new Object[]{1.01, "abc"});
         Map<String, String> parameterMap = StringUtils.getParameterMap(parameters);
-        Assert.assertEquals(5, parameterMap.size());
-        Assert.assertEquals("value1", parameterMap.get("key1"));
-        Assert.assertEquals("2", parameterMap.get("key2"));
-        Assert.assertEquals("2.1", parameterMap.get("key3"));
-        Assert.assertEquals("[10,20]", parameterMap.get("key4"));
-        Assert.assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
+        assertEquals(5, parameterMap.size());
+        assertEquals("value1", parameterMap.get("key1"));
+        assertEquals("2", parameterMap.get("key2"));
+        assertEquals("2.1", parameterMap.get("key3"));
+        assertEquals("[10,20]", parameterMap.get("key4"));
+        assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
     }
 
     @Test
     public void processTextDocs() {
         List<String> processedDocs = StringUtils.processTextDocs(Arrays.asList("abc \n\n123\"4", null, "[1.01,\"abc\"]"));
-        Assert.assertEquals(3, processedDocs.size());
-        Assert.assertEquals("abc \\n\\n123\\\"4", processedDocs.get(0));
+        assertEquals(3, processedDocs.size());
+        assertEquals("abc \\n\\n123\\\"4", processedDocs.get(0));
         Assert.assertNull(processedDocs.get(1));
-        Assert.assertEquals("[1.01,\\\"abc\\\"]", processedDocs.get(2));
+        assertEquals("[1.01,\\\"abc\\\"]", processedDocs.get(2));
     }
 
     @Test
@@ -143,7 +145,7 @@ public class StringUtilsTest {
     public void addDefaultMethod_NoEscape() {
         String input = "return 123;";
         String result = StringUtils.addDefaultMethod(input);
-        Assert.assertEquals(input, result);
+        assertEquals(input, result);
     }
 
     @Test
@@ -152,5 +154,35 @@ public class StringUtilsTest {
         String result = StringUtils.addDefaultMethod(input);
         Assert.assertNotEquals(input, result);
         Assert.assertTrue(result.startsWith(StringUtils.DEFAULT_ESCAPE_FUNCTION));
+    }
+
+    @Test
+    public void testGetErrorMessage() {
+        // Arrange
+        String errorMessage = "An error occurred.";
+        String modelId = "12345";
+        boolean isHidden = false;
+        String expected = "An error occurred. Model ID: 12345";
+
+        // Act
+        String result = StringUtils.getErrorMessage(errorMessage, modelId, isHidden);
+
+        // Assert
+        assertEquals(expected, result);
+    }
+
+    @Test
+    public void testGetErrorMessageWhenHidden() {
+        // Arrange
+        String errorMessage = "An error occurred.";
+        String modelId = "12345";
+        boolean isHidden = true;
+        String expected = "An error occurred.";
+
+        // Act
+        String result = StringUtils.getErrorMessage(errorMessage, modelId, isHidden);
+
+        // Assert
+        assertEquals(expected, result);
     }
 }

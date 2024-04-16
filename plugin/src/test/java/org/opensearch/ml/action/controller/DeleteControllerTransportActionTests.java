@@ -6,9 +6,12 @@
 package org.opensearch.ml.action.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +29,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
@@ -41,6 +45,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteRequest;
@@ -200,7 +205,32 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller, model ID: testModelId",
+            "User doesn't have privilege to perform this operation on this model controller. Model ID: testModelId",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testDeleteControllerWithModelAccessControlNoPermissionHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "User doesn't have privilege to perform this operation on this model controller.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -217,6 +247,34 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDeleteControllerWithModelAccessControlOtherExceptionHiddenModel() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener
+                .onFailure(
+                    new RuntimeException("Permission denied: Unable to delete the model controller with the provided model. Details: ")
+                );
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Permission denied: Unable to delete the model controller with the provided model. Details: ",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -326,7 +384,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Failed to undeploy model controller with model ID testModelId on following nodes [foo1], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+            "Failed to undeploy model controller with the given model on following nodes [foo1], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -345,7 +403,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Failed to undeploy model controller with model ID testModelId on following nodes [foo1, foo2], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion.",
+                "Failed to undeploy model controller with the given model on following nodes [foo1, foo2], deletion is aborted. Please retry or undeploy the model manually and then perform the deletion. Model ID: testModelId",
                 argumentCaptor.getValue().getMessage());
     }
 

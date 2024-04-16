@@ -135,7 +135,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 wrappedListener
                                     .onFailure(
                                         new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
+                                            "User doesn't have privilege to perform this operation on this model",
                                             RestStatus.FORBIDDEN
                                         )
                                     );

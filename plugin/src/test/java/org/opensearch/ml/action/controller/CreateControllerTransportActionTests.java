@@ -225,7 +225,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User doesn't have privilege to perform this operation on this model controller, model ID: testModelId",
+            "User doesn't have privilege to perform this operation on this model controller. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -256,7 +256,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Failed to find model to create the corresponding model controller with the provided model ID: testModelId",
+            "Failed to find model to create the corresponding model controller with the provided model ID",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -367,8 +367,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Successfully create model controller index with model ID testModelId "
-                + "but deploy model controller to cache was failed on following nodes [foo1], please retry.",
+            "Successfully created the model controller index, but deployment of the model controller to the cache failed on the following nodes [foo1]. Please retry. Model ID: testModelId",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -386,8 +385,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Successfully create model controller index with model ID testModelId " +
-                        "but deploy model controller to cache was failed on following nodes [foo1, foo2], please retry.",
+                "Successfully created the model controller index, but deployment of the model controller to the cache failed on the following nodes [foo1, foo2]. Please retry. Model ID: testModelId",
                 argumentCaptor.getValue().getMessage());
     }
 
