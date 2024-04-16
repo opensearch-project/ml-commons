@@ -1,6 +1,5 @@
 package org.opensearch.ml.common.input.nlp;
 
-import com.google.common.collect.Streams;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Before;
@@ -78,7 +77,7 @@ public class TextDocsMLInputTest {
 
     private void parseMLInput(String jsonStr, int docSize) throws IOException {
         XContentParser parser = XContentType.JSON.xContent()
-            .createParser(new NamedXContentRegistry(Streams.concat(new SearchModule(Settings.EMPTY,
+            .createParser(new NamedXContentRegistry(Stream.concat(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents().stream(), Stream.of(
                 AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY)).collect(Collectors.toList())), null, jsonStr);
         parser.nextToken();
