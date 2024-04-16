@@ -212,7 +212,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is not all cleaned up, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteLocalModel_deleteModelController_failed() throws IOException {
@@ -243,7 +243,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is not all cleaned up, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteRemoteModel_deleteModelChunks_failed() throws IOException {
@@ -269,7 +269,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Model is not all cleaned up, please try again: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteHiddenModel_Success() throws IOException {
@@ -546,7 +546,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
         ActionListener<Boolean> deleteChunksListener = mock(ActionListener.class);
-        deleteModelTransportAction.deleteModelChunks("test_id", deleteChunksListener);
+        deleteModelTransportAction.deleteModelChunks("test_id", false, deleteChunksListener);
         verify(deleteChunksListener).onResponse(true);
     }
 
@@ -566,7 +566,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
         ActionListener<Boolean> deleteChunksListener = mock(ActionListener.class);
-        deleteModelTransportAction.deleteModelChunks("test_id", deleteChunksListener);
+        deleteModelTransportAction.deleteModelChunks("test_id", false, deleteChunksListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteChunksListener).onFailure(argumentCaptor.capture());
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
@@ -581,7 +581,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
         ActionListener<Boolean> deleteChunksListener = mock(ActionListener.class);
-        deleteModelTransportAction.deleteModelChunks("test_id", deleteChunksListener);
+        deleteModelTransportAction.deleteModelChunks("test_id", false, deleteChunksListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteChunksListener).onFailure(argumentCaptor.capture());
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + BULK_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
@@ -597,7 +597,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
         ActionListener<Boolean> deleteChunksListener = mock(ActionListener.class);
-        deleteModelTransportAction.deleteModelChunks("test_id", deleteChunksListener);
+        deleteModelTransportAction.deleteModelChunks("test_id", false, deleteChunksListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteChunksListener).onFailure(argumentCaptor.capture());
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + TIMEOUT_MSG + "test_id", argumentCaptor.getValue().getMessage());
@@ -619,7 +619,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
         ActionListener<Boolean> deleteChunksListener = mock(ActionListener.class);
-        deleteModelTransportAction.deleteModelChunks("test_id", deleteChunksListener);
+        deleteModelTransportAction.deleteModelChunks("test_id", false, deleteChunksListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteChunksListener).onFailure(argumentCaptor.capture());
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
