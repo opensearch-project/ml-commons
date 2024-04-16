@@ -404,10 +404,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "User doesn't have privilege to perform this operation on this model, model ID test_model_id",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     @Test
