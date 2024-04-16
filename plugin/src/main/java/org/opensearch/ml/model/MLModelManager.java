@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
@@ -821,7 +822,7 @@ public class MLModelManager {
 
     /**
      * Check if exceed running task limit and if circuit breaker is open.
-     * 
+     *
      * @param mlTask           ML task
      * @param runningTaskLimit limit
      */
@@ -1421,7 +1422,7 @@ public class MLModelManager {
 
     /**
      * Construct a TokenBucket object from its rate limiter config.
-     * 
+     *
      * @param eligibleNodeCount eligible node count
      * @param rateLimiter       model rate limiter config
      * @return a TokenBucket object to enable throttling
@@ -1451,7 +1452,7 @@ public class MLModelManager {
 
     /**
      * Get model-level rate limiter with model id.
-     * 
+     *
      * @param modelId model id
      * @return a TokenBucket object to enable model-level throttling
      */
@@ -1495,7 +1496,7 @@ public class MLModelManager {
 
     /**
      * Get model from model index.
-     * 
+     *
      * @param modelId  model id
      * @param listener action listener
      */
@@ -1505,7 +1506,7 @@ public class MLModelManager {
 
     /**
      * Get model from model index with includes/excludes filter.
-     * 
+     *
      * @param modelId  model id
      * @param includes fields included
      * @param excludes fields excluded
@@ -1536,7 +1537,7 @@ public class MLModelManager {
 
     /**
      * Get model controller from model controller index.
-     * 
+     *
      * @param modelId  model id
      * @param listener action listener
      */
@@ -1591,7 +1592,7 @@ public class MLModelManager {
 
     /**
      * Retreive a model's all chunks.
-     * 
+     *
      * @param mlModelMeta model meta
      * @param listener    action listener
      */
@@ -1638,23 +1639,23 @@ public class MLModelManager {
 
     /**
      * Update model with build-in listener.
-     * 
+     *
      * @param modelId       model id
      * @param updatedFields updated fields
      */
-    public void updateModel(String modelId, Map<String, Object> updatedFields) {
+    public void updateModel(String modelId, boolean isHidden, Map<String, Object> updatedFields) {
         updateModel(modelId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
-                log.debug("Updated ML model successfully: {}, model id: {}", response.status(), modelId);
+                log.debug(getErrorMessage("Updated ML model successfully: {}", modelId, isHidden), response.status());
             } else {
-                log.error("Failed to update ML model {}, status: {}", modelId, response.status());
+                log.error(getErrorMessage("Failed to update provided ML model, status: {}", modelId, isHidden), response.status());
             }
-        }, e -> { log.error("Failed to update ML model: " + modelId, e); }));
+        }, e -> { log.error(getErrorMessage("Failed to update the provided ML model", modelId, isHidden), e); }));
     }
 
     /**
      * Update model.
-     * 
+     *
      * @param modelId       model id
      * @param updatedFields updated fields
      * @param listener      action listener
@@ -1683,7 +1684,7 @@ public class MLModelManager {
 
     /**
      * Get model chunk id.
-     * 
+     *
      * @param modelId     model id
      * @param chunkNumber model chunk number
      * @return model chunk id
@@ -1694,7 +1695,7 @@ public class MLModelManager {
 
     /**
      * Add model worker node to cache.
-     * 
+     *
      * @param modelId model id
      * @param nodeIds node ids
      */
