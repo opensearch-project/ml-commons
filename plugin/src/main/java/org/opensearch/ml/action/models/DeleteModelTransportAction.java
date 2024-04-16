@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -126,7 +127,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     );
                             } else {
                                 if (isModelNotDeployed(mlModelState)) {
-                                    deleteModel(modelId, actionListener);
+                                    deleteModel(modelId, isHidden, actionListener);
                                 } else {
                                     wrappedListener
                                         .onFailure(
@@ -149,7 +150,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 )
                                             );
                                     } else if (isModelNotDeployed(mlModelState)) {
-                                        deleteModel(modelId, actionListener);
+                                        deleteModel(modelId, isHidden, actionListener);
                                     } else {
                                         wrappedListener
                                             .onFailure(
@@ -171,7 +172,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 } else {
                     // when model metadata is not found, model chunk and controller might still there, delete them here and return success
                     // response
-                    deleteModelChunksAndController(wrappedListener, modelId, null);
+                    deleteModelChunksAndController(wrappedListener, modelId, false, null);
                 }
             }, e -> { wrappedListener.onFailure((new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND))); }));
         } catch (Exception e) {
@@ -181,20 +182,20 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     @VisibleForTesting
-    void deleteModelChunks(String modelId, ActionListener<Boolean> actionListener) {
+    void deleteModelChunks(String modelId, boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
         deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
 
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
             if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
                 && (r.getSearchFailures() == null || r.getSearchFailures().size() == 0)) {
-                log.debug("All model chunks are deleted for model {}", modelId);
+                log.debug(getErrorMessage("All model chunks are deleted for the provided model.", modelId, isHidden));
                 actionListener.onResponse(true);
             } else {
                 returnFailure(r, modelId, actionListener);
             }
         }, e -> {
-            log.error("Failed to delete model chunks for: " + modelId, e);
+            log.error(getErrorMessage("Failed to delete model chunks for the provided model", modelId, isHidden), e);
             actionListener.onFailure(e);
         }));
     }
@@ -212,20 +213,20 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void deleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
+    private void deleteModel(String modelId, boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
-                deleteModelChunksAndController(actionListener, modelId, deleteResponse);
+                deleteModelChunksAndController(actionListener, modelId, isHidden, deleteResponse);
             }
 
             @Override
             public void onFailure(Exception e) {
                 if (e instanceof ResourceNotFoundException) {
-                    deleteModelChunksAndController(actionListener, modelId, null);
+                    deleteModelChunksAndController(actionListener, modelId, isHidden, null);
                 } else {
-                    log.error("Model is not all cleaned up, please try again: " + modelId, e);
+                    log.error(getErrorMessage("Model is not all cleaned up, please try again.", modelId, isHidden), e);
                     actionListener.onFailure(e);
                 }
             }
@@ -235,6 +236,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void deleteModelChunksAndController(
         ActionListener<DeleteResponse> actionListener,
         String modelId,
+        boolean isHidden,
         DeleteResponse deleteResponse
     ) {
         CountDownLatch countDownLatch = new CountDownLatch(2);
@@ -244,25 +246,38 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             bothDeleted.compareAndSet(true, b);
             if (countDownLatch.getCount() == 0) {
                 if (bothDeleted.get()) {
-                    log.debug("model chunks and model controller for model {} deleted successfully", modelId);
+                    log
+                        .debug(
+                            getErrorMessage(
+                                "model chunks and model controller for the provided model deleted successfully",
+                                modelId,
+                                isHidden
+                            )
+                        );
                     if (deleteResponse != null) {
                         actionListener.onResponse(deleteResponse);
                     } else {
                         actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                     }
                 } else {
-                    actionListener.onFailure(new IllegalStateException("Model is not all cleaned up, please try again: " + modelId));
+                    actionListener
+                        .onFailure(
+                            new IllegalStateException(getErrorMessage("Model is not all cleaned up, please try again.", modelId, isHidden))
+                        );
                 }
             }
         }, e -> {
             countDownLatch.countDown();
             bothDeleted.compareAndSet(true, false);
             if (countDownLatch.getCount() == 0) {
-                actionListener.onFailure(new IllegalStateException("Model is not all cleaned up, please try again: " + modelId, e));
+                actionListener
+                    .onFailure(
+                        new IllegalStateException(getErrorMessage("Model is not all cleaned up, please try again.", modelId, isHidden), e)
+                    );
             }
         });
-        deleteModelChunks(modelId, countDownActionListener);
-        deleteController(modelId, countDownActionListener);
+        deleteModelChunks(modelId, isHidden, countDownActionListener);
+        deleteController(modelId, isHidden, countDownActionListener);
     }
 
     /**
@@ -271,22 +286,37 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
      *
      * @param modelId model ID
      */
-    private void deleteController(String modelId, ActionListener<Boolean> actionListener) {
+    private void deleteController(String modelId, boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
-                log.info("Model controller for model {} successfully deleted from index, result: {}", modelId, deleteResponse.getResult());
+                log
+                    .info(
+                        getErrorMessage(
+                            "Model controller for the provided model successfully deleted from index, result: {}.",
+                            modelId,
+                            isHidden
+                        ),
+                        deleteResponse.getResult()
+                    );
                 actionListener.onResponse(true);
             }
 
             @Override
             public void onFailure(Exception e) {
                 if (e instanceof ResourceNotFoundException) {
-                    log.info("Model controller not deleted due to no model controller found for model: " + modelId);
+                    log
+                        .info(
+                            getErrorMessage(
+                                "Model controller not deleted due to no model controller found for the given model.",
+                                modelId,
+                                isHidden
+                            )
+                        );
                     actionListener.onResponse(true); // we consider this as success
                 } else {
-                    log.error("Failed to delete model controller for model: " + modelId, e);
+                    log.error(getErrorMessage("Failed to delete model controller for the given model.", modelId, isHidden), e);
                     actionListener.onFailure(e);
                 }
             }

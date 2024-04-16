@@ -191,4 +191,19 @@ public class StringUtils {
     public static boolean containsEscapeMethod(String input) {
         return patternExist(input, "String\\s+escape\\s*\\(\\s*(def|String)\\s+.*?\\)\\s*\\{?");
     }
+
+    /**
+     * This method will define if we should print out model id with the error message or not.
+     * @param errorMessage
+     * @param modelId
+     * @param isHidden
+     * @return
+     */
+    public static String getErrorMessage(String errorMessage, String modelId, boolean isHidden) {
+        if (isHidden) {
+            return errorMessage;
+        } else {
+            return errorMessage + " Model ID: " + modelId;
+        }
+    }
 }

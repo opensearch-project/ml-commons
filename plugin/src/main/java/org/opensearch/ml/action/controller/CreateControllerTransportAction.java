@@ -8,6 +8,7 @@ package org.opensearch.ml.action.controller;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -100,6 +101,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
             ActionListener<MLCreateControllerResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
+                Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
                         .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
@@ -107,36 +109,26 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                                 if (mlModel.getModelState() != MLModelState.DEPLOYING) {
                                     indexAndCreateController(mlModel, controller, wrappedListener);
                                 } else {
-                                    wrappedListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, "
-                                                    + "please either create the model controller after it is deployed or before deploying it. Model ID: "
-                                                    + modelId,
-                                                RestStatus.CONFLICT
-                                            )
-                                        );
-                                    log
-                                        .error(
-                                            "Failed to create a model controller during its corresponding model in DEPLOYING state. Model ID: "
-                                                + modelId
-                                        );
+                                    String errorMessage =
+                                        "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                    errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
+                                    log.error(errorMessage);
+                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
                                 }
                             } else {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model controller, model ID: "
-                                                + modelId,
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
+                                String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
+                                errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
+                                log.error(errorMessage);
+                                wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
                             }
                         }, exception -> {
                             log
                                 .error(
-                                    "Permission denied: Unable to create the model controller for the model with ID {}. Details: {}",
-                                    modelId,
+                                    getErrorMessage(
+                                        "Permission denied: Unable to create the model controller. Details: {}",
+                                        modelId,
+                                        isHidden
+                                    ),
                                     exception
                                 );
                             wrappedListener.onFailure(exception);
@@ -156,13 +148,13 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                 e -> wrappedListener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "Failed to find model to create the corresponding model controller with the provided model ID: " + modelId,
+                            "Failed to find model to create the corresponding model controller with the provided model ID",
                             RestStatus.NOT_FOUND
                         )
                     )
             ));
         } catch (Exception e) {
-            log.error("Failed to create model controller for " + modelId, e);
+            log.error("Failed to create model controller", e);
             actionListener.onFailure(e);
         }
     }
@@ -172,6 +164,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         MLController controller,
         ActionListener<MLCreateControllerResponse> actionListener
     ) {
+        Boolean isHidden = mlModel.getIsHidden();
         mlIndicesHandler.initMLControllerIndex(ActionListener.wrap(indexCreated -> {
             if (!indexCreated) {
                 actionListener.onFailure(new RuntimeException("Failed to create model controller index."));
@@ -181,12 +174,20 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                 ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(indexResponse -> {
                     String modelId = indexResponse.getId();
                     MLCreateControllerResponse response = new MLCreateControllerResponse(modelId, indexResponse.getResult().name());
-                    log.info("Model controller for model id {} saved into index, result:{}", modelId, indexResponse.getResult());
+                    String errorMessage = getErrorMessage("Model controller saved into index, result:{}", modelId, isHidden);
+                    log.info(errorMessage, indexResponse.getResult());
                     if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                        mlModelManager.updateModel(modelId, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, true));
+                        mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, true));
                     }
                     if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId))) {
-                        log.info("Model {} is deployed. Start to deploy the model controller into cache.", modelId);
+                        log
+                            .info(
+                                getErrorMessage(
+                                    "The model is deployed. Start to deploy the model controller into cache.",
+                                    modelId,
+                                    isHidden
+                                )
+                            );
                         String[] targetNodeIds = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
                         MLDeployControllerNodesRequest deployControllerNodesRequest = new MLDeployControllerNodesRequest(
                             targetNodeIds,
@@ -195,29 +196,28 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                         client
                             .execute(MLDeployControllerAction.INSTANCE, deployControllerNodesRequest, ActionListener.wrap(nodesResponse -> {
                                 if (nodesResponse != null && isDeployControllerSuccessOnAllNodes(nodesResponse)) {
-                                    log.info("Successfully create model controller and deploy it into cache with model ID {}", modelId);
+                                    log
+                                        .info(
+                                            getErrorMessage(
+                                                "Successfully created model controller and deployed it into cache",
+                                                modelId,
+                                                isHidden
+                                            )
+                                        );
                                     actionListener.onResponse(response);
                                 } else {
                                     String[] nodeIds = getDeployControllerFailedNodesList(nodesResponse);
-                                    log
-                                        .error(
-                                            "Successfully create model controller index with model ID {} but deploy model controller to cache was failed on following nodes {}, please retry.",
-                                            modelId,
-                                            Arrays.toString(nodeIds)
-                                        );
-                                    actionListener
-                                        .onFailure(
-                                            new RuntimeException(
-                                                "Successfully create model controller index with model ID "
-                                                    + modelId
-                                                    + " but deploy model controller to cache was failed on following nodes "
-                                                    + Arrays.toString(nodeIds)
-                                                    + ", please retry."
-                                            )
-                                        );
+                                    String msg =
+                                        "Successfully created the model controller index, but deployment of the model controller to the cache failed on the following nodes "
+                                            + Arrays.toString(nodeIds)
+                                            + ". Please retry.";
+                                    msg = getErrorMessage(msg, modelId, isHidden);
+
+                                    actionListener.onFailure(new RuntimeException(msg));
+                                    log.error(msg);
                                 }
                             }, e -> {
-                                log.error("Failed to deploy model controller for model: {}" + modelId, e);
+                                log.error("Failed to deploy model controller for the given model", e);
                                 actionListener.onFailure(e);
                             }));
                     } else {
