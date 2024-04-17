@@ -206,13 +206,13 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         BytesRestResponse restResponse = argumentCaptor.getValue();
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
-        assertTrue(content.utf8ToString().contains("\"ml_connector_count\":2"));
-        assertTrue(content.utf8ToString().contains("\"ml_model_count\":10"));
+        final String stat = content.utf8ToString();
+        assertTrue(stat.contains("\"ml_connector_count\":2"));
+        assertTrue(stat.contains("\"ml_model_count\":10"));
         assertTrue(
-            content
-                .utf8ToString()
+            stat
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20},\"is_hidden\":true}}}}"
                 )
         );
     }
@@ -232,7 +232,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
 
             Map<String, MLModelStats> modelStats = new HashMap<>();
 
-            modelStats.put(modelId, new MLModelStats(actionStats, false));
+            modelStats.put(modelId, new MLModelStats(actionStats, true));
 
             MLStatsNodeResponse nodeResponse = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
             nodes.add(nodeResponse);
@@ -301,13 +301,13 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         BytesRestResponse restResponse = argumentCaptor.getValue();
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
-        assertTrue(content.utf8ToString().contains("\"ml_connector_count\":2"));
-        assertTrue(content.utf8ToString().contains("\"ml_model_count\":10"));
+        final String stat = content.utf8ToString();
+        assertTrue(stat.contains("\"ml_connector_count\":2"));
+        assertTrue(stat.contains("\"ml_model_count\":10"));
         assertTrue(
-            content
-                .utf8ToString()
+            stat
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20},\"is_hidden\":true}}}}"
                 )
         );
     }
@@ -336,13 +336,13 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         BytesRestResponse restResponse = argumentCaptor.getValue();
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
-        assertTrue(content.utf8ToString().contains("\"ml_connector_count\":2"));
-        assertTrue(content.utf8ToString().contains("\"ml_model_count\":10"));
+        final String stat = content.utf8ToString();
+        assertTrue(stat.contains("\"ml_connector_count\":2"));
+        assertTrue(stat.contains("\"ml_model_count\":10"));
         assertTrue(
-            content
-                .utf8ToString()
+            stat
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20},\"is_hidden\":true}}}}"
                 )
         );
     }
@@ -367,9 +367,10 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         BytesRestResponse restResponse = argumentCaptor.getValue();
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
+        String stat = content.utf8ToString();
         assertEquals(
-            "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
-            content.utf8ToString()
+            "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20},\"is_hidden\":true}}}}}",
+            stat
         );
     }
 
