@@ -74,7 +74,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"algorithms\":{\"kmeans\":{\"predict\":{\"ml_action_request_count\":100}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":100}}}}",
+            "{\"algorithms\":{\"kmeans\":{\"predict\":{\"ml_action_request_count\":100}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":100},\"is_hidden\":false}}}",
             taskContent
         );
     }
@@ -135,8 +135,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         String taskContent = TestHelper.xContentBuilderToString(builder);
         Set<String> validResult = ImmutableSet
             .of(
-                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
-                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22},\"is_hidden\":false}}}",
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111},\"is_hidden\":false}}}"
             );
         assertTrue(validResult.contains(taskContent));
     }
