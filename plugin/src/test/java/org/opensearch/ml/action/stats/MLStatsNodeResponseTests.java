@@ -101,7 +101,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         algoStats.put(FunctionName.KMEANS, new MLAlgoStats(stats));
 
         Map<String, MLModelStats> modelStats = new HashMap<>();
-        modelStats.put(modelId, new MLModelStats(stats));
+        modelStats.put(modelId, new MLModelStats(stats, false));
 
         MLStatsNodeResponse response = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
         return response;
@@ -127,7 +127,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         modelActionStatMap.put(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, 111);
         modelActionStatMap.put(MLActionLevelStat.ML_ACTION_FAILURE_COUNT, 22);
         modelActionStats.put(ActionName.PREDICT, new MLActionStats(modelActionStatMap));
-        modelStats.put(modelId, new MLModelStats(modelActionStats));
+        modelStats.put(modelId, new MLModelStats(modelActionStats, false));
 
         response = new MLStatsNodeResponse(node, statsToValues, algoStats, modelStats);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);

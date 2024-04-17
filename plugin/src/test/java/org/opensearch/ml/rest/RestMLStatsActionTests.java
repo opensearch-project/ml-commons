@@ -232,7 +232,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
 
             Map<String, MLModelStats> modelStats = new HashMap<>();
 
-            modelStats.put(modelId, new MLModelStats(actionStats));
+            modelStats.put(modelId, new MLModelStats(actionStats, false));
 
             MLStatsNodeResponse nodeResponse = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
             nodes.add(nodeResponse);

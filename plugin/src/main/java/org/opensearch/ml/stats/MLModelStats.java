@@ -25,15 +25,18 @@ public class MLModelStats implements ToXContentFragment, Writeable {
      * Example: {predict: { request_count: 1}}
      */
     private Map<ActionName, MLActionStats> modelStats;
+    private Boolean isHidden;
 
     public MLModelStats(StreamInput in) throws IOException {
         if (in.readBoolean()) {
             this.modelStats = in.readMap(stream -> stream.readEnum(ActionName.class), MLActionStats::new);
         }
+        this.isHidden = in.readOptionalBoolean();
     }
 
-    public MLModelStats(Map<ActionName, MLActionStats> modelStats) {
+    public MLModelStats(Map<ActionName, MLActionStats> modelStats, Boolean isHidden) {
         this.modelStats = modelStats;
+        this.isHidden = isHidden;
     }
 
     @Override
@@ -44,6 +47,7 @@ public class MLModelStats implements ToXContentFragment, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalBoolean(isHidden);
     }
 
     @Override
@@ -54,6 +58,9 @@ public class MLModelStats implements ToXContentFragment, Writeable {
                 entry.getValue().toXContent(builder, params);
                 builder.endObject();
             }
+        }
+        if (isHidden != null) {
+            builder.field("is_hidden", isHidden);
         }
         return builder;
     }

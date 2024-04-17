@@ -38,7 +38,7 @@ public class MLModelStatsTests extends OpenSearchTestCase {
 
         Map<ActionName, MLActionStats> modelStats = new HashMap<>();
         modelStats.put(ActionName.PREDICT, mlActionStats);
-        mlModelStats = new MLModelStats(modelStats);
+        mlModelStats = new MLModelStats(modelStats, false);
     }
 
     public void testSerializationDeserialization() throws IOException {
@@ -54,7 +54,7 @@ public class MLModelStatsTests extends OpenSearchTestCase {
     public void testEmptySerializationDeserialization() throws IOException {
 
         Map<ActionName, MLActionStats> modelStats = new HashMap<>();
-        MLModelStats mlModelEmptyStats = new MLModelStats(modelStats);
+        MLModelStats mlModelEmptyStats = new MLModelStats(modelStats, false);
         BytesStreamOutput output = new BytesStreamOutput();
         mlModelEmptyStats.writeTo(output);
         MLModelStats parsedMLModelStats = new MLModelStats(output.bytes().streamInput());
@@ -71,8 +71,8 @@ public class MLModelStatsTests extends OpenSearchTestCase {
         String content = TestHelper.xContentBuilderToString(builder);
         Set<String> validContents = ImmutableSet
             .of(
-                "{\"predict\":{\"ml_action_request_count\":200,\"ml_action_failure_count\":100}}",
-                "{\"predict\":{\"ml_action_failure_count\":100,\"ml_action_request_count\":200}}"
+                "{\"predict\":{\"ml_action_request_count\":200,\"ml_action_failure_count\":100},\"is_hidden\":false}",
+                "{\"predict\":{\"ml_action_failure_count\":100,\"ml_action_request_count\":200},\"is_hidden\":false}"
             );
         assertTrue(validContents.contains(content));
     }
@@ -104,11 +104,11 @@ public class MLModelStatsTests extends OpenSearchTestCase {
 
         // null stats
         Map<ActionName, MLActionStats> statMap = null;
-        MLModelStats stats = new MLModelStats(statMap);
+        MLModelStats stats = new MLModelStats(statMap, false);
         assertNull(stats.getActionStats(ActionName.PREDICT));
 
         // empty stats
-        stats = new MLModelStats(new HashMap<>());
+        stats = new MLModelStats(new HashMap<>(), false);
         assertNull(stats.getActionStats(ActionName.PREDICT));
     }
 }

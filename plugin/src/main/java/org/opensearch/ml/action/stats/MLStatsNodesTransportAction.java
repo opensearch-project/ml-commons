@@ -169,7 +169,12 @@ public class MLStatsNodesTransportAction extends
                                     actionStatsMap.put(entry.getKey(), entry.getValue());
                                 }
                             }
-                            modelStats.put(modelId, new MLModelStats(actionStatsMap));
+                            if (hiddenModels.contains(modelId)) {
+                                modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.TRUE));
+                            } else {
+                                modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.FALSE));
+                            }
+
                         }
                     }
                 }
