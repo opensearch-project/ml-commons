@@ -185,4 +185,19 @@ public class StringUtilsTest {
         // Assert
         assertEquals(expected, result);
     }
+
+    @Test
+    public void testGetErrorMessageWhenHiddenNull() {
+        // Arrange
+        String errorMessage = "An error occurred.";
+        String modelId = "12345";
+
+        String expected = "An error occurred. Model ID: 12345";
+
+        // Act
+        String result = StringUtils.getErrorMessage(errorMessage, modelId, null);
+
+        // Assert
+        assertEquals(expected, result);
+    }
 }

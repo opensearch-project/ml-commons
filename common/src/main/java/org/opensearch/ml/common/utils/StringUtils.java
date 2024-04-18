@@ -200,7 +200,7 @@ public class StringUtils {
      * @param isHidden
      * @return
      */
-    public static String getErrorMessage(String errorMessage, String modelId, boolean isHidden) {
+    public static String getErrorMessage(String errorMessage, String modelId, Boolean isHidden) {
         if (BooleanUtils.isTrue(isHidden)) {
             return errorMessage;
         } else {
