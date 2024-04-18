@@ -10,6 +10,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import lombok.extern.log4j.Log4j2;
+import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -199,8 +200,8 @@ public class StringUtils {
      * @param isHidden
      * @return
      */
-    public static String getErrorMessage(String errorMessage, String modelId, boolean isHidden) {
-        if (isHidden) {
+    public static String getErrorMessage(String errorMessage, String modelId, Boolean isHidden) {
+        if (BooleanUtils.isTrue(isHidden)) {
             return errorMessage;
         } else {
             return errorMessage + " Model ID: " + modelId;
