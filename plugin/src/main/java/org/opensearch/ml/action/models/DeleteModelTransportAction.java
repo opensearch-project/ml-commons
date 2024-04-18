@@ -161,7 +161,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                             );
                                     }
                                 }, e -> {
-                                    log.error("Failed to validate Access for Model Id " + modelId, e);
+                                    log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
                                     wrappedListener.onFailure(e);
                                 }));
                         }
@@ -182,7 +182,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     @VisibleForTesting
-    void deleteModelChunks(String modelId, boolean isHidden, ActionListener<Boolean> actionListener) {
+    void deleteModelChunks(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
         deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
 
@@ -213,7 +213,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void deleteModel(String modelId, boolean isHidden, ActionListener<DeleteResponse> actionListener) {
+    private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
@@ -236,7 +236,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void deleteModelChunksAndController(
         ActionListener<DeleteResponse> actionListener,
         String modelId,
-        boolean isHidden,
+        Boolean isHidden,
         DeleteResponse deleteResponse
     ) {
         CountDownLatch countDownLatch = new CountDownLatch(2);
@@ -286,7 +286,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
      *
      * @param modelId model ID
      */
-    private void deleteController(String modelId, boolean isHidden, ActionListener<Boolean> actionListener) {
+    private void deleteController(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override

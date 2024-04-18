@@ -1643,7 +1643,7 @@ public class MLModelManager {
      * @param modelId       model id
      * @param updatedFields updated fields
      */
-    public void updateModel(String modelId, boolean isHidden, Map<String, Object> updatedFields) {
+    public void updateModel(String modelId, Boolean isHidden, Map<String, Object> updatedFields) {
         updateModel(modelId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
                 log.debug(getErrorMessage("Updated ML model successfully: {}", modelId, isHidden), response.status());
