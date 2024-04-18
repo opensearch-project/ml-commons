@@ -369,7 +369,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     private ActionListener<MLDeployModelNodesResponse> deployModelNodesResponseListener(
         String taskId,
         String modelId,
-        boolean isHidden,
+        Boolean isHidden,
         ActionListener<MLDeployModelResponse> listener
     ) {
         return ActionListener.wrap(r -> {
