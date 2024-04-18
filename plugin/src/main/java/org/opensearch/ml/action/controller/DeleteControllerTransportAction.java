@@ -215,7 +215,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         }
     }
 
-    private void deleteController(String modelId, boolean isHidden, ActionListener<DeleteResponse> actionListener) {
+    private void deleteController(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
