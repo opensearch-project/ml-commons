@@ -439,22 +439,22 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         hits[0] = new SearchHit(0, "modelId", null, null).sourceRef(BytesReference.bytes(content));
 
         return new SearchResponse(
-                new InternalSearchResponse(
-                        new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
-                        InternalAggregations.EMPTY,
-                        new Suggest(Collections.emptyList()),
-                        new SearchProfileShardResults(Collections.emptyMap()),
-                        false,
-                        false,
-                        1
-                ),
-                "",
-                5,
-                5,
-                0,
-                100,
-                ShardSearchFailure.EMPTY_ARRAY,
-                SearchResponse.Clusters.EMPTY
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            5,
+            5,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
         );
     }
 
