@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import org.junit.Assert;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -19,6 +20,7 @@ public class MLStatsNodesRequestTests extends OpenSearchTestCase {
 
     public void testSerializationDeserialization() throws IOException {
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { "testNodeId" }, new MLStatsInput());
+        mlStatsNodesRequest.setHiddenModelIds(Collections.singleton("modelID"));
 
         mlStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         BytesStreamOutput output = new BytesStreamOutput();
@@ -33,5 +35,6 @@ public class MLStatsNodesRequestTests extends OpenSearchTestCase {
         for (Enum stat : newRequest.getMlStatsNodesRequest().getMlStatsInput().getNodeLevelStats()) {
             Assert.assertTrue(request.getMlStatsNodesRequest().getMlStatsInput().getNodeLevelStats().contains(stat));
         }
+        Assert.assertTrue(request.getMlStatsNodesRequest().getHiddenModelIds().contains("modelID"));
     }
 }

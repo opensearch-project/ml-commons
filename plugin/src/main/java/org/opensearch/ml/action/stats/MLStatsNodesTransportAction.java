@@ -6,13 +6,14 @@
 package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.search.SearchRequest;
@@ -157,34 +158,28 @@ public class MLStatsNodesTransportAction extends
 
         Map<String, MLModelStats> modelStats = new HashMap<>();
         if (mlStatsInput.includeModelStats()) {
-            CountDownLatch latch = new CountDownLatch(1);
             boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
-            searchHiddenModels(ActionListener.wrap(hiddenModels -> {
-                for (String modelId : mlStats.getAllModels()) {
-                    if (isSuperAdmin || !hiddenModels.contains(modelId)) {
-                        if (mlStatsInput.retrieveStatsForModel(modelId)) {
-                            Map<ActionName, MLActionStats> actionStatsMap = new HashMap<>();
-                            for (Map.Entry<ActionName, MLActionStats> entry : mlStats.getModelStats(modelId).entrySet()) {
-                                if (mlStatsInput.retrieveStatsForAction(entry.getKey())) {
-                                    actionStatsMap.put(entry.getKey(), entry.getValue());
-                                }
+            Set<String> hiddenModels = mlStatsNodesRequest.getHiddenModelIds() != null
+                ? mlStatsNodesRequest.getHiddenModelIds()
+                : Collections.emptySet();
+            log.info("List of hidden models from Stats transport action: {}", Arrays.toString(hiddenModels.toArray()));
+            for (String modelId : mlStats.getAllModels()) {
+                if (isSuperAdmin || !hiddenModels.contains(modelId)) {
+                    if (mlStatsInput.retrieveStatsForModel(modelId)) {
+                        Map<ActionName, MLActionStats> actionStatsMap = new HashMap<>();
+                        for (Map.Entry<ActionName, MLActionStats> entry : mlStats.getModelStats(modelId).entrySet()) {
+                            if (mlStatsInput.retrieveStatsForAction(entry.getKey())) {
+                                actionStatsMap.put(entry.getKey(), entry.getValue());
                             }
-                            if (hiddenModels.contains(modelId)) {
-                                modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.TRUE));
-                            } else {
-                                modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.FALSE));
-                            }
-
                         }
+                        if (hiddenModels.contains(modelId)) {
+                            modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.TRUE));
+                        } else {
+                            modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.FALSE));
+                        }
+
                     }
                 }
-            }, e -> { log.error("Search Hidden model wasn't successful"); }), latch);
-            // Wait for the asynchronous call to complete
-            try {
-                latch.await(10, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                // Handle interruption if necessary
-                Thread.currentThread().interrupt();
             }
         }
         return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats, modelStats);

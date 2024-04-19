@@ -5,32 +5,29 @@
 
 package org.opensearch.ml.action.profile;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
-import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_ML_VERSION;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
-import static org.opensearch.ml.utils.TestHelper.builder;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
-import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
@@ -41,13 +38,13 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.transport.TransportAddress;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.env.Environment;
-import org.opensearch.ml.common.*;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.model.MLModelManager;
@@ -56,12 +53,6 @@ import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
-import org.opensearch.search.SearchHit;
-import org.opensearch.search.SearchHits;
-import org.opensearch.search.aggregations.InternalAggregations;
-import org.opensearch.search.internal.InternalSearchResponse;
-import org.opensearch.search.profile.SearchProfileShardResults;
-import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -74,7 +65,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
     private MLTask mlTask;
     private MLModelProfile mlModelProfile;
     private String testTaskId;
-    private String testModelId;
+    private String testModelId, hiddenModelId;
 
     @Mock
     private Client client;
@@ -88,6 +79,8 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
 
     @Mock
     private ThreadPool threadPool;
+
+    Set<String> hiddenModelIds;
 
     @Override
     @Before
@@ -153,10 +146,14 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
                     .build()
             );
         testModelId = "test_model_id";
+        hiddenModelId = "hidden_model_id";
         mlModelManager = mock(MLModelManager.class);
-        when(mlModelManager.getAllModelIds()).thenReturn(new String[] { testModelId });
+        when(mlModelManager.getAllModelIds()).thenReturn(new String[] { testModelId, hiddenModelId });
         when(mlModelManager.getModelProfile(testModelId)).thenReturn(mlModelProfile);
+        when(mlModelManager.getModelProfile(hiddenModelId)).thenReturn(mlModelProfile);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("Local Cluster"));
+
+        hiddenModelIds = Set.of(hiddenModelId);
 
         action = Mockito
             .spy(
@@ -224,18 +221,11 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             false
         );
 
-        doAnswer(invocation -> {
-            ActionListener<Set<String>> listener = invocation.getArgument(0);
-            Set<String> result = new HashSet<>();
-            result.add("modelId");
-            listener.onResponse(result);
-            CountDownLatch latch = invocation.getArgument(1);
-            latch.countDown(); // Ensure the latch is counted down after the listener is notified
-            return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
-
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
         MLProfileRequest mlTaskProfileRequest2 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput2);
+
+        mlTaskProfileRequest1.setHiddenModelIds(hiddenModelIds);
+        mlTaskProfileRequest2.setHiddenModelIds(hiddenModelIds);
 
         MLProfileNodeResponse response1 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest1));
         MLProfileNodeResponse response2 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest2));
@@ -247,15 +237,6 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
 
     public void testNodeOperation_emptyInputs() {
         String nodeId = clusterService().localNode().getId();
-        doAnswer(invocation -> {
-            ActionListener<Set<String>> listener = invocation.getArgument(0);
-            Set<String> result = new HashSet<>();
-            result.add("modelId");
-            listener.onResponse(result);
-            CountDownLatch latch = invocation.getArgument(1);
-            latch.countDown(); // Ensure the latch is counted down after the listener is notified
-            return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
         MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), new HashSet<>(), new HashSet<>(), false, false);
         MLProfileRequest mlTaskProfileRequest = new MLProfileRequest(new String[] { nodeId }, mlProfileInput);
 
@@ -266,15 +247,6 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
 
     public void testNodeOperation_emptyResponses() {
         String nodeId = clusterService().localNode().getId();
-        doAnswer(invocation -> {
-            ActionListener<Set<String>> listener = invocation.getArgument(0);
-            Set<String> result = new HashSet<>();
-            result.add("modelId");
-            listener.onResponse(result);
-            CountDownLatch latch = invocation.getArgument(1);
-            latch.countDown(); // Ensure the latch is counted down after the listener is notified
-            return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
         MLProfileInput mlProfileInput1 = new MLProfileInput(
             new HashSet<>(),
             new HashSet<>(Arrays.asList("newtest_id")),
@@ -290,6 +262,8 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             false
         );
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
+
+        mlTaskProfileRequest1.setHiddenModelIds(hiddenModelIds);
         MLProfileRequest mlTaskProfileRequest2 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput2);
 
         MLProfileNodeResponse response1 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest1));
@@ -302,76 +276,10 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
 
     public void testNodeOperation_NoResponseIdNotMatch() {
         String nodeId = clusterService().localNode().getId();
-        doAnswer(invocation -> {
-            ActionListener<Set<String>> listener = invocation.getArgument(0);
-            Set<String> result = new HashSet<>();
-            result.add("modelId");
-            listener.onResponse(result);
-            CountDownLatch latch = invocation.getArgument(1);
-            latch.countDown(); // Ensure the latch is counted down after the listener is notified
-            return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
         MLProfileRequest mlTaskProfileRequest = new MLProfileRequest(new String[] { nodeId }, new MLProfileInput());
         MLProfileNodeResponse response = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest));
 
         assertEquals(0, response.getNodeTasksSize());
-    }
-
-    @Test
-    public void testSearchHiddenModels_successfulSearch() throws IOException {
-
-        SearchResponse response = createSearchModelResponse();
-
-        ActionListener<Set<String>> mockListener = mock(ActionListener.class);
-        CountDownLatch latch = mock(CountDownLatch.class);
-        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> al = invocation.getArgument(1);
-            al.onResponse(response);
-            return null;
-        }).when(client).search(captor.capture(), any());
-
-        action.searchHiddenModels(mockListener, latch);
-
-        ArgumentCaptor<Set<String>> argumentCaptor = ArgumentCaptor.forClass(Set.class);
-
-        verify(mockListener).onResponse(argumentCaptor.capture());
-        Set<String> capturedSet = argumentCaptor.getValue();
-        assertEquals(argumentCaptor.getValue().size(), 1);
-        assertTrue("Expected set to contain modelId", capturedSet.contains("modelId"));
-        verify(client).search(any(SearchRequest.class), any(ActionListener.class));
-    }
-
-    private SearchResponse createSearchModelResponse() throws IOException {
-        XContentBuilder content = builder();
-        content.startObject();
-        content.field(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name());
-        content.field(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION);
-        content.field(MLModel.MODEL_ID_FIELD, "modelId");
-        content.endObject();
-
-        SearchHit[] hits = new SearchHit[1];
-        hits[0] = new SearchHit(0, "modelId", null, null).sourceRef(BytesReference.bytes(content));
-
-        return new SearchResponse(
-            new InternalSearchResponse(
-                new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
-                InternalAggregations.EMPTY,
-                new Suggest(Collections.emptyList()),
-                new SearchProfileShardResults(Collections.emptyMap()),
-                false,
-                false,
-                1
-            ),
-            "",
-            5,
-            5,
-            0,
-            100,
-            ShardSearchFailure.EMPTY_ARRAY,
-            SearchResponse.Clusters.EMPTY
-        );
     }
 
     @Test
@@ -383,15 +291,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             false,
             false
         );
-        doAnswer(invocation -> {
-            ActionListener<Set<String>> listener = invocation.getArgument(0);
-            Set<String> result = new HashSet<>();
-            result.add("modelId");
-            listener.onResponse(result);
-            CountDownLatch latch = invocation.getArgument(1);
-            latch.countDown(); // Ensure the latch is counted down after the listener is notified
-            return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
+
         MLProfileRequest request = new MLProfileRequest(new String[] { clusterService().localNode().getId() }, mlProfileInput);
 
         MLProfileNodeResponse response = action.nodeOperation(new MLProfileNodeRequest(request));
@@ -401,24 +301,15 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
     @Test
     public void testNodeOperation_SuperAdminVsRegularUser() {
         MLProfileInput mlProfileInput = new MLProfileInput(
-            new HashSet<>(Arrays.asList(testModelId)),
+            new HashSet<>(Arrays.asList(hiddenModelId, testModelId)),
             new HashSet<>(),
             new HashSet<>(),
             false,
             false
         );
 
-        doAnswer(invocation -> {
-            ActionListener<Set<String>> listener = invocation.getArgument(0);
-            Set<String> result = new HashSet<>();
-            result.add(testModelId);
-            listener.onResponse(result);
-            CountDownLatch latch = invocation.getArgument(1);
-            latch.countDown(); // Ensure the latch is counted down after the listener is notified
-            return null;
-        }).when(action).searchHiddenModels(isA(ActionListener.class), isA(CountDownLatch.class));
-
         MLProfileRequest request = new MLProfileRequest(new String[] { localNode.getId() }, mlProfileInput);
+        request.setHiddenModelIds(hiddenModelIds);
 
         when(action.isSuperAdminUserWrapper(clusterService, client)).thenReturn(true); // Super admin test
 
@@ -428,7 +319,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
         when(action.isSuperAdminUserWrapper(clusterService, client)).thenReturn(false); // Regular user test
 
         MLProfileNodeResponse regularUserResponse = action.nodeOperation(new MLProfileNodeRequest(request));
-        assertTrue("Regular user may see fewer items", regularUserResponse.getMlNodeModels().isEmpty());
+        assertTrue("Regular user may see fewer items", superAdminResponse.getNodeModelsSize() > regularUserResponse.getNodeModelsSize());
     }
 
 }

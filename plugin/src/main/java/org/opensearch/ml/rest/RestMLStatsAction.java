@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -24,9 +25,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -46,6 +50,7 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchHit;
 
 import com.google.common.collect.ImmutableList;
 
@@ -124,33 +129,60 @@ public class RestMLStatsAction extends BaseRestHandler {
         // copy mlStatsInput to make an effectively final temp variable finalMlStatsInput
         MLStatsInput finalMlStatsInput = mlStatsInput;
         return channel -> {
-            if (finalMlStatsInput.getTargetStatLevels().contains(MLStatLevel.CLUSTER)
-                && (finalMlStatsInput.retrieveAllClusterLevelStats()
-                    || finalMlStatsInput.getClusterLevelStats().contains(MLClusterLevelStat.ML_MODEL_COUNT))) {
-                indexUtils
-                    .getNumberOfDocumentsInIndex(
-                        ML_MODEL_INDEX,
-                        QUERY_ALL_MODEL_META_DOC,
-                        xContentRegistry,
-                        ActionListener.wrap(modelCount -> {
-                            clusterStatsMap.put(MLClusterLevelStat.ML_MODEL_COUNT, modelCount);
-                            indexUtils.getNumberOfDocumentsInIndex(ML_CONNECTOR_INDEX, ActionListener.wrap(connectorCount -> {
-                                clusterStatsMap.put(MLClusterLevelStat.ML_CONNECTOR_COUNT, connectorCount);
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                // Create and configure the search request based on your specific needs
+                SearchRequest searchRequest = IndexUtils.buildHiddenModelSearchRequest();
+                client.search(searchRequest, ActionListener.runBefore(new ActionListener<SearchResponse>() {
+                    @Override
+                    public void onResponse(SearchResponse searchResponse) {
+                        Set<String> hiddenModelIds = new HashSet<>(searchResponse.getHits().getHits().length); // Set initial capacity to
+                        // the number of hits
+                        for (SearchHit hit : searchResponse.getHits()) {
+                            hiddenModelIds.add(hit.getId());
+                        }
+                        mlStatsNodesRequest.setHiddenModelIds(hiddenModelIds);
+                        log.info("List of hidden models from Rest ML Stats Action: {}", Arrays.toString(hiddenModelIds.toArray()));
+                        if (finalMlStatsInput.getTargetStatLevels().contains(MLStatLevel.CLUSTER)
+                            && (finalMlStatsInput.retrieveAllClusterLevelStats()
+                                || finalMlStatsInput.getClusterLevelStats().contains(MLClusterLevelStat.ML_MODEL_COUNT))) {
+                            indexUtils
+                                .getNumberOfDocumentsInIndex(
+                                    ML_MODEL_INDEX,
+                                    QUERY_ALL_MODEL_META_DOC,
+                                    xContentRegistry,
+                                    ActionListener.wrap(modelCount -> {
+                                        clusterStatsMap.put(MLClusterLevelStat.ML_MODEL_COUNT, modelCount);
+                                        indexUtils.getNumberOfDocumentsInIndex(ML_CONNECTOR_INDEX, ActionListener.wrap(connectorCount -> {
+                                            clusterStatsMap.put(MLClusterLevelStat.ML_CONNECTOR_COUNT, connectorCount);
+                                            getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
+                                        }, e -> {
+                                            String errorMessage = "Failed to get ML model count";
+                                            log.error(errorMessage, e);
+                                            onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
+                                        }));
+                                    }, e -> {
+                                        String errorMessage = "Failed to get ML model count";
+                                        log.error(errorMessage, e);
+                                        onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
+                                    })
+                                );
+                        } else {
+                            try {
                                 getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
-                            }, e -> {
-                                String errorMessage = "Failed to get ML model count";
-                                log.error(errorMessage, e);
-                                onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
-                            }));
-                        }, e -> {
-                            String errorMessage = "Failed to get ML model count";
-                            log.error(errorMessage, e);
-                            onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
-                        })
-                    );
-            } else {
-                getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
+                            } catch (IOException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, "Searching model wasn't successful", e);
+                    }
+                }, threadContext::restore));
+
             }
+
         };
     }
 
@@ -224,7 +256,7 @@ public class RestMLStatsAction extends BaseRestHandler {
             }, e -> {
                 String errorMessage = "Failed to get ML node level stats";
                 log.error(errorMessage, e);
-                onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
+                onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
             }));
         }
     }
@@ -238,7 +270,7 @@ public class RestMLStatsAction extends BaseRestHandler {
         return nodeIds.toArray(new String[0]);
     }
 
-    private void onFailure(RestChannel channel, RestStatus status, String errorMessage, Exception exception) {
+    private void onFailed(RestChannel channel, RestStatus status, String errorMessage, Exception exception) {
         BytesRestResponse bytesRestResponse;
         try {
             bytesRestResponse = new BytesRestResponse(channel, exception);

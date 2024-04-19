@@ -13,12 +13,15 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_ML_VERSION;
 import static org.opensearch.ml.utils.RestActionUtils.splitCommaSeparatedParam;
+import static org.opensearch.ml.utils.TestHelper.builder;
 import static org.opensearch.ml.utils.TestHelper.getStatsRestRequest;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,6 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -37,6 +41,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
@@ -50,11 +57,13 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.action.stats.MLStatsNodesResponse;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -72,6 +81,12 @@ import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.search.profile.SearchProfileShardResults;
+import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
@@ -141,6 +156,13 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             actionListener.onResponse(mlModelCount);
             return null;
         }).when(indexUtils).getNumberOfDocumentsInIndex(anyString(), anyString(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
 
         doAnswer(invocation -> {
             ActionListener<Long> actionListener = invocation.getArgument(1);
@@ -403,6 +425,37 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         String[] array = nodeId.get();
         Assert.assertEquals(array[0], "111");
         Assert.assertEquals(array[1], "222");
+    }
+
+    private SearchResponse createSearchModelResponse() throws IOException {
+        XContentBuilder content = builder();
+        content.startObject();
+        content.field(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name());
+        content.field(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION);
+        content.field(MLModel.MODEL_ID_FIELD, "modelId");
+        content.endObject();
+
+        SearchHit[] hits = new SearchHit[1];
+        hits[0] = new SearchHit(0, "modelId", null, null).sourceRef(BytesReference.bytes(content));
+
+        return new SearchResponse(
+                new InternalSearchResponse(
+                        new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
+                        InternalAggregations.EMPTY,
+                        new Suggest(Collections.emptyList()),
+                        new SearchProfileShardResults(Collections.emptyMap()),
+                        false,
+                        false,
+                        1
+                ),
+                "",
+                5,
+                5,
+                0,
+                100,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+        );
     }
 
 }

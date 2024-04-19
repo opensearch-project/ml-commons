@@ -17,15 +17,20 @@ import org.opensearch.ml.stats.MLStatLevel;
 import org.opensearch.ml.stats.MLStatsInput;
 
 import lombok.Getter;
+import lombok.Setter;
 
 public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
 
     @Getter
     private MLStatsInput mlStatsInput;
+    @Getter
+    @Setter
+    private Set<String> hiddenModelIds;
 
     public MLStatsNodesRequest(StreamInput in) throws IOException {
         super(in);
         mlStatsInput = new MLStatsInput(in);
+        hiddenModelIds = in.readSet(StreamInput::readString);
     }
 
     /**
@@ -52,6 +57,7 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         mlStatsInput.writeTo(out);
+        out.writeCollection(hiddenModelIds, StreamOutput::writeString);
     }
 
     public void addNodeLevelStats(Set<MLNodeLevelStat> stats) {

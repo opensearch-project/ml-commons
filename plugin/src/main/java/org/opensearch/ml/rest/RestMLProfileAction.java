@@ -10,19 +10,17 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TASK_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
-import static org.opensearch.ml.utils.RestActionUtils.onFailure;
 import static org.opensearch.ml.utils.RestActionUtils.splitCommaSeparatedParam;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
@@ -35,10 +33,13 @@ import org.opensearch.ml.action.profile.MLProfileRequest;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLProfileInput;
+import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
+import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchHit;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -60,6 +61,7 @@ public class RestMLProfileAction extends BaseRestHandler {
      * @param clusterService cluster service
      */
     public RestMLProfileAction(ClusterService clusterService) {
+
         this.clusterService = clusterService;
     }
 
@@ -97,32 +99,62 @@ public class RestMLProfileAction extends BaseRestHandler {
             : mlProfileInput.getNodeIds().toArray(new String[0]);
         MLProfileRequest mlProfileRequest = new MLProfileRequest(nodeIds, mlProfileInput);
 
+        // Create and configure the search request based on your specific needs
+        SearchRequest searchRequest = IndexUtils.buildHiddenModelSearchRequest();
+
         return channel -> {
+            // First execute the search request
             XContentBuilder builder = channel.newBuilder();
-            client.execute(MLProfileAction.INSTANCE, mlProfileRequest, ActionListener.wrap(r -> {
-                builder.startObject();
-                // node level profile
-                List<MLProfileNodeResponse> nodeProfiles = r.getNodes().stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-                log.debug("Build MLProfileNodeResponse for size of {}", nodeProfiles.size());
-                if (nodeProfiles.size() > 0) {
-                    if (NODE_VIEW.equals(view)) {
-                        r.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                    } else if (MODEL_VIEW.equals(view)) {
-                        Map<String, MLProfileModelResponse> modelCentricProfileMap = buildModelCentricResult(nodeProfiles);
-                        builder.startObject("models");
-                        for (Map.Entry<String, MLProfileModelResponse> entry : modelCentricProfileMap.entrySet()) {
-                            builder.field(entry.getKey(), entry.getValue());
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                client.search(searchRequest, ActionListener.runBefore(new ActionListener<SearchResponse>() {
+                    @Override
+                    public void onResponse(SearchResponse searchResponse) {
+                        // Initialize the result set
+                        Set<String> hiddenModelIds = new HashSet<>(searchResponse.getHits().getHits().length); // Set initial capacity to
+                                                                                                               // the number of hits
+                        for (SearchHit hit : searchResponse.getHits()) {
+                            hiddenModelIds.add(hit.getId());
                         }
-                        builder.endObject();
+                        log.info("List of hidden models from Rest ML Profile Action: {}", Arrays.toString(hiddenModelIds.toArray()));
+                        mlProfileRequest.setHiddenModelIds(hiddenModelIds);
+                        client.execute(MLProfileAction.INSTANCE, mlProfileRequest, ActionListener.wrap(r -> {
+                            builder.startObject();
+                            // node level profile
+                            List<MLProfileNodeResponse> nodeProfiles = r
+                                .getNodes()
+                                .stream()
+                                .filter(s -> !s.isEmpty())
+                                .collect(Collectors.toList());
+                            log.debug("Build MLProfileNodeResponse for size of {}", nodeProfiles.size());
+                            if (nodeProfiles.size() > 0) {
+                                if (NODE_VIEW.equals(view)) {
+                                    r.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                                } else if (MODEL_VIEW.equals(view)) {
+                                    Map<String, MLProfileModelResponse> modelCentricProfileMap = buildModelCentricResult(nodeProfiles);
+                                    builder.startObject("models");
+                                    for (Map.Entry<String, MLProfileModelResponse> entry : modelCentricProfileMap.entrySet()) {
+                                        builder.field(entry.getKey(), entry.getValue());
+                                    }
+                                    builder.endObject();
+                                }
+                            }
+                            builder.endObject();
+                            channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
+                        }, e -> {
+                            String errorMessage = "Failed to get ML node level profile";
+                            log.error(errorMessage, e);
+                            onFailed(channel, errorMessage, e);
+                        }));
                     }
-                }
-                builder.endObject();
-                channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
-            }, e -> {
-                String errorMessage = "Failed to get ML node level profile";
-                log.error(errorMessage, e);
-                onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
-            }));
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        onFailed(channel, "Searching model wasn't successful", e);
+                    }
+
+                }, threadContext::restore));
+            }
+
         };
     }
 
@@ -203,5 +235,18 @@ public class RestMLProfileAction extends BaseRestHandler {
             mlProfileInput.setReturnAllModels(true);
         }
         return mlProfileInput;
+    }
+
+    private void onFailed(RestChannel channel, String message, Exception e) {
+        try {
+            XContentBuilder builder = channel.newBuilder();
+            builder.startObject();
+            builder.field("error", message);
+            builder.field("exception", e.getMessage());
+            builder.endObject();
+            channel.sendResponse(new BytesRestResponse(RestStatus.INTERNAL_SERVER_ERROR, builder));
+        } catch (IOException ioException) {
+            log.error("Failed to send failure response", ioException);
+        }
     }
 }
