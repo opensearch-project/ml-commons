@@ -16,6 +16,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+
 import lombok.Getter;
 
 public class MLModelStats implements ToXContentFragment, Writeable {
