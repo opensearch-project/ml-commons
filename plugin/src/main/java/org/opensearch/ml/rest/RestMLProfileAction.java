@@ -13,7 +13,13 @@ import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 import static org.opensearch.ml.utils.RestActionUtils.splitCommaSeparatedParam;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.search.SearchRequest;
@@ -115,7 +121,6 @@ public class RestMLProfileAction extends BaseRestHandler {
                         for (SearchHit hit : searchResponse.getHits()) {
                             hiddenModelIds.add(hit.getId());
                         }
-                        log.info("List of hidden models from Rest ML Profile Action: {}", Arrays.toString(hiddenModelIds.toArray()));
                         mlProfileRequest.setHiddenModelIds(hiddenModelIds);
                         client.execute(MLProfileAction.INSTANCE, mlProfileRequest, ActionListener.wrap(r -> {
                             builder.startObject();

@@ -10,14 +10,19 @@ import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_FAILURE_COUNT;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import org.junit.Before;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
@@ -111,4 +116,37 @@ public class MLModelStatsTests extends OpenSearchTestCase {
         stats = new MLModelStats(new HashMap<>(), false);
         assertNull(stats.getActionStats(ActionName.PREDICT));
     }
+
+    public void testVersionBasedSerialization() throws IOException {
+        Version oldVersion = Version.fromString("1.0.0"); // below the threshold
+        Version newVersion = MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK; // at or above threshold
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(newVersion);
+        mlModelStats.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(newVersion);
+        MLModelStats newVersionStats = new MLModelStats(input);
+        assertEquals(mlModelStats.getIsHidden(), newVersionStats.getIsHidden());
+
+        output = new BytesStreamOutput();
+        output.setVersion(oldVersion);
+        mlModelStats.writeTo(output);
+        input = output.bytes().streamInput();
+        input.setVersion(oldVersion);
+        MLModelStats oldVersionStats = new MLModelStats(input);
+        assertNull(oldVersionStats.getIsHidden()); // Assuming `isHidden` is not serialized for old versions
+    }
+
+    public void testToXContentWithParams() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startObject();
+        ToXContent.Params params = new ToXContent.MapParams(Collections.singletonMap("pretty", "true"));
+        mlModelStats.toXContent(builder, params);
+        builder.endObject();
+        String prettyContent = TestHelper.xContentBuilderToString(builder);
+        assertNotNull(prettyContent);
+        assertFalse(prettyContent.contains("\n"));
+    }
+
 }

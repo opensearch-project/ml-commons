@@ -141,7 +141,6 @@ public class RestMLStatsAction extends BaseRestHandler {
                             hiddenModelIds.add(hit.getId());
                         }
                         mlStatsNodesRequest.setHiddenModelIds(hiddenModelIds);
-                        log.info("List of hidden models from Rest ML Stats Action: {}", Arrays.toString(hiddenModelIds.toArray()));
                         if (finalMlStatsInput.getTargetStatLevels().contains(MLStatLevel.CLUSTER)
                             && (finalMlStatsInput.retrieveAllClusterLevelStats()
                                 || finalMlStatsInput.getClusterLevelStats().contains(MLClusterLevelStat.ML_MODEL_COUNT))) {
@@ -170,7 +169,7 @@ public class RestMLStatsAction extends BaseRestHandler {
                             try {
                                 getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
                             } catch (IOException e) {
-                                throw new RuntimeException(e);
+                                onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, "Failed to retrieve Cluster level metrics", e);
                             }
                         }
                     }

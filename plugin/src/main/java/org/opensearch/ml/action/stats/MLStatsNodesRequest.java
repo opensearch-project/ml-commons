@@ -6,12 +6,15 @@
 package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Set;
 
+import org.opensearch.Version;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStatLevel;
 import org.opensearch.ml.stats.MLStatsInput;
@@ -25,12 +28,15 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
     private MLStatsInput mlStatsInput;
     @Getter
     @Setter
-    private Set<String> hiddenModelIds;
+    private Set<String> hiddenModelIds = Collections.emptySet();
 
     public MLStatsNodesRequest(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         mlStatsInput = new MLStatsInput(in);
-        hiddenModelIds = in.readSet(StreamInput::readString);
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            hiddenModelIds = in.readSet(StreamInput::readString);
+        }
     }
 
     /**
@@ -56,8 +62,11 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        Version streamOutputVersion = out.getVersion();
         mlStatsInput.writeTo(out);
-        out.writeCollection(hiddenModelIds, StreamOutput::writeString);
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            out.writeCollection(hiddenModelIds, StreamOutput::writeString);
+        }
     }
 
     public void addNodeLevelStats(Set<MLNodeLevelStat> stats) {

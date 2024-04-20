@@ -7,12 +7,14 @@ package org.opensearch.ml.profile;
 
 import java.io.IOException;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -82,14 +84,15 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         if (memSizeEstimationGPU != null) {
             builder.field("memory_size_estimation_gpu", memSizeEstimationGPU);
         }
-        if (isHidden != null) {
-            builder.field("is_hidden", isHidden);
+        if (isHidden != null && isHidden) {
+            builder.field("is_hidden", true);
         }
         builder.endObject();
         return builder;
     }
 
     public MLModelProfile(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         if (in.readBoolean()) {
             this.modelState = in.readEnum(MLModelState.class);
         } else {
@@ -110,11 +113,14 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         this.memSizeEstimationCPU = in.readOptionalLong();
         this.memSizeEstimationGPU = in.readOptionalLong();
-        this.isHidden = in.readOptionalBoolean();
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            this.isHidden = in.readOptionalBoolean();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         if (this.modelState != null) {
             out.writeBoolean(true);
             out.writeEnum(modelState);
@@ -138,6 +144,8 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         out.writeOptionalLong(memSizeEstimationCPU);
         out.writeOptionalLong(memSizeEstimationGPU);
-        out.writeOptionalBoolean(isHidden);
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            out.writeOptionalBoolean(isHidden);
+        }
     }
 }

@@ -9,11 +9,14 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import lombok.Getter;
 
 public class MLModelStats implements ToXContentFragment, Writeable {
 
@@ -25,13 +28,18 @@ public class MLModelStats implements ToXContentFragment, Writeable {
      * Example: {predict: { request_count: 1}}
      */
     private Map<ActionName, MLActionStats> modelStats;
+    @Getter
     private Boolean isHidden;
 
     public MLModelStats(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         if (in.readBoolean()) {
             this.modelStats = in.readMap(stream -> stream.readEnum(ActionName.class), MLActionStats::new);
         }
-        this.isHidden = in.readOptionalBoolean();
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            this.isHidden = in.readOptionalBoolean();
+        }
+
     }
 
     public MLModelStats(Map<ActionName, MLActionStats> modelStats, Boolean isHidden) {
@@ -41,13 +49,16 @@ public class MLModelStats implements ToXContentFragment, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         if (modelStats != null && modelStats.size() > 0) {
             out.writeBoolean(true);
             out.writeMap(modelStats, (stream, v) -> stream.writeEnum(v), (stream, stats) -> stats.writeTo(stream));
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalBoolean(isHidden);
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK)) {
+            out.writeOptionalBoolean(isHidden);
+        }
     }
 
     @Override
