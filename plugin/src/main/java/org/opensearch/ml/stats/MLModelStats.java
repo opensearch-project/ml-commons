@@ -71,8 +71,8 @@ public class MLModelStats implements ToXContentFragment, Writeable {
                 builder.endObject();
             }
         }
-        if (isHidden != null) {
-            builder.field("is_hidden", isHidden);
+        if (isHidden != null && isHidden) {
+            builder.field("is_hidden", true);
         }
         return builder;
     }

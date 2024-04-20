@@ -162,7 +162,6 @@ public class MLStatsNodesTransportAction extends
             Set<String> hiddenModels = mlStatsNodesRequest.getHiddenModelIds() != null
                 ? mlStatsNodesRequest.getHiddenModelIds()
                 : Collections.emptySet();
-            log.info("List of hidden models from Stats transport action: {}", Arrays.toString(hiddenModels.toArray()));
             for (String modelId : mlStats.getAllModels()) {
                 if (isSuperAdmin || !hiddenModels.contains(modelId)) {
                     if (mlStatsInput.retrieveStatsForModel(modelId)) {
@@ -174,10 +173,7 @@ public class MLStatsNodesTransportAction extends
                         }
                         if (hiddenModels.contains(modelId)) {
                             modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.TRUE));
-                        } else {
-                            modelStats.put(modelId, new MLModelStats(actionStatsMap, Boolean.FALSE));
                         }
-
                     }
                 }
             }
