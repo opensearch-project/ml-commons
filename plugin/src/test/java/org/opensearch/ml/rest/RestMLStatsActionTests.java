@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -428,7 +427,6 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT));
         assertEquals(0, input.getClusterLevelStats().size());
     }
-
 
     public void testCreateMlStatsInputFromRequestParams_ClusterStat() {
         RestRequest request = getStatsRestRequest(node.getId(), MLClusterLevelStat.ML_MODEL_COUNT.name().toLowerCase(Locale.ROOT));
