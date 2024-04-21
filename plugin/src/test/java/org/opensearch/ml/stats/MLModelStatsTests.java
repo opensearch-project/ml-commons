@@ -34,14 +34,14 @@ public class MLModelStatsTests extends OpenSearchTestCase {
     private long requestCount = 200;
     private long failureCount = 100;
 
+    Map<ActionName, MLActionStats> modelStats = new HashMap<>();
+
     @Before
     public void setup() {
         Map<MLActionLevelStat, Object> modelActionStats = new HashMap<>();
         modelActionStats.put(ML_ACTION_REQUEST_COUNT, requestCount);
         modelActionStats.put(ML_ACTION_FAILURE_COUNT, failureCount);
         mlActionStats = new MLActionStats(modelActionStats);
-
-        Map<ActionName, MLActionStats> modelStats = new HashMap<>();
         modelStats.put(ActionName.PREDICT, mlActionStats);
         mlModelStats = new MLModelStats(modelStats, false);
     }
@@ -71,13 +71,14 @@ public class MLModelStatsTests extends OpenSearchTestCase {
     public void testToXContent() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         builder.startObject();
+        mlModelStats = new MLModelStats(modelStats, false);
         mlModelStats.toXContent(builder, EMPTY_PARAMS);
         builder.endObject();
         String content = TestHelper.xContentBuilderToString(builder);
         Set<String> validContents = ImmutableSet
             .of(
-                "{\"predict\":{\"ml_action_request_count\":200,\"ml_action_failure_count\":100},\"is_hidden\":false}",
-                "{\"predict\":{\"ml_action_failure_count\":100,\"ml_action_request_count\":200},\"is_hidden\":false}"
+                "{\"predict\":{\"ml_action_request_count\":200,\"ml_action_failure_count\":100}}",
+                "{\"predict\":{\"ml_action_failure_count\":100,\"ml_action_request_count\":200}}"
             );
         assertTrue(validContents.contains(content));
     }

@@ -9,6 +9,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -208,6 +210,28 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertTrue(content.utf8ToString().contains("\"ml_model_count\":10"));
     }
 
+    public void testNodeStatsWithNoNodes() throws Exception {
+        when(clusterService.state()).thenReturn(ClusterState.builder(new ClusterName("emptyCluster")).build()); // Mock to return an empty cluster state
+
+        doAnswer(invocation -> {
+            ActionListener<MLStatsNodesResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mock(MLStatsNodesResponse.class));
+            return null;
+        }).when(client).execute(eq(MLStatsNodesAction.INSTANCE), any(), any());
+
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.NODE)).build();
+        RestRequest request = getStatsRestRequest(mlStatsInput);
+
+        restAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
+        verify(channel).sendResponse(argumentCaptor.capture());
+        BytesRestResponse response = argumentCaptor.getValue();
+        assertEquals(RestStatus.OK, response.status());
+        String test = response.content().utf8ToString();
+        assertTrue(response.content().utf8ToString().contains("{}")); // Expecting an empty node response
+    }
+
     public void testPrepareRequest_ClusterAndNodeLevelStates() throws Exception {
         prepareResponse();
 
@@ -405,6 +429,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertEquals(0, input.getClusterLevelStats().size());
     }
 
+
     public void testCreateMlStatsInputFromRequestParams_ClusterStat() {
         RestRequest request = getStatsRestRequest(node.getId(), MLClusterLevelStat.ML_MODEL_COUNT.name().toLowerCase(Locale.ROOT));
         MLStatsInput input = restAction.createMlStatsInputFromRequestParams(request);
@@ -425,6 +450,57 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         String[] array = nodeId.get();
         Assert.assertEquals(array[0], "111");
         Assert.assertEquals(array[1], "222");
+    }
+
+    public void testIOExceptionDuringNodeStatsRetrieval() throws Exception {
+        // Configure the client to simulate an error response through the ActionListener
+        doAnswer(invocation -> {
+            ActionListener<?> listener = invocation.getArgument(2);
+            listener.onFailure(new IOException("Failed to get ML node level stats"));  // Simulate an error being reported asynchronously
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.NODE)).build();
+        RestRequest request = getStatsRestRequest(mlStatsInput);
+
+        // Execute the request
+        restAction.handleRequest(request, channel, client);
+
+        // Capture and verify the response
+        ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
+        verify(channel).sendResponse(argumentCaptor.capture());
+        BytesRestResponse response = argumentCaptor.getValue();
+
+        // Assert the expected results
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, response.status());
+        assertTrue(response.content().utf8ToString().contains("Failed to get ML node level stats"));
+    }
+
+    public void testClusterStatsUnavailable() throws Exception {
+        // Mock the asynchronous method to simulate an error condition
+
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("Failed to get ML model count"));
+            return null; // Void method requires null return in doAnswer
+        }).when(indexUtils).getNumberOfDocumentsInIndex(anyString(), anyString(), any(), any());
+
+        // Build the stats input and the REST request to trigger the operation
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.CLUSTER)).build();
+        RestRequest request = getStatsRestRequest(mlStatsInput);
+
+        // Execute the action which should invoke the mocked method
+        restAction.handleRequest(request, channel, client);
+
+        // Capture and verify the response sent back via the channel
+        ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
+        verify(channel).sendResponse(argumentCaptor.capture());
+        BytesRestResponse response = argumentCaptor.getValue();
+
+        // Assert the response status and content to confirm proper error handling
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, response.status());
+        String test = response.content().utf8ToString();
+        assertTrue(response.content().utf8ToString().contains("Failed to get ML model count"));
     }
 
     private SearchResponse createSearchModelResponse() throws IOException {
