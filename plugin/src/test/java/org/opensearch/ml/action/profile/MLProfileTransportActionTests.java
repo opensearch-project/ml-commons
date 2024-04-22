@@ -7,24 +7,39 @@ package org.opensearch.ml.action.profile;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.env.Environment;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
@@ -39,6 +54,7 @@ import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
@@ -49,16 +65,36 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
     private MLTask mlTask;
     private MLModelProfile mlModelProfile;
     private String testTaskId;
-    private String testModelId;
+    private String testModelId, hiddenModelId;
+
+    @Mock
+    private Client client;
+
+    private DiscoveryNode localNode;
+
+    private ClusterSettings clusterSettings;
+
+    @Mock
+    private ClusterService clusterService;
+
+    @Mock
+    private ThreadPool threadPool;
+
+    Set<String> hiddenModelIds;
 
     @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
+        MockitoAnnotations.openMocks(this);
 
         environment = mock(Environment.class);
         Settings settings = Settings.builder().build();
         when(environment.settings()).thenReturn(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         mlTask = MLTask
             .builder()
@@ -84,29 +120,57 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { testTaskId });
         when(mlTaskManager.getMLTask(testTaskId)).thenReturn(mlTask);
 
-        mlModelProfile = MLModelProfile
-            .builder()
-            .predictor("test_predictor")
-            .workerNodes(new String[] { "node1", "node2" })
-            .modelState(MLModelState.DEPLOYED)
-            .modelInferenceStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
-            .build();
-        testModelId = "test_model_id";
-        mlModelManager = mock(MLModelManager.class);
-        when(mlModelManager.getAllModelIds()).thenReturn(new String[] { testModelId });
-        when(mlModelManager.getModelProfile(testModelId)).thenReturn(mlModelProfile);
-
-        action = new MLProfileTransportAction(
-            client().threadPool(),
-            clusterService(),
-            mock(TransportService.class),
-            mock(ActionFilters.class),
-            mlTaskManager,
-            environment,
-            mlModelManager
+        localNode = new DiscoveryNode(
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
+        when(clusterService.localNode()).thenReturn(localNode);
+
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true).build();
+        clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN)));
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
+
+        mlModelProfile = Mockito
+            .spy(
+                MLModelProfile
+                    .builder()
+                    .predictor("test_predictor")
+                    .workerNodes(new String[] { "node1", "node2" })
+                    .modelState(MLModelState.DEPLOYED)
+                    .modelInferenceStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
+                    .build()
+            );
+        testModelId = "test_model_id";
+        hiddenModelId = "hidden_model_id";
+        mlModelManager = mock(MLModelManager.class);
+        when(mlModelManager.getAllModelIds()).thenReturn(new String[] { testModelId, hiddenModelId });
+        when(mlModelManager.getModelProfile(testModelId)).thenReturn(mlModelProfile);
+        when(mlModelManager.getModelProfile(hiddenModelId)).thenReturn(mlModelProfile);
+        when(clusterService.getClusterName()).thenReturn(new ClusterName("Local Cluster"));
+
+        hiddenModelIds = Set.of(hiddenModelId);
+
+        action = Mockito
+            .spy(
+                new MLProfileTransportAction(
+                    client.threadPool(),
+                    clusterService,
+                    mock(TransportService.class),
+                    mock(ActionFilters.class),
+                    mlTaskManager,
+                    environment,
+                    mlModelManager,
+                    client
+                )
+            );
     }
 
+    @Test
     public void testNewResponse() {
         String nodeId = "nodeId1";
         MLProfileRequest request = new MLProfileRequest(new String[] { nodeId }, new MLProfileInput());
@@ -156,8 +220,12 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             false,
             false
         );
+
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
         MLProfileRequest mlTaskProfileRequest2 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput2);
+
+        mlTaskProfileRequest1.setHiddenModelIds(hiddenModelIds);
+        mlTaskProfileRequest2.setHiddenModelIds(hiddenModelIds);
 
         MLProfileNodeResponse response1 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest1));
         MLProfileNodeResponse response2 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest2));
@@ -194,6 +262,8 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             false
         );
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
+
+        mlTaskProfileRequest1.setHiddenModelIds(hiddenModelIds);
         MLProfileRequest mlTaskProfileRequest2 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput2);
 
         MLProfileNodeResponse response1 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest1));
@@ -211,4 +281,45 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
 
         assertEquals(0, response.getNodeTasksSize());
     }
+
+    @Test
+    public void testNodeOperation_EmptyIds() {
+        MLProfileInput mlProfileInput = new MLProfileInput(
+            new HashSet<>(), // Empty model IDs
+            new HashSet<>(), // Empty task IDs
+            new HashSet<>(),
+            false,
+            false
+        );
+
+        MLProfileRequest request = new MLProfileRequest(new String[] { clusterService().localNode().getId() }, mlProfileInput);
+
+        MLProfileNodeResponse response = action.nodeOperation(new MLProfileNodeRequest(request));
+        assertTrue("Expecting no tasks or models", response.getMlNodeTasks().isEmpty() && response.getMlNodeModels().isEmpty());
+    }
+
+    @Test
+    public void testNodeOperation_SuperAdminVsRegularUser() {
+        MLProfileInput mlProfileInput = new MLProfileInput(
+            new HashSet<>(Arrays.asList(hiddenModelId, testModelId)),
+            new HashSet<>(),
+            new HashSet<>(),
+            false,
+            false
+        );
+
+        MLProfileRequest request = new MLProfileRequest(new String[] { localNode.getId() }, mlProfileInput);
+        request.setHiddenModelIds(hiddenModelIds);
+
+        when(action.isSuperAdminUserWrapper(clusterService, client)).thenReturn(true); // Super admin test
+
+        MLProfileNodeResponse superAdminResponse = action.nodeOperation(new MLProfileNodeRequest(request));
+        assertFalse("Super admin may see more items", superAdminResponse.getMlNodeModels().isEmpty());
+
+        when(action.isSuperAdminUserWrapper(clusterService, client)).thenReturn(false); // Regular user test
+
+        MLProfileNodeResponse regularUserResponse = action.nodeOperation(new MLProfileNodeRequest(request));
+        assertTrue("Regular user may see fewer items", superAdminResponse.getNodeModelsSize() > regularUserResponse.getNodeModelsSize());
+    }
+
 }

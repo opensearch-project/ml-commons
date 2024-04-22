@@ -8,6 +8,7 @@ package org.opensearch.ml.task;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
@@ -142,26 +143,28 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     request.setDispatchTask(false);
                     transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
                 }
-            }, e -> { listener.onFailure(e); });
+            }, listener::onFailure);
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
             if (workerNodes == null || workerNodes.length == 0) {
                 if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                         mlModelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(model -> {
+                            Boolean isHidden = model.getIsHidden();
                             if (!checkModelAutoDeployEnabled(model)) {
-                                log.info("Auto deployment disabled for model {}, please deploy model first", modelId);
-                                listener
-                                    .onFailure(
-                                        new IllegalArgumentException(
-                                            "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + modelId + "/_deploy"
-                                        )
-                                    );
+                                final String errorMsg = getErrorMessage(
+                                    "Auto deployment disabled for this model, please deploy model first",
+                                    modelId,
+                                    isHidden
+                                );
+                                log.info(errorMsg);
+                                listener.onFailure(new IllegalArgumentException(errorMsg));
                                 return;
                             }
                             String[] planningWorkerNodes = model.getPlanningWorkerNodes();
                             MLModel modelBeingAutoDeployed = mlModelManager.addModelToAutoDeployCache(modelId, model);
                             if (modelBeingAutoDeployed == model) {
-                                log.info("Automatically deploy model {}", modelId);
+                                log.info(getErrorMessage("Automatically deploy model", modelId, isHidden));
+
                                 MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(
                                     modelId,
                                     planningWorkerNodes,
@@ -170,8 +173,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                     false
                                 );
                                 client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, ActionListener.wrap(r -> {
-                                    log.info("Auto deployment action triggered for model {}", modelId);
-                                }, e -> { log.error("Auto deployment action failed for model " + modelId, e); }));
+                                    log.info(getErrorMessage("Auto deployment action triggered for the model", modelId, isHidden));
+                                },
+                                    e -> log
+                                        .info(getErrorMessage("Auto deployment action failed for the given model {}", modelId, isHidden), e)
+                                ));
                             }
                             if (planningWorkerNodes == null || planningWorkerNodes.length == 0) {
                                 planningWorkerNodes = nodeHelper.getEligibleNodeIds(functionName);
@@ -184,12 +190,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     }
                     return;
                 } else if (FunctionName.needDeployFirst(functionName)) {
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException(
-                                "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + modelId + "/_deploy"
-                            )
-                        );
+                    listener.onFailure(new IllegalArgumentException("Model not ready yet. Please deploy the model first."));
                     return;
                 } else {
                     workerNodes = nodeHelper.getEligibleNodeIds(functionName);

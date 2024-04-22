@@ -44,6 +44,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
     }
 
     public void testTrainAndPredictKmeans() throws IOException {
+        ingestModelData();
         validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 0, 0);
         trainAndPredictKmeansWithCustomParam();
         validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 1, 1);
