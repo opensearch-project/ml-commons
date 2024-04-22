@@ -23,6 +23,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class IndexUtils {
@@ -132,6 +136,25 @@ public class IndexUtils {
         } else {
             listener.onResponse(0L);
         }
+    }
+
+    public static SearchRequest buildHiddenModelSearchRequest() {
+        SearchRequest searchRequest = new SearchRequest(CommonValue.ML_MODEL_INDEX);
+        // Build the query
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder
+            .filter(
+                QueryBuilders
+                    .boolQuery()
+                    .must(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, true))
+                    // Add the additional filter to exclude documents where "chunk_number" exists
+                    .mustNot(QueryBuilders.existsQuery("chunk_number"))
+            );
+        searchRequest.source().query(boolQueryBuilder);
+        // Specify the fields to include in the search results (only the "_id" field)
+        // No fields to exclude
+        searchRequest.source().fetchSource(new String[] { "_id" }, new String[] {});
+        return searchRequest;
     }
 
 }
