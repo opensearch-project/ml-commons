@@ -210,6 +210,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             .name("test")
             .algorithm(FunctionName.BATCH_RCF)
             .content("content")
+            .isHidden(true)
             .build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);

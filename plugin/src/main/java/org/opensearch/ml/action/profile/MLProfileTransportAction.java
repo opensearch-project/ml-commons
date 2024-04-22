@@ -7,14 +7,17 @@ package org.opensearch.ml.action.profile;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
+import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -24,9 +27,12 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -36,6 +42,8 @@ public class MLProfileTransportAction extends
     private MLTaskManager mlTaskManager;
     private final JvmService jvmService;
     private final MLModelManager mlModelManager;
+
+    private final Client client;
 
     /**
      * Constructor
@@ -55,7 +63,8 @@ public class MLProfileTransportAction extends
         ActionFilters actionFilters,
         MLTaskManager mlTaskManager,
         Environment environment,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        Client client
     ) {
         super(
             MLProfileAction.NAME,
@@ -71,6 +80,7 @@ public class MLProfileTransportAction extends
         this.mlTaskManager = mlTaskManager;
         this.jvmService = new JvmService(environment.settings());
         this.mlModelManager = mlModelManager;
+        this.client = client;
     }
 
     @Override
@@ -98,32 +108,47 @@ public class MLProfileTransportAction extends
     }
 
     private MLProfileNodeResponse createMLProfileNodeResponse(MLProfileRequest mlProfileRequest) {
-        log.debug("Calculating ml profile response on node id:{}", clusterService.localNode().getId());
-        Map<String, MLTask> mlLocalTasks = new HashMap<>();
-        Map<String, MLModelProfile> mlLocalModels = new HashMap<>();
-        MLProfileInput mlProfileInput = mlProfileRequest.getMlProfileInput();
-        Set<String> targetModelIds = mlProfileInput.getModelIds();
+        MLProfileInput profileInput = mlProfileRequest.getMlProfileInput();
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
+        Set<String> hiddenModels = Optional.ofNullable(mlProfileRequest.getHiddenModelIds()).orElse(Collections.emptySet());
+
+        Map<String, MLTask> tasks = getTasks(profileInput, isSuperAdmin, hiddenModels);
+        Map<String, MLModelProfile> models = getModels(profileInput, isSuperAdmin, hiddenModels);
+
+        return new MLProfileNodeResponse(clusterService.localNode(), tasks, models);
+    }
+
+    private Map<String, MLTask> getTasks(MLProfileInput profileInput, boolean isSuperAdmin, Set<String> hiddenModels) {
+        Map<String, MLTask> tasks = new HashMap<>();
         Arrays.stream(mlTaskManager.getAllTaskIds()).forEach(taskId -> {
-            MLTask mlTask = mlTaskManager.getMLTask(taskId);
-            if (mlProfileInput.isReturnAllTasks() || (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(taskId))) {
-                log.debug("Runtime task profile is found for model {}", mlTask.getModelId());
-                mlLocalTasks.put(taskId, mlTask);
-            }
-            if (mlProfileInput.isReturnAllTasks() || (!mlProfileInput.emptyModels() && targetModelIds.contains(mlTask.getModelId()))) {
-                log.debug("Runtime task profile is found for model {}", mlTask.getModelId());
-                mlLocalTasks.put(taskId, mlTask);
-            }
-        });
-        Arrays.stream(mlModelManager.getAllModelIds()).forEach(modelId -> {
-            if (mlProfileInput.isReturnAllModels() || (!mlProfileInput.emptyModels() && targetModelIds.contains(modelId))) {
-                log.debug("Runtime model profile is found for model {}", modelId);
-                MLModelProfile modelProfile = mlModelManager.getModelProfile(modelId);
-                if (modelProfile != null) {
-                    mlLocalModels.put(modelId, modelProfile);
+            MLTask task = mlTaskManager.getMLTask(taskId);
+            if (task != null && (isSuperAdmin || !hiddenModels.contains(task.getModelId()))) {
+                if (profileInput.isReturnAllTasks() || profileInput.getTaskIds().contains(taskId)) {
+                    tasks.put(taskId, task);
                 }
             }
         });
+        return tasks;
+    }
 
-        return new MLProfileNodeResponse(clusterService.localNode(), mlLocalTasks, mlLocalModels);
+    private Map<String, MLModelProfile> getModels(MLProfileInput profileInput, boolean isSuperAdmin, Set<String> hiddenModels) {
+        Map<String, MLModelProfile> models = new HashMap<>();
+        Arrays.stream(mlModelManager.getAllModelIds()).forEach(modelId -> {
+            if (isSuperAdmin || !hiddenModels.contains(modelId)) {
+                if (profileInput.isReturnAllModels() || profileInput.getModelIds().contains(modelId)) {
+                    MLModelProfile modelProfile = mlModelManager.getModelProfile(modelId);
+                    if (modelProfile != null) {
+                        modelProfile.setIsHidden(hiddenModels.contains(modelId));
+                        models.put(modelId, modelProfile);
+                    }
+                }
+            }
+        });
+        return models;
+    }
+
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }
