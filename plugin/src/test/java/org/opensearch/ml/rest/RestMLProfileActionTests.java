@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -48,11 +47,9 @@ import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
@@ -362,7 +359,6 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
     }
 
-
     public void test_Search_Failure() throws Exception {
         // Setup to simulate a search failure
         doAnswer(invocation -> {
@@ -390,7 +386,6 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         assertTrue(response.content().utf8ToString().contains("{}"));
     }
 
-
     public void test_WhenViewIsModel_ReturnModelViewResult() throws Exception {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
@@ -405,22 +400,22 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
     }
 
-//    public void testNodeViewOutput() throws Exception {
-//        // Assuming setup for non-empty node responses as done in the initial setup
-//        MLProfileInput mlProfileInput = new MLProfileInput();
-//        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "node"));
-//        profileAction.handleRequest(request, channel, client);
-//
-//        ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
-//        verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
-//
-//        // Verify that the response is correctly formed for the node view
-//        verify(channel).sendResponse(argThat(response -> {
-//            // Ensure the response content matches expected node view structure
-//            String content = response.content().utf8ToString();
-//            return content.contains("\"node\":") && !content.contains("\"models\":");
-//        }));
-//    }
+    // public void testNodeViewOutput() throws Exception {
+    // // Assuming setup for non-empty node responses as done in the initial setup
+    // MLProfileInput mlProfileInput = new MLProfileInput();
+    // RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "node"));
+    // profileAction.handleRequest(request, channel, client);
+    //
+    // ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
+    // verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+    //
+    // // Verify that the response is correctly formed for the node view
+    // verify(channel).sendResponse(argThat(response -> {
+    // // Ensure the response content matches expected node view structure
+    // String content = response.content().utf8ToString();
+    // return content.contains("\"node\":") && !content.contains("\"models\":");
+    // }));
+    // }
 
     public void testBackendFailureHandling() throws Exception {
         doAnswer(invocation -> {
@@ -441,9 +436,6 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
 
         verify(channel).sendResponse(argThat(response -> response.status() == RestStatus.INTERNAL_SERVER_ERROR));
     }
-
-
-
 
     private SearchResponse createSearchModelResponse() throws IOException {
         XContentBuilder content = builder();
