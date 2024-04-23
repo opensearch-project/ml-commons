@@ -154,7 +154,15 @@ public class RestMLProfileAction extends BaseRestHandler {
 
                     @Override
                     public void onFailure(Exception e) {
-                        channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
+                        try {
+                            builder.startObject();
+                            builder.endObject();
+                            channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
+                        } catch (IOException ex) {
+                            String errorMessage = "Failed to get ML node level profile";
+                            log.error(errorMessage, e);
+                            onFailed(channel, errorMessage, e);
+                        }
                     }
 
                 }, threadContext::restore));
