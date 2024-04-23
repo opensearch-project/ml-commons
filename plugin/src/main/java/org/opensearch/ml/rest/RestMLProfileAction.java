@@ -154,7 +154,7 @@ public class RestMLProfileAction extends BaseRestHandler {
 
                     @Override
                     public void onFailure(Exception e) {
-                        onFailed(channel, "Searching model wasn't successful", e);
+                        channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
                     }
 
                 }, threadContext::restore));
