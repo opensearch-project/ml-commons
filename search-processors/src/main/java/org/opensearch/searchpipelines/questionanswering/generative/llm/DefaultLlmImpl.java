@@ -89,7 +89,6 @@ public class DefaultLlmImpl implements Llm {
                     .getMlModelTensors()
                     .get(0)
                     .getDataAsMap();
-                // log.info("dataAsMap: {}", dataAsMap.toString());
                 listener
                     .onResponse(
                         buildChatCompletionOutput(

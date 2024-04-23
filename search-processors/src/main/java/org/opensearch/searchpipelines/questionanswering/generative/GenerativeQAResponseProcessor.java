@@ -119,7 +119,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         PipelineProcessingContext requestContext,
         ActionListener<SearchResponse> responseListener
     ) {
-        log.info("Entering processResponse.");
+        log.debug("Entering processResponse.");
 
         if (!this.featureFlagSupplier.getAsBoolean()) {
             throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
@@ -132,7 +132,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             t = DEFAULT_PROCESSOR_TIME_IN_SECONDS;
         }
         final int timeout = t;
-        log.info("Timeout for this request: {} seconds.", timeout);
+        log.debug("Timeout for this request: {} seconds.", timeout);
 
         String llmQuestion = params.getLlmQuestion();
         String llmModel = params.getLlmModel() == null ? this.llmModel : params.getLlmModel();
@@ -144,13 +144,12 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         if (conversationId != null && !Strings.hasText(conversationId)) {
             throw new IllegalArgumentException("Empty conversation_id is not allowed.");
         }
-        // log.info("LLM question: {}, LLM model {}, conversation id: {}", llmQuestion, llmModel, conversationId);
         Instant start = Instant.now();
         Integer interactionSize = params.getInteractionSize();
         if (interactionSize == null || interactionSize == GenerativeQAParameters.SIZE_NULL_VALUE) {
             interactionSize = DEFAULT_CHAT_HISTORY_WINDOW;
         }
-        log.info("Using interaction size of {}", interactionSize);
+        log.debug("Using interaction size of {}", interactionSize);
 
         Integer topN = params.getContextSize();
         if (topN == null) {
@@ -167,9 +166,6 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         if (params.getUserInstructions() != null) {
             effectiveUserInstructions = params.getUserInstructions();
         }
-
-        // log.info("system_prompt: {}", systemPrompt);
-        // log.info("user_instructions: {}", userInstructions);
 
         final List<Interaction> chatHistory = new ArrayList<>();
         if (conversationId == null) {
@@ -194,7 +190,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         } else {
             final Instant memoryStart = Instant.now();
             memoryClient.getInteractions(conversationId, interactionSize, ActionListener.wrap(r -> {
-                log.info("getInteractions complete. ({})", getDuration(memoryStart));
+                log.debug("getInteractions complete. ({})", getDuration(memoryStart));
                 chatHistory.addAll(r);
                 doChatCompletion(
                     LlmIOUtil
@@ -231,7 +227,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         llm.doChatCompletion(input, new ActionListener<>() {
             @Override
             public void onResponse(ChatCompletionOutput output) {
-                log.info("doChatCompletion complete. ({})", getDuration(chatStart));
+                log.debug("doChatCompletion complete. ({})", getDuration(chatStart));
 
                 final String answer = getAnswer(output);
                 final String errorMessage = getError(output);
