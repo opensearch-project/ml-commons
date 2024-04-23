@@ -6,8 +6,10 @@
 package org.opensearch.ml.rest;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -46,11 +48,14 @@ import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.action.profile.MLProfileAction;
@@ -67,6 +72,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.ml.profile.MLProfileInput;
+import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -152,13 +158,6 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         when(clusterService.state()).thenReturn(testState);
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
-            listener.onResponse(response);
-            return null;
-        }).when(client).search(any(SearchRequest.class), any());
-
-        doAnswer(invocation -> {
             ActionListener<MLProfileResponse> actionListener = invocation.getArgument(2);
             Map<String, MLTask> nodeTasks = new HashMap<>();
             nodeTasks.put("test_id", mlTask);
@@ -207,6 +206,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_TaskRequest() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         RestRequest request = getRestRequest();
         profileAction.handleRequest(request, channel, client);
 
@@ -218,6 +224,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_TaskRequestWithNoTaskIds() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withPath("/_plugins/_ml/profile/tasks").build();
         profileAction.handleRequest(request, channel, client);
 
@@ -228,6 +241,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_ModelRequest() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         RestRequest request = getModelRestRequest();
         profileAction.handleRequest(request, channel, client);
 
@@ -239,6 +259,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_TaskRequestWithNoModelIds() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withPath("/_plugins/_ml/profile/models").build();
         profileAction.handleRequest(request, channel, client);
 
@@ -249,6 +276,12 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_EmptyNodeProfile() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
         doAnswer(invocation -> {
             ActionListener<MLProfileResponse> actionListener = invocation.getArgument(2);
             MLProfileResponse profileResponse = new MLProfileResponse(clusterName, new ArrayList<>(), new ArrayList<>());
@@ -267,6 +300,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_EmptyNodeTasksSize() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         doAnswer(invocation -> {
             ActionListener<MLProfileResponse> actionListener = invocation.getArgument(2);
             Map<String, MLTask> nodeTasks = new HashMap<>();
@@ -288,6 +328,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_WithRequestContent() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         MLProfileInput mlProfileInput = new MLProfileInput();
         RestRequest request = getProfileRestRequest(mlProfileInput);
         profileAction.handleRequest(request, channel, client);
@@ -296,6 +343,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest_Failure() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
         doAnswer(invocation -> {
             ActionListener<MLProfileResponse> actionListener = invocation.getArgument(2);
             actionListener.onFailure(new RuntimeException("test failure"));
@@ -308,13 +362,88 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
     }
 
+
+    public void test_Search_Failure() throws Exception {
+        // Setup to simulate a search failure
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("Mocking Exception")); // Trigger failure
+            return null;
+        }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
+
+        // Create a RestRequest instance for testing
+        RestRequest request = getRestRequest(); // Ensure this method correctly initializes a RestRequest
+
+        // Handle the request with the expectation of handling a failure
+        profileAction.handleRequest(request, channel, client);
+
+        // Verification that the search method was called exactly once
+        verify(client, times(1)).search(any(SearchRequest.class), any(ActionListener.class));
+
+        // Capturing the response sent to the channel
+        ArgumentCaptor<BytesRestResponse> responseCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
+        verify(channel).sendResponse(responseCaptor.capture());
+
+        // Check the response status code to see if it correctly reflects the error
+        BytesRestResponse response = responseCaptor.getValue();
+        assertEquals(RestStatus.OK, response.status());
+        assertTrue(response.content().utf8ToString().contains("{}"));
+    }
+
+
     public void test_WhenViewIsModel_ReturnModelViewResult() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
         MLProfileInput mlProfileInput = new MLProfileInput();
         RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "model"));
         profileAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
     }
+
+//    public void testNodeViewOutput() throws Exception {
+//        // Assuming setup for non-empty node responses as done in the initial setup
+//        MLProfileInput mlProfileInput = new MLProfileInput();
+//        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "node"));
+//        profileAction.handleRequest(request, channel, client);
+//
+//        ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
+//        verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+//
+//        // Verify that the response is correctly formed for the node view
+//        verify(channel).sendResponse(argThat(response -> {
+//            // Ensure the response content matches expected node view structure
+//            String content = response.content().utf8ToString();
+//            return content.contains("\"node\":") && !content.contains("\"models\":");
+//        }));
+//    }
+
+    public void testBackendFailureHandling() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchResponse response = createSearchModelResponse(); // Prepare your mocked response here
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Simulated backend failure"));
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), any(ActionListener.class));
+
+        RestRequest request = getRestRequest();
+        profileAction.handleRequest(request, channel, client);
+
+        verify(channel).sendResponse(argThat(response -> response.status() == RestStatus.INTERNAL_SERVER_ERROR));
+    }
+
+
+
 
     private SearchResponse createSearchModelResponse() throws IOException {
         XContentBuilder content = builder();
