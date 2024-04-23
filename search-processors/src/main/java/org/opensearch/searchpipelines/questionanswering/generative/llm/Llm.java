@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import org.opensearch.core.action.ActionListener;
+
 /**
  * Capabilities of large language models, e.g. completion, embeddings, etc.
  */
@@ -29,5 +31,5 @@ public interface Llm {
         COHERE
     }
 
-    ChatCompletionOutput doChatCompletion(ChatCompletionInput input);
+    void doChatCompletion(ChatCompletionInput input, ActionListener<ChatCompletionOutput> listener);
 }
