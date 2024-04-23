@@ -176,7 +176,11 @@ public class RestMLStatsAction extends BaseRestHandler {
 
                     @Override
                     public void onFailure(Exception e) {
-                        onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, "Searching model wasn't successful", e);
+                        try {
+                            getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
+                        } catch (IOException ex) {
+                            onFailed(channel, RestStatus.INTERNAL_SERVER_ERROR, "Failed to retrieve Cluster level metrics", e);
+                        }
                     }
                 }, threadContext::restore));
 
