@@ -42,7 +42,7 @@ public class MachineLearningInternalClient {
     }
 
     @VisibleForTesting
-    void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
+    public void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
