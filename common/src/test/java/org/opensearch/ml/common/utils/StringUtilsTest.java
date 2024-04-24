@@ -118,6 +118,23 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void getInterfaceMap() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("input", "value1");
+        parameters.put("output", 2);
+        parameters.put("key3", 2.1);
+        parameters.put("key4", new int[]{10, 20});
+        parameters.put("key5", new Object[]{1.01, "abc"});
+        Map<String, String> interfaceMap = StringUtils.getInterfaceMap(parameters);
+        Assert.assertEquals(2, interfaceMap.size());
+        Assert.assertEquals("value1", interfaceMap.get("input"));
+        Assert.assertEquals("2", interfaceMap.get("output"));
+        Assert.assertNull(interfaceMap.get("key3"));
+        Assert.assertNull(interfaceMap.get("key4"));
+        Assert.assertNull(interfaceMap.get("key5"));
+    }
+
+    @Test
     public void processTextDocs() {
         List<String> processedDocs = StringUtils.processTextDocs(Arrays.asList("abc \n\n123\"4", null, "[1.01,\"abc\"]"));
         assertEquals(3, processedDocs.size());

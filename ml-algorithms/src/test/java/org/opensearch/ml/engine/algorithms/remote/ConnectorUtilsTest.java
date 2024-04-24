@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -24,6 +25,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -233,6 +235,37 @@ public class ConnectorUtilsTest {
         Assert.assertEquals(-0.0002135904, tensors.getMlModelTensors().get(0).getData()[1]);
         Assert.assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
     }
+
+    @Test
+    public void testValidateSchema() {
+        String schema = "{"
+                + "\"type\": \"object\","
+                + "\"properties\": {"
+                + "    \"key1\": {\"type\": \"string\"},"
+                + "    \"key2\": {\"type\": \"integer\"}"
+                + "}"
+                + "}";
+        String json = "{\"key1\": \"foo\", \"key2\": 123}";
+        ConnectorUtils.validateSchema(schema, json);
+    }
+
+    @Test
+    public void testConvertingInterfaceToValidSchema() {
+        String schemaString = "{"
+                + "\"department\": {"
+                + "    \"name\": \"string\","
+                + "    \"employees\": "
+                + "        {\"name\": \"string\","
+                + "         \"age\": {\"type\":\"integer\","
+                + "                   \"description\": \"This field should be above zero\"}},"
+                + "     }, \"foo\": {\"properties\":{\"name\":\"string\"}}"
+                + "}";
+        String expectedString = "{\"properties\":{\"foo\":{\"properties\":{\"name\":\"string\"}},\"department\":{\"properties\":{\"name\":\"string\",\"employees\":{\"properties\":{\"name\":\"string\",\"age\":{\"description\":\"This field should be above zero\",\"type\":\"integer\"}}}}}}}";
+        JSONObject schemaObject = new JSONObject(schemaString);
+        JSONObject validSchemaObject = ConnectorUtils.processJsonObject(schemaObject);
+        Assert.assertEquals(expectedString, validSchemaObject.toString());
+    }
+
 
     private void processInput_TextDocsInputDataSet_PreprocessFunction(
         String requestBody,

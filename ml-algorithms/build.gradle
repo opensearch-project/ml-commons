@@ -28,6 +28,7 @@ dependencies {
        exclude group: "org.jetbrains", module: "annotations"
     }
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'com.github.erosb', name: 'json-sKema', version: '0.15.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'

@@ -160,7 +160,11 @@ public class CommonValue {
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
                         + AbstractConnector.ACTIONS_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
+                        + AbstractConnector.MODEL_INTERFACE_FIELD
                         + "\" : {\"type\": \"flat_object\"}\n";
+
 
         public static final String ML_MODEL_INDEX_MAPPING = "{\n"
                         + "    \"_meta\": {\"schema_version\": "

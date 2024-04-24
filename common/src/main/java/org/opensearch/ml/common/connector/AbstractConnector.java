@@ -44,6 +44,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
+    public static final String MODEL_INTERFACE_FIELD = "model_interface";
 
 
     protected String name;
@@ -69,6 +70,7 @@ public abstract class AbstractConnector implements Connector {
     protected Instant lastUpdateTime;
     @Setter
     protected ConnectorClientConfig connectorClientConfig;
+    protected Map<String, String> modelInterface;
 
     protected Map<String, String> createPredictDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
