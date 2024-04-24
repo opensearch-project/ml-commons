@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.*;
+
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
@@ -12,13 +14,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -36,7 +31,13 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import static org.opensearch.ml.common.CommonValue.*;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 @Getter
 @Setter
