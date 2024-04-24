@@ -27,7 +27,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.*;
+import static org.opensearch.ml.common.utils.StringUtils.getInterfaceMap;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
