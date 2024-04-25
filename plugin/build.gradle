@@ -185,6 +185,8 @@ integTest {
     // note: if left false the log output will still show in your IDE
     testLogging.showStandardStreams = true
 
+    // Exclude integration test for search index tool for multiple nodes
+    // because we cannot get concrete exception message in multi-node cluster
     if (_numNodes > 1) {
         filter {
             excludeTestsMatching "org.opensearch.ml.rest.RestSearchIndexToolIT.*"
