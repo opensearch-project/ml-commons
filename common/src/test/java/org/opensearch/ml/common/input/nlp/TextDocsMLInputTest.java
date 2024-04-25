@@ -1,5 +1,7 @@
 package org.opensearch.ml.common.input.nlp;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -16,6 +18,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
@@ -65,10 +68,17 @@ public class TextDocsMLInputTest {
         parseMLInput(jsonStr, 2);
     }
 
+    @Test
+    public void parseTextDocsMLInput_WithParameters() throws IOException {
+        String jsonStr = "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}, \"parameters\" : {\"content_type\": \"passage\"}}";
+        parseMLInput(jsonStr, 2);
+    }
+
     private void parseMLInput(String jsonStr, int docSize) throws IOException {
         XContentParser parser = XContentType.JSON.xContent()
-            .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+            .createParser(new NamedXContentRegistry(Stream.concat(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents().stream(), Stream.of(
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY)).collect(Collectors.toList())), null, jsonStr);
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.input.nlp;
 
+import java.util.Locale;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -13,6 +14,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 import java.io.IOException;
@@ -82,6 +84,7 @@ public class TextDocsMLInput extends MLInput {
         List<String> docs = new ArrayList<>();
         ModelResultFilter resultFilter = null;
 
+        MLAlgoParams mlParameters = null;
         boolean returnBytes = false;
         boolean returnNumber = true;
         List<String> targetResponse = new ArrayList<>();
@@ -93,6 +96,10 @@ public class TextDocsMLInput extends MLInput {
             parser.nextToken();
 
             switch (fieldName) {
+                case ML_PARAMETERS_FIELD:
+                    mlParameters = parser.namedObject(MLAlgoParams.class, this.algorithm.name().toUpperCase(
+                        Locale.ROOT), null);
+                    break;
                 case RETURN_BYTES_FIELD:
                     returnBytes = parser.booleanValue();
                     break;
@@ -137,6 +144,8 @@ public class TextDocsMLInput extends MLInput {
             throw new IllegalArgumentException("Empty text docs");
         }
         inputDataset = new TextDocsInputDataSet(docs, filter);
+
+        this.parameters = mlParameters;
     }
 
 }
