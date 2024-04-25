@@ -6,22 +6,31 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.apache.hc.core5.http.ParseException;
+import org.junit.After;
 import org.opensearch.client.*;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.DeprecationHandler;
+import org.opensearch.core.xcontent.MediaType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.utils.TestHelper;
 
-public abstract class RestBaseAgentToolsIT extends RestOpenSearchSecureTestCase {
+public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
+
+    private static final String INTERNAL_INDICES_PREFIX = ".";
 
     private Object parseFieldFromResponse(Response response, String field) throws IOException, ParseException {
         assertNotNull(field);
@@ -73,5 +82,39 @@ public abstract class RestBaseAgentToolsIT extends RestOpenSearchSecureTestCase 
         Response response = TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, requestBody, null);
         return parseStringResponseFromExecuteAgentResponse(response);
+    }
+
+    @After
+    public void deleteExternalIndices() throws IOException {
+        final Response response = client().performRequest(new Request("GET", "/_cat/indices?format=json" + "&expand_wildcards=all"));
+        final MediaType xContentType = MediaType.fromMediaType(response.getEntity().getContentType());
+        try (
+            final XContentParser parser = xContentType
+                .xContent()
+                .createParser(
+                    NamedXContentRegistry.EMPTY,
+                    DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
+                    response.getEntity().getContent()
+                )
+        ) {
+            final XContentParser.Token token = parser.nextToken();
+            final List<Map<String, Object>> parserList;
+            if (token == XContentParser.Token.START_ARRAY) {
+                parserList = parser.listOrderedMap().stream().map(obj -> (Map<String, Object>) obj).collect(Collectors.toList());
+            } else {
+                parserList = Collections.singletonList(parser.mapOrdered());
+            }
+
+            final List<String> externalIndices = parserList
+                .stream()
+                .map(index -> (String) index.get("index"))
+                .filter(indexName -> indexName != null)
+                .filter(indexName -> !indexName.startsWith(INTERNAL_INDICES_PREFIX))
+                .collect(Collectors.toList());
+
+            for (final String indexName : externalIndices) {
+                adminClient().performRequest(new Request("DELETE", "/" + indexName));
+            }
+        }
     }
 }
