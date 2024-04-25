@@ -131,7 +131,7 @@ Sample response:
 ## 5. Deploy the model
 
 ```json
-POST /_plugins/_ml/models/pX8scY4B2QHLlv0i6LYZ/_deploy
+POST /_plugins/_ml/models/pn8scY4B2QHLlv0i6LZB/_deploy
 ```
 Sample response:
 
