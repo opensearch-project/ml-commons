@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.client.RestClientBuilder.DEFAULT_MAX_CONN_PER_ROUTE;
-import static org.opensearch.client.RestClientBuilder.DEFAULT_MAX_CONN_TOTAL;
-
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -15,38 +12,23 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.apache.hc.client5.http.auth.AuthScope;
-import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
-import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
-import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
-import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
-import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
-import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpHost;
-import org.apache.hc.core5.http.message.BasicHeader;
-import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
-import org.apache.hc.core5.ssl.SSLContextBuilder;
-import org.apache.hc.core5.util.Timeout;
 import org.junit.After;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 /**
  * Base class for running the integration tests on a secure cluster. The plugin IT test should either extend this
  * class or create another base class by extending this class to make sure that their IT can be run on secure clusters.
  */
-public abstract class RestOpenSearchSecureTestCase extends OpenSearchRestTestCase {
+public abstract class RestOpenSearchSecureTestCase extends MLCommonsRestTestCase {
 
     private static final String PROTOCOL_HTTP = "http";
     private static final String PROTOCOL_HTTPS = "https";
@@ -89,56 +71,6 @@ public abstract class RestOpenSearchSecureTestCase extends OpenSearchRestTestCas
         }
 
         return builder.build();
-    }
-
-    private void configureHttpsClient(final RestClientBuilder builder, final Settings settings) {
-        final Map<String, String> headers = ThreadContext.buildDefaultHeaders(settings);
-        final Header[] defaultHeaders = new Header[headers.size()];
-        int i = 0;
-        for (Map.Entry<String, String> entry : headers.entrySet()) {
-            defaultHeaders[i++] = new BasicHeader(entry.getKey(), entry.getValue());
-        }
-        builder.setDefaultHeaders(defaultHeaders);
-        builder.setHttpClientConfigCallback(httpClientBuilder -> {
-            final String userName = Optional
-                .ofNullable(System.getProperty(SYS_PROPERTY_KEY_USER))
-                .orElseThrow(() -> new RuntimeException("user name is missing"));
-            final String password = Optional
-                .ofNullable(System.getProperty(SYS_PROPERTY_KEY_PASSWORD))
-                .orElseThrow(() -> new RuntimeException("password is missing"));
-            final BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-            final AuthScope anyScope = new AuthScope(null, -1);
-            credentialsProvider.setCredentials(anyScope, new UsernamePasswordCredentials(userName, password.toCharArray()));
-            try {
-                final TlsStrategy tlsStrategy = ClientTlsStrategyBuilder
-                    .create()
-                    .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-                    .setSslContext(SSLContextBuilder.create().loadTrustMaterial(null, (chains, authType) -> true).build())
-                    .build();
-                final PoolingAsyncClientConnectionManager connectionManager = PoolingAsyncClientConnectionManagerBuilder
-                    .create()
-                    .setMaxConnPerRoute(DEFAULT_MAX_CONN_PER_ROUTE)
-                    .setMaxConnTotal(DEFAULT_MAX_CONN_TOTAL)
-                    .setTlsStrategy(tlsStrategy)
-                    .build();
-                return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider).setConnectionManager(connectionManager);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
-
-        final String socketTimeoutString = settings.get(CLIENT_SOCKET_TIMEOUT);
-        final TimeValue socketTimeout = TimeValue
-            .parseTimeValue(socketTimeoutString == null ? DEFAULT_SOCKET_TIMEOUT : socketTimeoutString, CLIENT_SOCKET_TIMEOUT);
-        builder.setRequestConfigCallback(conf -> {
-            Timeout timeout = Timeout.ofMilliseconds(Math.toIntExact(socketTimeout.getMillis()));
-            conf.setConnectTimeout(timeout);
-            conf.setResponseTimeout(timeout);
-            return conf;
-        });
-        if (settings.hasValue(CLIENT_PATH_PREFIX)) {
-            builder.setPathPrefix(settings.get(CLIENT_PATH_PREFIX));
-        }
     }
 
     /**
