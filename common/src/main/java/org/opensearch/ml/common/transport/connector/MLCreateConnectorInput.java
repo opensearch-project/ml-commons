@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getInterfaceMap;
+import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @Data
@@ -183,7 +183,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 case AbstractConnector.MODEL_INTERFACE_FIELD:
-                    modelInterface = getInterfaceMap(parser.map());
+                    modelInterface = filterInterfaceMap(parser.map());
                     break;
                 default:
                     parser.skipChildren();

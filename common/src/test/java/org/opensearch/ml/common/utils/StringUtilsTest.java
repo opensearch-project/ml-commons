@@ -125,7 +125,7 @@ public class StringUtilsTest {
         parameters.put("key3", 2.1);
         parameters.put("key4", new int[]{10, 20});
         parameters.put("key5", new Object[]{1.01, "abc"});
-        Map<String, String> interfaceMap = StringUtils.getInterfaceMap(parameters);
+        Map<String, String> interfaceMap = StringUtils.filterInterfaceMap(parameters);
         Assert.assertEquals(2, interfaceMap.size());
         Assert.assertEquals("value1", interfaceMap.get("input"));
         Assert.assertEquals("2", interfaceMap.get("output"));

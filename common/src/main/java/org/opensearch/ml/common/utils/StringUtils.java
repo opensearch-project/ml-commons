@@ -21,12 +21,19 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
 
 @Log4j2
 public class StringUtils {
@@ -96,26 +103,18 @@ public class StringUtils {
         return result;
     }
 
-    public static Map<String, String> getInterfaceMap(Map<String, ?> interfaceObjs) {
-        Map<String, String> parameters = new HashMap<>();
-        for (String key : interfaceObjs.keySet()) {
-            if (Objects.equals(key, "input") || Objects.equals(key, "output")) {
-                Object value = interfaceObjs.get(key);
-                try {
-                    AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                        if (value instanceof String) {
-                            parameters.put(key, (String)value);
-                        } else {
-                            parameters.put(key, gson.toJson(value));
-                        }
-                        return null;
-                    });
-                } catch (PrivilegedActionException e) {
-                    throw new RuntimeException(e);
-                }
+    public static Map<String, String> filterInterfaceMap(Map<String, ?> interfaceObjs) {
+            final Set<String> allowedInterfaceFieldNameList = new HashSet<>(Arrays.asList("input","output"));
+
+            if (interfaceObjs == null) {
+                return new HashMap<>();
             }
-        }
-        return parameters;
+
+            return interfaceObjs
+                    .entrySet()
+                    .stream()
+                    .filter(map -> allowedInterfaceFieldNameList.contains(map.getKey()))
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> (e.getValue() instanceof String) ? (String)e.getValue() : gson.toJson(e.getValue())));
     }
 
     @SuppressWarnings("removal")

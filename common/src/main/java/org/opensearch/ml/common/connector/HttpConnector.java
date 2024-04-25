@@ -34,7 +34,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
-import static org.opensearch.ml.common.utils.StringUtils.getInterfaceMap;
+import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 @Log4j2
@@ -130,7 +130,7 @@ public class HttpConnector extends AbstractConnector {
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 case MODEL_INTERFACE_FIELD:
-                    modelInterface =  getInterfaceMap(parser.map());
+                    modelInterface =  filterInterfaceMap(parser.map());
                     break;
                 default:
                     parser.skipChildren();
