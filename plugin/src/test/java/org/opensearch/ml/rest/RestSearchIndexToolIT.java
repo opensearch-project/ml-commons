@@ -53,7 +53,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
                         this
                             .getClass()
                             .getClassLoader()
-                            .getResource("org/opensearch/ml/rest/register_flow_agent_of_search_index_tool_request_body.json")
+                            .getResource("register_flow_agent_of_search_index_tool_request_body.json")
                             .toURI()
                     )
             );
