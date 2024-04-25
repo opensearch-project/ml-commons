@@ -24,7 +24,18 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
     private String registerAgentRequestBody;
 
     private void prepareIndex() throws Exception {
-        createIndexWithConfiguration(TEST_INDEX_NAME, "{\n" + "  \"mappings\": {\n" + "    \"properties\": {\n" + "      \"text\": {\n" + "        \"type\": \"text\"\n" + "      }\n" + "    }\n" + "  }\n" + "}");
+        createIndexWithConfiguration(
+            TEST_INDEX_NAME,
+            "{\n"
+                + "  \"mappings\": {\n"
+                + "    \"properties\": {\n"
+                + "      \"text\": {\n"
+                + "        \"type\": \"text\"\n"
+                + "      }\n"
+                + "    }\n"
+                + "  }\n"
+                + "}"
+        );
         addDocToIndex(TEST_INDEX_NAME, "0", List.of("text"), List.of("text doc 1"));
         addDocToIndex(TEST_INDEX_NAME, "1", List.of("text"), List.of("text doc 2"));
         addDocToIndex(TEST_INDEX_NAME, "2", List.of("text"), List.of("text doc 3"));
@@ -38,7 +49,13 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             .readString(
                 Path
                     .of(
-                        Objects.requireNonNull(this.getClass().getClassLoader().getResource("org/opensearch/ml/rest/tools/register_flow_agent_of_search_index_tool_request_body.json"))
+                        Objects
+                            .requireNonNull(
+                                this
+                                    .getClass()
+                                    .getClassLoader()
+                                    .getResource("org/opensearch/ml/rest/tools/register_flow_agent_of_search_index_tool_request_body.json")
+                            )
                             .toURI()
                     )
             );
