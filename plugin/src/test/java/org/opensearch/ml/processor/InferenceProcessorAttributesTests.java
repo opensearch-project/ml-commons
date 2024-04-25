@@ -6,6 +6,7 @@ package org.opensearch.ml.processor;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.opensearch.ml.processor.MLInferenceIngestProcessor.DEFAULT_MAX_PREDICTION_TASKS;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,23 +21,30 @@ public class InferenceProcessorAttributesTests {
         String modelId = "my_model";
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> inputField = new HashMap<>();
-        inputField.put("field", "input_field");
+        inputField.put("model_input", "document_field");
         inputMap.add(inputField);
 
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> outputField = new HashMap<>();
-        outputField.put("field", "output_field");
+        outputField.put("model_output", "new_document_field");
         outputMap.add(outputField);
 
         Map<String, String> modelConfig = new HashMap<>();
         modelConfig.put("config_key", "config_value");
 
-        InferenceProcessorAttributes mlModelUtil = new InferenceProcessorAttributes(modelId, inputMap, outputMap, modelConfig);
+        InferenceProcessorAttributes mlModelUtil = new InferenceProcessorAttributes(
+            modelId,
+            inputMap,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS
+        );
 
         assertEquals(modelId, mlModelUtil.getModelId());
         assertEquals(inputMap, mlModelUtil.getOutputMaps());
         assertEquals(outputMap, mlModelUtil.getOutputMaps());
-        assertEquals(modelConfig, mlModelUtil.getModelConfig());
+        assertEquals(modelConfig, mlModelUtil.getModelConfigMaps());
+        assertEquals(DEFAULT_MAX_PREDICTION_TASKS, mlModelUtil.getMaxPredictionTask());
     }
 
     @Test
@@ -45,6 +53,6 @@ public class InferenceProcessorAttributesTests {
         assertNotNull(InferenceProcessorAttributes.INPUT_MAP);
         assertNotNull(InferenceProcessorAttributes.OUTPUT_MAP);
         assertNotNull(InferenceProcessorAttributes.MODEL_CONFIG);
-        assertNotNull(InferenceProcessorAttributes.IGNORE_MISSING);
+        assertNotNull(InferenceProcessorAttributes.MAX_PREDICTION_TASKS);
     }
 }

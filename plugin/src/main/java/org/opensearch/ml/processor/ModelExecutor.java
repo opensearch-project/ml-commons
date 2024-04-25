@@ -27,6 +27,11 @@ import com.jayway.jsonpath.Option;
  */
 public interface ModelExecutor {
 
+    Configuration suppressExceptionConfiguration = Configuration
+        .builder()
+        .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
+        .build();
+
     default <T> ActionRequest getRemoteModelInferenceRequest(Map<String, String> parameters, String modelId) {
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
@@ -99,10 +104,6 @@ public interface ModelExecutor {
             revisedPath.append(pathComponents[i]);
             currentPath.append(pathComponents[i]);
 
-            Configuration suppressExceptionConfiguration = Configuration
-                .builder()
-                .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
-                .build();
             currentValue = JsonPath.using(suppressExceptionConfiguration).parse(jsonObject).read(currentPath.toString());
 
             if (currentValue instanceof ArrayList) {

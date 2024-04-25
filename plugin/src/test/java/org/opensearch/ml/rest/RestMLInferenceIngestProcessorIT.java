@@ -13,6 +13,7 @@ import java.util.Map;
 
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
+import org.junit.Assert;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
@@ -85,7 +86,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
             + "\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
-            + "            \"diary\": \"input\"\n"
+            + "            \"input\": \"diary\"\n"
             + "          }\n"
             + "        ],\n"
             + "        \n"
@@ -117,15 +118,15 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         uploadDocument(index_name, "1", uploadDocumentRequestBody);
         Map document = getDocument(index_name, "1");
         List embeddingList = JsonPath.parse(document).read("_source.diary_embedding");
-        assertEquals(2, embeddingList.size());
+        Assert.assertEquals(2, embeddingList.size());
 
         List embedding1 = JsonPath.parse(document).read("_source.diary_embedding[0]");
-        assertEquals(1536, embedding1.size());
-        assertEquals(-0.0118564125, embedding1.get(0));
+        Assert.assertEquals(1536, embedding1.size());
+        Assert.assertEquals(-0.0118564125, (Double) embedding1.get(0), 0.00005);
 
         List embedding2 = JsonPath.parse(document).read("_source.diary_embedding[1]");
-        assertEquals(1536, embedding2.size());
-        assertEquals(-0.005518768, embedding2.get(0));
+        Assert.assertEquals(1536, embedding2.size());
+        Assert.assertEquals(-0.005518768, (Double) embedding2.get(0), 0.00005);
     }
 
     public void testMLInferenceProcessorWithNestedFieldType() throws Exception {
@@ -140,7 +141,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
             + "\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
-            + "            \"book.chunk.text.context\": \"input\"\n"
+            + "            \"input\": \"book.chunk.text.context\"\n"
             + "          }\n"
             + "        ],\n"
             + "        \n"
@@ -200,23 +201,23 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         Map document = getDocument(index_name, "1");
 
         List embeddingList = JsonPath.parse(document).read("_source.book[*].chunk.text[*].context_embedding");
-        assertEquals(4, embeddingList.size());
+        Assert.assertEquals(4, embeddingList.size());
 
         List embedding1 = JsonPath.parse(document).read("_source.book[0].chunk.text[0].context_embedding");
-        assertEquals(1536, embedding1.size());
-        assertEquals(0.023224998, embedding1.get(0));
+        Assert.assertEquals(1536, embedding1.size());
+        Assert.assertEquals(0.023224998, (Double) embedding1.get(0), 0.00005);
 
         List embedding2 = JsonPath.parse(document).read("_source.book[0].chunk.text[1].context_embedding");
-        assertEquals(1536, embedding2.size());
-        assertEquals(0.016423305, embedding2.get(0));
+        Assert.assertEquals(1536, embedding2.size());
+        Assert.assertEquals(0.016423305, (Double) embedding2.get(0), 0.00005);
 
         List embedding3 = JsonPath.parse(document).read("_source.book[1].chunk.text[0].context_embedding");
-        assertEquals(1536, embedding3.size());
-        assertEquals(0.011252925, embedding3.get(0));
+        Assert.assertEquals(1536, embedding3.size());
+        Assert.assertEquals(0.011252925, (Double) embedding3.get(0), 0.00005);
 
         List embedding4 = JsonPath.parse(document).read("_source.book[1].chunk.text[1].context_embedding");
-        assertEquals(1536, embedding4.size());
-        assertEquals(0.014352738, embedding4.get(0));
+        Assert.assertEquals(1536, embedding4.size());
+        Assert.assertEquals(0.014352738, (Double) embedding4.get(0), 0.00005);
     }
 
     protected void createPipelineProcessor(String requestBody, final String pipelineName) throws Exception {

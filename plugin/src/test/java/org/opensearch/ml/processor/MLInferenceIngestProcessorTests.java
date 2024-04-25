@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.processor.MLInferenceIngestProcessor.DEFAULT_OUTPUT_FIELD_NAME;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -25,6 +26,7 @@ import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ingest.IngestDocument;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -81,6 +83,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
             input_map,
             output_map,
             model_config,
+            RANDOM_MULTIPLIER,
             PROCESSOR_TAG,
             DESCRIPTION,
             ignoreMissing,
@@ -104,7 +107,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "chunks.chunk";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, true);
@@ -135,7 +138,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "chunks.chunk.text";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, true);
@@ -274,7 +277,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "chunks.chunk.text.context";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, true);
@@ -328,7 +331,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "chunks.chunk.text.context";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
 
         List<Map<String, String>> outputMap = new ArrayList<>();
@@ -370,7 +373,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "chunks.chunk.text.context";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
 
         List<Map<String, String>> outputMap = new ArrayList<>();
@@ -469,7 +472,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "text";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -492,7 +495,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "text";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -507,7 +510,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "";  // emptyInputField
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -529,7 +532,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "";  // emptyInputField
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -548,7 +551,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "text";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -611,6 +614,98 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         assertEquals(ingestDocument, ingestDocument1);
     }
 
+    public void testExecute_SingleTensorInDataOutputSuccess() {
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, null, true);
+
+        Float[] value = new Float[] { 1.0f, 2.0f, 3.0f };
+        List<ModelTensors> outputs = new ArrayList<>();
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .data(value)
+            .name("test")
+            .shape(new long[] { 1, 3 })
+            .dataType(MLResultDataType.FLOAT32)
+            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+            .build();
+        List<ModelTensor> mlModelTensors = Arrays.asList(tensor);
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(mlModelTensors).build();
+        outputs.add(modelTensors);
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        processor.execute(ingestDocument, handler);
+
+        Map<String, Object> sourceAndMetadata = new HashMap<>();
+        sourceAndMetadata.put("key1", "value1");
+        sourceAndMetadata.put("key2", "value2");
+        sourceAndMetadata.put(DEFAULT_OUTPUT_FIELD_NAME, List.of(Arrays.asList(1.0f, 2.0f, 3.0f)));
+        IngestDocument ingestDocument1 = new IngestDocument(sourceAndMetadata, new HashMap<>());
+        verify(handler).accept(eq(ingestDocument1), isNull());
+        assertEquals(ingestDocument, ingestDocument1);
+    }
+
+    public void testExecute_MultipleTensorInDataOutputSuccess() {
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, null, true);
+        List<ModelTensors> outputs = new ArrayList<>();
+
+        Float[] value = new Float[] { 1.0f };
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .data(value)
+            .name("test")
+            .shape(new long[] { 1, 1 })
+            .dataType(MLResultDataType.FLOAT32)
+            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+            .build();
+
+        Float[] value1 = new Float[] { 2.0f };
+        ModelTensor tensor1 = ModelTensor
+            .builder()
+            .data(value1)
+            .name("test")
+            .shape(new long[] { 1, 1 })
+            .dataType(MLResultDataType.FLOAT32)
+            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+            .build();
+
+        Float[] value2 = new Float[] { 3.0f };
+        ModelTensor tensor2 = ModelTensor
+            .builder()
+            .data(value2)
+            .name("test")
+            .shape(new long[] { 1, 1 })
+            .dataType(MLResultDataType.FLOAT32)
+            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+            .build();
+
+        List<ModelTensor> mlModelTensors = Arrays.asList(tensor, tensor1, tensor2);
+
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(mlModelTensors).build();
+        outputs.add(modelTensors);
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        processor.execute(ingestDocument, handler);
+
+        Map<String, Object> sourceAndMetadata = new HashMap<>();
+        sourceAndMetadata.put("key1", "value1");
+        sourceAndMetadata.put("key2", "value2");
+        sourceAndMetadata.put(DEFAULT_OUTPUT_FIELD_NAME, Arrays.asList(List.of(1.0f), List.of(2.0f), List.of(3.0f)));
+        IngestDocument ingestDocument1 = new IngestDocument(sourceAndMetadata, new HashMap<>());
+        verify(handler).accept(eq(ingestDocument1), isNull());
+        assertEquals(ingestDocument, ingestDocument1);
+    }
+
     public void testExecute_getModelOutputFieldWithFieldNameSuccess() {
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -651,7 +746,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, outputMap, true);
         ModelTensor modelTensor = ModelTensor
             .builder()
-            .dataAsMap(ImmutableMap.of("response", ImmutableMap.of("language", "en", "score", "0.9876")))
+            .dataAsMap(ImmutableMap.of("response", ImmutableMap.of("language", List.of("en", "en"), "score", "0.9876")))
             .build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
@@ -667,7 +762,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         Map<String, Object> sourceAndMetadata = new HashMap<>();
         sourceAndMetadata.put("key1", "value1");
         sourceAndMetadata.put("key2", "value2");
-        sourceAndMetadata.put("language_identification", List.of("en"));
+        sourceAndMetadata.put("language_identification", List.of("en", "en"));
         IngestDocument ingestDocument1 = new IngestDocument(sourceAndMetadata, new HashMap<>());
         verify(handler).accept(eq(ingestDocument1), isNull());
         assertEquals(ingestDocument, ingestDocument1);
@@ -748,7 +843,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String originalFieldPath = "chunks.chunk.text.context";
-        input.put(originalFieldPath, "inputs");
+        input.put("inputs", originalFieldPath);
         inputMap.add(input);
 
         List<Map<String, String>> outputMap = new ArrayList<>();
@@ -782,9 +877,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
             processor.execute(nestedObjectIngestDocument, handler);
         } catch (RuntimeException e) {
             assertEquals(
-                "the prediction field: chunks.chunk.text.embedding is an array in size of 3 but the document field array from field "
-                    + documentFieldName
-                    + " is in size of 4",
+                "the prediction field: response is an array in size of 3 but the document field array from field chunks.chunk.text.embedding is in size of 4",
                 e.getMessage()
             );
         }
