@@ -48,14 +48,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         prepareIndex();
         registerAgentRequestBody = Files
             .readString(
-                Path
-                    .of(
-                        this
-                            .getClass()
-                            .getClassLoader()
-                            .getResource("register_flow_agent_of_search_index_tool_request_body.json")
-                            .toURI()
-                    )
+                Path.of(this.getClass().getClassLoader().getResource("register_flow_agent_of_search_index_tool_request_body.json").toURI())
             );
     }
 
