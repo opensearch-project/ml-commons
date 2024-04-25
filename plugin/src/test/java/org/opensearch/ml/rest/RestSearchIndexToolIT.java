@@ -7,66 +7,50 @@ package org.opensearch.ml.rest;
 
 import static org.hamcrest.Matchers.containsString;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 
+import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.ResponseException;
 
-import lombok.SneakyThrows;
-
 public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
     public static String TEST_INDEX_NAME = "test_index";
     private String registerAgentRequestBody;
 
-    @SneakyThrows
-    private void prepareIndex() {
-        createIndexWithConfiguration(
-            TEST_INDEX_NAME,
-            "{\n"
-                + "  \"mappings\": {\n"
-                + "    \"properties\": {\n"
-                + "      \"text\": {\n"
-                + "        \"type\": \"text\"\n"
-                + "      }\n"
-                + "    }\n"
-                + "  }\n"
-                + "}"
-        );
+    private void prepareIndex() throws Exception {
+        createIndexWithConfiguration(TEST_INDEX_NAME, "{\n" + "  \"mappings\": {\n" + "    \"properties\": {\n" + "      \"text\": {\n" + "        \"type\": \"text\"\n" + "      }\n" + "    }\n" + "  }\n" + "}");
         addDocToIndex(TEST_INDEX_NAME, "0", List.of("text"), List.of("text doc 1"));
         addDocToIndex(TEST_INDEX_NAME, "1", List.of("text"), List.of("text doc 2"));
         addDocToIndex(TEST_INDEX_NAME, "2", List.of("text"), List.of("text doc 3"));
     }
 
     @Before
-    @SneakyThrows
-    public void setUp() {
+    public void setUp() throws Exception {
         super.setUp();
         prepareIndex();
         registerAgentRequestBody = Files
             .readString(
                 Path
                     .of(
-                        this
-                            .getClass()
-                            .getClassLoader()
-                            .getResource("org/opensearch/ml/rest/tools/register_flow_agent_of_search_index_tool_request_body.json")
+                        Objects.requireNonNull(this.getClass().getClassLoader().getResource("org/opensearch/ml/rest/tools/register_flow_agent_of_search_index_tool_request_body.json"))
                             .toURI()
                     )
             );
     }
 
     @After
-    @SneakyThrows
-    public void tearDown() {
+    public void tearDown() throws Exception {
         super.tearDown();
         deleteExternalIndices();
     }
 
-    public void testSearchIndexToolInFlowAgent_withMatchAllQuery() {
+    public void testSearchIndexToolInFlowAgent_withMatchAllQuery() throws IOException, ParseException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
@@ -90,7 +74,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         );
     }
 
-    public void testSearchIndexToolInFlowAgent_withEmptyIndexField_thenThrowException() {
+    public void testSearchIndexToolInFlowAgent_withEmptyIndexField_thenThrowException() throws IOException, ParseException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
@@ -107,7 +91,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 
-    public void testSearchIndexToolInFlowAgent_withEmptyQueryField_thenThrowException() {
+    public void testSearchIndexToolInFlowAgent_withEmptyQueryField_thenThrowException() throws IOException, ParseException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
@@ -120,7 +104,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 
-    public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() {
+    public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() throws IOException, ParseException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
