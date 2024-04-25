@@ -11,7 +11,8 @@ import org.opensearch.ml.common.TestHelper;
 
 import java.io.IOException;
 import java.util.function.Function;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.TestHelper.contentObjectToString;
@@ -52,7 +53,7 @@ public class AsymmetricTextEmbeddingParametersTest {
   @Test
   public void parse_AsymmetricTextEmbeddingParameters_Invalid() throws IOException {
     exceptionRule.expect(IllegalArgumentException.class);
-    exceptionRule.expectMessage("No enum constant org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType.FU");
+    exceptionRule.expectMessage("No enum constant org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType.FU");
     String paramsStr = contentObjectToString(params);
     testParseFromString(params, paramsStr.replace("QUERY","fu"), function);
   }
