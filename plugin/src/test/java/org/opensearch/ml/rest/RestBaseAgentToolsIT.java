@@ -14,7 +14,8 @@ import java.util.stream.Collectors;
 
 import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
-import org.opensearch.client.*;
+import org.opensearch.client.Request;
+import org.opensearch.client.Response;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;

@@ -5,9 +5,15 @@
 
 package org.opensearch.ml.engine.tools;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 import java.io.InputStream;
 import java.util.Collections;
@@ -48,11 +54,10 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void setup() {
         client = mock(Client.class);
-        mockedSearchIndexTool = Mockito
-            .mock(
-                SearchIndexTool.class,
-                Mockito.withSettings().useConstructor(client, TEST_XCONTENT_REGISTRY_FOR_QUERY).defaultAnswer(Mockito.CALLS_REAL_METHODS)
-            );
+        mockedSearchIndexTool = mock(
+            SearchIndexTool.class,
+            Mockito.withSettings().useConstructor(client, TEST_XCONTENT_REGISTRY_FOR_QUERY).defaultAnswer(Mockito.CALLS_REAL_METHODS)
+        );
 
         try (InputStream searchResponseIns = SearchIndexTool.class.getResourceAsStream("retrieval_tool_search_response.json")) {
             if (searchResponseIns != null) {
