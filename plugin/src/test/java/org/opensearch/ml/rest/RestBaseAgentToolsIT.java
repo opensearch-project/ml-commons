@@ -49,7 +49,7 @@ public abstract class RestBaseAgentToolsIT extends RestOpenSearchSecureTestCase 
         assertEquals(RestStatus.CREATED, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
     }
 
-    public String createAgent(String requestBody) throws IOException, ParseException {
+    protected String createAgent(String requestBody) throws IOException, ParseException {
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/_register", null, requestBody, null);
         assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
         return parseFieldFromResponse(response, AgentMLInput.AGENT_ID_FIELD).toString();
@@ -69,7 +69,7 @@ public abstract class RestBaseAgentToolsIT extends RestOpenSearchSecureTestCase 
 
     // execute the agent, and return the String response from the json structure
     // {"inference_results": [{"output": [{"name": "response","result": "the result to return."}]}]}
-    public String executeAgent(String agentId, String requestBody) throws IOException, ParseException {
+    protected String executeAgent(String agentId, String requestBody) throws IOException, ParseException {
         Response response = TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, requestBody, null);
         return parseStringResponseFromExecuteAgentResponse(response);
