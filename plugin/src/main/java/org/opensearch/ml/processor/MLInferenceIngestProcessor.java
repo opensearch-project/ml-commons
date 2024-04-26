@@ -120,6 +120,12 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
      * when no input mappings provided, default to add all fields to model input fields,
      * when no output mapping provided, default to output as
      * "inference_results" field (the same format as predict API)
+     * @param ingestDocument The IngestDocument object containing the data to be processed.
+     * @param batchPredictionListener The GroupedActionListener for batch prediction.
+     * @param processInputMap A list of maps containing input field mappings.
+     * @param processOutputMap A list of maps containing output field mappings.
+     * @param i The current index of the prediction task.
+     * @param num_of_prediction_tasks The total number of prediction tasks.
      */
     private void processPredictions(
         IngestDocument ingestDocument,
