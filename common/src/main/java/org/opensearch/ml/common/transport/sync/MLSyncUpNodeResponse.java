@@ -22,14 +22,16 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
     private String[] deployedModelIds;
     private String[] runningDeployModelIds; // model ids which have deploying model task running
     private String[] runningDeployModelTaskIds; // deploy model task ids which is running
+    private String[] expiredModelIds;
 
     public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] deployedModelIds, String[] runningDeployModelIds,
-                                String[] runningDeployModelTaskIds) {
+                                String[] runningDeployModelTaskIds, String[] expiredModelIds) {
         super(node);
         this.modelStatus = modelStatus;
         this.deployedModelIds = deployedModelIds;
         this.runningDeployModelIds = runningDeployModelIds;
         this.runningDeployModelTaskIds = runningDeployModelTaskIds;
+        this.expiredModelIds = expiredModelIds;
     }
 
     public MLSyncUpNodeResponse(StreamInput in) throws IOException {
@@ -38,6 +40,7 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
         this.deployedModelIds = in.readOptionalStringArray();
         this.runningDeployModelIds = in.readOptionalStringArray();
         this.runningDeployModelTaskIds = in.readOptionalStringArray();
+        this.expiredModelIds = in.readOptionalStringArray();
     }
 
     public static MLSyncUpNodeResponse readStats(StreamInput in) throws IOException {
@@ -51,6 +54,7 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
         out.writeOptionalStringArray(deployedModelIds);
         out.writeOptionalStringArray(runningDeployModelIds);
         out.writeOptionalStringArray(runningDeployModelTaskIds);
+        out.writeOptionalStringArray(expiredModelIds);
     }
 
 }

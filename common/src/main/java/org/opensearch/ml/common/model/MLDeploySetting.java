@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
 import java.io.IOException;
+import java.time.Duration;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -24,25 +25,37 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @Getter
 public class MLDeploySetting implements ToXContentObject, Writeable {
     public static final String IS_AUTO_DEPLOY_ENABLED_FIELD = "is_auto_deploy_enabled";
+    public static final String MODEL_TTL_FIELD = "model_ttl";
+    private static final long DEFAULT_TTL_HOUR = -1;
 
     private Boolean isAutoDeployEnabled;
+    private Long modelTTL;  // Time to live in hours
 
     @Builder(toBuilder = true)
     public MLDeploySetting(Boolean isAutoDeployEnabled) {
         this.isAutoDeployEnabled = isAutoDeployEnabled;
+        this.modelTTL = DEFAULT_TTL_HOUR;
+    }
+    @Builder(toBuilder = true)
+    public MLDeploySetting(Boolean isAutoDeployEnabled, Long modelTTL) {
+        this.isAutoDeployEnabled = isAutoDeployEnabled;
+        this.modelTTL = modelTTL;
     }
 
     public MLDeploySetting(StreamInput in) throws IOException {
         this.isAutoDeployEnabled = in.readOptionalBoolean();
+        this.modelTTL = in.readOptionalLong();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalBoolean(isAutoDeployEnabled);
+        out.writeOptionalLong(modelTTL);
     }
 
     public static MLDeploySetting parse(XContentParser parser) throws IOException {
         Boolean isAutoDeployEnabled = null;
+        Long modelTTL = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -51,12 +64,14 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
                 case IS_AUTO_DEPLOY_ENABLED_FIELD:
                     isAutoDeployEnabled = parser.booleanValue();
                     break;
+                case MODEL_TTL_FIELD:
+                    modelTTL = parser.longValue();
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLDeploySetting(isAutoDeployEnabled);
+        return new MLDeploySetting(isAutoDeployEnabled, modelTTL);
     }
 
     @Override
@@ -64,6 +79,9 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
         builder.startObject();
         if (isAutoDeployEnabled != null) {
             builder.field(IS_AUTO_DEPLOY_ENABLED_FIELD, isAutoDeployEnabled);
+        }
+        if (modelTTL != null) {
+            builder.field(MODEL_TTL_FIELD, modelTTL);
         }
         builder.endObject();
         return builder;

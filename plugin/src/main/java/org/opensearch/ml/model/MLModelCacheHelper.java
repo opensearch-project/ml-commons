@@ -7,6 +7,8 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +70,7 @@ public class MLModelCacheHelper {
         modelCache.setFunctionName(functionName);
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(deployToAllNodes);
+        modelCache.setLastAccessTime(Instant.now());
         modelCaches.put(modelId, modelCache);
     }
 
@@ -87,6 +90,7 @@ public class MLModelCacheHelper {
         modelCache.setFunctionName(functionName);
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(false);
+        modelCache.setLastAccessTime(Instant.now());
         modelCaches.put(modelId, modelCache);
     }
 
@@ -342,6 +346,26 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Get expired models on node.
+     *
+     * @return array of expired model id
+     */
+    public String[] getExpiredModels() {
+        return modelCaches.entrySet().stream().filter(entry -> {
+            MLModel mlModel = entry.getValue().getCachedModelInfo();
+            if (mlModel.getDeploySetting() == null) {
+                return false;  // no TTL, never expire
+            }
+            Duration liveDuration = Duration.between(entry.getValue().getLastAccessTime(), Instant.now());
+            Long timeToLive = mlModel.getDeploySetting().getModelTTL();
+            boolean isModelExpired = (timeToLive != null
+                && timeToLive > 0
+                && liveDuration.getSeconds() > Duration.ofHours(timeToLive).getSeconds());
+            return isModelExpired && mlModel.getModelState() == MLModelState.DEPLOYED;
+        }).map(entry -> entry.getKey()).collect(Collectors.toList()).toArray(new String[0]);
+    }
+
+    /**
      * Check if model is running on node.
      * 
      * @param modelId model id
@@ -401,6 +425,16 @@ public class MLModelCacheHelper {
         if (modelCache != null) {
             modelCache.setTargetWorkerNodes(targetWorkerNodes);
         }
+    }
+
+    /**
+     * Set the last access time to Instant.now()
+     *
+     * @param modelId           model id
+     */
+    public void refreshLastAccessTime(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        modelCache.setLastAccessTime(Instant.now());
     }
 
     /**

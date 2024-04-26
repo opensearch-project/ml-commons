@@ -41,6 +41,8 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.search.SearchHit;
@@ -101,11 +103,23 @@ public class MLSyncUpCron implements Runnable {
             Map<String, Set<String>> runningDeployModelTasks = new HashMap<>();
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> deployingModels = new HashMap<>();
+            // key is expired model_id, value is set of worker node ids
+            Map<String, Set<String>> expiredModels = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
+                String[] expiredModelIds = response.getExpiredModelIds();
+                if (expiredModelIds != null && expiredModelIds.length > 0) {
+                    Arrays
+                        .stream(expiredModelIds)
+                        .forEach(modelId -> { expiredModels.computeIfAbsent(modelId, it -> new HashSet<>()).add(nodeId); });
+                }
+
                 String[] deployedModelIds = response.getDeployedModelIds();
                 if (deployedModelIds != null && deployedModelIds.length > 0) {
                     for (String modelId : deployedModelIds) {
+                        if (expiredModels.containsKey(modelId)) {
+                            continue;
+                        }
                         Set<String> workerNodes = modelWorkerNodes.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
@@ -154,6 +168,8 @@ public class MLSyncUpCron implements Runnable {
                         log.error("Failed to sync model routing", ex);
                     })
                 );
+            // Undeploy expired models
+            undeployExpiredModels(expiredModels.keySet(), modelWorkerNodes);
 
             // refresh model status
             mlIndicesHandler
@@ -161,6 +177,21 @@ public class MLSyncUpCron implements Runnable {
                     log.error("Failed to init model index", e);
                 }));
         }, e -> { log.error("Failed to sync model routing", e); }));
+    }
+
+    private void undeployExpiredModels(Set<String> expiredModels, Map<String, Set<String>> modelWorkerNodes) {
+        expiredModels.forEach(modelId -> {
+            String[] targetNodeIds = modelWorkerNodes.keySet().toArray(new String[0]);
+
+            MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(
+                targetNodeIds,
+                new String[] { modelId }
+            );
+
+            client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
+                log.debug("model {} is un_deployed", modelId);
+            }, e -> { log.error("Failed to undeploy model {}", modelId, e); }));
+        });
     }
 
     @VisibleForTesting
