@@ -50,7 +50,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Getter
     private final StringBuilder responseBody = new StringBuilder();
 
-    private final WrappedCountDownLatch countDownLatch;
+    private final ExecutionContext executionContext;
 
     private final ActionListener<List<ModelTensors>> actionListener;
 
@@ -64,12 +64,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private final MLGuard mlGuard;
 
-    private Exception exception;
-
     private final static Gson GSON = StringUtils.gson;
 
     public MLSdkAsyncHttpResponseHandler(
-        WrappedCountDownLatch countDownLatch,
+        ExecutionContext executionContext,
         ActionListener<List<ModelTensors>> actionListener,
         Map<String, String> parameters,
         Map<Integer, ModelTensors> tensorOutputs,
@@ -77,7 +75,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         ScriptService scriptService,
         MLGuard mlGuard
     ) {
-        this.countDownLatch = countDownLatch;
+        this.executionContext = executionContext;
         this.actionListener = actionListener;
         this.parameters = parameters;
         this.tensorOutputs = tensorOutputs;
@@ -114,22 +112,28 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     ) {
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            if (exception == null)
-                exception = new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
+            if (executionContext.getExceptionHolder().get() == null)
+                executionContext
+                    .getExceptionHolder()
+                    .compareAndSet(null, new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
         } else {
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
-                if (exception == null)
-                    exception = new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode));
+                if (executionContext.getExceptionHolder().get() == null)
+                    executionContext
+                        .getExceptionHolder()
+                        .compareAndSet(null, new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
             } else {
                 try {
                     ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
                     tensors.setStatusCode(statusCode);
-                    tensorOutputs.put(countDownLatch.getSequence(), tensors);
+                    tensorOutputs.put(executionContext.getSequence(), tensors);
                 } catch (Exception e) {
                     log.error("Failed to process response body: {}", body, e);
-                    if (exception == null)
-                        exception = new MLException("Fail to execute predict in aws connector", e);
+                    if (executionContext.getExceptionHolder().get() == null)
+                        executionContext
+                            .getExceptionHolder()
+                            .compareAndSet(null, new MLException("Fail to execute predict in aws connector", e));
                 }
             }
         }
@@ -217,16 +221,16 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private void response(Map<Integer, ModelTensors> tensors) {
         processResponse(statusCode, responseBody.toString(), parameters, tensorOutputs);
-        countDownLatch.getCountDownLatch().countDown();
+        executionContext.getCountDownLatch().countDown();
         // when countdown's count equals to 0 means all responses are received.
-        if (countDownLatch.getCountDownLatch().getCount() == 0) {
-            if (exception != null) {
-                actionListener.onFailure(exception);
+        if (executionContext.getCountDownLatch().getCount() == 0) {
+            if (executionContext.getExceptionHolder().get() != null) {
+                actionListener.onFailure(executionContext.getExceptionHolder().get());
                 return;
             }
             reOrderTensorResponses(tensors);
         } else {
-            log.debug("Not all responses received, left response count is: " + countDownLatch.getCountDownLatch().getCount());
+            log.debug("Not all responses received, left response count is: " + executionContext.getCountDownLatch().getCount());
         }
     }
 }

@@ -76,7 +76,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         Map<String, String> parameters,
         String payload,
         Map<Integer, ModelTensors> tensorOutputs,
-        WrappedCountDownLatch countDownLatch,
+        ExecutionContext countDownLatch,
         ActionListener<List<ModelTensors>> actionListener
     ) {
         try {

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -40,8 +41,7 @@ import software.amazon.awssdk.http.SdkHttpFullResponse;
 import software.amazon.awssdk.http.SdkHttpResponse;
 
 public class MLSdkAsyncHttpResponseHandlerTest {
-
-    private final WrappedCountDownLatch countDownLatch = new WrappedCountDownLatch(0, new CountDownLatch(1));
+    private final ExecutionContext executionContext = new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>());
     @Mock
     private ActionListener<List<ModelTensors>> actionListener;
     @Mock
@@ -95,7 +95,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             .actions(Arrays.asList(noProcessFunctionPredictAction))
             .build();
         mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
-            countDownLatch,
+            executionContext,
             actionListener,
             parameters,
             tensorOutputs,
@@ -155,7 +155,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             }
         };
         MLSdkAsyncHttpResponseHandler noProcessFunctionMlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
-            countDownLatch,
+            executionContext,
             actionListener,
             parameters,
             tensorOutputs,
@@ -178,7 +178,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        assert captor.getValue().getMessage().equals("Error on communication with remote model: runtime exception");
+        assert captor.getValue().getMessage().equals("Error communicating with remote model: runtime exception");
     }
 
     @Test
@@ -244,6 +244,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
     @Test
     public void test_onComplete_partial_success_exceptionSecond() {
+        AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
         String response1 = "{\n"
             + "    \"embedding\": [\n"
             + "        0.46484375,\n"
@@ -259,7 +260,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new WrappedCountDownLatch(0, count),
+            new ExecutionContext(0, count, exceptionHolder),
             actionListener,
             parameters,
             tensorOutputs,
@@ -268,7 +269,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
-            new WrappedCountDownLatch(1, count),
+            new ExecutionContext(1, count, exceptionHolder),
             actionListener,
             parameters,
             tensorOutputs,
@@ -311,6 +312,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
     @Test
     public void test_onComplete_partial_success_exceptionFirst() {
+        AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
         String response1 = "{\n"
             + "    \"embedding\": [\n"
             + "        0.46484375,\n"
@@ -326,7 +328,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new WrappedCountDownLatch(0, count),
+            new ExecutionContext(0, count, exceptionHolder),
             actionListener,
             parameters,
             tensorOutputs,
@@ -335,7 +337,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
-            new WrappedCountDownLatch(1, count),
+            new ExecutionContext(1, count, exceptionHolder),
             actionListener,
             parameters,
             tensorOutputs,

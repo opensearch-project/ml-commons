@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
@@ -42,8 +43,9 @@ public interface RemoteConnectorExecutor {
         ActionListener<List<ModelTensors>> tensorActionListener = ActionListener.wrap(r -> {
             actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(r)));
         }, actionListener::onFailure);
-        Map<Integer, ModelTensors> modelTensors = new ConcurrentHashMap<>();
         try {
+            Map<Integer, ModelTensors> modelTensors = new ConcurrentHashMap<>();
+            AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
             if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
                 TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
                 Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
@@ -59,7 +61,7 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         modelTensors,
-                        new WrappedCountDownLatch(sequence++, countDownLatch),
+                        new ExecutionContext(sequence++, countDownLatch, exceptionHolder),
                         tensorActionListener
                     );
                 }
@@ -67,7 +69,7 @@ public interface RemoteConnectorExecutor {
                 preparePayloadAndInvokeRemoteModel(
                     mlInput,
                     modelTensors,
-                    new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                    new ExecutionContext(0, new CountDownLatch(1), exceptionHolder),
                     tensorActionListener
                 );
             }
@@ -131,7 +133,7 @@ public interface RemoteConnectorExecutor {
     default void preparePayloadAndInvokeRemoteModel(
         MLInput mlInput,
         Map<Integer, ModelTensors> tensorOutputs,
-        WrappedCountDownLatch countDownLatch,
+        ExecutionContext countDownLatch,
         ActionListener<List<ModelTensors>> actionListener
     ) {
         Connector connector = getConnector();
@@ -183,7 +185,7 @@ public interface RemoteConnectorExecutor {
         Map<String, String> parameters,
         String payload,
         Map<Integer, ModelTensors> tensorOutputs,
-        WrappedCountDownLatch countDownLatch,
+        ExecutionContext countDownLatch,
         ActionListener<List<ModelTensors>> actionListener
     );
 }

@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -93,7 +94,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 "{\"input\": \"hello world\"}",
                 new HashMap<>(),
-                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
@@ -125,7 +126,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 null,
                 new HashMap<>(),
-                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
@@ -157,7 +158,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 null,
                 new HashMap<>(),
-                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
     }
@@ -185,7 +186,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 "hello world",
                 new HashMap<>(),
-                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
     }
@@ -216,7 +217,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 "hello world",
                 new HashMap<>(),
-                new WrappedCountDownLatch(0, new CountDownLatch(1)),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
