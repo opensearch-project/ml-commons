@@ -92,11 +92,14 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         );
     }
 
-    public void testExecute_successful() throws Exception {
+    public void testExecute_Exception() throws Exception {
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, null, false);
-        IngestDocument document = processor.execute(ingestDocument);
+        try {
+            IngestDocument document = processor.execute(ingestDocument);
+        } catch (UnsupportedOperationException e) {
+            assertEquals("this method should not get executed.", e.getMessage());
+        }
 
-        assert document.getSourceAndMetadata().containsKey("key1");
     }
 
     /**

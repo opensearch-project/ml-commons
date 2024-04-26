@@ -111,7 +111,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
     @Override
     public IngestDocument execute(IngestDocument ingestDocument) throws Exception {
-        return ingestDocument;
+        throw new UnsupportedOperationException("this method should not get executed.");
     }
 
     /**

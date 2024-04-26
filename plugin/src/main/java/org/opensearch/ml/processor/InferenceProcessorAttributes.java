@@ -4,21 +4,15 @@
  */
 package org.opensearch.ml.processor;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-
-import org.opensearch.core.common.io.stream.NamedWriteable;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Setter
 @Getter
-public class InferenceProcessorAttributes implements ToXContentObject, NamedWriteable {
+public class InferenceProcessorAttributes {
 
     protected List<Map<String, String>> inputMaps;
 
@@ -76,18 +70,4 @@ public class InferenceProcessorAttributes implements ToXContentObject, NamedWrit
         this.maxPredictionTask = maxPredictionTask;
     }
 
-    @Override
-    public String getWriteableName() {
-        return null;
-    }
-
-    @Override
-    public void writeTo(StreamOutput out) throws IOException {
-
-    }
-
-    @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        return null;
-    }
 }

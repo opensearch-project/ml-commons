@@ -41,7 +41,7 @@ public class InferenceProcessorAttributesTests {
         );
 
         assertEquals(modelId, mlModelUtil.getModelId());
-        assertEquals(inputMap, mlModelUtil.getOutputMaps());
+        assertEquals(inputMap, mlModelUtil.getInputMaps());
         assertEquals(outputMap, mlModelUtil.getOutputMaps());
         assertEquals(modelConfig, mlModelUtil.getModelConfigMaps());
         assertEquals(DEFAULT_MAX_PREDICTION_TASKS, mlModelUtil.getMaxPredictionTask());
