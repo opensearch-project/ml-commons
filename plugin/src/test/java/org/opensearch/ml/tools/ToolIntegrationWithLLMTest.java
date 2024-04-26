@@ -62,6 +62,7 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
     @After
     public void deleteModel() throws IOException {
+        undeployModel(modelId);
         deleteModel(client(), modelId, null);
     }
 
