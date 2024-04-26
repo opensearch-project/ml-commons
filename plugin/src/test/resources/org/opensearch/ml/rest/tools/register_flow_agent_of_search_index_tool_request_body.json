@@ -1,0 +1,10 @@
+{
+  "name": "Test_Search_Index_Agent",
+  "type": "flow",
+  "tools": [
+    {
+      "type": "SearchIndexTool",
+      "description": "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when a DSL query is available."
+    }
+  ]
+}
