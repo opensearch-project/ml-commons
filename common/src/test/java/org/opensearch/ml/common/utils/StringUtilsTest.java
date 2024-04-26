@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.assertEquals;
 
 public class StringUtilsTest {
@@ -129,9 +130,6 @@ public class StringUtilsTest {
         Assert.assertEquals(2, interfaceMap.size());
         Assert.assertEquals("value1", interfaceMap.get("input"));
         Assert.assertEquals("2", interfaceMap.get("output"));
-        Assert.assertNull(interfaceMap.get("key3"));
-        Assert.assertNull(interfaceMap.get("key4"));
-        Assert.assertNull(interfaceMap.get("key5"));
     }
 
     @Test

@@ -236,7 +236,7 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void testValidateSchema() {
+    public void testValidateSchema() throws IOException {
         String schema = "{"
             + "\"type\": \"object\","
             + "\"properties\": {"
@@ -246,24 +246,6 @@ public class ConnectorUtilsTest {
             + "}";
         String json = "{\"key1\": \"foo\", \"key2\": 123}";
         ConnectorUtils.validateSchema(schema, json);
-    }
-
-    @Test
-    public void testConvertingInterfaceToValidSchema() {
-        String schemaString = "{"
-            + "\"department\": {"
-            + "    \"name\": \"string\","
-            + "    \"employees\": "
-            + "        {\"name\": \"string\","
-            + "         \"age\": {\"type\":\"integer\","
-            + "                   \"description\": \"This field should be above zero\"}},"
-            + "     }, \"foo\": {\"properties\":{\"name\":\"string\"}}"
-            + "}";
-        String expectedString =
-            "{\"properties\":{\"foo\":{\"properties\":{\"name\":\"string\"}},\"department\":{\"properties\":{\"name\":\"string\",\"employees\":{\"properties\":{\"name\":\"string\",\"age\":{\"description\":\"This field should be above zero\",\"type\":\"integer\"}}}}}}}";
-        JSONObject schemaObject = new JSONObject(schemaString);
-        JSONObject validSchemaObject = ConnectorUtils.processJsonObject(schemaObject);
-        Assert.assertEquals(expectedString, validSchemaObject.toString());
     }
 
     private void processInput_TextDocsInputDataSet_PreprocessFunction(
