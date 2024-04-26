@@ -83,7 +83,7 @@ public abstract class TextEmbeddingModel extends DLModel {
             : modelConfig.getQueryPrefix();
         if (prefix != null) {
             List<String> prefixedDocs = inputDataSet.getDocs().stream().map(s -> prefix + s).collect(Collectors.toList());
-            return TextDocsInputDataSet.builder().docs(prefixedDocs).build();
+            return TextDocsInputDataSet.builder().docs(prefixedDocs).resultFilter(inputDataSet.getResultFilter()).build();
         }
         return inputDataSet;
     }

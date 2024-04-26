@@ -262,7 +262,13 @@ public class TextEmbeddingDenseModelTest {
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("what is the meaning of life?", "who won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY))
             .build();
@@ -270,7 +276,13 @@ public class TextEmbeddingDenseModelTest {
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("The meaning of life is 42", "I won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("The meaning of life is 42", "I won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.PASSAGE))
             .build();
@@ -285,19 +297,37 @@ public class TextEmbeddingDenseModelTest {
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("what is the meaning of life?", "who won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .build();
         MLInput symmetricMlInputPassages = MLInput
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("The meaning of life is 42", "I won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("The meaning of life is 42", "I won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .build();
 
         ModelTensorOutput symmetricQueryEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(symmetricMlInputQueries);
         ModelTensorOutput symmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(symmetricMlInputPassages);
+
+        assertTrue(
+            "asymmetric and symmetric embeddings should have the same number of tensors",
+            asymmetricQueryEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().size() == 1
+                && symmetricQueryEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().size() == 1
+        );
 
         assertTrue(
             "asymmetric and symmetric query embeddings should be different",
