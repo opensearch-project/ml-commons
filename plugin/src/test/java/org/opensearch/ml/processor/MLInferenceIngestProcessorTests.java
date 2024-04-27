@@ -109,11 +109,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
      */
     public void testExecute_nestedObjectStringDocumentSuccess() {
 
-        List<Map<String, String>> inputMap = new ArrayList<>();
-        Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.chunk";
-        input.put("inputs", originalFieldPath);
-        inputMap.add(input);
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.chunk");
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, true, false);
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", Arrays.asList(1, 2, 3))).build();
@@ -129,7 +125,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         processor.execute(nestedObjectIngestDocument, handler);
         // match output documents
         Map<String, Object> sourceAndMetadata = getNestedObjectWithAnotherNestedObjectSource();
-        sourceAndMetadata.put(DEFAULT_OUTPUT_FIELD_NAME, List.of(ImmutableMap.of("response", Arrays.asList(1, 2, 3))));
+        sourceAndMetadata.put(DEFAULT_OUTPUT_FIELD_NAME, ImmutableMap.of("response", Arrays.asList(1, 2, 3)));
         IngestDocument ingestDocument1 = new IngestDocument(sourceAndMetadata, new HashMap<>());
         verify(handler).accept(eq(ingestDocument1), isNull());
         assertEquals(nestedObjectIngestDocument, ingestDocument1);
@@ -140,11 +136,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
      * the value Object is a Map<String,String>
      */
     public void testExecute_nestedObjectMapDocumentSuccess() {
-        List<Map<String, String>> inputMap = new ArrayList<>();
-        Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.*.chunk.text";
-        input.put("inputs", originalFieldPath);
-        inputMap.add(input);
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text");
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, true, false);
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", Arrays.asList(1, 2, 3))).build();
@@ -231,11 +223,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
      * the value Object is a also a nested object,
      */
     public void testExecute_nestedObjectAndNestedObjectDocumentOutputInOneFieldSuccess() {
-        List<Map<String, String>> inputMap = new ArrayList<>();
-        Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.*.chunk.text.*.context";
-        input.put("inputs", originalFieldPath);
-        inputMap.add(input);
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, true, false);
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", Arrays.asList(1, 2, 3, 4))).build();
@@ -285,18 +273,9 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     }
 
     public void testExecute_nestedObjectAndNestedObjectDocumentOutputInArraySuccess() {
-        List<Map<String, String>> inputMap = new ArrayList<>();
-        Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.*.chunk.text.*.context";
-        input.put("inputs", originalFieldPath);
-        inputMap.add(input);
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
 
-        List<Map<String, String>> outputMap = new ArrayList<>();
-        Map<String, String> output = new HashMap<>();
-        String modelOutputPath = "response";
-        String documentFieldName = "chunks.*.chunk.text.*.embedding";
-        output.put(modelOutputPath, documentFieldName);
-        outputMap.add(output);
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, false);
         ArrayList<List<Integer>> modelPredictionOutput = new ArrayList<>();
         modelPredictionOutput.add(Arrays.asList(1));
@@ -326,18 +305,9 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     }
 
     public void testExecute_nestedObjectAndNestedObjectDocumentOutputInArrayMissingLeaveSuccess() {
-        List<Map<String, String>> inputMap = new ArrayList<>();
-        Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.*.chunk.text.*.context";
-        input.put("inputs", originalFieldPath);
-        inputMap.add(input);
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
 
-        List<Map<String, String>> outputMap = new ArrayList<>();
-        Map<String, String> output = new HashMap<>();
-        String modelOutputPath = "response";
-        String documentFieldName = "chunks.*.chunk.text.*.embedding";
-        output.put(modelOutputPath, documentFieldName);
-        outputMap.add(output);
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, false);
         ArrayList<List<Integer>> modelPredictionOutput = new ArrayList<>();
@@ -368,7 +338,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         assertEquals(nestedObjectIngestDocument.getFieldValue("chunks.1.chunk.text", ArrayList.class).size(), 2);
         assertEquals(nestedObjectIngestDocument.getFieldValue("chunks.0.chunk.text.0.embedding", Object.class), Arrays.asList(1));
         assertEquals(nestedObjectIngestDocument.getFieldValue("chunks.0.chunk.text.1.embedding", Object.class), Arrays.asList(2));
-        assertNull(((ArrayList<?>) nestedObjectIngestDocument.getFieldValue("chunks.1.chunk.text.0.embedding", Object.class)).get(0)); // missing
+        assertNull(((ArrayList<?>) nestedObjectIngestDocument.getFieldValue("chunks.1.chunk.text.0.embedding", Object.class))); // missing
         assertEquals(nestedObjectIngestDocument.getFieldValue("chunks.1.chunk.text.1.embedding", Object.class), Arrays.asList(4));
     }
 
@@ -401,7 +371,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
         String originalOutPutFieldName = "response1";
-        output.put(originalOutPutFieldName, "text_embedding");
+        output.put("text_embedding", originalOutPutFieldName);
         outputMap.add(output);
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, outputMap, false, false);
 
@@ -427,12 +397,12 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     public void testExecute_whenInputFieldNotFound_ExceptionWithIgnoreMissingFalse() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "text";
-        input.put("inputs", originalFieldPath);
+        String documentFieldPath = "text";
+        input.put("inputs", documentFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "text_embedding");
+        output.put("text_embedding", "response");
         outputMap.add(output);
         Map<String, String> model_config = new HashMap<>();
         model_config.put("position_embedding_type", "absolute");
@@ -442,7 +412,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         try {
             processor.execute(ingestDocument, handler);
         } catch (IllegalArgumentException e) {
-            assertEquals("field name in input_map: [" + originalFieldPath + "] doesn't exist", e.getMessage());
+            assertEquals("field name in input_map: [" + documentFieldPath + "] doesn't exist", e.getMessage());
         }
 
     }
@@ -450,12 +420,12 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     public void testExecute_whenInputFieldNotFound_SuccessWithIgnoreMissingTrue() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "text";
-        input.put("inputs", originalFieldPath);
+        String documentFieldPath = "text";
+        input.put("inputs", documentFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "text_embedding");
+        output.put("text_embedding", "response");
         outputMap.add(output);
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, false);
 
@@ -465,12 +435,12 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     public void testExecute_whenEmptyInputField_ExceptionWithIgnoreMissingFalse() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "";  // emptyInputField
-        input.put("inputs", originalFieldPath);
+        String documentFieldPath = "";  // emptyInputField
+        input.put("inputs", documentFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "text_embedding");
+        output.put("text_embedding", "response");
         outputMap.add(output);
         Map<String, String> model_config = new HashMap<>();
         model_config.put("position_embedding_type", "absolute");
@@ -480,19 +450,19 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         try {
             processor.execute(ingestDocument, handler);
         } catch (IllegalArgumentException e) {
-            assertEquals("field name in input_map [ " + originalFieldPath + "] cannot be null nor empty", e.getMessage());
+            assertEquals("field name in input_map [ " + documentFieldPath + "] cannot be null nor empty", e.getMessage());
         }
     }
 
     public void testExecute_whenEmptyInputField_ExceptionWithIgnoreMissingTrue() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "";  // emptyInputField
-        input.put("inputs", originalFieldPath);
+        String documentFieldPath = "";  // emptyInputField
+        input.put("inputs", documentFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "text_embedding");
+        output.put("text_embedding", "response");
         outputMap.add(output);
         Map<String, String> model_config = new HashMap<>();
         model_config.put("position_embedding_type", "absolute");
@@ -506,12 +476,12 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     public void testExecute_IOExceptionWithIgnoreMissingFalse() throws JsonProcessingException {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "text";
-        input.put("inputs", originalFieldPath);
+        String documentFieldPath = "text";
+        input.put("inputs", documentFieldPath);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "text_embedding");
+        output.put("text_embedding", "response");
         outputMap.add(output);
         Map<String, String> model_config = new HashMap<>();
         model_config.put("position_embedding_type", "absolute");
@@ -524,7 +494,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         try {
             processor.execute(ingestDocument, handler);
         } catch (IllegalArgumentException e) {
-            assertEquals("field name in input_map: [" + originalFieldPath + "] doesn't exist", e.getMessage());
+            assertEquals("field name in input_map: [" + documentFieldPath + "] doesn't exist", e.getMessage());
         }
     }
 
@@ -564,7 +534,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         Map<String, Object> sourceAndMetadata = new HashMap<>();
         sourceAndMetadata.put("key1", "value1");
         sourceAndMetadata.put("key2", "value2");
-        sourceAndMetadata.put(DEFAULT_OUTPUT_FIELD_NAME, List.of(ImmutableMap.of("response", Arrays.asList(1, 2, 3))));
+        sourceAndMetadata.put(DEFAULT_OUTPUT_FIELD_NAME, ImmutableMap.of("response", Arrays.asList(1, 2, 3)));
         IngestDocument ingestDocument1 = new IngestDocument(sourceAndMetadata, new HashMap<>());
         verify(handler).accept(eq(ingestDocument1), isNull());
         assertEquals(ingestDocument, ingestDocument1);
@@ -665,7 +635,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     public void testExecute_getModelOutputFieldWithFieldNameSuccess() {
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "classification");
+        output.put("classification", "response");
         outputMap.add(output);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, outputMap, true, false);
@@ -687,7 +657,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         Map<String, Object> sourceAndMetadata = new HashMap<>();
         sourceAndMetadata.put("key1", "value1");
         sourceAndMetadata.put("key2", "value2");
-        sourceAndMetadata.put("classification", List.of(ImmutableMap.of("language", "en", "score", "0.9876")));
+        sourceAndMetadata.put("classification", ImmutableMap.of("language", "en", "score", "0.9876"));
         IngestDocument ingestDocument1 = new IngestDocument(sourceAndMetadata, new HashMap<>());
         verify(handler).accept(eq(ingestDocument1), isNull());
         assertEquals(ingestDocument, ingestDocument1);
@@ -696,7 +666,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     public void testExecute_getModelOutputFieldWithDotPathSuccess() {
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response.language", "language_identification");
+        output.put("language_identification", "response.language");
         outputMap.add(output);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, outputMap, true, false);
@@ -728,7 +698,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response.lan", "language_identification");
+        output.put("language_identification", "response.lan");
         outputMap.add(output);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, outputMap, true, false);
@@ -782,25 +752,84 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
             processor.execute(ingestDocument1, handler);
         } catch (IllegalArgumentException e) {
             assertEquals("model inference output can not find field name: " + "response.lan", e.getMessage());
-
         }
         ;
 
     }
 
-    public void testExecute_getModelOutputFieldDifferentLengthException() {
+    public void testExecute_getModelOutputFieldWithExistedFieldNameException() {
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("key1", "response");
+        outputMap.add(output);
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, null, outputMap, false, false);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", ImmutableMap.of("language", "en", "score", "0.9876")))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        processor.execute(ingestDocument, handler);
+        verify(handler)
+            .accept(
+                eq(null),
+                argThat(
+                    exception -> exception
+                        .getMessage()
+                        .equals(
+                            "document already has field name key1. Not allow to overwrite the same field name, please check output_map."
+                        )
+                )
+            );
+    }
+
+    public void testExecute_documentNotExistedFieldNameException() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.*.chunk.text.*.context";
-        input.put("inputs", originalFieldPath);
+        input.put("inputs", "key99");
         inputMap.add(input);
 
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        String modelOutputPath = "response";
-        String documentFieldName = "chunks.*.chunk.text.*.embedding";
-        output.put(modelOutputPath, documentFieldName);
+        output.put("classification", "response");
         outputMap.add(output);
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, false, false);
+
+        processor.execute(ingestDocument, handler);
+        verify(handler)
+            .accept(eq(null), argThat(exception -> exception.getMessage().equals("cannot find field name defined from input map: key99")));
+    }
+
+    public void testExecute_nestedDocumentNotExistedFieldNameException() {
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context1");
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, null, false, false);
+
+        processor.execute(ingestDocument, handler);
+        verify(handler)
+            .accept(
+                eq(null),
+                argThat(
+                    exception -> exception
+                        .getMessage()
+                        .equals("cannot find field name defined from input map: chunks.*.chunk.text.*.context1")
+                )
+            );
+    }
+
+    public void testExecute_getModelOutputFieldDifferentLengthException() {
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, false);
         ArrayList<List<Integer>> modelPredictionOutput = new ArrayList<>();
@@ -834,18 +863,9 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     }
 
     public void testExecute_getModelOutputFieldDifferentLengthIgnoreFailureSuccess() {
-        List<Map<String, String>> inputMap = new ArrayList<>();
-        Map<String, String> input = new HashMap<>();
-        String originalFieldPath = "chunks.*.chunk.text.*.context";
-        input.put("inputs", originalFieldPath);
-        inputMap.add(input);
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
 
-        List<Map<String, String>> outputMap = new ArrayList<>();
-        Map<String, String> output = new HashMap<>();
-        String modelOutputPath = "response";
-        String documentFieldName = "chunks.*.chunk.text.*.embedding";
-        output.put(modelOutputPath, documentFieldName);
-        outputMap.add(output);
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, true);
         ArrayList<List<Integer>> modelPredictionOutput = new ArrayList<>();
@@ -870,6 +890,119 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         processor.execute(nestedObjectIngestDocument, handler);
         verify(handler).accept(eq(nestedObjectIngestDocument), isNull());
         assertNull(nestedObjectIngestDocument.getIngestMetadata().get("response"));
+    }
+
+    public void testExecute_getMlModelTensorsIsNull() {
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, false);
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(null).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+        Map<String, Object> sourceAndMetadata = getNestedObjectWithAnotherNestedObjectSource();
+
+        IngestDocument nestedObjectIngestDocument = new IngestDocument(sourceAndMetadata, new HashMap<>());
+
+        processor.execute(nestedObjectIngestDocument, handler);
+
+        verify(handler)
+            .accept(
+                eq(null),
+                argThat(exception -> exception.getMessage().equals("An unexpected error occurred: Output tensors are null or empty."))
+            );
+
+    }
+
+    public void testExecute_getMlModelTensorsIsNullIgnoreFailure() {
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, true);
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(null).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+        Map<String, Object> sourceAndMetadata = getNestedObjectWithAnotherNestedObjectSource();
+
+        IngestDocument nestedObjectIngestDocument = new IngestDocument(sourceAndMetadata, new HashMap<>());
+
+        processor.execute(nestedObjectIngestDocument, handler);
+        verify(handler).accept(eq(nestedObjectIngestDocument), isNull());
+    }
+
+    public void testExecute_modelTensorOutputIsNull() {
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, false);
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(null).build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+        Map<String, Object> sourceAndMetadata = getNestedObjectWithAnotherNestedObjectSource();
+
+        IngestDocument nestedObjectIngestDocument = new IngestDocument(sourceAndMetadata, new HashMap<>());
+
+        processor.execute(nestedObjectIngestDocument, handler);
+        verify(handler).accept(eq(null), argThat(exception -> exception.getMessage().equals("model inference output cannot be null")));
+
+    }
+
+    public void testExecute_modelTensorOutputIsNullIgnoreFailureSuccess() {
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+
+        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, true, true);
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(null).build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+        Map<String, Object> sourceAndMetadata = getNestedObjectWithAnotherNestedObjectSource();
+
+        IngestDocument nestedObjectIngestDocument = new IngestDocument(sourceAndMetadata, new HashMap<>());
+
+        processor.execute(nestedObjectIngestDocument, handler);
+        verify(handler).accept(eq(nestedObjectIngestDocument), isNull());
+    }
+
+    public void testParseGetDataInTensor_IntegerDataType() {
+        ModelTensor mockTensor = mock(ModelTensor.class);
+        when(mockTensor.getDataType()).thenReturn(MLResultDataType.INT8);
+        when(mockTensor.getData()).thenReturn(new Number[] { 1, 2, 3 });
+        Object result = ModelExecutor.parseDataInTensor(mockTensor);
+        assertEquals(List.of(1, 2, 3), result);
+    }
+
+    public void testParseGetDataInTensor_FloatDataType() {
+        ModelTensor mockTensor = mock(ModelTensor.class);
+        when(mockTensor.getDataType()).thenReturn(MLResultDataType.FLOAT32);
+        when(mockTensor.getData()).thenReturn(new Number[] { 1.1, 2.2, 3.3 });
+        Object result = ModelExecutor.parseDataInTensor(mockTensor);
+        assertEquals(List.of(1.1f, 2.2f, 3.3f), result);
+    }
+
+    public void testParseGetDataInTensor_BooleanDataType() {
+        ModelTensor mockTensor = mock(ModelTensor.class);
+        when(mockTensor.getDataType()).thenReturn(MLResultDataType.BOOLEAN);
+        when(mockTensor.getData()).thenReturn(new Number[] { 1, 0, 1 });
+        Object result = ModelExecutor.parseDataInTensor(mockTensor);
+        assertEquals(List.of(true, false, true), result);
     }
 
     private static Map<String, Object> getNestedObjectWithAnotherNestedObjectSource() {
@@ -912,5 +1045,23 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         Map<String, Object> sourceAndMetadata = new HashMap<>();
         sourceAndMetadata.put("chunks", childDocuments);
         return sourceAndMetadata;
+    }
+
+    private static List<Map<String, String>> getOutputMapsForNestedObjectChunks() {
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        String modelOutputPath = "response";
+        String documentFieldName = "chunks.*.chunk.text.*.embedding";
+        output.put(documentFieldName, modelOutputPath);
+        outputMap.add(output);
+        return outputMap;
+    }
+
+    private static List<Map<String, String>> getInputMapsForNestedObjectChunks(String documentFieldPath) {
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put("inputs", documentFieldPath);
+        inputMap.add(input);
+        return inputMap;
     }
 }

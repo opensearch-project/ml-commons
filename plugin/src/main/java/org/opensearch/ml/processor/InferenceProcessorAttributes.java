@@ -24,29 +24,39 @@ public class InferenceProcessorAttributes {
     protected Map<String, String> modelConfigMaps;
     public static final String MODEL_ID = "model_id";
     /**
-     * The list of maps will support for one or more prediction tasks mapping
-     * model fields on the left and document fields on the right side
-     * example input_maps
-     *"input_map": [
-     *           {
-     *             "input": "book.title"
-     *           },
-     *           {
-     *             "input": "book.text"
-     *           },
-     *         ]
+     * The list of maps that support one or more prediction tasks mapping.
+     * The mappings also support JSON path for nested objects.
+     *
+     * input_map is used to construct model inputs, where the keys represent the model input fields,
+     * and the values represent the corresponding document fields.
+     *
+     *  Example input_map:
+     *
+     * "input_map": [
+     *   {
+     *     "input": "book.title"
+     *   },
+     *   {
+     *     "input": "book.text"
+     *   }
+     * ]
      */
     public static final String INPUT_MAP = "input_map";
     /**
-     * example output_maps
-     *"output_map": [
-     *           {
-     *             "response.language": "book.title_language"
-     *           },
-     *           {
-     *             "response.language": "book.text_language"
-     *           },
-     *         ]
+     * output_map is used to construct document fields, where the keys represent the document fields,
+     * and the values represent the corresponding model output fields.
+     *
+     * Example output_map:
+     *
+     * "output_map": [
+     *   {
+     *     "book.title_language": "response.language"
+     *   },
+     *   {
+     *     "book.text_language": "response.language"
+     *   }
+     * ]
+     *
      */
     public static final String OUTPUT_MAP = "output_map";
     public static final String MODEL_CONFIG = "model_config";

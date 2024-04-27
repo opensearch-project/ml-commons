@@ -75,7 +75,7 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
         } catch (IllegalArgumentException e) {
             assertEquals(
                 e.getMessage(),
-                ("The number of prediction task setting in this process is 3. It exceeds the max_prediction_tasks of 2. Please reduce the length of input_map or increase max_prediction_tasks.")
+                ("The number of prediction task setting in this process is 3. It exceeds the max_prediction_tasks of 2. Please reduce the size of input_map or increase max_prediction_tasks.")
             );
         }
     }
@@ -94,13 +94,13 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
         config.put(INPUT_MAP, inputMap);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output1 = new HashMap<>();
-        output1.put("response", "text_embedding");
+        output1.put("text_embedding", "response");
         outputMap.add(output1);
         Map<String, String> output2 = new HashMap<>();
-        output2.put("response", "hashtag_embedding");
+        output2.put("hashtag_embedding", "response");
         outputMap.add(output2);
         Map<String, String> output3 = new HashMap<>();
-        output2.put("response", "hashtvg_embedding");
+        output2.put("hashtvg_embedding", "response");
         outputMap.add(output3);
         config.put(OUTPUT_MAP, outputMap);
         config.put(MAX_PREDICTION_TASKS, 2);
@@ -128,7 +128,7 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
-        output.put("response", "text_embedding");
+        output.put("text_embedding", "response");
         outputMap.add(output);
         config.put(INPUT_MAP, inputMap);
         config.put(OUTPUT_MAP, outputMap);

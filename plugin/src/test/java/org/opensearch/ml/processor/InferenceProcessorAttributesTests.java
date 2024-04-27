@@ -26,7 +26,7 @@ public class InferenceProcessorAttributesTests {
 
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> outputField = new HashMap<>();
-        outputField.put("model_output", "new_document_field");
+        outputField.put("new_document_field", "model_output");
         outputMap.add(outputField);
 
         Map<String, String> modelConfig = new HashMap<>();

@@ -37,6 +37,15 @@ public interface ModelExecutor {
         .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
         .build();
 
+    /**
+     * Creates an ActionRequest for remote model inference based on the provided parameters and model ID.
+     *
+     * @param <T>        the type parameter for the ActionRequest
+     * @param parameters a map of input parameters for the model inference
+     * @param modelId    the ID of the model to be used for inference
+     * @return an ActionRequest instance for remote model inference
+     * @throws IllegalArgumentException if the input parameters are null
+     */
     default <T> ActionRequest getRemoteModelInferenceRequest(Map<String, String> parameters, String modelId) {
         if (parameters == null) {
             throw new IllegalArgumentException("wrong input. The model input cannot be empty.");
@@ -52,12 +61,16 @@ public interface ModelExecutor {
     }
 
     /**
-     * Read ModelTensorOutput and find value in DataAsMap and Data based on field Name
-     * @param modelTensorOutput
-     * @param originalModelOutputFieldName
-     * @return
+     * Retrieves the model output value from the given ModelTensorOutput for the specified modelOutputFieldName.
+     * It handles cases where the output contains a single tensor or multiple tensors.
+     *
+     * @param modelTensorOutput          the ModelTensorOutput containing the model output
+     * @param modelOutputFieldName       the name of the field in the model output to retrieve the value for
+     * @param ignoreMissing              a flag indicating whether to ignore missing fields or throw an exception
+     * @return the model output value as an Object
+     * @throws RuntimeException          if there is an error retrieving the model output value
      */
-    default Object getModelOutputValue(ModelTensorOutput modelTensorOutput, String originalModelOutputFieldName, boolean ignoreMissing) {
+    default Object getModelOutputValue(ModelTensorOutput modelTensorOutput, String modelOutputFieldName, boolean ignoreMissing) {
         Object modelOutputValue;
         try {
             // getMlModelOutputs() returns a list or collection.
@@ -65,6 +78,7 @@ public interface ModelExecutor {
             if (modelTensorOutput != null && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
                 // getMlModelOutputs() returns a list of ModelTensors
                 // accessing the first element.
+                // TODO currently remote model only return single tensor, might need to processor multiple tensors later
                 ModelTensors output = modelTensorOutput.getMlModelOutputs().get(0);
                 // Adding null check for output
                 if (output != null && output.getMlModelTensors() != null && !output.getMlModelTensors().isEmpty()) {
@@ -74,12 +88,12 @@ public interface ModelExecutor {
                         // try getDataAsMap first
                         Map<String, ?> tensorInDataAsMap = tensor.getDataAsMap();
                         if (tensorInDataAsMap != null) {
-                            modelOutputValue = getModelOutputField(tensorInDataAsMap, originalModelOutputFieldName, ignoreMissing);
+                            modelOutputValue = getModelOutputField(tensorInDataAsMap, modelOutputFieldName, ignoreMissing);
                         }
                         // if dataAsMap is empty try getData
                         else {
-                            // pase data type
-                            modelOutputValue = parseGetDataInTensor(tensor);
+                            // parse data type
+                            modelOutputValue = parseDataInTensor(tensor);
                         }
                     } else {
 
@@ -96,13 +110,11 @@ public interface ModelExecutor {
                                     // try getDataAsMap first
                                     Map<String, ?> tensorInDataAsMap = tensor.getDataAsMap();
                                     if (tensorInDataAsMap != null) {
-
-                                        tensorArray
-                                            .add(getModelOutputField(tensorInDataAsMap, originalModelOutputFieldName, ignoreMissing));
+                                        tensorArray.add(getModelOutputField(tensorInDataAsMap, modelOutputFieldName, ignoreMissing));
                                     }
                                     // if dataAsMap is empty try getData
                                     else {
-                                        tensorArray.add(parseGetDataInTensor(tensor));
+                                        tensorArray.add(parseDataInTensor(tensor));
                                     }
                                 } catch (Exception e) {
                                     // Handle the exception accordingly
@@ -112,7 +124,6 @@ public interface ModelExecutor {
                         }
                         modelOutputValue = tensorArray;
                     }
-
                 } else {
                     throw new RuntimeException("Output tensors are null or empty.");
                 }
@@ -125,7 +136,16 @@ public interface ModelExecutor {
         return modelOutputValue;
     }
 
-    private static Object parseGetDataInTensor(ModelTensor tensor) {
+    /**
+     * Parses the data from the given ModelTensor and returns it as an Object.
+     * The method handles different data types (integer, floating-point, string, and boolean)
+     * and converts the data accordingly.
+     *
+     * @param tensor the ModelTensor containing the data to be parsed
+     * @return the parsed data as an Object (typically a List)
+     * @throws RuntimeException if the data type is not supported
+     */
+    static Object parseDataInTensor(ModelTensor tensor) {
         Object modelOutputValue;
         if (tensor.getDataType().isInteger()) {
             modelOutputValue = Arrays.stream(tensor.getData()).map(Number::intValue).map(Integer::new).collect(Collectors.toList());
@@ -146,33 +166,42 @@ public interface ModelExecutor {
     }
 
     /**
-     * filter model outputs by field name,
-     * supported using dot path look up for objects
-     * when a field name not provided, default to get all prediction outputs
+     * Retrieves the value of the specified field from the given model tensor output map.
+     * If the field name is null, it returns the entire map.
+     * If the field name is present in the map, it returns the corresponding value.
+     * If the field name is not present in the map, it attempts to retrieve the value using JsonPath.
+     * If the field is not found and ignoreMissing is true, it returns the entire map.
+     * If the field is not found and ignoreMissing is false, it throws an IOException.
+     *
+     * @param modelTensorOutputMap the model tensor output map to retrieve the field value from
+     * @param fieldName            the name of the field to retrieve the value for
+     * @param ignoreMissing        a flag indicating whether to ignore missing fields or throw an exception
+     * @return the value of the specified field, or the entire map if the field name is null
+     * @throws IOException if the field is not found and ignoreMissing is false
      */
     default Object getModelOutputField(Map<String, ?> modelTensorOutputMap, String fieldName, boolean ignoreMissing) throws IOException {
-
-        if (fieldName == null) {
+        if (fieldName == null || modelTensorOutputMap == null) {
             return modelTensorOutputMap;
-        } else if (modelTensorOutputMap.containsKey(fieldName) && modelTensorOutputMap != null) {
-            Object filteredOutput = modelTensorOutputMap.get(fieldName);
-            return filteredOutput;
-        } else {
-            try {
-                Object filteredOutput = JsonPath.using(suppressExceptionConfiguration).parse(modelTensorOutputMap).read(fieldName);
-                return filteredOutput;
-            } catch (Exception e) {
-                if (ignoreMissing) {
-                    return modelTensorOutputMap;
-                } else {
-                    throw new IOException("model inference output can not find field name: " + fieldName, e);
-                }
+        }
+        if (modelTensorOutputMap.containsKey(fieldName)) {
+            return modelTensorOutputMap.get(fieldName);
+        }
+        try {
+            return JsonPath.using(suppressExceptionConfiguration).parse(modelTensorOutputMap).read(fieldName);
+        } catch (Exception e) {
+            if (ignoreMissing) {
+                return modelTensorOutputMap;
+            } else {
+                throw new IOException("model inference output cannot find field name: " + fieldName, e);
             }
         }
     }
 
     /**
-     * cast object to JsonString
+     * Converts the given Object to its JSON string representation using the Gson library.
+     *
+     * @param originalFieldValue the Object to be converted to JSON string
+     * @return the JSON string representation of the input Object
      */
 
     default String toString(Object originalFieldValue) {
@@ -180,9 +209,12 @@ public interface ModelExecutor {
     }
 
     /**
-     * write new dot path within nested object
-     * return a list of dot path
+     * Writes a new dot path for a nested object within the given JSON object.
+     * This method is useful when dealing with arrays or nested objects in the JSON structure.
      * for example foo.*.bar.*.quk to be [foo.0.bar.0.quk, foo.0.bar.1.quk..]
+     * @param json    the JSON object containing the nested object
+     * @param dotPath the dot path representing the location of the nested object
+     * @return a list of dot paths representing the new locations of the nested object
      */
     default List<String> writeNewDotPathForNestedObject(Object json, String dotPath) {
         int lastDotIndex = dotPath.lastIndexOf('.');
@@ -207,8 +239,11 @@ public interface ModelExecutor {
     }
 
     /**
-     * Convert JSONPath format to dot path notation format
-     * for example $['foo'][0]['bar']['quz'][0] to foo.0.bar.quiz.0
+     * Converts a JSONPath format string to a dot path notation format.
+     * For example, it converts "$['foo'][0]['bar']['quz'][0]" to "foo.0.bar.quiz.0".
+     *
+     * @param path the JSONPath format string to be converted
+     * @return the converted dot path notation string
      */
     default String convertToDotPath(String path) {
 
