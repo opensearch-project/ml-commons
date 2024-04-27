@@ -60,4 +60,13 @@ public enum MLResultDataType {
     public boolean isBoolean() {
         return format == Format.BOOLEAN;
     }
+
+    /**
+     * Checks whether it is a String data type.
+     *
+     * @return whether it is a String data type
+     */
+    public boolean isString() {
+        return format == Format.STRING;
+    }
 }

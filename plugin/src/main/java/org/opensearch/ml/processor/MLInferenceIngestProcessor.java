@@ -7,7 +7,6 @@ package org.opensearch.ml.processor;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -41,13 +40,12 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
     private final boolean ignoreMissing;
+    private final boolean ignoreFailure;
     private final ScriptService scriptService;
     private static Client client;
     public static final String TYPE = "ml_inference";
     public static final String DEFAULT_OUTPUT_FIELD_NAME = "inference_results";
-
     public static final String IGNORE_MISSING = "ignore_missing";
-
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
 
     private Configuration suppressExceptionConfiguration = Configuration
@@ -64,6 +62,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
         String tag,
         String description,
         boolean ignoreMissing,
+        boolean ignoreFailure,
         ScriptService scriptService,
         Client client
     ) {
@@ -76,6 +75,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             maxPredictionTask
         );
         this.ignoreMissing = ignoreMissing;
+        this.ignoreFailure = ignoreFailure;
         this.scriptService = scriptService;
         this.client = client;
     }
@@ -90,7 +90,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
-        int num_of_prediction_tasks = (processInputMap != null) ? processInputMap.size() : 0;
+        int inputMapSize = (processInputMap != null) ? processInputMap.size() : 0;
 
         GroupedActionListener<Void> batchPredictionListener = new GroupedActionListener<>(new ActionListener<Collection<Void>>() {
             @Override
@@ -100,12 +100,25 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
             @Override
             public void onFailure(Exception e) {
-                handler.accept(null, e);
+                if (ignoreFailure) {
+                    handler.accept(ingestDocument, null);
+                } else {
+                    handler.accept(null, e);
+                }
             }
-        }, Math.max(num_of_prediction_tasks, 1));
+        }, Math.max(inputMapSize, 1));
 
-        for (int i = 0; i < Math.max(num_of_prediction_tasks, 1); i++) {
-            processPredictions(ingestDocument, batchPredictionListener, processInputMap, processOutputMap, 0, num_of_prediction_tasks);
+        for (int inputMapIndex = 0; inputMapIndex < Math.max(inputMapSize, 1); inputMapIndex++) {
+            try {
+                processPredictions(ingestDocument, batchPredictionListener, processInputMap, processOutputMap, inputMapIndex, inputMapSize);
+            } catch (Exception e) {
+                if (ignoreFailure) {
+                    batchPredictionListener.onFailure(e);
+                } else {
+                    throw e;
+                }
+
+            }
         }
     }
 
@@ -124,30 +137,30 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
      * @param batchPredictionListener The GroupedActionListener for batch prediction.
      * @param processInputMap A list of maps containing input field mappings.
      * @param processOutputMap A list of maps containing output field mappings.
-     * @param i The current index of the prediction task.
-     * @param num_of_prediction_tasks The total number of prediction tasks.
+     * @param inputMapIndex The current index of the inputMap.
+     * @param inputMapSize The size of inputMap.
      */
     private void processPredictions(
         IngestDocument ingestDocument,
         GroupedActionListener<Void> batchPredictionListener,
         List<Map<String, String>> processInputMap,
         List<Map<String, String>> processOutputMap,
-        int i,
-        int num_of_prediction_tasks
+        int inputMapIndex,
+        int inputMapSize
     ) {
         Map<String, String> modelParameters = new HashMap<>();
         if (inferenceProcessorAttributes.getModelConfigMaps() != null) {
             modelParameters.putAll(inferenceProcessorAttributes.getModelConfigMaps());
         }
         // when no input mapping is provided, default to read all fields from documents as model input
-        if (num_of_prediction_tasks == 0) {
+        if (inputMapSize == 0) {
             Set<String> documentFields = ingestDocument.getSourceAndMetadata().keySet();
             for (String field : documentFields) {
                 getMappedModelInputFromDocuments(ingestDocument, modelParameters, field, field);
             }
 
         } else {
-            Map<String, String> inputMapping = processInputMap.get(i);
+            Map<String, String> inputMapping = processInputMap.get(inputMapIndex);
             for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
                 // model field as key, document field as value
                 String originalFieldName = entry.getValue();
@@ -166,7 +179,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
                 if (processOutputMap == null || processOutputMap.isEmpty()) {
                     appendFieldValue(modelTensorOutput, null, DEFAULT_OUTPUT_FIELD_NAME, ingestDocument);
                 } else {
-                    Map<String, String> outputMapping = processOutputMap.get(i);
+                    Map<String, String> outputMapping = processOutputMap.get(inputMapIndex);
 
                     for (Map.Entry<String, String> entry : outputMapping.entrySet()) {
                         String originalModelOutputFieldName = entry.getKey();
@@ -202,11 +215,11 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             if (originalFieldName.contains(".")) {
 
                 Map<String, Object> sourceObject = ingestDocument.getSourceAndMetadata();
-                String rewriteDotPathForNestedObject = findDotPathForNestedObject(sourceObject, originalFieldName);
+
                 ArrayList<Object> fieldValueList = JsonPath
                     .using(suppressExceptionConfiguration)
                     .parse(sourceObject)
-                    .read(rewriteDotPathForNestedObject);
+                    .read(originalFieldName);
 
                 String originalFieldValueAsString = toString(fieldValueList);
                 updateModelParameters(modelInputFieldName, originalFieldValueAsString, modelParameters);
@@ -223,9 +236,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
         if (modelParameters.containsKey(modelInputFieldName)) {
             Object existingValue = modelParameters.get(modelInputFieldName);
             List<Object> updatedList = (List<Object>) existingValue;
-
             updatedList.add(originalFieldValueAsString);
-
             modelParameters.put(modelInputFieldName, toString(updatedList));
         } else {
             modelParameters.put(modelInputFieldName, originalFieldValueAsString);
@@ -257,35 +268,10 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
         IngestDocument ingestDocument
     ) {
         Object modelOutputValue = null;
-        if (modelTensorOutput.getMlModelOutputs() != null) {
-            Map<String, ?> modelTensorOutputMap = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
 
-            if (modelTensorOutputMap != null) {
-                try {
-                    modelOutputValue = getModelOutputField(modelTensorOutputMap, originalModelOutputFieldName, ignoreMissing);
-                } catch (IOException e) {
-                    if (!ignoreMissing) {
-                        throw new IllegalArgumentException(
-                            "model inference output can not find field name: " + originalModelOutputFieldName,
-                            e
-                        );
-                    }
-                }
-            } else {
-                // further check if there is number array in getData
-                ArrayList tensorArray = new ArrayList<>();
-                for (int i = 0; i < modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size(); i++) {
+        if (modelTensorOutput.getMlModelOutputs() != null && modelTensorOutput.getMlModelOutputs().size() > 0) {
 
-                    Number[] tensorData = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(i).getData();
-                    // ingestDocument does not accept java.lang.Number, cast to float
-                    List<Float> numberList = Arrays.stream(tensorData).map(Number::floatValue).map(Float::new).collect(Collectors.toList());
-                    tensorArray.add(numberList);
-                }
-                modelOutputValue = tensorArray;
-                if (modelOutputValue == null) {
-                    throw new RuntimeException("model inference output cannot be null");
-                }
-            }
+            modelOutputValue = getModelOutputValue(modelTensorOutput, originalModelOutputFieldName, ignoreMissing);
 
             List<String> dotPathsInArray = writeNewDotPathForNestedObject(ingestDocument.getSourceAndMetadata(), newDocumentFieldName);
 
@@ -363,23 +349,14 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             int maxPredictionTask = ConfigurationUtils
                 .readIntProperty(TYPE, processorTag, config, MAX_PREDICTION_TASKS, DEFAULT_MAX_PREDICTION_TASKS);
             boolean ignoreMissing = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, IGNORE_MISSING, false);
-
+            boolean ignoreFailure = ConfigurationUtils
+                .readBooleanProperty(TYPE, processorTag, config, ConfigurationUtils.IGNORE_FAILURE_KEY, false);
             // convert model config user input data structure to Map<String, String>
-            Map<String, String> modelConfigMaps = null;
-            if (modelConfigInput != null) {
-                modelConfigMaps = new HashMap<>();
-                for (String key : modelConfigInput.keySet()) {
-                    Object value = modelConfigInput.get(key);
-                    if (value instanceof String) {
-                        modelConfigMaps.put(key, (String) value);
-                    } else {
-                        modelConfigMaps.put(key, gson.toJson(value));
-                    }
-                }
-            }
+            Map<String, String> modelConfigMaps = (modelConfigInput != null)
+                ? modelConfigInput.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> gson.toJson(e.getValue())))
+                : Map.of();
 
             // check if the number of prediction tasks exceeds max prediction tasks
-
             if (inputMaps != null && inputMaps.size() > maxPredictionTask) {
                 throw new IllegalArgumentException(
                     "The number of prediction task setting in this process is "
@@ -402,6 +379,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
                 processorTag,
                 description,
                 ignoreMissing,
+                ignoreFailure,
                 scriptService,
                 client
             );
