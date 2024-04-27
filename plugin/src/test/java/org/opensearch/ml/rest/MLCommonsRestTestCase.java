@@ -57,11 +57,13 @@ import org.opensearch.common.io.PathUtils;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
@@ -106,6 +108,27 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
 
         return isHttps;
+    }
+
+    protected void updateClusterSettings(String settingKey, Object value) throws IOException {
+        XContentBuilder builder = XContentFactory
+            .jsonBuilder()
+            .startObject()
+            .startObject("persistent")
+            .field(settingKey, value)
+            .endObject()
+            .endObject();
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                builder.toString(),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+
+        assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
     }
 
     @Before
