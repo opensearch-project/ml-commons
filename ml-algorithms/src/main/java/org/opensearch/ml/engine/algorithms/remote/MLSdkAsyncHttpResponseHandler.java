@@ -60,8 +60,6 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private final MLGuard mlGuard;
 
-    private final static Gson GSON = StringUtils.gson;
-
     public MLSdkAsyncHttpResponseHandler(
         ExecutionContext executionContext,
         ActionListener<List<ModelTensors>> actionListener,
@@ -108,17 +106,19 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     ) {
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            if (executionContext.getExceptionHolder().get() == null)
+            if (executionContext.getExceptionHolder().get() == null) {
                 executionContext
                     .getExceptionHolder()
                     .compareAndSet(null, new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
+            }
         } else {
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
-                if (executionContext.getExceptionHolder().get() == null)
+                if (executionContext.getExceptionHolder().get() == null) {
                     executionContext
                         .getExceptionHolder()
                         .compareAndSet(null, new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
+                }
             } else {
                 try {
                     ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
@@ -126,10 +126,11 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                     tensorOutputs.put(executionContext.getSequence(), tensors);
                 } catch (Exception e) {
                     log.error("Failed to process response body: {}", body, e);
-                    if (executionContext.getExceptionHolder().get() == null)
+                    if (executionContext.getExceptionHolder().get() == null) {
                         executionContext
                             .getExceptionHolder()
                             .compareAndSet(null, new MLException("Fail to execute predict in aws connector", e));
+                    }
                 }
             }
         }
