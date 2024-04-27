@@ -33,7 +33,7 @@ public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
 
     private static final String INTERNAL_INDICES_PREFIX = ".";
 
-    private Object parseFieldFromResponse(Response response, String field) throws IOException, ParseException {
+    protected Object parseFieldFromResponse(Response response, String field) throws IOException, ParseException {
         assertNotNull(field);
         Map map = parseResponseToMap(response);
         Object result = map.get(field);

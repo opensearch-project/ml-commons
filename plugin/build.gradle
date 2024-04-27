@@ -101,6 +101,10 @@ compileJava {
     options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
 }
 
+compileTestJava {
+    options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
+}
+
 //TODO: check which one should be enabled
 licenseHeaders.enabled = true
 testingConventions.enabled = false
@@ -144,6 +148,8 @@ integTest {
     if (System.getProperty("tests.rest.cluster") != null) {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*IT"
+            // mock LLM run in localhost, it will not reachable for docker or remote cluster
+            excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
     }
 
@@ -232,6 +238,8 @@ task integTestRemote(type: RestIntegTestTask) {
     if (System.getProperty("tests.rest.cluster") != null) {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*IT"
+            // mock LLM run in localhost, it will not reachable for docker or remote cluster
+            excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
     }
 }
