@@ -170,6 +170,7 @@ import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
+import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -569,12 +570,14 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         CatIndexTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
+        VisualizationsTool.Factory.getInstance().init(client);
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
+        toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);

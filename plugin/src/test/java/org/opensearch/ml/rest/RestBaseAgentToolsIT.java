@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
@@ -33,7 +32,7 @@ public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
 
     private static final String INTERNAL_INDICES_PREFIX = ".";
 
-    private Object parseFieldFromResponse(Response response, String field) throws IOException, ParseException {
+    protected Object parseFieldFromResponse(Response response, String field) throws IOException {
         assertNotNull(field);
         Map map = parseResponseToMap(response);
         Object result = map.get(field);
@@ -59,13 +58,13 @@ public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
         assertEquals(RestStatus.CREATED, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
     }
 
-    protected String createAgent(String requestBody) throws IOException, ParseException {
+    protected String createAgent(String requestBody) throws IOException {
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/_register", null, requestBody, null);
         assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
         return parseFieldFromResponse(response, AgentMLInput.AGENT_ID_FIELD).toString();
     }
 
-    private String parseStringResponseFromExecuteAgentResponse(Response response) throws IOException, ParseException {
+    private String parseStringResponseFromExecuteAgentResponse(Response response) throws IOException {
         Map responseInMap = parseResponseToMap(response);
         Optional<String> optionalResult = Optional
             .ofNullable(responseInMap)
@@ -79,7 +78,7 @@ public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
 
     // execute the agent, and return the String response from the json structure
     // {"inference_results": [{"output": [{"name": "response","result": "the result to return."}]}]}
-    protected String executeAgent(String agentId, String requestBody) throws IOException, ParseException {
+    protected String executeAgent(String agentId, String requestBody) throws IOException {
         Response response = TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, requestBody, null);
         return parseStringResponseFromExecuteAgentResponse(response);
@@ -88,7 +87,7 @@ public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
     @After
     public void deleteExternalIndices() throws IOException {
         final Response response = client().performRequest(new Request("GET", "/_cat/indices?format=json" + "&expand_wildcards=all"));
-        final MediaType xContentType = MediaType.fromMediaType(response.getEntity().getContentType());
+        final MediaType xContentType = MediaType.fromMediaType(response.getEntity().getContentType().getValue());
         try (
             final XContentParser parser = xContentType
                 .xContent()
