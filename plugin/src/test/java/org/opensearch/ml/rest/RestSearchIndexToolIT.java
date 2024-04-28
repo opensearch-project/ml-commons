@@ -13,7 +13,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
-import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
@@ -67,7 +66,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         deleteExternalIndices();
     }
 
-    public void testSearchIndexToolInFlowAgent_withMatchAllQuery() throws IOException, ParseException {
+    public void testSearchIndexToolInFlowAgent_withMatchAllQuery() throws IOException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
@@ -91,7 +90,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         );
     }
 
-    public void testSearchIndexToolInFlowAgent_withEmptyIndexField_thenThrowException() throws IOException, ParseException {
+    public void testSearchIndexToolInFlowAgent_withEmptyIndexField_thenThrowException() throws IOException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
@@ -108,7 +107,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 
-    public void testSearchIndexToolInFlowAgent_withEmptyQueryField_thenThrowException() throws IOException, ParseException {
+    public void testSearchIndexToolInFlowAgent_withEmptyQueryField_thenThrowException() throws IOException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"
@@ -121,7 +120,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 
-    public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() throws IOException, ParseException {
+    public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() throws IOException {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n"
             + "  \"parameters\": {\n"

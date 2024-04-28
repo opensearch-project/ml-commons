@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-import org.apache.hc.core5.http.ParseException;
 import org.junit.Assert;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
@@ -56,7 +55,7 @@ public class VisualizationsToolIT extends ToolIntegrationWithLLMTest {
         return VisualizationsTool.TYPE;
     }
 
-    public void testVisualizationNotFound() throws IOException, ParseException {
+    public void testVisualizationNotFound() throws IOException {
         String requestBody = "{\"parameters\":{\"question\":\"can you show me RAM info with visualization?\"}}";
         Response response = TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, requestBody, null);
@@ -65,7 +64,7 @@ public class VisualizationsToolIT extends ToolIntegrationWithLLMTest {
         Assert.assertEquals("No Visualization found", toolOutput);
     }
 
-    public void testVisualizationFound() throws IOException, ParseException {
+    public void testVisualizationFound() throws IOException {
         String title = "[eCommerce] Sales by Category";
         String id = UUID.randomUUID().toString();
         prepareVisualization(title, id);

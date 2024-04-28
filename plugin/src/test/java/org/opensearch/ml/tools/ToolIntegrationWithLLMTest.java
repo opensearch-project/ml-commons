@@ -11,7 +11,6 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
@@ -83,7 +82,7 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         return connectorId;
     }
 
-    private String setUpConnector() throws IOException, ParseException {
+    private String setUpConnector() throws IOException {
         String url = String.format(Locale.ROOT, "http://127.0.0.1:%d/invoke", server.getAddress().getPort());
         return createConnector(
             "{\n"
@@ -136,7 +135,7 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", null);
     }
 
-    protected String createConnector(String requestBody) throws IOException, ParseException {
+    protected String createConnector(String requestBody) throws IOException {
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, requestBody, null);
         assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
         return parseFieldFromResponse(response, MLModel.CONNECTOR_ID_FIELD).toString();
