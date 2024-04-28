@@ -60,8 +60,9 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
     }
 
     @After
-    public void deleteModel() throws IOException {
+    public void deleteModel() throws IOException, InterruptedException {
         undeployModel(modelId);
+        TimeUnit.SECONDS.sleep(1);
         deleteModel(client(), modelId, null);
     }
 
