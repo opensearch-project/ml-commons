@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.sync;
 
 import lombok.Builder;
 import lombok.Data;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -34,6 +35,8 @@ public class MLSyncUpInput implements Writeable {
     // deployToAll flag for models, when deploy/undeploy a model, this will passed to each node to update cache value to make sure
     // profile API has consistent data with model index.
     private Map<String, Boolean> deployToAllNodes;
+
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = Version.V_2_14_0;
 
     @Builder
     public MLSyncUpInput(boolean getDeployedModels,

@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.sync;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.Version;
 import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -36,11 +37,14 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
 
     public MLSyncUpNodeResponse(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         this.modelStatus = in.readOptionalString();
         this.deployedModelIds = in.readOptionalStringArray();
         this.runningDeployModelIds = in.readOptionalStringArray();
         this.runningDeployModelTaskIds = in.readOptionalStringArray();
-        this.expiredModelIds = in.readOptionalStringArray();
+        if (streamInputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+            this.expiredModelIds = in.readOptionalStringArray();
+        }
     }
 
     public static MLSyncUpNodeResponse readStats(StreamInput in) throws IOException {
@@ -49,12 +53,14 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         super.writeTo(out);
         out.writeOptionalString(modelStatus);
         out.writeOptionalStringArray(deployedModelIds);
         out.writeOptionalStringArray(runningDeployModelIds);
         out.writeOptionalStringArray(runningDeployModelTaskIds);
-        out.writeOptionalStringArray(expiredModelIds);
+        if (streamOutputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+            out.writeOptionalStringArray(expiredModelIds);
+        }
     }
-
 }

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.model;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -15,6 +16,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -54,15 +56,21 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
 
     public MLDeploySetting(StreamInput in) throws IOException {
         this.isAutoDeployEnabled = in.readOptionalBoolean();
-        this.modelTTLInHours = in.readOptionalLong();
-        this.modelTTLInMinutes = in.readOptionalLong();
+        Version streamInputVersion = in.getVersion();
+        if (streamInputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+            this.modelTTLInHours = in.readOptionalLong();
+            this.modelTTLInMinutes = in.readOptionalLong();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalBoolean(isAutoDeployEnabled);
-        out.writeOptionalLong(modelTTLInHours);
-        out.writeOptionalLong(modelTTLInMinutes);
+        if (streamOutputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+            out.writeOptionalLong(modelTTLInHours);
+            out.writeOptionalLong(modelTTLInMinutes);
+        }
     }
 
     public static MLDeploySetting parse(XContentParser parser) throws IOException {
