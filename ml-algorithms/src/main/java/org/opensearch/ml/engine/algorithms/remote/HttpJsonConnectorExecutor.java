@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
+import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -29,6 +30,8 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -87,9 +90,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
+                    validateHttpClientParameters(parameters);
                     request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
                     break;
                 case "GET":
+                    validateHttpClientParameters(parameters);
                     request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET);
                     break;
                 default:
@@ -119,5 +124,15 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             log.error("Fail to execute http connector", e);
             actionListener.onFailure(new MLException("Fail to execute http connector", e));
         }
+    }
+
+    @VisibleForTesting
+    protected void validateHttpClientParameters(Map<String, String> parameters) throws Exception {
+        String endpoint = connector.getPredictEndpoint(parameters);
+        URL url = new URL(endpoint);
+        String protocol = url.getProtocol();
+        String host = url.getHost();
+        int port = url.getPort();
+        MLHttpClientFactory.validate(protocol, host, port);
     }
 }

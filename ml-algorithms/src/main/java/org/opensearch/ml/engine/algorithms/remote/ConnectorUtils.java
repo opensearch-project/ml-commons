@@ -16,7 +16,6 @@ import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunct
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,7 +39,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import com.jayway.jsonpath.JsonPath;
@@ -269,13 +267,7 @@ public class ConnectorUtils {
         Map<String, String> parameters,
         String payload,
         SdkHttpMethod method
-    ) throws Exception {
-        String endpoint = connector.getPredictEndpoint(parameters);
-        URL url = new URL(endpoint);
-        String protocol = url.getProtocol();
-        String host = url.getHost();
-        int port = url.getPort();
-        MLHttpClientFactory.validate(protocol, host, port);
+    ) {
         String charset = parameters.getOrDefault("charset", "UTF-8");
         RequestBody requestBody;
         if (payload != null) {
@@ -287,6 +279,7 @@ public class ConnectorUtils {
             log.error("Content length is 0. Aborting request to remote model");
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
+        String endpoint = connector.getPredictEndpoint(parameters);
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
             .method(method)

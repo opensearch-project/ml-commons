@@ -38,7 +38,6 @@ import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -95,43 +94,6 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_invalidIp() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
-            .method("POST")
-            .url("http://test1.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-        Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-        Connector connector = AwsConnector
-            .awsConnectorBuilder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(parameters)
-            .credential(credential)
-            .actions(Arrays.asList(predictAction))
-            .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-        Settings settings = Settings.builder().build();
-        threadContext = new ThreadContext(settings);
-        when(executor.getClient()).thenReturn(client);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
-
-        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-        assert exceptionCaptor.getValue() instanceof MLException;
-        assertEquals("Fail to execute predict in aws connector", exceptionCaptor.getValue().getMessage());
-    }
-
-    @Test
     public void executePredict_RemoteInferenceInput_EmptyIpAddress() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
@@ -164,45 +126,8 @@ public class AwsConnectorExecutorTest {
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
-        assertEquals("Remote inference host name has private ip address: ", exceptionCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void executePredict_RemoteInferenceInput_illegalIpAddress() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
-            .method("POST")
-            .url("http://localhost/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-        Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-        Connector connector = AwsConnector
-            .awsConnectorBuilder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(parameters)
-            .credential(credential)
-            .actions(Arrays.asList(predictAction))
-            .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-        Settings settings = Settings.builder().build();
-        threadContext = new ThreadContext(settings);
-        when(executor.getClient()).thenReturn(client);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
-
-        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
-        assertEquals("Remote inference host name has private ip address: localhost", exceptionCaptor.getValue().getMessage());
+        assert exceptionCaptor.getValue() instanceof NullPointerException;
+        assertEquals("host must not be null.", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
