@@ -35,9 +35,7 @@ import com.networknt.schema.SpecVersion.VersionFlag;
 import com.networknt.schema.ValidationMessage;
 
 import lombok.experimental.UtilityClass;
-import lombok.extern.log4j.Log4j2;
 
-@Log4j2
 @UtilityClass
 public class MLNodeUtils {
     public boolean isMLNode(DiscoveryNode node) {
@@ -68,14 +66,12 @@ public class MLNodeUtils {
     }
 
     public static void validateSchema(String schemaString, String instanceString) throws IOException {
-        log.info(schemaString);
         ObjectMapper mapper = new ObjectMapper();
         // parse the schema JSON as string
         JsonNode schemaNode = mapper.readTree(schemaString);
         JsonSchema schema = JsonSchemaFactory.getInstance(VersionFlag.V202012).getSchema(schemaNode);
 
         // JSON data to validate
-        log.info(instanceString);
         JsonNode jsonNode = mapper.readTree(instanceString);
 
         // Validate JSON node against the schema
