@@ -36,7 +36,7 @@ public class MLDeployingSettingTests {
 
     private MLDeploySetting deploySettingNull;
 
-    private final String expectedInputStr = "{\"is_auto_deploy_enabled\":true,\"model_ttl_hours\":-1,\"model_ttl_minutes\":-1}";
+    private final String expectedInputStr = "{\"is_auto_deploy_enabled\":true,\"model_ttl_minutes\":-1}";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -66,7 +66,7 @@ public class MLDeployingSettingTests {
 
     @Test
     public void testToXContentIncomplete() throws Exception {
-        final String expectedIncompleteInputStr = "{\"model_ttl_hours\":-1,\"model_ttl_minutes\":-1}";
+        final String expectedIncompleteInputStr = "{\"model_ttl_minutes\":-1}";
 
         String jsonStr = serializationWithToXContent(deploySettingNull);
         assertEquals(expectedIncompleteInputStr, jsonStr);
@@ -114,7 +114,7 @@ public class MLDeployingSettingTests {
 
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
-                assertEquals("{\"is_auto_deploy_enabled\":true,\"model_ttl_hours\":0,\"model_ttl_minutes\":0}", serializationWithToXContent(parsedInput));
+                assertEquals("{\"is_auto_deploy_enabled\":true,\"model_ttl_minutes\":-1}", serializationWithToXContent(parsedInput));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

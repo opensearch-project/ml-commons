@@ -140,7 +140,7 @@ public class MLSyncUpCron implements Runnable {
 
             Set<String> modelsToUndeploy = new HashSet<>();
             for (String modelId : expiredModelToNodes.keySet()) {
-                if (expiredModelToNodes.get(modelId) == modelWorkerNodes.get(modelId)) {
+                if (expiredModelToNodes.get(modelId).size() == modelWorkerNodes.get(modelId).size()) {
                     // this model has expired in all the nodes
                     modelWorkerNodes.remove(modelId);
                     modelsToUndeploy.add(modelId);
@@ -194,7 +194,6 @@ public class MLSyncUpCron implements Runnable {
                 targetNodeIds,
                 new String[] { modelId }
             );
-
             client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
                 log.debug("model {} is un_deployed", modelId);
             }, e -> { log.error("Failed to undeploy model {}", modelId, e); }));

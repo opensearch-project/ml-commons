@@ -357,14 +357,14 @@ public class MLModelCacheHelper {
                 return false;  // no TTL, never expire
             }
             Duration liveDuration = Duration.between(entry.getValue().getLastAccessTime(), Instant.now());
-            Long ttlInHour = mlModel.getDeploySetting().getModelTTLInHours();
             Long ttlInMinutes = mlModel.getDeploySetting().getModelTTLInMinutes();
-            if (ttlInHour < 0 || ttlInMinutes < 0) {
+            if (ttlInMinutes < 0) {
                 return false;
             }
-            Duration ttl = Duration.ofHours(ttlInHour).plusMinutes(ttlInMinutes);
-            boolean isModelExpired = liveDuration.getSeconds() > ttl.getSeconds();
-            return isModelExpired && mlModel.getModelState() == MLModelState.DEPLOYED;
+            Duration ttl = Duration.ofMinutes(ttlInMinutes);
+            boolean isModelExpired = liveDuration.getSeconds() >= ttl.getSeconds();
+            return isModelExpired
+                && (mlModel.getModelState() == MLModelState.DEPLOYED || mlModel.getModelState() == MLModelState.PARTIALLY_DEPLOYED);
         }).map(entry -> entry.getKey()).collect(Collectors.toList()).toArray(new String[0]);
     }
 
