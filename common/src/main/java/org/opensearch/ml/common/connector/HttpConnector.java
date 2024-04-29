@@ -34,7 +34,6 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
-import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 @Log4j2
@@ -54,7 +53,7 @@ public class HttpConnector extends AbstractConnector {
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
                          List<String> backendRoles, AccessMode accessMode, User owner,
-                         ConnectorClientConfig connectorClientConfig, Map<String, String> modelInterface) {
+                         ConnectorClientConfig connectorClientConfig) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -67,7 +66,6 @@ public class HttpConnector extends AbstractConnector {
         this.access = accessMode;
         this.owner = owner;
         this.connectorClientConfig = connectorClientConfig;
-        this.modelInterface = modelInterface;
 
     }
 
@@ -129,9 +127,6 @@ public class HttpConnector extends AbstractConnector {
                 case CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
-                case MODEL_INTERFACE_FIELD:
-                    modelInterface =  filterInterfaceMap(parser.map());
-                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -181,9 +176,6 @@ public class HttpConnector extends AbstractConnector {
         if (connectorClientConfig != null) {
             builder.field(CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
-        if (modelInterface != null) {
-            builder.field(MODEL_INTERFACE_FIELD, modelInterface);
-        }
         builder.endObject();
         return builder;
     }
@@ -226,9 +218,6 @@ public class HttpConnector extends AbstractConnector {
         this.lastUpdateTime = input.readOptionalInstant();
         if (input.readBoolean()) {
             this.connectorClientConfig = new ConnectorClientConfig(input);
-        }
-        if (input.readBoolean()) {
-            this.modelInterface = input.readMap(StreamInput::readString, StreamInput::readString);
         }
     }
 
@@ -280,12 +269,6 @@ public class HttpConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
-        if (modelInterface != null) {
-            out.writeBoolean(true);
-            out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
-        } else {
-            out.writeBoolean(false);
-        }
     }
 
     @Override
@@ -320,9 +303,6 @@ public class HttpConnector extends AbstractConnector {
         }
         if (updateContent.getConnectorClientConfig() != null) {
             this.connectorClientConfig = updateContent.getConnectorClientConfig();
-        }
-        if (updateContent.getModelInterface() != null && updateContent.getModelInterface().size() > 0) {
-            this.modelInterface = updateContent.getModelInterface();
         }
     }
 
@@ -381,7 +361,7 @@ public class HttpConnector extends AbstractConnector {
 
     @Override
     public Connector cloneConnector() {
-        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
             return new HttpConnector(streamInput);

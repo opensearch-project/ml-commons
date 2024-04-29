@@ -15,6 +15,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
@@ -29,12 +30,15 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
+import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
 
 @Getter
 public class MLModel implements ToXContentObject {
@@ -89,6 +93,7 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
+    public static final String MODEL_INTERFACE_FIELD = "model_interface";
 
     private String name;
     private String modelGroupId;
@@ -134,6 +139,8 @@ public class MLModel implements ToXContentObject {
     private String connectorId;
     private Guardrails guardrails;
 
+    private Map<String, String> modelInterface;
+
     @Builder(toBuilder = true)
     public MLModel(String name,
             String modelGroupId,
@@ -166,7 +173,8 @@ public class MLModel implements ToXContentObject {
             Boolean isHidden,
             Connector connector,
             String connectorId,
-            Guardrails guardrails) {
+            Guardrails guardrails,
+            Map<String, String> modelInterface) {
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.algorithm = algorithm;
@@ -200,6 +208,7 @@ public class MLModel implements ToXContentObject {
         this.connector = connector;
         this.connectorId = connectorId;
         this.guardrails = guardrails;
+        this.modelInterface = modelInterface;
     }
 
     public MLModel(StreamInput input) throws IOException {
@@ -260,6 +269,9 @@ public class MLModel implements ToXContentObject {
             connectorId = input.readOptionalString();
             if (input.readBoolean()) {
                 this.guardrails = new Guardrails(input);
+            }
+            if (input.readBoolean()) {
+                modelInterface = input.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
     }
@@ -335,6 +347,12 @@ public class MLModel implements ToXContentObject {
         if (guardrails != null) {
             out.writeBoolean(true);
             guardrails.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (modelInterface != null) {
+            out.writeBoolean(true);
+            out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
         }
@@ -442,6 +460,9 @@ public class MLModel implements ToXContentObject {
         if (guardrails != null) {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
+        if (modelInterface != null) {
+            builder.field(MODEL_INTERFACE_FIELD, modelInterface);
+        }
         builder.endObject();
         return builder;
     }
@@ -486,6 +507,7 @@ public class MLModel implements ToXContentObject {
         Connector connector = null;
         String connectorId = null;
         Guardrails guardrails = null;
+        Map<String, String> modelInterface = new HashMap<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -617,6 +639,9 @@ public class MLModel implements ToXContentObject {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
+                case MODEL_INTERFACE_FIELD:
+                    modelInterface = filterInterfaceMap(parser.map());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -656,6 +681,7 @@ public class MLModel implements ToXContentObject {
                 .connector(connector)
                 .connectorId(connectorId)
                 .guardrails(guardrails)
+                .modelInterface(modelInterface)
                 .build();
     }
 

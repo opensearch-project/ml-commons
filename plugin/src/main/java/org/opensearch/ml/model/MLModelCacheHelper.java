@@ -188,9 +188,43 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Set the ml interface for the model
+     *
+     * @param modelId model id
+     * @param modelInterface model interface
+     */
+    public synchronized void setModelInterface(String modelId, Map<String, String> modelInterface) {
+        log.debug("Setting ML Interface {} for Model {}", modelInterface, modelId);
+        getExistingModelCache(modelId).setModelInterface(modelInterface);
+    }
+
+    /**
+     * Get the current ml interface for the model
+     *
+     * @param modelId model id
+     */
+    public Map<String, String> getModelInterface(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getModelInterface();
+    }
+
+    /**
+     * Remove the ml interface from cache
+     *
+     * @param modelId model id
+     */
+    public synchronized void removeModelInterface(String modelId) {
+        log.debug("Removing the ML Interface from Model {}", modelId);
+        getExistingModelCache(modelId).setModelInterface(null);
+    }
+
+    /**
      * Set a ml guard
      *
-     * @param modelId     model id
+     * @param modelId model id
      * @param mlGuard mlGuard
      */
     public synchronized void setMLGuard(String modelId, MLGuard mlGuard) {

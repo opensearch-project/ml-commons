@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @Data
@@ -48,7 +47,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String DRY_RUN_FIELD = "dry_run";
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = Version.V_2_13_0;
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE = Version.V_2_14_0;
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -65,7 +63,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private boolean dryRun;
     private boolean updateConnector;
     private ConnectorClientConfig connectorClientConfig;
-    private Map<String, String> modelInterface;
 
 
     @Builder(toBuilder = true)
@@ -81,8 +78,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   AccessMode access,
                                   boolean dryRun,
                                   boolean updateConnector,
-                                  ConnectorClientConfig connectorClientConfig,
-                                  Map<String, String> modelInterface
+                                  ConnectorClientConfig connectorClientConfig
 
     ) {
         if (!dryRun && !updateConnector) {
@@ -109,7 +105,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.dryRun = dryRun;
         this.updateConnector = updateConnector;
         this.connectorClientConfig = connectorClientConfig;
-        this.modelInterface = modelInterface;
 
     }
 
@@ -130,7 +125,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         AccessMode access = null;
         boolean dryRun = false;
         ConnectorClientConfig connectorClientConfig = null;
-        Map<String, String> modelInterface = new HashMap<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -182,16 +176,13 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case AbstractConnector.CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
-                case AbstractConnector.MODEL_INTERFACE_FIELD:
-                    modelInterface = filterInterfaceMap(parser.map());
-                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
         return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions,
-                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorClientConfig, modelInterface);
+                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorClientConfig);
     }
 
     @Override
@@ -229,9 +220,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (connectorClientConfig != null) {
             builder.field(AbstractConnector.CLIENT_CONFIG_FIELD, connectorClientConfig);
-        }
-        if (modelInterface != null) {
-            builder.field(AbstractConnector.MODEL_INTERFACE_FIELD, modelInterface);
         }
         builder.endObject();
         return builder;
@@ -288,14 +276,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 output.writeBoolean(false);
             }
         }
-        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
-            if (modelInterface != null) {
-                output.writeBoolean(true);
-                output.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
-            } else {
-                output.writeBoolean(false);
-            }
-        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -329,11 +309,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG)) {
             if (input.readBoolean()) {
                 this.connectorClientConfig = new ConnectorClientConfig(input);
-            }
-        }
-        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
-            if (input.readBoolean()) {
-                modelInterface = input.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
     }

@@ -56,7 +56,7 @@ public class CommonValue {
         public static final String ML_MODEL_INDEX = ".plugins-ml-model";
         public static final String ML_TASK_INDEX = ".plugins-ml-task";
         public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
-        public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 10;
+        public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 11;
         public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
         public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
         public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
@@ -160,11 +160,7 @@ public class CommonValue {
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
                         + AbstractConnector.ACTIONS_FIELD
-                        + "\" : {\"type\": \"flat_object\"},\n"
-                        + "      \""
-                        + AbstractConnector.MODEL_INTERFACE_FIELD
-                        + "\" : {\"type\": \"flat_object\"}\n";
-
+                        + "\" : {\"type\": \"flat_object\"},\n";
 
         public static final String ML_MODEL_INDEX_MAPPING = "{\n"
                         + "    \"_meta\": {\"schema_version\": "
@@ -269,45 +265,48 @@ public class CommonValue {
                         + MLModel.LAST_UNDEPLOYED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
+                        + MLModel.MODEL_INTERFACE_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + MLModel.GUARDRAILS_FIELD
                         + "\" : {\n" +
-                "          \"properties\": {\n" +
-                "            \"input_guardrail\": {\n" +
-                "              \"properties\": {\n" +
-                "                \"regex\": {\n" +
-                "                  \"type\": \"text\"\n" +
-                "                },\n" +
-                "                \"stop_words\": {\n" +
-                "                  \"properties\": {\n" +
-                "                    \"index_name\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    },\n" +
-                "                    \"source_fields\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    }\n" +
-                "                  }\n" +
-                "                }\n" +
-                "              }\n" +
-                "            },\n" +
-                "            \"output_guardrail\": {\n" +
-                "              \"properties\": {\n" +
-                "                \"regex\": {\n" +
-                "                  \"type\": \"text\"\n" +
-                "                },\n" +
-                "                \"stop_words\": {\n" +
-                "                  \"properties\": {\n" +
-                "                    \"index_name\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    },\n" +
-                "                    \"source_fields\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    }\n" +
-                "                  }\n" +
-                "                }\n" +
-                "              }\n" +
-                "            }\n" +
-                "          }\n" +
-                "        },\n"
+                        "          \"properties\": {\n" +
+                        "            \"input_guardrail\": {\n" +
+                        "              \"properties\": {\n" +
+                        "                \"regex\": {\n" +
+                        "                  \"type\": \"text\"\n" +
+                        "                },\n" +
+                        "                \"stop_words\": {\n" +
+                        "                  \"properties\": {\n" +
+                        "                    \"index_name\": {\n" +
+                        "                      \"type\": \"text\"\n" +
+                        "                    },\n" +
+                        "                    \"source_fields\": {\n" +
+                        "                      \"type\": \"text\"\n" +
+                        "                    }\n" +
+                        "                  }\n" +
+                        "                }\n" +
+                        "              }\n" +
+                        "            },\n" +
+                        "            \"output_guardrail\": {\n" +
+                        "              \"properties\": {\n" +
+                        "                \"regex\": {\n" +
+                        "                  \"type\": \"text\"\n" +
+                        "                },\n" +
+                        "                \"stop_words\": {\n" +
+                        "                  \"properties\": {\n" +
+                        "                    \"index_name\": {\n" +
+                        "                      \"type\": \"text\"\n" +
+                        "                    },\n" +
+                        "                    \"source_fields\": {\n" +
+                        "                      \"type\": \"text\"\n" +
+                        "                    }\n" +
+                        "                  }\n" +
+                        "                }\n" +
+                        "              }\n" +
+                        "            }\n" +
+                        "          }\n" +
+                        "        },\n"
                         + "      \""
                         + MLModel.CONNECTOR_FIELD
                         + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"

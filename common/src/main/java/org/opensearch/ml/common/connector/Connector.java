@@ -60,8 +60,6 @@ public interface Connector extends ToXContentObject, Writeable {
 
     String getPredictHttpMethod();
 
-    Map<String, String> getModelInterface();
-
     <T> T createPredictPayload(Map<String, String> parameters);
 
     void decrypt(Function<String, String> function);
