@@ -757,6 +757,44 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
     }
 
+    public void testExecute_getModelOutputFieldInNestedWithInvalidDotPathException() {
+
+        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("chunks.*.chunk.text.*.context_embedding", "response.language1");
+        outputMap.add(output);
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor("model1", null, inputMap, outputMap, false, false);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", ImmutableMap.of("language", "en", "score", "0.9876")))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        processor.execute(nestedObjectIngestDocument, handler);
+
+        verify(handler)
+            .accept(
+                eq(null),
+                argThat(
+                    exception -> exception
+                        .getMessage()
+                        .equals("An unexpected error occurred: model inference output cannot find field name: response.language1")
+                )
+            );
+        ;
+
+    }
+
     public void testExecute_getModelOutputFieldWithExistedFieldNameException() {
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();

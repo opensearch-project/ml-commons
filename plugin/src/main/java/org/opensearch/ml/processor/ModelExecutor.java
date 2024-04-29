@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.processor;
 
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +20,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -187,12 +186,12 @@ public interface ModelExecutor {
             return modelTensorOutputMap.get(fieldName);
         }
         try {
-            return JsonPath.using(suppressExceptionConfiguration).parse(modelTensorOutputMap).read(fieldName);
+            return JsonPath.parse(modelTensorOutputMap).read(fieldName);
         } catch (Exception e) {
             if (ignoreMissing) {
                 return modelTensorOutputMap;
             } else {
-                throw new IOException("model inference output cannot find field name: " + fieldName, e);
+                throw new IllegalArgumentException("model inference output cannot find field name: " + fieldName, e);
             }
         }
     }
@@ -205,7 +204,7 @@ public interface ModelExecutor {
      */
 
     default String toString(Object originalFieldValue) {
-        return gson.toJson(originalFieldValue);
+        return StringUtils.toJson(originalFieldValue);
     }
 
     /**

@@ -6,7 +6,12 @@ package org.opensearch.ml.processor;
 
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 import org.opensearch.action.ActionRequest;
@@ -49,6 +54,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
     // prediction outcomes, return the whole prediction outcome by skipping filtering
     public static final String IGNORE_MISSING = "ignore_missing";
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
+    // it can be overwritten using maxPredictionTask when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
 
     private Configuration suppressExceptionConfiguration = Configuration
