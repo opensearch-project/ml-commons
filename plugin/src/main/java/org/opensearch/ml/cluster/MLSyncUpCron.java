@@ -140,7 +140,8 @@ public class MLSyncUpCron implements Runnable {
 
             Set<String> modelsToUndeploy = new HashSet<>();
             for (String modelId : expiredModelToNodes.keySet()) {
-                if (expiredModelToNodes.get(modelId).size() == modelWorkerNodes.get(modelId).size()) {
+                if (modelWorkerNodes.containsKey(modelId)
+                    && expiredModelToNodes.get(modelId).size() == modelWorkerNodes.get(modelId).size()) {
                     // this model has expired in all the nodes
                     modelWorkerNodes.remove(modelId);
                     modelsToUndeploy.add(modelId);

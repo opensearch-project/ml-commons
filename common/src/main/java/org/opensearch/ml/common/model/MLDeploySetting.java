@@ -16,7 +16,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 
 import java.io.IOException;
 
@@ -28,6 +27,7 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
     public static final String IS_AUTO_DEPLOY_ENABLED_FIELD = "is_auto_deploy_enabled";
     public static final String MODEL_TTL_MINUTES_FIELD = "model_ttl_minutes";
     private static final long DEFAULT_TTL_MINUTES = -1;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = Version.V_2_14_0;
 
     private Boolean isAutoDeployEnabled;
     private Long modelTTLInMinutes; // in minutes
@@ -44,7 +44,7 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
     public MLDeploySetting(StreamInput in) throws IOException {
         this.isAutoDeployEnabled = in.readOptionalBoolean();
         Version streamInputVersion = in.getVersion();
-        if (streamInputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
             this.modelTTLInMinutes = in.readOptionalLong();
         }
     }
@@ -53,7 +53,7 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         Version streamOutputVersion = out.getVersion();
         out.writeOptionalBoolean(isAutoDeployEnabled);
-        if (streamOutputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
             out.writeOptionalLong(modelTTLInMinutes);
         }
     }

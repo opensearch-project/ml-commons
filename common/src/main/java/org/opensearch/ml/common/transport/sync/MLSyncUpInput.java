@@ -36,8 +36,6 @@ public class MLSyncUpInput implements Writeable {
     // profile API has consistent data with model index.
     private Map<String, Boolean> deployToAllNodes;
 
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = Version.V_2_14_0;
-
     @Builder
     public MLSyncUpInput(boolean getDeployedModels,
                          Map<String, String[]> addedWorkerNodes,

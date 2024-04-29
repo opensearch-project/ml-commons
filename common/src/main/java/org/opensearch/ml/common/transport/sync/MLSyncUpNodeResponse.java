@@ -12,6 +12,7 @@ import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.model.MLDeploySetting;
 
 import java.io.IOException;
 
@@ -42,7 +43,7 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
         this.deployedModelIds = in.readOptionalStringArray();
         this.runningDeployModelIds = in.readOptionalStringArray();
         this.runningDeployModelTaskIds = in.readOptionalStringArray();
-        if (streamInputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+        if (streamInputVersion.onOrAfter(MLDeploySetting.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
             this.expiredModelIds = in.readOptionalStringArray();
         }
     }
@@ -59,7 +60,7 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
         out.writeOptionalStringArray(deployedModelIds);
         out.writeOptionalStringArray(runningDeployModelIds);
         out.writeOptionalStringArray(runningDeployModelTaskIds);
-        if (streamOutputVersion.onOrAfter(MLSyncUpInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
+        if (streamOutputVersion.onOrAfter(MLDeploySetting.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL)) {
             out.writeOptionalStringArray(expiredModelIds);
         }
     }
