@@ -311,5 +311,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 this.connectorClientConfig = new ConnectorClientConfig(input);
             }
         }
+        
     }
 }
