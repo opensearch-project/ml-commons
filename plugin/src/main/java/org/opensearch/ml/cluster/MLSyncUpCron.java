@@ -104,22 +104,19 @@ public class MLSyncUpCron implements Runnable {
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> deployingModels = new HashMap<>();
             // key is expired model_id, value is set of worker node ids
-            Map<String, Set<String>> expiredModels = new HashMap<>();
+            Map<String, Set<String>> expiredModelToNodes = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
                 String[] expiredModelIds = response.getExpiredModelIds();
                 if (expiredModelIds != null && expiredModelIds.length > 0) {
                     Arrays
                         .stream(expiredModelIds)
-                        .forEach(modelId -> { expiredModels.computeIfAbsent(modelId, it -> new HashSet<>()).add(nodeId); });
+                        .forEach(modelId -> { expiredModelToNodes.computeIfAbsent(modelId, it -> new HashSet<>()).add(nodeId); });
                 }
 
                 String[] deployedModelIds = response.getDeployedModelIds();
                 if (deployedModelIds != null && deployedModelIds.length > 0) {
                     for (String modelId : deployedModelIds) {
-                        if (expiredModels.containsKey(modelId)) {
-                            continue;
-                        }
                         Set<String> workerNodes = modelWorkerNodes.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
@@ -140,6 +137,16 @@ public class MLSyncUpCron implements Runnable {
                     }
                 }
             }
+
+            Set<String> modelsToUndeploy = new HashSet<>();
+            for (String modelId : expiredModelToNodes.keySet()) {
+                if (expiredModelToNodes.get(modelId) == modelWorkerNodes.get(modelId)) {
+                    // this model has expired in all the nodes
+                    modelWorkerNodes.remove(modelId);
+                    modelsToUndeploy.add(modelId);
+                }
+            }
+
             for (Map.Entry<String, Set<String>> entry : modelWorkerNodes.entrySet()) {
                 String modelId = entry.getKey();
                 log.debug("will sync model worker nodes for model: {}: {}", modelId, entry.getValue().toArray(new String[0]));
@@ -169,7 +176,7 @@ public class MLSyncUpCron implements Runnable {
                     })
                 );
             // Undeploy expired models
-            undeployExpiredModels(expiredModels.keySet(), modelWorkerNodes);
+            undeployExpiredModels(modelsToUndeploy, modelWorkerNodes);
 
             // refresh model status
             mlIndicesHandler

@@ -25,37 +25,50 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @Getter
 public class MLDeploySetting implements ToXContentObject, Writeable {
     public static final String IS_AUTO_DEPLOY_ENABLED_FIELD = "is_auto_deploy_enabled";
-    public static final String MODEL_TTL_FIELD = "model_ttl";
+    public static final String MODEL_TTL_HOURS_FIELD = "model_ttl_hours";
+    public static final String MODEL_TTL_MINUTES_FIELD = "model_ttl_minutes";
     private static final long DEFAULT_TTL_HOUR = -1;
+    private static final long DEFAULT_TTL_MINUTES = -1;
 
     private Boolean isAutoDeployEnabled;
-    private Long modelTTL;  // Time to live in hours
+    private Long modelTTLInHours;  // Time to live in hours
+    private Long modelTTLInMinutes; // in minutes
 
     @Builder(toBuilder = true)
-    public MLDeploySetting(Boolean isAutoDeployEnabled) {
+    public MLDeploySetting(Boolean isAutoDeployEnabled, Long modelTTLInHours, Long modelTTLInMinutes) {
         this.isAutoDeployEnabled = isAutoDeployEnabled;
-        this.modelTTL = DEFAULT_TTL_HOUR;
-    }
-    @Builder(toBuilder = true)
-    public MLDeploySetting(Boolean isAutoDeployEnabled, Long modelTTL) {
-        this.isAutoDeployEnabled = isAutoDeployEnabled;
-        this.modelTTL = modelTTL;
+        this.modelTTLInHours = modelTTLInHours;
+        this.modelTTLInMinutes = modelTTLInMinutes;
+        if (modelTTLInHours == null && modelTTLInMinutes == null) {
+            this.modelTTLInHours = DEFAULT_TTL_HOUR;
+            this.modelTTLInMinutes = DEFAULT_TTL_MINUTES;
+            return;
+        }
+        if (modelTTLInHours == null) {
+            this.modelTTLInHours = 0L;
+        }
+        if (modelTTLInMinutes == null) {
+            this.modelTTLInMinutes = 0L;
+        }
     }
 
     public MLDeploySetting(StreamInput in) throws IOException {
         this.isAutoDeployEnabled = in.readOptionalBoolean();
-        this.modelTTL = in.readOptionalLong();
+        this.modelTTLInHours = in.readOptionalLong();
+        this.modelTTLInMinutes = in.readOptionalLong();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalBoolean(isAutoDeployEnabled);
-        out.writeOptionalLong(modelTTL);
+        out.writeOptionalLong(modelTTLInHours);
+        out.writeOptionalLong(modelTTLInMinutes);
     }
 
     public static MLDeploySetting parse(XContentParser parser) throws IOException {
         Boolean isAutoDeployEnabled = null;
-        Long modelTTL = null;
+        Long modelTTLHours = null;
+        Long modelTTLMinutes = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -64,14 +77,16 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
                 case IS_AUTO_DEPLOY_ENABLED_FIELD:
                     isAutoDeployEnabled = parser.booleanValue();
                     break;
-                case MODEL_TTL_FIELD:
-                    modelTTL = parser.longValue();
+                case MODEL_TTL_HOURS_FIELD:
+                    modelTTLHours = parser.longValue();
+                case MODEL_TTL_MINUTES_FIELD:
+                    modelTTLMinutes = parser.longValue();
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLDeploySetting(isAutoDeployEnabled, modelTTL);
+        return new MLDeploySetting(isAutoDeployEnabled, modelTTLHours, modelTTLMinutes);
     }
 
     @Override
@@ -80,8 +95,11 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
         if (isAutoDeployEnabled != null) {
             builder.field(IS_AUTO_DEPLOY_ENABLED_FIELD, isAutoDeployEnabled);
         }
-        if (modelTTL != null) {
-            builder.field(MODEL_TTL_FIELD, modelTTL);
+        if (modelTTLInHours != null) {
+            builder.field(MODEL_TTL_HOURS_FIELD, modelTTLInHours);
+        }
+        if (modelTTLInMinutes != null) {
+            builder.field(MODEL_TTL_MINUTES_FIELD, modelTTLInMinutes);
         }
         builder.endObject();
         return builder;
