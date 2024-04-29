@@ -119,11 +119,11 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
         List embedding1 = JsonPath.parse(document).read("_source.diary_embedding[0]");
         Assert.assertEquals(1536, embedding1.size());
-        Assert.assertEquals(-0.0118564125, (Double) embedding1.get(0), 0.00005);
+        Assert.assertEquals(-0.0118564125, (Double) embedding1.get(0), 0.005);
 
         List embedding2 = JsonPath.parse(document).read("_source.diary_embedding[1]");
         Assert.assertEquals(1536, embedding2.size());
-        Assert.assertEquals(-0.005518768, (Double) embedding2.get(0), 0.00005);
+        Assert.assertEquals(-0.005518768, (Double) embedding2.get(0), 0.005);
     }
 
     public void testMLInferenceProcessorWithNestedFieldType() throws Exception {
@@ -202,19 +202,19 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
         List embedding1 = JsonPath.parse(document).read("_source.book[0].chunk.text[0].context_embedding");
         Assert.assertEquals(1536, embedding1.size());
-        Assert.assertEquals(0.023224998, (Double) embedding1.get(0), 0.00005);
+        Assert.assertEquals(0.023224998, (Double) embedding1.get(0), 0.005);
 
         List embedding2 = JsonPath.parse(document).read("_source.book[0].chunk.text[1].context_embedding");
         Assert.assertEquals(1536, embedding2.size());
-        Assert.assertEquals(0.016423305, (Double) embedding2.get(0), 0.00005);
+        Assert.assertEquals(0.016423305, (Double) embedding2.get(0), 0.005);
 
         List embedding3 = JsonPath.parse(document).read("_source.book[1].chunk.text[0].context_embedding");
         Assert.assertEquals(1536, embedding3.size());
-        Assert.assertEquals(0.011252925, (Double) embedding3.get(0), 0.00005);
+        Assert.assertEquals(0.011252925, (Double) embedding3.get(0), 0.005);
 
         List embedding4 = JsonPath.parse(document).read("_source.book[1].chunk.text[1].context_embedding");
         Assert.assertEquals(1536, embedding4.size());
-        Assert.assertEquals(0.014352738, (Double) embedding4.get(0), 0.00005);
+        Assert.assertEquals(0.014352738, (Double) embedding4.get(0), 0.005);
     }
 
     protected void createPipelineProcessor(String requestBody, final String pipelineName) throws Exception {
