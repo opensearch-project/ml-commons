@@ -135,12 +135,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.endObject();
-        return builder;
-    }
-
-    public XContentBuilder toXContentForUpdateRequestDoc(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
         builder.field(MODEL_ID_FIELD, modelId);
         if (name != null) {
             builder.field(MODEL_NAME_FIELD, name);

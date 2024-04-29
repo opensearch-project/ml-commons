@@ -379,7 +379,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         try {
             updateModelInput.setLastUpdateTime(Instant.now());
-            updateRequest.doc(updateModelInput.toXContentForUpdateRequestDoc(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {
@@ -420,7 +420,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             Integer.parseInt(updatedVersion)
         );
         try {
-            updateRequest.doc(updateModelInput.toXContentForUpdateRequestDoc(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {

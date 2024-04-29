@@ -8,8 +8,6 @@ package org.opensearch.ml.action.prediction;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
-import java.io.IOException;
-
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -42,9 +40,6 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -243,19 +238,15 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         if (modelCacheHelper.getModelInterface(modelId) != null && modelCacheHelper.getModelInterface(modelId).get("input") != null) {
             String inputSchemaString = modelCacheHelper.getModelInterface(modelId).get("input");
             try {
-                String parametersString = parametersObjectExtractor(mlInput);
-                MLNodeUtils.validateSchema(inputSchemaString, parametersString);
+                MLNodeUtils
+                    .validateSchema(
+                        inputSchemaString,
+                        mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
+                    );
             } catch (Exception e) {
                 throw new IllegalArgumentException("Error validating input schema: " + e.getMessage());
             }
         }
-    }
-
-    private static String parametersObjectExtractor(MLInput mlInput) throws IOException {
-        String mlInputString = mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString();
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode mlInputObject = mapper.readTree(mlInputString);
-        return mlInputObject.get("parameters").asText();
     }
 
 }
