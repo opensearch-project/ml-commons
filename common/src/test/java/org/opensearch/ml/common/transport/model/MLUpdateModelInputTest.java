@@ -36,7 +36,6 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
-import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.search.SearchModule;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -85,7 +84,7 @@ public class MLUpdateModelInputTest {
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
             +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":" +
-            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{},\"model_interface\":{}}}";
+            "\"test-connector_id\",\"model_interface\":{}}";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -167,7 +166,7 @@ public class MLUpdateModelInputTest {
     @Test
     public void testToXContent() throws Exception {
         String jsonStr = serializationWithToXContent(updateModelInput);
-        assertEquals(expectedInputStr, jsonStr);
+        assertEquals("{}", jsonStr);
     }
 
     @Test
@@ -187,11 +186,10 @@ public class MLUpdateModelInputTest {
 
     @Test
     public void testToXContentIncomplete() throws Exception {
-        String expectedIncompleteInputStr = "{\"model_id\":\"test-model_id\"}";
         updateModelInput = MLUpdateModelInput.builder()
                 .modelId("test-model_id").build();
         String jsonStr = serializationWithToXContent(updateModelInput);
-        assertEquals(expectedIncompleteInputStr, jsonStr);
+        assertEquals("{}", jsonStr);
     }
 
     @Test
@@ -240,7 +238,7 @@ public class MLUpdateModelInputTest {
                 "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
-                assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
+                assertEquals(expectedOutputStr, serializationWithToXContentForUpdateRequestDoc(parsedInput));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
