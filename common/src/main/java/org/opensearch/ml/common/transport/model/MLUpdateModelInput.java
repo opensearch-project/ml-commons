@@ -260,7 +260,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         MLCreateConnectorInput connector = null;
         Instant lastUpdateTime = null;
         Guardrails guardrails = null;
-        Map<String, String> modelInterface = new HashMap<>();
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {

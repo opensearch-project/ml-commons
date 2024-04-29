@@ -397,7 +397,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
         Guardrails guardrails = null;
-        Map<String, String> modelInterface = new HashMap<>();
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -507,7 +507,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
         Guardrails guardrails = null;
-        Map<String, String> modelInterface = new HashMap<>();
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {

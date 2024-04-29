@@ -336,7 +336,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         Boolean isAddAllBackendRoles = null;
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
-        Map<String, String> modelInterface = new HashMap<>();
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
