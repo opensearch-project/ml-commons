@@ -234,19 +234,6 @@ public class ConnectorUtilsTest {
         Assert.assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
     }
 
-    @Test
-    public void testValidateSchema() throws IOException {
-        String schema = "{"
-            + "\"type\": \"object\","
-            + "\"properties\": {"
-            + "    \"key1\": {\"type\": \"string\"},"
-            + "    \"key2\": {\"type\": \"integer\"}"
-            + "}"
-            + "}";
-        String json = "{\"key1\": \"foo\", \"key2\": 123}";
-        ConnectorUtils.validateSchema(schema, json);
-    }
-
     private void processInput_TextDocsInputDataSet_PreprocessFunction(
         String requestBody,
         List<String> inputs,

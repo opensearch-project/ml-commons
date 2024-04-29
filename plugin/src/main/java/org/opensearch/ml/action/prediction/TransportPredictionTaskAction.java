@@ -8,6 +8,8 @@ package org.opensearch.ml.action.prediction;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
+import java.io.IOException;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -17,13 +19,16 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -33,9 +38,13 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -155,6 +164,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
                                     } else {
+                                        validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                         executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                     }
                                 }
@@ -228,4 +238,24 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 })
             );
     }
+
+    private void validateInputSchema(String modelId, MLInput mlInput) {
+        if (modelCacheHelper.getModelInterface(modelId) != null && modelCacheHelper.getModelInterface(modelId).get("input") != null) {
+            String inputSchemaString = modelCacheHelper.getModelInterface(modelId).get("input");
+            try {
+                String parametersString = parametersObjectExtractor(mlInput);
+                MLNodeUtils.validateSchema(inputSchemaString, parametersString);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Error validating input schema: " + e.getMessage());
+            }
+        }
+    }
+
+    private static String parametersObjectExtractor(MLInput mlInput) throws IOException {
+        String mlInputString = mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode mlInputObject = mapper.readTree(mlInputString);
+        return mlInputObject.get("parameters").asText();
+    }
+
 }

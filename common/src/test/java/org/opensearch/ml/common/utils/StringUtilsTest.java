@@ -10,8 +10,10 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.assertEquals;
@@ -120,13 +122,14 @@ public class StringUtilsTest {
 
     @Test
     public void getInterfaceMap() {
+        final Set<String> allowedInterfaceFieldNameList = new HashSet<>(Arrays.asList("input","output"));
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("input", "value1");
         parameters.put("output", 2);
         parameters.put("key3", 2.1);
         parameters.put("key4", new int[]{10, 20});
         parameters.put("key5", new Object[]{1.01, "abc"});
-        Map<String, String> interfaceMap = StringUtils.filterInterfaceMap(parameters);
+        Map<String, String> interfaceMap = StringUtils.filteredParameterMap(parameters, allowedInterfaceFieldNameList);
         Assert.assertEquals(2, interfaceMap.size());
         Assert.assertEquals("value1", interfaceMap.get("input"));
         Assert.assertEquals("2", interfaceMap.get("output"));

@@ -35,7 +35,8 @@ import java.util.Locale;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 @Data
 public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
@@ -180,7 +181,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 this.deploySetting = new MLDeploySetting(in);
             }
         }
-        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (in.readBoolean()) {
                 this.modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
@@ -250,7 +251,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
-        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (modelInterface != null) {
                 out.writeBoolean(true);
                 out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
@@ -309,7 +310,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
             builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
         }
         if (modelInterface != null) {
-            builder.field(MLModel.MODEL_INTERFACE_FIELD, modelInterface);
+            builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
         builder.endObject();
         return builder;
@@ -407,8 +408,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 case MLModel.IS_HIDDEN_FIELD:
                     isHidden = parser.booleanValue();
                     break;
-                case MLModel.MODEL_INTERFACE_FIELD:
-                    modelInterface = filterInterfaceMap(parser.map());
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                 default:
                     parser.skipChildren();
                     break;

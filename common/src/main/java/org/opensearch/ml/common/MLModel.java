@@ -15,7 +15,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
@@ -30,15 +29,18 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
-import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 @Getter
 public class MLModel implements ToXContentObject {
@@ -93,7 +95,9 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
-    public static final String MODEL_INTERFACE_FIELD = "model_interface";
+    public static final String INTERFACE_FIELD = "interface";
+
+    public static final Set<String> allowedInterfaceFieldKeys = new HashSet<>(Arrays.asList("input", "output"));
 
     private String name;
     private String modelGroupId;
@@ -461,7 +465,7 @@ public class MLModel implements ToXContentObject {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
         if (modelInterface != null) {
-            builder.field(MODEL_INTERFACE_FIELD, modelInterface);
+            builder.field(INTERFACE_FIELD, modelInterface);
         }
         builder.endObject();
         return builder;
@@ -639,8 +643,8 @@ public class MLModel implements ToXContentObject {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
-                case MODEL_INTERFACE_FIELD:
-                    modelInterface = filterInterfaceMap(parser.map());
+                case INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 default:
                     parser.skipChildren();
@@ -689,4 +693,5 @@ public class MLModel implements ToXContentObject {
         MLModel mlModel = new MLModel(in);
         return mlModel;
     }
+
 }

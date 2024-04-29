@@ -14,7 +14,9 @@ import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.OpenSearchParseException;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -103,18 +105,26 @@ public class StringUtils {
         return result;
     }
 
-    public static Map<String, String> filterInterfaceMap(Map<String, ?> interfaceObjs) {
-            final Set<String> allowedInterfaceFieldNameList = new HashSet<>(Arrays.asList("input","output"));
-
-            if (interfaceObjs == null) {
-                return new HashMap<>();
+    public static Map<String, String> filteredParameterMap(Map<String, ?> parameterObjs, Set<String> allowedList) {
+        Map<String, String> parameters = new HashMap<>();
+        Set<String> filteredKeys = new HashSet<>(parameterObjs.keySet());
+        filteredKeys.retainAll(allowedList);
+        for (String key : filteredKeys) {
+            Object value = parameterObjs.get(key);
+            try {
+                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                    if (value instanceof String) {
+                        parameters.put(key, (String)value);
+                    } else {
+                        parameters.put(key, gson.toJson(value));
+                    }
+                    return null;
+                });
+            } catch (PrivilegedActionException e) {
+                throw new RuntimeException(e);
             }
-
-            return interfaceObjs
-                    .entrySet()
-                    .stream()
-                    .filter(map -> allowedInterfaceFieldNameList.contains(map.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> (e.getValue() instanceof String) ? (String)e.getValue() : gson.toJson(e.getValue())));
+        }
+        return parameters;
     }
 
     @SuppressWarnings("removal")

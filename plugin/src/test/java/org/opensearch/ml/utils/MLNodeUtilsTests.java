@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.Assert;
+import org.junit.Test;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
@@ -48,5 +49,18 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
         xContentParser.nextToken();
         MLTask parsedMLTask = MLTask.parse(xContentParser);
         assertEquals(mlTask, parsedMLTask);
+    }
+
+    @Test
+    public void testValidateSchema() throws IOException {
+        String schema = "{"
+            + "\"type\": \"object\","
+            + "\"properties\": {"
+            + "    \"key1\": {\"type\": \"string\"},"
+            + "    \"key2\": {\"type\": \"integer\"}"
+            + "}"
+            + "}";
+        String json = "{\"key1\": \"foo\", \"key2\": 123}";
+        MLNodeUtils.validateSchema(schema, json);
     }
 }

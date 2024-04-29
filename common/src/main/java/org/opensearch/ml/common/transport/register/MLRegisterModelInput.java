@@ -36,8 +36,9 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
-import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 /**
  * ML input data: algirithm name, parameters and input data set.
@@ -70,7 +71,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.V_2_12_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY = Version.V_2_13_0;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE = Version.V_2_14_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE = Version.V_2_14_0;
 
     private FunctionName functionName;
     private String modelName;
@@ -217,7 +218,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 this.deploySetting = new MLDeploySetting(in);
             }
         }
-        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (in.readBoolean()) {
                 this.modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
@@ -295,7 +296,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
-        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (modelInterface != null) {
                 out.writeBoolean(true);
                 out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
@@ -369,7 +370,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
         if (modelInterface != null) {
-            builder.field(MLModel.MODEL_INTERFACE_FIELD, modelInterface);
+            builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
         builder.endObject();
         return builder;
@@ -470,8 +471,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
-                case MLModel.MODEL_INTERFACE_FIELD:
-                    modelInterface = filterInterfaceMap(parser.map());
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 default:
                     parser.skipChildren();
@@ -587,8 +588,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
-                case MLModel.MODEL_INTERFACE_FIELD:
-                    modelInterface = filterInterfaceMap(parser.map());
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 default:
                     parser.skipChildren();

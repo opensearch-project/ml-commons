@@ -25,7 +25,6 @@ dependencies {
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}")
-    implementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation group: 'com.github.erosb', name: 'json-sKema', version: '0.15.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'

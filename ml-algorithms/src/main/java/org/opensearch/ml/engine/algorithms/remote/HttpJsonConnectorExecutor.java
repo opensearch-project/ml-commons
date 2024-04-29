@@ -61,9 +61,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private MLGuard mlGuard;
-    @Setter
-    @Getter
-    private Map<String, String> modelInterface;
 
     private SdkAsyncHttpClient httpClient;
 

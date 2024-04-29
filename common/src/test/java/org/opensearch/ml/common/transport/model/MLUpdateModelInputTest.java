@@ -84,7 +84,7 @@ public class MLUpdateModelInputTest {
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
             +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":" +
-            "\"test-connector_id\",\"model_interface\":{}}";
+            "\"test-connector_id\",\"interface\":{}}";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();

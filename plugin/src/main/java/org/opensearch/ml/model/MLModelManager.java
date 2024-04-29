@@ -28,7 +28,6 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
-import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.MODEL_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
@@ -1144,7 +1143,6 @@ public class MLModelManager {
         TokenBucket rateLimiter = getRateLimiter(modelId);
         Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
         MLGuard mlGuard = getMLGuard(modelId);
-        Map<String, String> modelInterface = getModelInterface(modelId);
 
         Map<String, Object> params = new HashMap<>();
         params.put(ML_ENGINE, mlEngine);
@@ -1170,11 +1168,6 @@ public class MLModelManager {
         if (mlGuard != null) {
             params.put(GUARDRAILS, mlGuard);
             log.info("Setting up ML guard parameter for ML predictor.");
-        }
-
-        if (modelInterface != null) {
-            params.put(MODEL_INTERFACE, modelInterface);
-            log.info("Setting up model interface parameter for ML predictor.");
         }
         return Collections.unmodifiableMap(params);
     }

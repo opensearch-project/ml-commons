@@ -31,7 +31,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.filterInterfaceMap;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 @Data
 public class MLUpdateModelInput implements ToXContentObject, Writeable {
@@ -124,7 +125,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 this.deploySetting = new MLDeploySetting(in);
             }
         }
-        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (in.readBoolean()) {
                 modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
@@ -179,7 +180,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
         if (modelInterface != null) {
-            builder.field(MLModel.MODEL_INTERFACE_FIELD, modelInterface);
+            builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
         builder.endObject();
         return builder;
@@ -234,7 +235,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
-        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_MODEL_INTERFACE)) {
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (modelInterface != null) {
                 out.writeBoolean(true);
                 out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
@@ -296,8 +297,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
-                case MLModel.MODEL_INTERFACE_FIELD:
-                    modelInterface = filterInterfaceMap(parser.map());
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 default:
                     parser.skipChildren();
