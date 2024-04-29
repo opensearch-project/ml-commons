@@ -1,0 +1,8 @@
+"c":
+  - do:
+      cat.plugins:
+        local: true
+        h: component
+
+  - match:
+      $body: /^plugin\n$/

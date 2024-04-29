@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
@@ -238,13 +237,6 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         Map map = (Map) responseMap.get("error");
         String message = (String) map.get("message");
         return message.equals("You exceeded your current quota, please check your plan and billing details.");
-    }
-
-    protected Map parseResponseToMap(Response response) throws IOException {
-        HttpEntity entity = response.getEntity();
-        assertNotNull(response);
-        String entityString = TestHelper.httpEntityToString(entity);
-        return gson.fromJson(entityString, Map.class);
     }
 
     protected void disableClusterConnectorAccessControl() throws IOException {

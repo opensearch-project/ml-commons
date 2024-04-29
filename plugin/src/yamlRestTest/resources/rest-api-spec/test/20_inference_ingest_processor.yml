@@ -1,0 +1,24 @@
+---
+teardown:
+  - do:
+      ingest.delete_pipeline:
+        id: "my_pipeline"
+        ignore: 404
+
+---
+"Test ML Inference Processor":
+  - do:
+      ingest.put_pipeline:
+        id: "my_pipeline"
+        body:  >
+          {
+            "description" : "pipeline with drop",
+            "processors" : [
+              {
+                "ml_inference" : {
+                  "model_id": "AGYioI4BK5nJfCdc0w1T"
+                }
+              }
+            ]
+          }
+  - match: { acknowledged: true }

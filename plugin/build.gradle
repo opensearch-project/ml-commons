@@ -60,6 +60,7 @@ dependencies {
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.15.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation 'com.jayway.jsonpath:json-path:2.9.0'
 }
 
 publishing {
