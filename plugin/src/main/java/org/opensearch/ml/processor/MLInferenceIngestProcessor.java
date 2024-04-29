@@ -54,7 +54,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
     // prediction outcomes, return the whole prediction outcome by skipping filtering
     public static final String IGNORE_MISSING = "ignore_missing";
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
-    // it can be overwritten using maxPredictionTask when creating processor
+    // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
 
     private Configuration suppressExceptionConfiguration = Configuration
