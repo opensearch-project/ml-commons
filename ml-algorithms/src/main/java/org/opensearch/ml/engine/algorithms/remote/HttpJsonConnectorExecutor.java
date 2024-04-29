@@ -126,8 +126,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    @VisibleForTesting
-    protected void validateHttpClientParameters(Map<String, String> parameters) throws Exception {
+    private void validateHttpClientParameters(Map<String, String> parameters) throws Exception {
         String endpoint = connector.getPredictEndpoint(parameters);
         URL url = new URL(endpoint);
         String protocol = url.getProtocol();
