@@ -206,13 +206,13 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
         boolean isModelDeployed = isModelDeployed(mlModel.getModelState());
         // This flag is used to decide if we need to re-deploy the predictor(model) when updating the model cache.
-        // If one of the internal connector, stand-alone connector id, model quota flag, as well as the model rate limiter and guardrails
-        // need update, we
-        // need to perform a re-deploy.
+        // If one of the internal connector, stand-alone connector id, model quota flag, model rate limiter, model interface,
+        // and guardrails need update, we need to perform a re-deployment.
         boolean isPredictorUpdate = (updateModelInput.getConnector() != null)
             || (newConnectorId != null)
             || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled())
-            || (updateModelInput.getGuardrails() != null);
+            || (updateModelInput.getGuardrails() != null)
+            || (updateModelInput.getModelInterface() != null);
         if (MLRateLimiter.updateValidityPreCheck(mlModel.getRateLimiter(), updateModelInput.getRateLimiter())) {
             MLRateLimiter updatedRateLimiterConfig = MLRateLimiter.update(mlModel.getRateLimiter(), updateModelInput.getRateLimiter());
             updateModelInput.setRateLimiter(updatedRateLimiterConfig);
@@ -379,7 +379,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         try {
             updateModelInput.setLastUpdateTime(Instant.now());
-            updateRequest.doc(updateModelInput.toXContentForUpdateRequestDoc(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {
@@ -420,7 +420,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             Integer.parseInt(updatedVersion)
         );
         try {
-            updateRequest.doc(updateModelInput.toXContentForUpdateRequestDoc(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             if (isUpdateModelCache) {

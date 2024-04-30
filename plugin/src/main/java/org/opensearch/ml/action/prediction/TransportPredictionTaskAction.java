@@ -17,13 +17,16 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -33,6 +36,7 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -152,9 +156,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     )
                                                 );
                                         } else {
+                                            validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
                                     } else {
+                                        validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                         executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                     }
                                 }
@@ -228,4 +234,20 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 })
             );
     }
+
+    public void validateInputSchema(String modelId, MLInput mlInput) {
+        if (modelCacheHelper.getModelInterface(modelId) != null && modelCacheHelper.getModelInterface(modelId).get("input") != null) {
+            String inputSchemaString = modelCacheHelper.getModelInterface(modelId).get("input");
+            try {
+                MLNodeUtils
+                    .validateSchema(
+                        inputSchemaString,
+                        mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
+                    );
+            } catch (Exception e) {
+                throw new OpenSearchStatusException("Error validating input schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+            }
+        }
+    }
+
 }
