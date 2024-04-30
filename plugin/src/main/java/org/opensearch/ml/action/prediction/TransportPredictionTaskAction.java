@@ -156,6 +156,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     )
                                                 );
                                         } else {
+                                            validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
                                     } else {
@@ -234,7 +235,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             );
     }
 
-    private void validateInputSchema(String modelId, MLInput mlInput) {
+    public void validateInputSchema(String modelId, MLInput mlInput) {
         if (modelCacheHelper.getModelInterface(modelId) != null && modelCacheHelper.getModelInterface(modelId).get("input") != null) {
             String inputSchemaString = modelCacheHelper.getModelInterface(modelId).get("input");
             try {
@@ -244,7 +245,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                         mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
                     );
             } catch (Exception e) {
-                throw new IllegalArgumentException("Error validating input schema: " + e.getMessage());
+                throw new OpenSearchStatusException("Error validating input schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
             }
         }
     }

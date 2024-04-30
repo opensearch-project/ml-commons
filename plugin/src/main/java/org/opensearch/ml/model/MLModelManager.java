@@ -1493,6 +1493,7 @@ public class MLModelManager {
      * Set up model interface with model id.
      */
     private void setupModelInterface(String modelId, Map<String, String> modelInterface) {
+        log.debug("Model interface for model: {} loaded into cache.", modelId);
         if (modelInterface != null) {
             modelCacheHelper.setModelInterface(modelId, modelInterface);
         } else {

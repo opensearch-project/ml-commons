@@ -143,6 +143,42 @@ public class MLModel implements ToXContentObject {
     private String connectorId;
     private Guardrails guardrails;
 
+    /**
+     * Model interface is a map that contains the input and output fields of the model, with JSON schema as the value.
+     * Sample model interface:
+     * {
+     *   "interface": {
+     *     "input": {
+     *       "properties": {
+     *         "parameters": {
+     *           "properties": {
+     *             "messages": {
+     *               "type": "string",
+     *               "description": "This is a test description field"
+     *             }
+     *           }
+     *         }
+     *       }
+     *     },
+     *     "output": {
+     *       "properties": {
+     *         "name": {
+     *           "type": "string",
+     *           "description": "This is a test description field"
+     *         },
+     *         "dataAsMap": {
+     *           "properties": {
+     *             "id": {
+     *               "type": "string",
+     *               "description": "This is a test description field"
+     *             }
+     *           }
+     *         }
+     *       }
+     *     }
+     *   }
+     * }
+     */
     private Map<String, String> modelInterface;
 
     @Builder(toBuilder = true)

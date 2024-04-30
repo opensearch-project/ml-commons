@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -25,6 +26,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
@@ -41,6 +43,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -233,4 +236,50 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         assertEquals("Testing MLResourceNotFoundException", argumentCaptor.getValue().getMessage());
     }
 
+    public void testValidateInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    public void testValidateInputSchemaFailed() {
+        exceptionRule.expect(OpenSearchParseException.class);
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
 }
