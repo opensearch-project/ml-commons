@@ -162,17 +162,9 @@ public class MLModel implements ToXContentObject {
      *     },
      *     "output": {
      *       "properties": {
-     *         "name": {
-     *           "type": "string",
+     *         "inference_results": {
+     *           "type": "array",
      *           "description": "This is a test description field"
-     *         },
-     *         "dataAsMap": {
-     *           "properties": {
-     *             "id": {
-     *               "type": "string",
-     *               "description": "This is a test description field"
-     *             }
-     *           }
      *         }
      *       }
      *     }
