@@ -15,6 +15,8 @@ import static org.opensearch.ml.common.utils.StringUtils.processTextDocs;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +36,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
@@ -46,7 +49,9 @@ import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.signer.Aws4Signer;
 import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
+import software.amazon.awssdk.http.SdkHttpMethod;
 import software.amazon.awssdk.regions.Region;
 
 @Log4j2
@@ -179,10 +184,14 @@ public class ConnectorUtils {
         String modelResponse,
         Connector connector,
         ScriptService scriptService,
-        Map<String, String> parameters
+        Map<String, String> parameters,
+        MLGuard mlGuard
     ) throws IOException {
         if (modelResponse == null) {
             throw new IllegalArgumentException("model response is null");
+        }
+        if (mlGuard != null && !mlGuard.validate(modelResponse, MLGuard.Type.OUTPUT)) {
+            throw new IllegalArgumentException("guardrails triggered for LLM output");
         }
         List<ModelTensor> modelTensors = new ArrayList<>();
         Optional<ConnectorAction> predictAction = connector.findPredictAction();
@@ -251,5 +260,43 @@ public class ConnectorUtils {
             .build();
 
         return signer.sign(request, params);
+    }
+
+    public static SdkHttpFullRequest buildSdkRequest(
+        Connector connector,
+        Map<String, String> parameters,
+        String payload,
+        SdkHttpMethod method
+    ) {
+        String charset = parameters.getOrDefault("charset", "UTF-8");
+        RequestBody requestBody;
+        if (payload != null) {
+            requestBody = RequestBody.fromString(payload, Charset.forName(charset));
+        } else {
+            requestBody = RequestBody.empty();
+        }
+        if (SdkHttpMethod.POST == method && 0 == requestBody.optionalContentLength().get()) {
+            log.error("Content length is 0. Aborting request to remote model");
+            throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
+        }
+        String endpoint = connector.getPredictEndpoint(parameters);
+        SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
+            .builder()
+            .method(method)
+            .uri(URI.create(endpoint))
+            .contentStreamProvider(requestBody.contentStreamProvider());
+        Map<String, String> headers = connector.getDecryptedHeaders();
+        if (headers != null) {
+            for (String key : headers.keySet()) {
+                builder.putHeader(key, headers.get(key));
+            }
+        }
+        if (builder.matchingHeaders("Content-Type").isEmpty()) {
+            builder.putHeader("Content-Type", "application/json");
+        }
+        if (builder.matchingHeaders("Content-Length").isEmpty()) {
+            builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
+        }
+        return builder.build();
     }
 }
