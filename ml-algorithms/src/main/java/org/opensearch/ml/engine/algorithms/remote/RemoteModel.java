@@ -10,6 +10,7 @@ import java.util.Map;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -18,6 +19,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
@@ -55,18 +57,22 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public MLOutput predict(MLInput mlInput) {
+    public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         if (!isModelReady()) {
-            throw new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy");
+            actionListener
+                .onFailure(
+                    new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy")
+                );
+            return;
         }
         try {
-            return connectorExecutor.executePredict(mlInput);
+            connectorExecutor.executePredict(mlInput, actionListener);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
-            throw e;
+            actionListener.onFailure(e);
         } catch (Throwable e) {
             log.error("Failed to call remote model.", e);
-            throw new MLException(e);
+            actionListener.onFailure(new MLException(e));
         }
     }
 
