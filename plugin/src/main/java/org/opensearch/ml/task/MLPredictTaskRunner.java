@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
@@ -31,10 +32,13 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -48,6 +52,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -61,6 +66,7 @@ import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
@@ -324,6 +330,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
                         long startTime = System.nanoTime();
                         ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
+                            if (output.getOutput() instanceof ModelTensorOutput) {
+                                validateOutputSchema(modelId, (ModelTensorOutput) output.getOutput());
+                            }
                             handleAsyncMLTaskComplete(mlTask);
                             mlModelManager.trackPredictDuration(modelId, startTime);
                             internalListener.onResponse(output);
@@ -333,6 +342,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                        }
+                        if (output instanceof ModelTensorOutput) {
+                            validateOutputSchema(modelId, (ModelTensorOutput) output);
                         }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
@@ -383,7 +395,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }
-
+                        if (output instanceof ModelTensorOutput) {
+                            validateOutputSchema(modelId, (ModelTensorOutput) output);
+                        }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
                         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
@@ -438,5 +452,20 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
+    }
+
+    public void validateOutputSchema(String modelId, ModelTensorOutput output) {
+        if (mlModelManager.getModelInterface(modelId) != null && mlModelManager.getModelInterface(modelId).get("output") != null) {
+            String outputSchemaString = mlModelManager.getModelInterface(modelId).get("output");
+            try {
+                MLNodeUtils
+                    .validateSchema(
+                        outputSchemaString,
+                        output.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
+                    );
+            } catch (Exception e) {
+                throw new OpenSearchStatusException("Error validating output schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+            }
+        }
     }
 }

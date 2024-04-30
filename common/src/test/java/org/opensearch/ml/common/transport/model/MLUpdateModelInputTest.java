@@ -36,7 +36,6 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
-import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.search.SearchModule;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -85,7 +84,7 @@ public class MLUpdateModelInputTest {
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
             +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":" +
-            "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\",\"parameters\":{},\"credential\":{}}}";
+            "\"test-connector_id\"}";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -167,22 +166,7 @@ public class MLUpdateModelInputTest {
     @Test
     public void testToXContent() throws Exception {
         String jsonStr = serializationWithToXContent(updateModelInput);
-        assertEquals(expectedInputStr, jsonStr);
-    }
-
-    @Test
-    public void testToXContentForUpdateRequestDoc() throws Exception {
-        String jsonStr = serializationWithToXContentForUpdateRequestDoc(updateModelInput);
         assertEquals(expectedOutputStrForUpdateRequestDoc, jsonStr);
-    }
-
-    @Test
-    public void testToXContenttForUpdateRequestDocIncomplete() throws Exception {
-        String expectedIncompleteInputStr = "{\"model_id\":\"test-model_id\"}";
-        updateModelInput = MLUpdateModelInput.builder()
-                .modelId("test-model_id").build();
-        String jsonStr = serializationWithToXContentForUpdateRequestDoc(updateModelInput);
-        assertEquals(expectedIncompleteInputStr, jsonStr);
     }
 
     @Test
@@ -270,10 +254,4 @@ public class MLUpdateModelInputTest {
         return builder.toString();
     }
 
-    private String serializationWithToXContentForUpdateRequestDoc(MLUpdateModelInput input) throws IOException {
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        input.toXContentForUpdateRequestDoc(builder, ToXContent.EMPTY_PARAMS);
-        assertNotNull(builder);
-        return builder.toString();
-    }
 }

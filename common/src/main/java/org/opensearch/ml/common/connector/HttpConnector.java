@@ -5,23 +5,6 @@
 
 package org.opensearch.ml.common.connector;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
-import static org.opensearch.ml.common.utils.StringUtils.isJson;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -34,6 +17,23 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 @Log4j2
@@ -361,7 +361,7 @@ public class HttpConnector extends AbstractConnector {
 
     @Override
     public Connector cloneConnector() {
-        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
             return new HttpConnector(streamInput);

@@ -29,12 +29,18 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 @Getter
 public class MLModel implements ToXContentObject {
@@ -89,6 +95,9 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
+    public static final String INTERFACE_FIELD = "interface";
+
+    public static final Set<String> allowedInterfaceFieldKeys = new HashSet<>(Arrays.asList("input", "output"));
 
     private String name;
     private String modelGroupId;
@@ -134,6 +143,36 @@ public class MLModel implements ToXContentObject {
     private String connectorId;
     private Guardrails guardrails;
 
+    /**
+     * Model interface is a map that contains the input and output fields of the model, with JSON schema as the value.
+     * Sample model interface:
+     * {
+     *   "interface": {
+     *     "input": {
+     *       "properties": {
+     *         "parameters": {
+     *           "properties": {
+     *             "messages": {
+     *               "type": "string",
+     *               "description": "This is a test description field"
+     *             }
+     *           }
+     *         }
+     *       }
+     *     },
+     *     "output": {
+     *       "properties": {
+     *         "inference_results": {
+     *           "type": "array",
+     *           "description": "This is a test description field"
+     *         }
+     *       }
+     *     }
+     *   }
+     * }
+     */
+    private Map<String, String> modelInterface;
+
     @Builder(toBuilder = true)
     public MLModel(String name,
             String modelGroupId,
@@ -166,7 +205,8 @@ public class MLModel implements ToXContentObject {
             Boolean isHidden,
             Connector connector,
             String connectorId,
-            Guardrails guardrails) {
+            Guardrails guardrails,
+            Map<String, String> modelInterface) {
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.algorithm = algorithm;
@@ -200,6 +240,7 @@ public class MLModel implements ToXContentObject {
         this.connector = connector;
         this.connectorId = connectorId;
         this.guardrails = guardrails;
+        this.modelInterface = modelInterface;
     }
 
     public MLModel(StreamInput input) throws IOException {
@@ -260,6 +301,9 @@ public class MLModel implements ToXContentObject {
             connectorId = input.readOptionalString();
             if (input.readBoolean()) {
                 this.guardrails = new Guardrails(input);
+            }
+            if (input.readBoolean()) {
+                modelInterface = input.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
     }
@@ -335,6 +379,12 @@ public class MLModel implements ToXContentObject {
         if (guardrails != null) {
             out.writeBoolean(true);
             guardrails.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (modelInterface != null) {
+            out.writeBoolean(true);
+            out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
         }
@@ -442,6 +492,9 @@ public class MLModel implements ToXContentObject {
         if (guardrails != null) {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
+        if (modelInterface != null) {
+            builder.field(INTERFACE_FIELD, modelInterface);
+        }
         builder.endObject();
         return builder;
     }
@@ -486,6 +539,7 @@ public class MLModel implements ToXContentObject {
         Connector connector = null;
         String connectorId = null;
         Guardrails guardrails = null;
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -617,6 +671,9 @@ public class MLModel implements ToXContentObject {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
+                case INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -656,6 +713,7 @@ public class MLModel implements ToXContentObject {
                 .connector(connector)
                 .connectorId(connectorId)
                 .guardrails(guardrails)
+                .modelInterface(modelInterface)
                 .build();
     }
 
@@ -663,4 +721,5 @@ public class MLModel implements ToXContentObject {
         MLModel mlModel = new MLModel(in);
         return mlModel;
     }
+
 }
