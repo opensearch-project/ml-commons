@@ -162,11 +162,13 @@ public class TransportSyncUpOnNodeAction extends
         String[] deployedModelIds = null;
         String[] runningDeployModelTaskIds = null;
         String[] runningDeployModelIds = null;
+        String[] expiredModelIds = null;
         if (syncUpInput.isGetDeployedModels()) {
             deployedModelIds = mlModelManager.getLocalDeployedModels();
             List<String[]> localRunningDeployModel = mlTaskManager.getLocalRunningDeployModelTasks();
             runningDeployModelTaskIds = localRunningDeployModel.get(0);
             runningDeployModelIds = localRunningDeployModel.get(1);
+            expiredModelIds = mlModelManager.getExpiredModels();
         }
 
         if (syncUpInput.isClearRoutingTable()) {
@@ -186,7 +188,8 @@ public class TransportSyncUpOnNodeAction extends
             "ok",
             deployedModelIds,
             runningDeployModelIds,
-            runningDeployModelTaskIds
+            runningDeployModelTaskIds,
+            expiredModelIds
         );
     }
 

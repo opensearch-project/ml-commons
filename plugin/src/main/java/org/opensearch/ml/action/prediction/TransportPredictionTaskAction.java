@@ -223,6 +223,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     long endTime = System.nanoTime();
                     double durationInMs = (endTime - startTime) / 1e6;
                     modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+                    modelCacheHelper.refreshLastAccessTime(modelId);
                     log.debug("completed predict request " + requestId + " for model " + modelId);
                 })
             );
