@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
@@ -35,6 +36,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
@@ -460,13 +462,15 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         if (mlModelManager.getModelInterface(modelId) != null && mlModelManager.getModelInterface(modelId).get("output") != null) {
             String outputSchemaString = mlModelManager.getModelInterface(modelId).get("output");
             try {
+                System.out.println(modelTensor.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString());
+                System.out.println(outputSchemaString);
                 MLNodeUtils
                     .validateSchema(
                         outputSchemaString,
                         modelTensor.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
                     );
             } catch (Exception e) {
-                throw new IllegalArgumentException("Error validating output schema: " + e.getMessage());
+                throw new OpenSearchStatusException("Error validating output schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
             }
         }
     }

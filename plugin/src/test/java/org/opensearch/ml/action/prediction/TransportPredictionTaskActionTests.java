@@ -253,14 +253,14 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             .of(
                 "input",
                 "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
-                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
+                    + "\"description\":\"This is a test description field\",\"type\":\"string\"}}}}}"
             );
         when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
         transportPredictionTaskAction.validateInputSchema("testId", mlInput);
     }
 
     public void testValidateInputSchemaFailed() {
-        exceptionRule.expect(OpenSearchParseException.class);
+        exceptionRule.expect(OpenSearchStatusException.class);
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
             .builder()
             .parameters(
