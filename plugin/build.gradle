@@ -52,6 +52,7 @@ dependencies {
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+    implementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
@@ -352,6 +353,7 @@ configurations.all {
     resolutionStrategy.force 'commons-codec:commons-codec:1.15'
     resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
     resolutionStrategy.force 'org.codehaus.plexus:plexus-utils:3.3.0'
+    exclude group: "org.jetbrains", module: "annotations"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

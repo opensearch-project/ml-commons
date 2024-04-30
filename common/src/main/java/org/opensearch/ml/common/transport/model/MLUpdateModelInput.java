@@ -15,6 +15,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
@@ -26,8 +27,12 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 @Data
 public class MLUpdateModelInput implements ToXContentObject, Writeable {
@@ -66,10 +71,13 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private Instant lastUpdateTime;
     private Guardrails guardrails;
 
+    private Map<String, String> modelInterface;
+
     @Builder(toBuilder = true)
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
             Boolean isEnabled, MLRateLimiter rateLimiter, MLModelConfig modelConfig, MLDeploySetting deploySetting,
-            Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime, Guardrails guardrails) {
+            Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime,
+            Guardrails guardrails, Map<String, String> modelInterface) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
@@ -84,6 +92,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.connector = connector;
         this.lastUpdateTime = lastUpdateTime;
         this.guardrails = guardrails;
+        this.modelInterface = modelInterface;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
@@ -116,56 +125,15 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 this.deploySetting = new MLDeploySetting(in);
             }
         }
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
+            if (in.readBoolean()) {
+                modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
+            }
+        }
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        builder.field(MODEL_ID_FIELD, modelId);
-        if (name != null) {
-            builder.field(MODEL_NAME_FIELD, name);
-        }
-        if (description != null) {
-            builder.field(DESCRIPTION_FIELD, description);
-        }
-        if (version != null) {
-            builder.field(MODEL_VERSION_FIELD, version);
-        }
-        if (modelGroupId != null) {
-            builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
-        }
-        if (isEnabled != null) {
-            builder.field(IS_ENABLED_FIELD, isEnabled);
-        }
-        if (rateLimiter != null) {
-            builder.field(RATE_LIMITER_FIELD, rateLimiter);
-        }
-        if (modelConfig != null) {
-            builder.field(MODEL_CONFIG_FIELD, modelConfig);
-        }
-        if (deploySetting != null) {
-            builder.field(DEPLOY_SETTING_FIELD, deploySetting);
-        }
-        if (updatedConnector != null) {
-            builder.field(UPDATED_CONNECTOR_FIELD, updatedConnector);
-        }
-        if (connectorId != null) {
-            builder.field(CONNECTOR_ID_FIELD, connectorId);
-        }
-        if (connector != null) {
-            builder.field(CONNECTOR_FIELD, connector);
-        }
-        if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
-        }
-        if (guardrails != null) {
-            builder.field(GUARDRAILS_FIELD, guardrails);
-        }
-        builder.endObject();
-        return builder;
-    }
-
-    public XContentBuilder toXContentForUpdateRequestDoc(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(MODEL_ID_FIELD, modelId);
         if (name != null) {
@@ -204,6 +172,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         if (guardrails != null) {
             builder.field(GUARDRAILS_FIELD, guardrails);
+        }
+        if (modelInterface != null) {
+            builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
         builder.endObject();
         return builder;
@@ -258,6 +229,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
+            if (modelInterface != null) {
+                out.writeBoolean(true);
+                out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -275,6 +254,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         MLCreateConnectorInput connector = null;
         Instant lastUpdateTime = null;
         Guardrails guardrails = null;
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -311,6 +291,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -319,6 +302,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         // Model ID can only be set through RestRequest. Model version can only be set
         // automatically.
         return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, rateLimiter,
-                modelConfig, deploySetting, updatedConnector, connectorId, connector, lastUpdateTime, guardrails);
+                modelConfig, deploySetting, updatedConnector, connectorId, connector, lastUpdateTime, guardrails,
+                modelInterface);
     }
 }

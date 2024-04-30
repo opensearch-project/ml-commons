@@ -14,18 +14,28 @@ import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.OpenSearchParseException;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
 
 @Log4j2
 public class StringUtils {
@@ -93,6 +103,28 @@ public class StringUtils {
             throw new IllegalArgumentException("Unsupported response type");
         }
         return result;
+    }
+
+    public static Map<String, String> filteredParameterMap(Map<String, ?> parameterObjs, Set<String> allowedList) {
+        Map<String, String> parameters = new HashMap<>();
+        Set<String> filteredKeys = new HashSet<>(parameterObjs.keySet());
+        filteredKeys.retainAll(allowedList);
+        for (String key : filteredKeys) {
+            Object value = parameterObjs.get(key);
+            try {
+                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                    if (value instanceof String) {
+                        parameters.put(key, (String)value);
+                    } else {
+                        parameters.put(key, gson.toJson(value));
+                    }
+                    return null;
+                });
+            } catch (PrivilegedActionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return parameters;
     }
 
     @SuppressWarnings("removal")

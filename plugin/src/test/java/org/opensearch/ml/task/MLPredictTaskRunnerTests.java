@@ -26,6 +26,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
@@ -56,7 +57,9 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -388,6 +391,45 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals("No model found, please check the modelId.", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testValidateModelTensorOutputSuccess() {
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("id", "chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm"))
+            .build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "output",
+                "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"array\"}}}"
+            );
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
+            .build();
+        when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
+        taskRunner.validateOutputSchema("testId", modelTensorOutput);
+    }
+
+    public void testValidateModelTensorOutputFailed() {
+        exceptionRule.expect(OpenSearchStatusException.class);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("id", "chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm"))
+            .build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "output",
+                "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"string\"}}}"
+            );
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
+            .build();
+        when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
+        taskRunner.validateOutputSchema("testId", modelTensorOutput);
     }
 
     private void setupMocks(boolean runOnLocalNode, boolean failedToParseQueryInput, boolean failedToGetModel, boolean nullGetResponse) {

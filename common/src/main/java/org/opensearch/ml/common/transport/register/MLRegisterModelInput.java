@@ -29,12 +29,16 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 /**
  * ML input data: algirithm name, parameters and input data set.
@@ -67,6 +71,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = Version.V_2_11_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = Version.V_2_12_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY = Version.V_2_13_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE = Version.V_2_14_0;
 
     private FunctionName functionName;
     private String modelName;
@@ -95,6 +100,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private Boolean isHidden;
     private Guardrails guardrails;
 
+    private Map<String, String> modelInterface;
+
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
             String modelName,
@@ -117,7 +124,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             AccessMode accessMode,
             Boolean doesVersionCreateModelGroup,
             Boolean isHidden,
-            Guardrails guardrails) {
+            Guardrails guardrails,
+            Map<String, String> modelInterface) {
         this.functionName = Objects.requireNonNullElse(functionName, FunctionName.TEXT_EMBEDDING);
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
@@ -155,6 +163,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.doesVersionCreateModelGroup = doesVersionCreateModelGroup;
         this.isHidden = isHidden;
         this.guardrails = guardrails;
+        this.modelInterface = modelInterface;
     }
 
     public MLRegisterModelInput(StreamInput in) throws IOException {
@@ -207,6 +216,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
             if (in.readBoolean()) {
                 this.deploySetting = new MLDeploySetting(in);
+            }
+        }
+        if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
+            if (in.readBoolean()) {
+                this.modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
     }
@@ -282,6 +296,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
+            if (modelInterface != null) {
+                out.writeBoolean(true);
+                out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -347,6 +369,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (guardrails != null) {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
+        if (modelInterface != null) {
+            builder.field(MLModel.INTERFACE_FIELD, modelInterface);
+        }
         builder.endObject();
         return builder;
     }
@@ -372,6 +397,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
         Guardrails guardrails = null;
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -445,6 +471,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -453,7 +482,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, isEnabled,
                 rateLimiter, url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]),
                 connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
-                isHidden, guardrails);
+                isHidden, guardrails, modelInterface);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -478,6 +507,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean doesVersionCreateModelGroup = null;
         Boolean isHidden = null;
         Guardrails guardrails = null;
+        Map<String, String> modelInterface = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -558,13 +588,17 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case GUARDRAILS_FIELD:
                     guardrails = Guardrails.parse(parser);
                     break;
+                case MLModel.INTERFACE_FIELD:
+                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
         return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, isEnabled, rateLimiter,
-                url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]), connector,
-                connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup, isHidden, guardrails);
+                url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]),
+                connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
+                isHidden, guardrails, modelInterface);
     }
 }
