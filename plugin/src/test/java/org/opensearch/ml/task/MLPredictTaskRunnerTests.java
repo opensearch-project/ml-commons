@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -51,12 +52,16 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
+import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
@@ -304,6 +309,72 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals("ModelId is invalid", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testExecuteTask_OnLocalNode_remoteModel_success() {
+        setupMocks(true, false, false, false);
+        TextDocsInputDataSet textDocsInputDataSet = new TextDocsInputDataSet(List.of("hello", "world"), null);
+        MLPredictionTaskRequest textDocsInputRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(textDocsInputDataSet).build())
+            .build();
+        Predictable predictor = mock(Predictable.class);
+        when(predictor.isModelReady()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
+            return null;
+        }).when(predictor).asyncPredict(any(), any());
+        when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
+        when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
+        taskRunner.dispatchTask(FunctionName.REMOTE, textDocsInputRequest, transportService, listener);
+        verify(client, never()).get(any(), any());
+        ArgumentCaptor<MLTaskResponse> argumentCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+        assert argumentCaptor.getValue().getOutput() instanceof ModelTensorOutput;
+    }
+
+    public void testExecuteTask_OnLocalNode_localModel_success() {
+        setupMocks(true, false, false, false);
+        TextDocsInputDataSet textDocsInputDataSet = new TextDocsInputDataSet(List.of("hello", "world"), null);
+        MLPredictionTaskRequest textDocsInputRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build())
+            .build();
+        Predictable predictor = mock(Predictable.class);
+        when(predictor.isModelReady()).thenReturn(true);
+        when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
+        when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.TEXT_EMBEDDING), eq(true))).thenReturn(new String[] { "node1" });
+        when(mlModelManager.trackPredictDuration(anyString(), any())).thenReturn(mock(MLPredictionOutput.class));
+        taskRunner.dispatchTask(FunctionName.TEXT_EMBEDDING, textDocsInputRequest, transportService, listener);
+        verify(client, never()).get(any(), any());
+        ArgumentCaptor<MLTaskResponse> argumentCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+        assert argumentCaptor.getValue().getOutput() instanceof MLPredictionOutput;
+    }
+
+    public void testExecuteTask_OnLocalNode_prediction_exception() {
+        setupMocks(true, false, false, false);
+        TextDocsInputDataSet textDocsInputDataSet = new TextDocsInputDataSet(List.of("hello", "world"), null);
+        MLPredictionTaskRequest textDocsInputRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build())
+            .build();
+        Predictable predictable = mock(Predictable.class);
+        when(mlModelManager.getPredictor(anyString())).thenReturn(predictable);
+        when(predictable.isModelReady()).thenThrow(new RuntimeException("runtime exception"));
+        when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.TEXT_EMBEDDING), eq(true))).thenReturn(new String[] { "node1" });
+        when(mlModelManager.trackPredictDuration(anyString(), any())).thenReturn(mock(MLPredictionOutput.class));
+        taskRunner.dispatchTask(FunctionName.TEXT_EMBEDDING, textDocsInputRequest, transportService, listener);
+        verify(client, never()).get(any(), any());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assert argumentCaptor.getValue() instanceof RuntimeException;
+        assertEquals("runtime exception", argumentCaptor.getValue().getMessage());
     }
 
     public void testExecuteTask_OnLocalNode_NullGetResponse() {

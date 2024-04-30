@@ -321,17 +321,26 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (!predictor.isModelReady()) {
                         throw new IllegalArgumentException("Model not ready: " + modelId);
                     }
-                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
-                    if (output instanceof MLPredictionOutput) {
-                        ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                    if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
+                        long startTime = System.nanoTime();
+                        ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
+                            handleAsyncMLTaskComplete(mlTask);
+                            mlModelManager.trackPredictDuration(modelId, startTime);
+                            internalListener.onResponse(output);
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId));
+                        predictor.asyncPredict(mlInput, trackPredictDurationListener);
+                    } else {
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
+                        if (output instanceof MLPredictionOutput) {
+                            ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                        }
+                        // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
+                        handleAsyncMLTaskComplete(mlTask);
+                        internalListener.onResponse(new MLTaskResponse(output));
                     }
-
-                    // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
-                    handleAsyncMLTaskComplete(mlTask);
-                    MLTaskResponse response = MLTaskResponse.builder().output(output).build();
-                    internalListener.onResponse(response);
                     return;
                 } catch (Exception e) {
+                    log.error("Failed to predict model " + modelId, e);
                     handlePredictFailure(mlTask, internalListener, e, false, modelId);
                     return;
                 }
