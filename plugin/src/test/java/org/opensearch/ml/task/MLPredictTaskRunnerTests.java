@@ -390,6 +390,39 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         assertEquals("No model found, please check the modelId.", argumentCaptor.getValue().getMessage());
     }
 
+    public void testValidateModelTensorOutputSuccess() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("id","chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm")).build();
+        Map<String, String> modelInterface = Map
+                .of(
+                        "output",
+                        "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\","
+                                + "\"type\":\"array\"}}}"
+                );
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
+            .build();
+        when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
+        taskRunner.validateOutputSchema("testId", modelTensorOutput);
+    }
+
+    public void testValidateModelTensorOutputFailed() {
+        exceptionRule.expect(OpenSearchStatusException.class);
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("id","chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm")).build();
+        Map<String, String> modelInterface = Map
+                .of(
+                        "output",
+                        "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\","
+                                + "\"type\":\"string\"}}}"
+                );
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
+            .build();
+        when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
+        taskRunner.validateOutputSchema("testId", modelTensorOutput);
+    }
+
     private void setupMocks(boolean runOnLocalNode, boolean failedToParseQueryInput, boolean failedToGetModel, boolean nullGetResponse) {
         doAnswer(invocation -> {
             ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);

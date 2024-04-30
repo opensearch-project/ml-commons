@@ -392,15 +392,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }
                         if (output instanceof ModelTensorOutput) {
-                            // pick the first output tensor to validate the schema
-                            if (((ModelTensorOutput) output).getMlModelOutputs() != null
-                                && !((ModelTensorOutput) output).getMlModelOutputs().isEmpty()) {
-                                ModelTensors modelTensors = ((ModelTensorOutput) output).getMlModelOutputs().get(0);
-                                if (modelTensors.getMlModelTensors() != null && !modelTensors.getMlModelTensors().isEmpty()) {
-                                    ModelTensor modelTensorOutput = modelTensors.getMlModelTensors().get(0);
-                                    validateOutputSchema(modelId, modelTensorOutput);
-                                }
-                            }
+                            validateOutputSchema(modelId, (ModelTensorOutput) output);
                         }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
@@ -458,16 +450,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         listener.onFailure(e);
     }
 
-    private void validateOutputSchema(String modelId, ModelTensor modelTensor) {
+    public void validateOutputSchema(String modelId, ModelTensorOutput output) {
         if (mlModelManager.getModelInterface(modelId) != null && mlModelManager.getModelInterface(modelId).get("output") != null) {
             String outputSchemaString = mlModelManager.getModelInterface(modelId).get("output");
             try {
-                System.out.println(modelTensor.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString());
-                System.out.println(outputSchemaString);
                 MLNodeUtils
                     .validateSchema(
                         outputSchemaString,
-                        modelTensor.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
+                            output.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
                     );
             } catch (Exception e) {
                 throw new OpenSearchStatusException("Error validating output schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
