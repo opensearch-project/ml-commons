@@ -171,12 +171,14 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         String[] deployedModelIds = new String[] { "123" };
         String[] runningDeployModelIds = new String[] { "model1" };
         String[] runningDeployModelTaskIds = new String[] { "1" };
+        String[] expiredModelIds = new String[] { "modelExpired" };
         MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(
             mlNode1,
             "DEPLOYED",
             deployedModelIds,
             runningDeployModelIds,
-            runningDeployModelTaskIds
+            runningDeployModelTaskIds,
+            expiredModelIds
         );
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);

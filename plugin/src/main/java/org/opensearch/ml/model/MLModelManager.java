@@ -967,6 +967,7 @@ public class MLModelManager {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
                 modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
+                modelCacheHelper.refreshLastAccessTime(modelId);
             }
             listener.onResponse("successful");
             return;
@@ -1041,6 +1042,7 @@ public class MLModelManager {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+                            modelCacheHelper.refreshLastAccessTime(modelId);
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
@@ -1053,6 +1055,7 @@ public class MLModelManager {
                             modelCacheHelper.setPredictor(modelId, predictable);
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+                            modelCacheHelper.refreshLastAccessTime(modelId);
                             Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
                             long contentSize = modelContentSizeInBytes == null
                                 ? mlModel.getTotalChunks() * CHUNK_SIZE
@@ -1105,6 +1108,7 @@ public class MLModelManager {
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+            modelCacheHelper.refreshLastAccessTime(modelId);
             wrappedListener.onResponse("successful");
             return;
         }
@@ -1114,6 +1118,7 @@ public class MLModelManager {
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+            modelCacheHelper.refreshLastAccessTime(modelId);
             wrappedListener.onResponse("successful");
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, wrappedListener::onFailure));
@@ -1855,6 +1860,10 @@ public class MLModelManager {
      */
     public String[] getLocalDeployedModels() {
         return modelCacheHelper.getDeployedModels();
+    }
+
+    public String[] getExpiredModels() {
+        return modelCacheHelper.getExpiredModels();
     }
 
     /**
