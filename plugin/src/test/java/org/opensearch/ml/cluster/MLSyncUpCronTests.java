@@ -416,7 +416,18 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             String[] deployedModelIds = new String[] { randomAlphaOfLength(10) };
             String[] runningDeployModelIds = new String[] { randomAlphaOfLength(10) };
             String[] runningDeployModelTaskIds = new String[] { randomAlphaOfLength(10) };
-            nodeResponses.add(new MLSyncUpNodeResponse(mlNode1, "ok", deployedModelIds, runningDeployModelIds, runningDeployModelTaskIds));
+            String[] expiredModelIds = new String[] { randomAlphaOfLength(10) };
+            nodeResponses
+                .add(
+                    new MLSyncUpNodeResponse(
+                        mlNode1,
+                        "ok",
+                        deployedModelIds,
+                        runningDeployModelIds,
+                        runningDeployModelTaskIds,
+                        expiredModelIds
+                    )
+                );
             MLSyncUpNodesResponse response = new MLSyncUpNodesResponse(ClusterName.DEFAULT, nodeResponses, Arrays.asList());
             listener.onResponse(response);
             return null;

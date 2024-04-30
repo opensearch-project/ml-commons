@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.model;
 
+import java.time.Instant;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,7 @@ public class MLModelCache {
     // In rare case, this could be null, e.g. model info not synced up yet a predict request comes in.
     @Setter
     private Boolean deployToAllNodes;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Instant lastAccessTime;
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();

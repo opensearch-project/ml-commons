@@ -24,6 +24,8 @@ public class MLSyncUpNodeResponseTest {
     private final String[] loadedModelIds = {"loadedModelIds"};
     private final String[] runningLoadModelTaskIds = {"runningLoadModelTaskIds"};
     private final String[] runningLoadModelIds = {"modelid1"};
+
+    private final String[] expiredModelIds = {"modelExpired"};
     @Before
     public void setUp() throws Exception {
         localNode = new DiscoveryNode(
@@ -38,7 +40,7 @@ public class MLSyncUpNodeResponseTest {
 
     @Test
     public void testSerializationDeserialization() throws IOException {
-        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds);
+        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds, expiredModelIds);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLSyncUpNodeResponse newResponse = new MLSyncUpNodeResponse(output.bytes().streamInput());
@@ -51,7 +53,7 @@ public class MLSyncUpNodeResponseTest {
 
     @Test
     public void testReadProfile() throws IOException {
-        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds);
+        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds, expiredModelIds);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLSyncUpNodeResponse newResponse = MLSyncUpNodeResponse.readStats(output.bytes().streamInput());
