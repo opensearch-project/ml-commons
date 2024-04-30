@@ -26,6 +26,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
@@ -391,13 +392,16 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     }
 
     public void testValidateModelTensorOutputSuccess() {
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("id","chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm")).build();
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("id", "chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm"))
+            .build();
         Map<String, String> modelInterface = Map
-                .of(
-                        "output",
-                        "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\","
-                                + "\"type\":\"array\"}}}"
-                );
+            .of(
+                "output",
+                "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"array\"}}}"
+            );
         ModelTensorOutput modelTensorOutput = ModelTensorOutput
             .builder()
             .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
@@ -408,13 +412,16 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
     public void testValidateModelTensorOutputFailed() {
         exceptionRule.expect(OpenSearchStatusException.class);
-        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of("id","chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm")).build();
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("id", "chatcmpl-9JUSY2myXUjGBUrG0GO5niEAY5NKm"))
+            .build();
         Map<String, String> modelInterface = Map
-                .of(
-                        "output",
-                        "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\","
-                                + "\"type\":\"string\"}}}"
-                );
+            .of(
+                "output",
+                "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"string\"}}}"
+            );
         ModelTensorOutput modelTensorOutput = ModelTensorOutput
             .builder()
             .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
