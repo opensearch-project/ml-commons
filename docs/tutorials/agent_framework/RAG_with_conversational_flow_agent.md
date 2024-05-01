@@ -1,13 +1,15 @@
 # Topic
 
-> Agent Framework is an experimental feature released in OpenSearch 2.12 and not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
+> Agent Framework is GA released in OpenSearch 2.13. To read more details, see the OpenSearch document [Agents and tools](https://opensearch.org/docs/latest/ml-commons-plugin/agents-tools/index/).
 
-> This tutorial doesn't explain what retrieval-augmented generation(RAG) is.
+Read this AWS [retrieval-augmented-generation](https://aws.amazon.com/what-is/retrieval-augmented-generation/) doc to learn more details about RAG.
 
 This tutorial explains how to use a conversational flow agent to build  a RAG application by using your 
 OpenSearch data as knowledge base.
 
 Note: You should replace the placeholders with prefix `your_` with your own value
+
+The other way to build RAG/conversational search is using RAG pipeline, see [conversational_search_with_Cohere_Command](../conversational_search/conversational_search_with_Cohere_Command.md)
 
 # Steps
 

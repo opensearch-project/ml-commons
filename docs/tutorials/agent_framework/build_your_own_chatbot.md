@@ -1,6 +1,6 @@
 # Topic
 
-> Agent Framework is an experimental feature released in OpenSearch 2.12 and is not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
+> Agent Framework is GA released in OpenSearch 2.13. To read more details, see the OpenSearch document [Agents and tools](https://opensearch.org/docs/latest/ml-commons-plugin/agents-tools/index/).
 
 Some questions require more than one call to an LLM to produce an answer. For example, an LLM can't answer how many errors there are in your log index for last week because its knowledge base does not contain your proprietary data.
 You can use an agent to solve such complex problems. The agent can run tools to obtain more information and send it to the LLM as context.

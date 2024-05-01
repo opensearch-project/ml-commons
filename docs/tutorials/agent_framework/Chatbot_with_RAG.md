@@ -1,8 +1,8 @@
 # Topic
 
-> Agent Framework is an experimental feature released in OpenSearch 2.12 and is not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, see the associated [GitHub issue](https://github.com/opensearch-project/ml-commons/issues/1161).
+> Agent Framework is GA released in OpenSearch 2.13. To read more details, see the OpenSearch document [Agents and tools](https://opensearch.org/docs/latest/ml-commons-plugin/agents-tools/index/).
 
-> This tutorial doesn't explain what retrieval-augmented generation (RAG) is.
+Read this AWS [retrieval-augmented-generation](https://aws.amazon.com/what-is/retrieval-augmented-generation/) doc to learn more details about RAG.
 
 One of the known limitations of large language models (LLMs) is that their knowledge base only contains information up to the time when the LLMs were trained. 
 LLMs have no knowledge of recent events or your internal data. 
