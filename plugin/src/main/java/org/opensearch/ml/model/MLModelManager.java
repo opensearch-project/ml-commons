@@ -996,6 +996,7 @@ public class MLModelManager {
             }
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
+                modelCacheHelper.setModelInfo(modelId, mlModel);
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
