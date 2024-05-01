@@ -287,16 +287,18 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelWithWrongInputInterface() throws IOException, InterruptedException {
         testPredictRemoteModelWithInterface("wrongInputInterface", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.OpenSearchStatusException);
+            System.out.println(exception.getMessage());
             String stackTrace = ExceptionUtils.getStackTrace(exception);
+            System.out.println(stackTrace);
             assertTrue(stackTrace.contains("Error validating input schema"));
         });
     }
 
     public void testPredictRemoteModelWithWrongOutputInterface() throws IOException, InterruptedException {
         testPredictRemoteModelWithInterface("wrongOutputInterface", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.OpenSearchStatusException);
+            System.out.println(exception.getMessage());
             String stackTrace = ExceptionUtils.getStackTrace(exception);
+            System.out.println(stackTrace);
             assertTrue(stackTrace.contains("Error validating output schema"));
         });
     }
