@@ -287,9 +287,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelWithWrongInputInterface() throws IOException, InterruptedException {
         testPredictRemoteModelWithInterface("wrongInputInterface", null, (exception) -> {
-            assertTrue(exception instanceof NullPointerException);
+            assertTrue(exception instanceof org.opensearch.client.ResponseException);
             String stackTrace = ExceptionUtils.getStackTrace(exception);
-            System.out.println(stackTrace);
             assertTrue(stackTrace.contains("Error validating input schema"));
         });
     }
@@ -876,7 +875,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"properties\": {\n"
             + "        \"parameters\": {\n"
             + "          \"properties\": {\n"
-            + "            \"messages\": {\n"
+            + "            \"prompt\": {\n"
             + "              \"type\": \"string\",\n"
             + "              \"description\": \"This is a test description field\"\n"
             + "            }\n"
@@ -936,8 +935,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"properties\": {\n"
             + "        \"parameters\": {\n"
             + "          \"properties\": {\n"
-            + "            \"messages\": {\n"
-            + "              \"type\": \"string\",\n"
+            + "            \"prompt\": {\n"
+            + "              \"type\": \"integer\",\n"
             + "              \"description\": \"This is a test description field\"\n"
             + "            }\n"
             + "          }\n"
