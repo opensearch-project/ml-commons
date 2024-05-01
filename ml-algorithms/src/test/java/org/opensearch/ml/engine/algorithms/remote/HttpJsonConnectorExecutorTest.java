@@ -220,7 +220,7 @@ public class HttpJsonConnectorExecutorTest {
                 new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(NullPointerException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue() instanceof NullPointerException;
     }
