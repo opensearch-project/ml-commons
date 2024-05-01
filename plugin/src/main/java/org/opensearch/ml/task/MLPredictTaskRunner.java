@@ -167,6 +167,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 return;
                             }
                             String[] planningWorkerNodes = model.getPlanningWorkerNodes();
+                            boolean deployToAllNodes = model.isDeployToAllNodes();
+                            if (deployToAllNodes) {
+                                planningWorkerNodes = null;
+                            }
                             MLModel modelBeingAutoDeployed = mlModelManager.addModelToAutoDeployCache(modelId, model);
                             if (modelBeingAutoDeployed == model) {
                                 log.info(getErrorMessage("Automatically deploy model", modelId, isHidden));
