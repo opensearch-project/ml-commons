@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.lang.reflect.Field;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -220,7 +221,7 @@ public class HttpJsonConnectorExecutorTest {
                 new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
                 actionListener
             );
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(NullPointerException.class);
         verify(actionListener, times(1)).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue() instanceof NullPointerException;
     }
