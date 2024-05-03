@@ -987,13 +987,14 @@ public class MLModelManager {
         if (!autoDeployModel) {
             modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         } else {
-            modelCacheHelper.initModelStateLocal(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
+            modelCacheHelper.initModelStateAutoDeploy(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
         }
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
                 context.restore();
                 modelCacheHelper.removeAutoDeployModel(modelId);
+                modelCacheHelper.setIsAutoDeploying(modelId, false);
             });
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);

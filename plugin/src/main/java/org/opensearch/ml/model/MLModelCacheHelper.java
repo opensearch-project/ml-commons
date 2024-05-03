@@ -61,7 +61,7 @@ public class MLModelCacheHelper {
         List<String> targetWorkerNodes,
         boolean deployToAllNodes
     ) {
-        if (isModelRunningOnNode(modelId)) {
+        if (isModelRunningOnNode(modelId) && !isAutoDeploying(modelId)) {
             throw new MLLimitExceededException("Duplicate deploy model task");
         }
         log.debug("init model state for model {}, state: {}", modelId, state);
@@ -74,7 +74,7 @@ public class MLModelCacheHelper {
         modelCaches.put(modelId, modelCache);
     }
 
-    public synchronized void initModelStateLocal(
+    public synchronized void initModelStateAutoDeploy(
         String modelId,
         MLModelState state,
         FunctionName functionName,
@@ -92,6 +92,7 @@ public class MLModelCacheHelper {
         modelCache.setDeployToAllNodes(false);
         modelCache.setLastAccessTime(Instant.now());
         modelCaches.put(modelId, modelCache);
+        setIsAutoDeploying(modelId, true);
     }
 
     /**
@@ -277,6 +278,28 @@ public class MLModelCacheHelper {
             return null;
         }
         return modelCache.getIsModelEnabled();
+    }
+
+    /**
+     * Set a flag to show if model is in auto deploying status
+     *
+     * @param modelId        model id
+     * @param isModelAutoDeploying auto deploy flag
+     */
+    public synchronized void setIsAutoDeploying(String modelId, Boolean isModelAutoDeploying) {
+        log.debug("Setting the auto deploying flag for Model {}", modelId);
+        getExistingModelCache(modelId).setIsAutoDeploying(isModelAutoDeploying);
+    }
+
+    /**
+     * Check if model is in auto deploying.
+     *
+     * @param modelId model id
+     * @return true if model is auto deploying.
+     */
+    public boolean isAutoDeploying(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        return modelCache != null && modelCache.getIsAutoDeploying() == true;
     }
 
     /**
