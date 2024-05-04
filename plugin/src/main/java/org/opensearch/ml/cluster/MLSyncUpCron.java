@@ -100,7 +100,12 @@ public class MLSyncUpCron implements Runnable {
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
             List<MLSyncUpNodeResponse> responses = r.getNodes();
             if (r.failures() != null && r.failures().size() != 0) {
-                log.error("Received {} failures in the sync up response on nodes", r.failures().size());
+                log
+                    .debug(
+                        "Received {} failures in the sync up response on nodes. Error messages are {}",
+                        r.failures().size(),
+                        r.failures().stream().map(Exception::getMessage).collect(Collectors.joining(", "))
+                    );
             }
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
