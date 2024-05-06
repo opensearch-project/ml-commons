@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
@@ -105,7 +106,14 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
+        int numNodes = NumberUtils.createInteger(System.getProperty("cluster.number_of_nodes", "1"));
+        if (numNodes == 1) {
+            MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
+        } else {
+            // in multi-node cluster, the exception is remote transport exception
+            // we cannot get the concrete exception message
+            MatcherAssert.assertThat(exception.getMessage(), containsString("RemoteTransportException"));
+        }
     }
 
     public void testSearchIndexToolInFlowAgent_withEmptyQueryField_thenThrowException() throws IOException, ParseException {
@@ -118,7 +126,14 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
+        int numNodes = NumberUtils.createInteger(System.getProperty("cluster.number_of_nodes", "1"));
+        if (numNodes == 1) {
+            MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
+        } else {
+            // in multi-node cluster, the exception is remote transport exception
+            // we cannot get the concrete exception message
+            MatcherAssert.assertThat(exception.getMessage(), containsString("RemoteTransportException"));
+        }
     }
 
     public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() throws IOException, ParseException {
@@ -132,6 +147,13 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
+        int numNodes = NumberUtils.createInteger(System.getProperty("cluster.number_of_nodes", "1"));
+        if (numNodes == 1) {
+            MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
+        } else {
+            // in multi-node cluster, the exception is remote transport exception
+            // we cannot get the concrete exception message
+            MatcherAssert.assertThat(exception.getMessage(), containsString("RemoteTransportException"));
+        }
     }
 }
