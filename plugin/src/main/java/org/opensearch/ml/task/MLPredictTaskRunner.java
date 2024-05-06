@@ -263,7 +263,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     private boolean checkModelAutoDeployEnabled(MLModel mlModel) {
-        if (mlModel.getDeploySetting() == null) {
+        if (mlModel.getDeploySetting() == null || mlModel.getDeploySetting().getIsAutoDeployEnabled() == null) {
             return true;
         }
         return mlModel.getDeploySetting().getIsAutoDeployEnabled();
