@@ -114,7 +114,8 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             // in multi-node cluster, the exception maybe of type RemoteTransportException
             // we cannot get the concrete exception message from RemoteTransportException
             if (!exceptionMessage.contains("RemoteTransportException")) {
-                MatcherAssert.assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
+                MatcherAssert
+                    .assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
             }
         }
     }
@@ -137,7 +138,8 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             // in multi-node cluster, the exception maybe of type RemoteTransportException
             // we cannot get the concrete exception message from RemoteTransportException
             if (!exceptionMessage.contains("RemoteTransportException")) {
-                MatcherAssert.assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
+                MatcherAssert
+                    .assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
             }
         }
     }
