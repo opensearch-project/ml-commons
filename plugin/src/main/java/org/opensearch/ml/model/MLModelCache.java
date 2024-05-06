@@ -54,6 +54,7 @@ public class MLModelCache {
     @Setter
     private Boolean deployToAllNodes;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Instant lastAccessTime;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isAutoDeploying;
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
