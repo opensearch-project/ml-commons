@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.BooleanUtils;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
@@ -299,7 +300,7 @@ public class MLModelCacheHelper {
      */
     public boolean isAutoDeploying(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
-        return modelCache != null && modelCache.getIsAutoDeploying() == true;
+        return modelCache != null && BooleanUtils.isTrue(modelCache.getIsAutoDeploying());
     }
 
     /**
