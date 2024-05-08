@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -80,11 +81,9 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         Predicate<Response> condition = response -> {
             try {
                 Map<String, Object> responseInMap = parseResponseToMap(response);
-                String state = responseInMap.get(MLModel.MODEL_STATE_FIELD).toString();
-                return !state.equals(MLModelState.DEPLOYED.toString())
-                    && !state.equals(MLModelState.DEPLOYING.toString())
-                    && !state.equals(MLModelState.PARTIALLY_DEPLOYED.toString());
-            } catch (IOException e) {
+                MLModelState state = MLModelState.from(responseInMap.get(MLModel.MODEL_STATE_FIELD).toString());
+                return Set.of(MLModelState.UNDEPLOYED, MLModelState.DEPLOY_FAILED).contains(state);
+            } catch (Exception e) {
                 return false;
             }
         };
