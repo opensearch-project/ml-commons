@@ -77,7 +77,8 @@ public class AwsConnectorExecutorTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
+        when(scriptService.compile(any(), any()))
+            .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
     }
 
     @Test
@@ -302,8 +303,7 @@ public class AwsConnectorExecutorTest {
             .build();
         Map<String, String> credential = ImmutableMap
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap
-            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -337,12 +337,13 @@ public class AwsConnectorExecutorTest {
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
-            .preProcessFunction("\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"text_inputs\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";")
+            .preProcessFunction(
+                "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"text_inputs\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";"
+            )
             .build();
         Map<String, String> credential = ImmutableMap
             .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
-        Map<String, String> parameters = ImmutableMap
-            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
