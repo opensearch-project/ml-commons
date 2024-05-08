@@ -11,6 +11,7 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processI
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,6 +28,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -99,6 +102,12 @@ public interface RemoteConnectorExecutor {
                 return Tuple.tuple(textDocsLength / stepSize + 1, stepSize);
             }
         } else {
+            Optional<ConnectorAction> predictAction = getConnector().findPredictAction();
+            String preProcessFunction = predictAction.get().getPreProcessFunction();
+            if (preProcessFunction != null && !MLPreProcessFunction.contains(preProcessFunction)) {
+                // user defined preprocess script, this case, the chunk size is always equals to text docs length.
+                return Tuple.tuple(textDocsLength, 1);
+            }
             // consider as batch.
             return Tuple.tuple(1, textDocsLength);
         }
