@@ -27,7 +27,10 @@ public class MultiModalEmbeddingPreProcessFunction extends ConnectorPreProcessFu
     @Override
     public RemoteInferenceInputDataSet process(MLInput mlInput) {
         TextDocsInputDataSet inputData = (TextDocsInputDataSet) mlInput.getInputDataset();
-        Map<String, Object> processedResult = Map.of("parameters", Map.of("inputText", inputData.getDocs().get(0), "inputImage", inputData.getDocs().get(1)));
-        return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(processedResult)).build();
+        if (inputData.getDocs().size() == 1) {
+            return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(Map.of("inputText", inputData.getDocs().get(0)))).build();
+        } else {
+            return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(Map.of("inputText", inputData.getDocs().get(0), "inputImage", inputData.getDocs().get(1)))).build();
+        }
     }
 }
