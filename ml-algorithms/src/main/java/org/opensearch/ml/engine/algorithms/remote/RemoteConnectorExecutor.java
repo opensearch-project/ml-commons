@@ -103,6 +103,9 @@ public interface RemoteConnectorExecutor {
             }
         } else {
             Optional<ConnectorAction> predictAction = getConnector().findPredictAction();
+            if (predictAction.isEmpty()) {
+                throw new IllegalArgumentException("no predict action found");
+            }
             String preProcessFunction = predictAction.get().getPreProcessFunction();
             if (preProcessFunction != null && !MLPreProcessFunction.contains(preProcessFunction)) {
                 // user defined preprocess script, this case, the chunk size is always equals to text docs length.
