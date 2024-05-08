@@ -13,7 +13,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
-import lombok.SneakyThrows;
 import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
@@ -26,6 +25,7 @@ import org.opensearch.ml.utils.TestHelper;
 
 import com.sun.net.httpserver.HttpServer;
 
+import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -82,22 +82,17 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
                 Map<String, Object> responseInMap = parseResponseToMap(response);
                 String state = responseInMap.get(MLModel.MODEL_STATE_FIELD).toString();
                 return !state.equals(MLModelState.DEPLOYED.toString())
-                        && !state.equals(MLModelState.DEPLOYING.toString())
-                        && !state.equals(MLModelState.PARTIALLY_DEPLOYED.toString());
+                    && !state.equals(MLModelState.DEPLOYING.toString())
+                    && !state.equals(MLModelState.PARTIALLY_DEPLOYED.toString());
             } catch (IOException e) {
-               return false;
+                return false;
             }
         };
         waitResponseMeetingCondition("GET", "/_plugins/_ml/models/" + modelId, null, condition);
     }
 
     @SneakyThrows
-    protected Response waitResponseMeetingCondition(
-            String method,
-            String endpoint,
-            String jsonEntity,
-            Predicate<Response> condition
-    ) {
+    protected Response waitResponseMeetingCondition(String method, String endpoint, String jsonEntity, Predicate<Response> condition) {
         for (int i = 0; i < MAX_TASK_RESULT_QUERY_TIME_IN_SECOND; i++) {
             Response response = TestHelper.makeRequest(client(), method, endpoint, null, jsonEntity, null);
             assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
