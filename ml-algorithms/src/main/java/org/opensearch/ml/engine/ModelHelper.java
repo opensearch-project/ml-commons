@@ -27,6 +27,7 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
@@ -70,6 +71,7 @@ public class ModelHelper {
         boolean deployModel = registerModelInput.isDeployModel();
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         String modelGroupId = registerModelInput.getModelGroupId();
+        MLDeploySetting mlDeploySetting = registerModelInput.getDeploySetting();
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
 
@@ -104,7 +106,8 @@ public class ModelHelper {
                     .modelNodeIds(modelNodeIds)
                     .isHidden(isHidden)
                     .modelGroupId(modelGroupId)
-                    .functionName(FunctionName.from((functionName)));
+                    .functionName(FunctionName.from((functionName)))
+                    .deploySetting(mlDeploySetting);
 
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
