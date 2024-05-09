@@ -32,7 +32,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
-    private static final int MAX_TASK_RESULT_QUERY_TIME_IN_SECOND = 60 * 5;
+    private static final int MAX_TASK_RESULT_QUERY_TIME_IN_SECOND = 30;
     private static final int DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND = 1000;
 
     protected HttpServer server;
