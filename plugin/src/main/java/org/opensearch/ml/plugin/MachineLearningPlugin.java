@@ -256,6 +256,7 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.sdkclient.XContentClient;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -285,6 +286,7 @@ import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
@@ -647,6 +649,8 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
+        SdkClient sdkClient = new XContentClient(client, xContentRegistry);
+
         return ImmutableList
             .of(
                 encryptor,
@@ -673,7 +677,8 @@ public class MachineLearningPlugin extends Plugin
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
-                cmHandler
+                cmHandler,
+                sdkClient
             );
     }
 
