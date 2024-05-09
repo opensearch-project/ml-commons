@@ -108,15 +108,10 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
         String exceptionMessage = exception.getMessage();
         int numNodes = NumberUtils.createInteger(System.getProperty("cluster.number_of_nodes", "1"));
-        if (numNodes == 1) {
-            MatcherAssert.assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
-        } else {
+        if (numNodes == 1 || !exceptionMessage.contains("RemoteTransportException")) {
             // in multi-node cluster, the exception maybe of type RemoteTransportException
             // we cannot get the concrete exception message from RemoteTransportException
-            if (!exceptionMessage.contains("RemoteTransportException")) {
-                MatcherAssert
-                    .assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
-            }
+            MatcherAssert.assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
         }
     }
 
@@ -132,15 +127,10 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
         String exceptionMessage = exception.getMessage();
         int numNodes = NumberUtils.createInteger(System.getProperty("cluster.number_of_nodes", "1"));
-        if (numNodes == 1) {
-            MatcherAssert.assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
-        } else {
+        if (numNodes == 1 || !exceptionMessage.contains("RemoteTransportException")) {
             // in multi-node cluster, the exception maybe of type RemoteTransportException
             // we cannot get the concrete exception message from RemoteTransportException
-            if (!exceptionMessage.contains("RemoteTransportException")) {
-                MatcherAssert
-                    .assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
-            }
+            MatcherAssert.assertThat(exceptionMessage, containsString("SearchIndexTool's two parameter: index and query are required!"));
         }
     }
 
@@ -157,14 +147,10 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
         String exceptionMessage = exception.getMessage();
         int numNodes = NumberUtils.createInteger(System.getProperty("cluster.number_of_nodes", "1"));
-        if (numNodes == 1) {
-            MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
-        } else {
+        if (numNodes == 1 || !exceptionMessage.contains("RemoteTransportException")) {
             // in multi-node cluster, the exception maybe of type RemoteTransportException
             // we cannot get the concrete exception message from RemoteTransportException
-            if (!exceptionMessage.contains("RemoteTransportException")) {
-                MatcherAssert.assertThat(exceptionMessage, containsString("ParsingException"));
-            }
+            MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
         }
     }
 }
