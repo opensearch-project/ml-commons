@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -235,6 +236,39 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         }
         responseMap = (Map) responseList.get(0);
         assertFalse(((String) responseMap.get("text")).isEmpty());
+    }
+
+    public void testPredictWithAutoDeployAndTTL_RemoteModel() throws IOException, InterruptedException {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            System.out.println("OPENAI_KEY is null");
+            return;
+        }
+        Response response = createConnector(completionModelConnectorEntity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModelWithTTL("openAI-GPT-3.5 completions", connectorId, 1);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
+        response = predictRemoteModel(modelId, predictInput);
+        responseMap = parseResponseToMap(response);
+        List responseList = (List) responseMap.get("inference_results");
+        responseMap = (Map) responseList.get(0);
+        responseList = (List) responseMap.get("output");
+        responseMap = (Map) responseList.get(0);
+        responseMap = (Map) responseMap.get("dataAsMap");
+        responseList = (List) responseMap.get("choices");
+        if (responseList == null) {
+            assertTrue(checkThrottlingOpenAI(responseMap));
+            return;
+        }
+        responseMap = (Map) responseList.get(0);
+        assertFalse(((String) responseMap.get("text")).isEmpty());
+
+        getModelProfile(modelId, verifyRemoteModelDeployed());
+        TimeUnit.SECONDS.sleep(71);
+        assertTrue(getModelProfile(modelId, verifyRemoteModelDeployed()).isEmpty());
     }
 
     public void testPredictRemoteModelWithInterface(String testCase, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
@@ -836,6 +870,46 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  \"connector_id\": \""
             + connectorId
             + "\"\n"
+            + "}";
+        return TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
+    }
+
+    public static Response registerRemoteModelWithTTL(String name, String connectorId, int ttl) throws IOException {
+        String registerModelGroupEntity = "{\n"
+            + "  \"name\": \"remote_model_group\",\n"
+            + "  \"description\": \"This is an example description\"\n"
+            + "}";
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_plugins/_ml/model_groups/_register",
+                null,
+                TestHelper.toHttpEntity(registerModelGroupEntity),
+                null
+            );
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((String) responseMap.get("status"), "CREATED");
+        String modelGroupId = (String) responseMap.get("model_group_id");
+
+        String registerModelEntity = "{\n"
+            + "  \"name\": \""
+            + name
+            + "\",\n"
+            + "  \"function_name\": \"remote\",\n"
+            + "  \"model_group_id\": \""
+            + modelGroupId
+            + "\",\n"
+            + "  \"version\": \"1.0.0\",\n"
+            + "  \"description\": \"test model\",\n"
+            + "  \"connector_id\": \""
+            + connectorId
+            + "\",\n"
+            + "  \"deploy_setting\": "
+            + " { \"model_ttl_minutes\": "
+            + ttl
+            + "}\n"
             + "}";
         return TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
