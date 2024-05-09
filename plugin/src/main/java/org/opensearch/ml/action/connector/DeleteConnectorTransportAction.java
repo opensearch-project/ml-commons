@@ -14,7 +14,6 @@ import java.util.List;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -33,6 +32,8 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.sdk.DeleteCustomRequest;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
@@ -44,6 +45,7 @@ import lombok.extern.log4j.Log4j2;
 public class DeleteConnectorTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
     Client client;
+    private final SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -53,11 +55,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper
     ) {
         super(MLConnectorDeleteAction.NAME, transportService, actionFilters, MLConnectorDeleteRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
     }
@@ -120,24 +124,18 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.delete(deleteRequest, ActionListener.runBefore(new ActionListener<>() {
-                @Override
-                public void onResponse(DeleteResponse deleteResponse) {
-                    if (deleteResponse.getResult() == DocWriteResponse.Result.NOT_FOUND) {
-                        log.info("Connector id:{} not found", connectorId);
-                        actionListener.onResponse(deleteResponse);
-                        return;
+            sdkClient
+                .deleteCustom(new DeleteCustomRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
+                .whenCompleteAsync((r, throwable) -> {
+                    if (throwable != null) {
+                        actionListener.onFailure(new RuntimeException(throwable));
+                    } else {
+                        context.restore();
+                        log.info("Connector deletion result: {}, connector id: {}", r.deleted(), r.id());
+                        DeleteResponse response = new DeleteResponse(deleteRequest.shardId(), r.id(), 0, 0, 0, r.deleted());
+                        actionListener.onResponse(response);
                     }
-                    log.info("Completed Delete Connector Request, connector id:{} deleted", connectorId);
-                    actionListener.onResponse(deleteResponse);
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    log.error("Failed to delete ML connector: " + connectorId, e);
-                    actionListener.onFailure(e);
-                }
-            }, () -> context.restore()));
+                });
         } catch (Exception e) {
             log.error("Failed to delete ML connector: " + connectorId, e);
             actionListener.onFailure(e);
