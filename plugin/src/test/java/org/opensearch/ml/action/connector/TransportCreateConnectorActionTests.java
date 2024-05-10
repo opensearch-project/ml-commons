@@ -44,6 +44,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -60,6 +61,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     private MLIndicesHandler mlIndicesHandler;
     @Mock
     private Client client;
+    @Mock
+    private SdkClient sdkClient;
     @Mock
     private MLEngine mlEngine;
     @Mock
@@ -113,6 +116,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             actionFilters,
             mlIndicesHandler,
             client,
+            sdkClient,
             mlEngine,
             connectorAccessControlHelper,
             settings,
@@ -316,6 +320,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             actionFilters,
             mlIndicesHandler,
             client,
+            sdkClient,
             mlEngine,
             connectorAccessControlHelper,
             settings,
@@ -357,6 +362,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             actionFilters,
             mlIndicesHandler,
             client,
+            sdkClient,
             mlEngine,
             connectorAccessControlHelper,
             settings,
@@ -401,6 +407,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             actionFilters,
             mlIndicesHandler,
             client,
+            sdkClient,
             mlEngine,
             connectorAccessControlHelper,
             settings,
@@ -467,6 +474,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             actionFilters,
             mlIndicesHandler,
             client,
+            sdkClient,
             mlEngine,
             connectorAccessControlHelper,
             settings,

@@ -45,6 +45,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -58,6 +59,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+
+    @Mock
+    SdkClient sdkClient;
 
     @Mock
     TransportService transportService;
@@ -93,7 +97,14 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
         Settings settings = Settings.builder().build();
         deleteConnectorTransportAction = spy(
-            new DeleteConnectorTransportAction(transportService, actionFilters, client, xContentRegistry, connectorAccessControlHelper)
+            new DeleteConnectorTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                xContentRegistry,
+                connectorAccessControlHelper
+            )
         );
 
         doAnswer(invocation -> {

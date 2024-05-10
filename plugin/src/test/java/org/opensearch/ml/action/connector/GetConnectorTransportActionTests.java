@@ -36,6 +36,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -46,6 +47,9 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+
+    @Mock
+    SdkClient sdkClient;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -75,7 +79,14 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
 
         getConnectorTransportAction = spy(
-            new GetConnectorTransportAction(transportService, actionFilters, client, xContentRegistry, connectorAccessControlHelper)
+            new GetConnectorTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                xContentRegistry,
+                connectorAccessControlHelper
+            )
         );
 
         doAnswer(invocation -> {
