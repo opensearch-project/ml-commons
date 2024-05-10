@@ -149,16 +149,18 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                     RestStatus.FORBIDDEN
                                                 )
                                             );
-                                    } else if (isModelNotDeployed(mlModelState)) {
-                                        deleteModel(modelId, isHidden, actionListener);
                                     } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                    RestStatus.BAD_REQUEST
-                                                )
-                                            );
+                                        if (isModelNotDeployed(mlModelState)) {
+                                            deleteModel(modelId, isHidden, actionListener);
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                        RestStatus.BAD_REQUEST
+                                                    )
+                                                );
+                                        }
                                     }
                                 }, e -> {
                                     log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);

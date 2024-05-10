@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.bulk.BulkRequest;
-import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -248,17 +247,18 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                         }
                         syncUpInput.setDeployToAllNodes(deployToAllNodes);
-                        ActionListener<BulkResponse> actionListener = ActionListener.wrap(bulkResponse -> {
+                        client.bulk(bulkRequest, ActionListener.wrap(bulkResponse -> {
                             log
                                 .debug(
                                     "updated model state as undeployed for : {}",
                                     Arrays.toString(actualRemovedNodesMap.keySet().toArray(new String[0]))
                                 );
-                        }, e -> { log.error("Failed to update model state as undeployed", e); });
-                        client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> {
                             syncUpUndeployedModels(syncUpRequest, ActionListener.wrap(syncUpNodesResponse -> {
                                 wrappedListener.onResponse(new MLUndeployModelsResponse(r));
                             }, wrappedListener::onFailure));
+                        }, e -> {
+                            log.error("Failed to update model state as undeployed", e);
+                            wrappedListener.onFailure(e);
                         }));
                     } else {
                         syncUpUndeployedModels(syncUpRequest, ActionListener.wrap(syncUpNodesResponse -> {
@@ -270,6 +270,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                     listener.onFailure(e);
                 }
             } else {
+                log.warn("MLUndeployModelNodesResponse has null MLUndeployModelNodeResponse");
                 listener.onResponse(new MLUndeployModelsResponse(r));
             }
         }, listener::onFailure));
