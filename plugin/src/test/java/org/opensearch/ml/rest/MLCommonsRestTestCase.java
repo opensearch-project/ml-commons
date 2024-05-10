@@ -644,7 +644,8 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     public void deleteModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
-        Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/models/" + modelId, null, "", null);
+        TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/models/" + modelId, null, "", null);
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/models/" + modelId, null, "", null);
         verifyResponse(function, response);
     }
 
