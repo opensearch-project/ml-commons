@@ -36,7 +36,7 @@ import org.opensearch.sdk.PutCustomRequest;
 import org.opensearch.sdk.PutCustomResponse;
 import org.opensearch.sdk.SdkClient;
 
-public class XContentClient implements SdkClient {
+public class XContentClient extends SdkClient {
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;

@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
@@ -282,12 +281,6 @@ import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
-import org.opensearch.sdk.DeleteCustomRequest;
-import org.opensearch.sdk.DeleteCustomResponse;
-import org.opensearch.sdk.GetCustomRequest;
-import org.opensearch.sdk.GetCustomResponse;
-import org.opensearch.sdk.PutCustomRequest;
-import org.opensearch.sdk.PutCustomResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
@@ -641,26 +634,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
-        // We can't inject the implementation here with interface as key because Node.java uses runtime class
-        // of the instance. This is a hacky workaround that we can hopefully remove if client is injected elsewhere
-        SdkClient sdkClient = new SdkClient() {
-            private final SdkClient impl = new XContentClient(client, xContentRegistry);
-
-            @Override
-            public CompletionStage<PutCustomResponse> putCustom(PutCustomRequest request) {
-                return impl.putCustom(request);
-            }
-
-            @Override
-            public CompletionStage<GetCustomResponse> getCustom(GetCustomRequest request) {
-                return impl.getCustom(request);
-            }
-
-            @Override
-            public CompletionStage<DeleteCustomResponse> deleteCustom(DeleteCustomRequest request) {
-                return impl.deleteCustom(request);
-            }
-        };
+        SdkClient sdkClient = new SdkClient();
+        sdkClient.setImplementation(new XContentClient(client, xContentRegistry));
 
         return ImmutableList
             .of(
