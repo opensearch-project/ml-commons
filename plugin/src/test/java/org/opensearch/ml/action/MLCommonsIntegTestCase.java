@@ -8,6 +8,7 @@ package org.opensearch.ml.action;
 import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 import static org.opensearch.ml.utils.TestData.TARGET_FIELD;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
@@ -93,14 +94,26 @@ import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.test.ParameterizedStaticSettingsOpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
-public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
+public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearchIntegTestCase {
     private Gson gson = new Gson();
+
+    /**
+     * set ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS to 0 to disable ML_COMMONS_SYNC_UP_JOB
+     * the cluster will be pre-created with the settings at startup
+     */
+    public MLCommonsIntegTestCase() {
+        super(Settings.builder().put(ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS.getKey(), 0).build());
+    }
+
+    public MLCommonsIntegTestCase(Settings nodeSettings) {
+        super(nodeSettings);
+    }
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
