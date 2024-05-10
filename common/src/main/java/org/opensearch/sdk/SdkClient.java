@@ -10,11 +10,22 @@ package org.opensearch.sdk;
 
 import java.util.concurrent.CompletionStage;
 
-public interface SdkClient {
+public class SdkClient {
+    private SdkClient impl;
+    
+    public void setImplementation(SdkClient impl) {
+        this.impl = impl;
+    }
 
-    CompletionStage<PutCustomResponse> putCustom(PutCustomRequest request);
+    public CompletionStage<PutCustomResponse> putCustom(PutCustomRequest request) {
+        return impl.putCustom(request);
+    }
 
-    CompletionStage<GetCustomResponse> getCustom(GetCustomRequest request);
+    public CompletionStage<GetCustomResponse> getCustom(GetCustomRequest request) {
+        return impl.getCustom(request);
+    }
 
-    CompletionStage<DeleteCustomResponse> deleteCustom(DeleteCustomRequest request);
+    public CompletionStage<DeleteCustomResponse> deleteCustom(DeleteCustomRequest request) {
+        return impl.deleteCustom(request);
+    }
 }
