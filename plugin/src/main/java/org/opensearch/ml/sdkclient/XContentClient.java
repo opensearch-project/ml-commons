@@ -79,7 +79,7 @@ public class XContentClient implements SdkClient {
                     .complete(
                         new GetCustomResponse.Builder().id(r.getId()).custom(request.clazz().cast(new Object()).parse(parser)).build()
                     );
-            } catch (Exception e) {
+            } catch (IOException e) {
                 // Parsing error
                 future.completeExceptionally(e);
             }
