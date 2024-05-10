@@ -110,6 +110,12 @@ public interface Connector extends ToXContentObject, Writeable, Custom {
             throw illegalArgumentException;
         }
     }
+    
+
+    @Override
+    default Custom parse(XContentParser parser) throws IOException {
+        return createConnector(parser);
+    }
 
     @SuppressWarnings("removal")
     static Connector createConnector(XContentParser parser) throws IOException {

@@ -11,9 +11,11 @@ package org.opensearch.sdk;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentParser;
 
+import java.io.IOException;
+
 /**
  * Custom metadata.
  */
 public interface Custom extends ToXContentObject {
-    Custom parse(XContentParser parser);
+    Custom parse(XContentParser parser) throws IOException;
 }
