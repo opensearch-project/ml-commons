@@ -45,6 +45,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
@@ -209,6 +210,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
                 MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<MLUndeployModelsResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
                     if (actualRemovedNodesMap.size() > 0) {
                         BulkRequest bulkRequest = new BulkRequest();
                         Map<String, Boolean> deployToAllNodes = new HashMap<>();
@@ -246,20 +248,30 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                         }
                         syncUpInput.setDeployToAllNodes(deployToAllNodes);
-                        ActionListener<BulkResponse> actionListener = ActionListener.runBefore(ActionListener.wrap(bulkResponse -> {
+                        ActionListener<BulkResponse> actionListener = ActionListener.wrap(bulkResponse -> {
                             log
                                 .debug(
                                     "updated model state as undeployed for : {}",
                                     Arrays.toString(actualRemovedNodesMap.keySet().toArray(new String[0]))
                                 );
-                        }, e -> { log.error("Failed to update model state as undeployed", e); }), context::restore);
-                        client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> { syncUpUndeployedModels(syncUpRequest); }));
+                        }, e -> { log.error("Failed to update model state as undeployed", e); });
+                        client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> {
+                            syncUpUndeployedModels(syncUpRequest, ActionListener.wrap(syncUpNodesResponse -> {
+                                wrappedListener.onResponse(new MLUndeployModelsResponse(r));
+                            }, wrappedListener::onFailure));
+                        }));
                     } else {
-                        syncUpUndeployedModels(syncUpRequest);
+                        syncUpUndeployedModels(syncUpRequest, ActionListener.wrap(syncUpNodesResponse -> {
+                            wrappedListener.onResponse(new MLUndeployModelsResponse(r));
+                        }, wrappedListener::onFailure));
                     }
+                } catch (Exception e) {
+                    log.error("Failed to sync up removed node", e);
+                    listener.onFailure(e);
                 }
+            } else {
+                listener.onResponse(new MLUndeployModelsResponse(r));
             }
-            listener.onResponse(new MLUndeployModelsResponse(r));
         }, listener::onFailure));
     }
 
@@ -345,13 +357,13 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         return removedNodesMap;
     }
 
-    private void syncUpUndeployedModels(MLSyncUpNodesRequest syncUpRequest) {
-        client
-            .execute(
-                MLSyncUpAction.INSTANCE,
-                syncUpRequest,
-                ActionListener
-                    .wrap(r -> log.debug("sync up removed nodes successfully"), e -> log.error("failed to sync up removed node", e))
-            );
+    private void syncUpUndeployedModels(MLSyncUpNodesRequest syncUpRequest, ActionListener<MLSyncUpNodesResponse> listener) {
+        client.execute(MLSyncUpAction.INSTANCE, syncUpRequest, ActionListener.wrap(r -> {
+            listener.onResponse(r);
+            log.debug("Sync up removed nodes successfully");
+        }, e -> {
+            listener.onFailure(e);
+            log.error("Failed to sync up removed node", e);
+        }));
     }
 }
