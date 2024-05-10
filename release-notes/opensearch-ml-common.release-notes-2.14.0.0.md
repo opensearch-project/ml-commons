@@ -9,7 +9,7 @@ Compatible with OpenSearch 2.14.0.0
 
 ### Enhancements
 * Change httpclient to async ([#1958](https://github.com/opensearch-project/ml-commons/pull/1958))
-* Change httpclient to async bug fix ([#2418](https://github.com/opensearch-project/ml-commons/pull/2418))
+* Fix user defined preprocess function missing prediction issue ([#2418](https://github.com/opensearch-project/ml-commons/pull/2418))
 * Migrate RAG pipeline to async processing. ([#2345](https://github.com/opensearch-project/ml-commons/pull/2345))
 * Filtering hidden model info from model profiling for users other than superadmin ([#2332](https://github.com/opensearch-project/ml-commons/pull/2332))
 * check model auto deploy  ([#2288](https://github.com/opensearch-project/ml-commons/pull/2288))
