@@ -58,6 +58,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
 import org.opensearch.common.io.PathUtils;
@@ -644,9 +645,12 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     public void deleteModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
-        TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/models/" + modelId, null, "", null);
-        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/models/" + modelId, null, "", null);
-        verifyResponse(function, response);
+        try {
+            TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/models/" + modelId, null, "", null);
+        } catch (ResponseException e) {
+            Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/models/" + modelId, null, "", null);
+            verifyResponse(function, response);
+        }
     }
 
     public void deleteTask(RestClient client, String taskId, Consumer<Map<String, Object>> function) throws IOException {
