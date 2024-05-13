@@ -25,6 +25,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -846,6 +847,9 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     public Map getModelProfile(String modelId, Consumer verifyFunction) throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/profile/models/" + modelId, null, (String) null, null);
         Map profile = parseResponseToMap(response);
+        if (profile == null || profile.get("nodes") == null) {
+            return new HashMap();
+        }
         Map<String, Object> nodeProfiles = (Map) profile.get("nodes");
         for (Map.Entry<String, Object> entry : nodeProfiles.entrySet()) {
             Map<String, Object> modelProfiles = (Map) entry.getValue();
@@ -897,6 +901,17 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             if (modelProfile.containsKey("model_state")) {
                 assertEquals(MLModelState.DEPLOYED.name(), modelProfile.get("model_state"));
                 assertTrue(((String) modelProfile.get("predictor")).startsWith("org.opensearch.ml.engine.algorithms.TextEmbeddingModel@"));
+            }
+            List<String> workNodes = (List) modelProfile.get("worker_nodes");
+            assertTrue(workNodes.size() > 0);
+        };
+    }
+
+    public Consumer<Map<String, Object>> verifyRemoteModelDeployed() {
+        return (modelProfile) -> {
+            if (modelProfile.containsKey("model_state")) {
+                assertEquals(MLModelState.DEPLOYED.name(), modelProfile.get("model_state"));
+                assertTrue(((String) modelProfile.get("predictor")).startsWith("org.opensearch.ml.engine.algorithms.remote.RemoteModel@"));
             }
             List<String> workNodes = (List) modelProfile.get("worker_nodes");
             assertTrue(workNodes.size() > 0);
