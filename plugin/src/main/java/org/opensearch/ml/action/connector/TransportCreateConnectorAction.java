@@ -37,7 +37,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.sdk.PutCustomRequest;
+import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -130,7 +130,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
-                    .putCustomAsync(new PutCustomRequest.Builder().index(ML_CONNECTOR_INDEX).custom(connector).build())
+                    .putDataObjectAsync(new PutDataObjectRequest.Builder().index(ML_CONNECTOR_INDEX).dataObject(connector).build())
                     .whenCompleteAsync((r, throwable) -> {
                         if (throwable != null) {
                             listener.onFailure(new RuntimeException(throwable));

@@ -31,7 +31,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
-import org.opensearch.sdk.Custom;
+import org.opensearch.sdk.DataObject;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -39,7 +39,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 /**
  * Connector defines how to connect to a remote service.
  */
-public interface Connector extends ToXContentObject, Writeable, Custom {
+public interface Connector extends ToXContentObject, Writeable, DataObject {
 
     String getName();
     String getProtocol();
@@ -112,7 +112,7 @@ public interface Connector extends ToXContentObject, Writeable, Custom {
     }
     
     @Override
-    default Custom parse(XContentParser parser) throws IOException {
+    default DataObject parse(XContentParser parser) throws IOException {
         return createConnector(parser);
     }
 

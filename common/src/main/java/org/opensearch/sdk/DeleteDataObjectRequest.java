@@ -8,17 +8,19 @@
  */
 package org.opensearch.sdk;
 
-public class DeleteCustomRequest {
+public class DeleteDataObjectRequest {
 
     private final String index;
     private final String id;
 
     /**
-     * Instantiate this request with an index and id
+     * Instantiate this request with an index and id.
+     * <p>
+     * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param index the index location to delete the object
      * @param id the document id
      */
-    public DeleteCustomRequest(String index, String id) {
+    public DeleteDataObjectRequest(String index, String id) {
         this.index = index;
         this.id = id;
     }
@@ -73,10 +75,10 @@ public class DeleteCustomRequest {
 
         /**
          * Builds the object
-         * @return A {@link DeleteCustomRequest}
+         * @return A {@link DeleteDataObjectRequest}
          */
-        public DeleteCustomRequest build() {
-            return new DeleteCustomRequest(this.index, this.id);
+        public DeleteDataObjectRequest build() {
+            return new DeleteDataObjectRequest(this.index, this.id);
         }
     }
 }

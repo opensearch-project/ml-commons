@@ -10,21 +10,23 @@ package org.opensearch.sdk;
 
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
-public class GetCustomRequest {
+public class GetDataObjectRequest {
 
     private final String index;
     private final String id;
     private final FetchSourceContext fetchSourceContext;
-    private final Class<? extends Custom> clazz;
+    private final Class<? extends DataObject> clazz;
 
     /**
      * Instantiate this request with an index and id
+     * <p>
+     * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param index the index location to get the object
      * @param id the document id
      * @param fetchSourceContext the context to use when fetching _source
-     * @param clazz the type of Custom object to parse
+     * @param clazz the type of data object to parse
      */
-    public GetCustomRequest(String index, String id, FetchSourceContext fetchSourceContext, Class<? extends Custom> clazz) {
+    public GetDataObjectRequest(String index, String id, FetchSourceContext fetchSourceContext, Class<? extends DataObject> clazz) {
         this.index = index;
         this.id = id;
         this.fetchSourceContext = fetchSourceContext;
@@ -56,10 +58,10 @@ public class GetCustomRequest {
     }
     
     /**
-     * Returns the Custom Class type
+     * Returns the Data Object Class type
      * @return the class type
      */
-    public Class<? extends Custom> clazz() {
+    public Class<? extends DataObject> clazz() {
         return this.clazz;
     }
 
@@ -70,7 +72,7 @@ public class GetCustomRequest {
         private String index = null;
         private String id = null;
         private FetchSourceContext fetchSourceContext;
-        private Class<? extends Custom> clazz = null;
+        private Class<? extends DataObject> clazz = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -102,7 +104,7 @@ public class GetCustomRequest {
          * @param clazz the class type
          * @return the updated builder
          */
-        public Builder clazz(Class<? extends Custom> clazz) {
+        public Builder clazz(Class<? extends DataObject> clazz) {
             this.clazz = clazz;
             return this;
         }
@@ -113,11 +115,11 @@ public class GetCustomRequest {
         }
 
         /**
-         * Builds the object
-         * @return A {@link GetCustomRequest}
+         * Builds the request
+         * @return A {@link GetDataObjectRequest}
          */
-        public GetCustomRequest build() {
-            return new GetCustomRequest(this.index, this.id, this.fetchSourceContext, this.clazz);
+        public GetDataObjectRequest build() {
+            return new GetDataObjectRequest(this.index, this.id, this.fetchSourceContext, this.clazz);
         }
 
     }

@@ -8,13 +8,20 @@
  */
 package org.opensearch.sdk;
 
-public class PutCustomResponse {
+public class GetDataObjectResponse {
     private final String id;
-    private final boolean created;
+    private final DataObject dataObject;
 
-    public PutCustomResponse(String id, boolean created) {
+    /**
+     * Instantiate this request with an id and data object.
+     * <p>
+     * For data storage implementations other than OpenSearch, the id may be referred to as a primary key and the data object an Item or Row.
+     * @param id the document id
+     * @param deleted Whether the object was deleted. Use {@code false} if the object was not found.
+     */
+    public GetDataObjectResponse(String id, DataObject dataObject) {
         this.id = id;
-        this.created = created;
+        this.dataObject = dataObject;
     }
 
     /**
@@ -22,15 +29,15 @@ public class PutCustomResponse {
      * @return the id
      */
     public String id() {
-        return id;
+        return this.id;
     }
 
     /**
-     * Returns whether creation was successful
-     * @return true if creation was successful
+     * Returns the data object
+     * @return the data object
      */
-    public boolean created() {
-        return created;
+    public DataObject dataObject() {
+        return this.dataObject;
     }
 
     /**
@@ -38,7 +45,7 @@ public class PutCustomResponse {
      */
     public static class Builder {
         private String id = null;
-        private boolean created = false;
+        private DataObject dataObject = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -56,21 +63,21 @@ public class PutCustomResponse {
         }
 
         /**
-         * Add a created status to this builder
-         * @param created the created status to add
+         * Add a data object to this builder
+         * @param dataObject the data object
          * @return the updated builder
          */
-        public Builder created(boolean created) {
-            this.created = created;
+        public Builder dataObject(DataObject dataObject) {
+            this.dataObject = dataObject;
             return this;
         }
 
         /**
          * Builds the object
-         * @return A {@link PutCustomResponse}
+         * @return A {@link GetDataObjectResponse}
          */
-        public PutCustomResponse build() {
-            return new PutCustomResponse(this.id, this.created);
+        public GetDataObjectResponse build() {
+            return new GetDataObjectResponse(this.id, this.dataObject);
         }
     }
 }

@@ -15,23 +15,23 @@ import java.util.concurrent.CompletionStage;
 public interface SdkClient {
 
     /**
-     * Create/Put/Index an object/document into a table/index.
-     * @param request A request encapsulating the data to store
+     * Create/Put/Index a data object/document into a table/index.
+     * @param request A request encapsulating the data object to store
      * @return A completion stage encapsulating the response or exception
      */
-    public CompletionStage<PutCustomResponse> putCustomAsync(PutCustomRequest request);
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request);
 
     /**
-     * Create/Put/Index an object/document into a table/index.
-     * @param request A request encapsulating the data to store
+     * Create/Put/Index a data object/document into a table/index.
+     * @param request A request encapsulating the data object to store
      * @return A response on success.
      * @throws {@link OpenSearchException} wrapping the cause on exception.
      */
-    default PutCustomResponse putCustom(PutCustomRequest request) {
+    default PutDataObjectResponse putDataObject(PutDataObjectRequest request) {
         try {
-            return putCustomAsync(request).toCompletableFuture().join();
-        } catch (CompletionException ce) {
-            Throwable cause = ce.getCause();
+            return putDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
             if (cause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
@@ -40,24 +40,24 @@ public interface SdkClient {
     }
 
     /**
-     * Read/Get an object/document from a table/index.
-     * @param request A request identifying the data to retrieve
+     * Read/Get a data object/document from a table/index.
+     * @param request A request identifying the data object to retrieve
      * @return A response on success.
      * @throws {@link OpenSearchException} wrapping the cause on exception.
      */
-    public CompletionStage<GetCustomResponse> getCustomAsync(GetCustomRequest request);
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request);
 
     /**
-     * Read/Get an object/document from a table/index.
-     * @param request A request identifying the data to retrieve
+     * Read/Get a data object/document from a table/index.
+     * @param request A request identifying the data object to retrieve
      * @return A response on success.
      * @throws {@link OpenSearchException} wrapping the cause on exception.
      */
-    default GetCustomResponse getCustom(GetCustomRequest request) {
+    default GetDataObjectResponse getDataObject(GetDataObjectRequest request) {
         try {
-            return getCustomAsync(request).toCompletableFuture().join();
-        } catch (CompletionException ce) {
-            Throwable cause = ce.getCause();
+            return getDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
             if (cause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
@@ -66,27 +66,26 @@ public interface SdkClient {
     }
 
     /**
-     * Delete an object/document from a table/index.
-     * @param request A request identifying the data to delete
+     * Delete a data object/document from a table/index.
+     * @param request A request identifying the data object to delete
      * @return A completion stage encapsulating the response or exception
      */
-    public CompletionStage<DeleteCustomResponse> deleteCustomAsync(DeleteCustomRequest request);
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request);
 
     /**
-     * Delete an object/document from a table/index.
-     * @param request A request identifying the data to delete
+     * Delete a data object/document from a table/index.
+     * @param request A request identifying the data object to delete
      * @return A completion stage encapsulating the response or exception
      */
-    default DeleteCustomResponse deleteCustom(DeleteCustomRequest request) {
+    default DeleteDataObjectResponse deleteDataObject(DeleteDataObjectRequest request) {
         try {
-            return deleteCustomAsync(request).toCompletableFuture().join();
-        } catch (CompletionException ce) {
-            Throwable cause = ce.getCause();
+            return deleteDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause();
             if (cause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             throw new OpenSearchException(cause);
         }
     }
-    
 }
