@@ -130,7 +130,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
-                    .putCustom(new PutCustomRequest.Builder().index(ML_CONNECTOR_INDEX).custom(connector).build())
+                    .putCustomAsync(new PutCustomRequest.Builder().index(ML_CONNECTOR_INDEX).custom(connector).build())
                     .whenCompleteAsync((r, throwable) -> {
                         if (throwable != null) {
                             listener.onFailure(new RuntimeException(throwable));

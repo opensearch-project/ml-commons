@@ -69,7 +69,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                .getCustom(
+                .getCustomAsync(
                     new GetCustomRequest.Builder().index(ML_CONNECTOR_INDEX).id(connectorId).fetchSourceContext(fetchSourceContext).build()
                 )
                 .whenCompleteAsync((r, throwable) -> {

@@ -125,7 +125,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                .deleteCustom(new DeleteCustomRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
+                .deleteCustomAsync(new DeleteCustomRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
                 .whenCompleteAsync((r, throwable) -> {
                     if (throwable != null) {
                         actionListener.onFailure(new RuntimeException(throwable));
