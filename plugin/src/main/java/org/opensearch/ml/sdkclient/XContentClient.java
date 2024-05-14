@@ -36,7 +36,7 @@ import org.opensearch.sdk.PutCustomRequest;
 import org.opensearch.sdk.PutCustomResponse;
 import org.opensearch.sdk.SdkClient;
 
-public class XContentClient extends SdkClient {
+public class XContentClient implements SdkClient {
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
@@ -47,7 +47,7 @@ public class XContentClient extends SdkClient {
     }
 
     @Override
-    public CompletionStage<PutCustomResponse> putCustom(PutCustomRequest request) {
+    public CompletionStage<PutCustomResponse> putCustomAsync(PutCustomRequest request) {
         CompletableFuture<PutCustomResponse> future = new CompletableFuture<>();
         try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
             client
@@ -69,7 +69,7 @@ public class XContentClient extends SdkClient {
     }
 
     @Override
-    public CompletionStage<GetCustomResponse> getCustom(GetCustomRequest request) {
+    public CompletionStage<GetCustomResponse> getCustomAsync(GetCustomRequest request) {
         CompletableFuture<GetCustomResponse> future = new CompletableFuture<>();
         client.get(new GetRequest(request.index(), request.id()), ActionListener.wrap(r -> {
             try {
@@ -88,7 +88,7 @@ public class XContentClient extends SdkClient {
     }
 
     @Override
-    public CompletionStage<DeleteCustomResponse> deleteCustom(DeleteCustomRequest request) {
+    public CompletionStage<DeleteCustomResponse> deleteCustomAsync(DeleteCustomRequest request) {
         CompletableFuture<DeleteCustomResponse> future = new CompletableFuture<>();
         client
             .delete(

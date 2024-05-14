@@ -26,6 +26,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Module;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.IndexScopedSettings;
 import org.opensearch.common.settings.Setting;
@@ -200,7 +201,6 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
@@ -281,7 +281,6 @@ import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
-import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
@@ -358,7 +357,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
-        return ImmutableList
+        return List
             .of(
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
@@ -419,6 +418,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class),
                 new ActionHandler<>(MLConfigGetAction.INSTANCE, GetConfigTransportAction.class)
             );
+    }
+
+    @Override
+    public Collection<Module> createGuiceModules() {
+        return List.of(new SdkClientModule());
     }
 
     @SneakyThrows
@@ -634,10 +638,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
-        SdkClient sdkClient = new SdkClient();
-        sdkClient.setImplementation(new XContentClient(client, xContentRegistry));
+        XContentClient xContentClient = new XContentClient(client, xContentRegistry);
 
-        return ImmutableList
+        return List
             .of(
                 encryptor,
                 mlEngine,
@@ -664,7 +667,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
                 cmHandler,
-                sdkClient
+                xContentClient
             );
     }
 
@@ -733,7 +736,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
-        return ImmutableList
+        return List
             .of(
                 restMLStatsAction,
                 restMLTrainingAction,
@@ -848,7 +851,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             false
         );
 
-        return ImmutableList
+        return List
             .of(
                 generalThreadPool,
                 registerModelThreadPool,
@@ -862,7 +865,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public List<NamedXContentRegistry.Entry> getNamedXContent() {
-        return ImmutableList
+        return List
             .of(
                 KMeansParams.XCONTENT_REGISTRY,
                 LinearRegressionParams.XCONTENT_REGISTRY,
@@ -882,7 +885,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public List<Setting<?>> getSettings() {
-        List<Setting<?>> settings = ImmutableList
+        List<Setting<?>> settings = List
             .of(
                 MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY,
                 MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE,
