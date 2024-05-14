@@ -13,12 +13,16 @@ import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.aws.AwsSdk2Transport;
 import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
 import org.opensearch.common.inject.AbstractModule;
+import org.opensearch.core.common.Strings;
 import org.opensearch.sdk.SdkClient;
 
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 
+/**
+ * A module for binding this plugin's desired implementation of {@link SdkClient}.
+ */
 public class SdkClientModule extends AbstractModule {
 
     // Constants to configure the remote client
@@ -27,7 +31,7 @@ public class SdkClientModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        boolean local = System.getenv(REMOTE_METADATA_ENDPOINT).isBlank();
+        boolean local = Strings.isNullOrEmpty(System.getenv(REMOTE_METADATA_ENDPOINT));
         if (local) {
             bind(SdkClient.class).to(LocalClusterIndicesClient.class);
         } else {
@@ -35,7 +39,7 @@ public class SdkClientModule extends AbstractModule {
         }
     }
 
-    OpenSearchClient createOpenSearchClient() {
+    private OpenSearchClient createOpenSearchClient() {
         SdkHttpClient httpClient = ApacheHttpClient.builder().build();
         try {
             return new OpenSearchClient(

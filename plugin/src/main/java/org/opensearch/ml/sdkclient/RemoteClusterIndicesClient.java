@@ -24,31 +24,41 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
-import org.opensearch.sdk.Custom;
-import org.opensearch.sdk.DeleteCustomRequest;
-import org.opensearch.sdk.DeleteCustomResponse;
-import org.opensearch.sdk.GetCustomRequest;
-import org.opensearch.sdk.GetCustomResponse;
-import org.opensearch.sdk.PutCustomRequest;
-import org.opensearch.sdk.PutCustomResponse;
+import org.opensearch.sdk.DataObject;
+import org.opensearch.sdk.DeleteDataObjectRequest;
+import org.opensearch.sdk.DeleteDataObjectResponse;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.GetDataObjectResponse;
+import org.opensearch.sdk.PutDataObjectRequest;
+import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 
+/**
+ * An implementation of {@link SdkClient} that stores data in a remote OpenSearch cluster using the OpenSearch Java Client.
+ */
 public class RemoteClusterIndicesClient implements SdkClient {
 
     private OpenSearchClient openSearchClient;
 
+    /**
+     * Instantiate this object with an OpenSearch Java client.
+     * @param openSearchClient The client to wrap
+     */
     public RemoteClusterIndicesClient(OpenSearchClient openSearchClient) {
         this.openSearchClient = openSearchClient;
     }
 
     @Override
-    public CompletionStage<PutCustomResponse> putCustomAsync(PutCustomRequest request) {
-        CompletableFuture<PutCustomResponse> future = new CompletableFuture<>();
-        IndexRequest<?> indexRequest = new IndexRequest.Builder<>().index(request.index()).document(request.custom()).build();
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request) {
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
+        IndexRequest<?> indexRequest = new IndexRequest.Builder<>().index(request.index()).document(request.dataObject()).build();
         AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
             try {
                 IndexResponse indexResponse = openSearchClient.index(indexRequest);
-                future.complete(new PutCustomResponse.Builder().id(indexResponse.id()).created(indexResponse.result() == Created).build());
+                future
+                    .complete(
+                        new PutDataObjectResponse.Builder().id(indexResponse.id()).created(indexResponse.result() == Created).build()
+                    );
             } catch (IOException e) {
                 future.completeExceptionally(e);
             }
@@ -58,13 +68,13 @@ public class RemoteClusterIndicesClient implements SdkClient {
     }
 
     @Override
-    public CompletionStage<GetCustomResponse> getCustomAsync(GetCustomRequest request) {
-        CompletableFuture<GetCustomResponse> future = new CompletableFuture<>();
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
+        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
         GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
         AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
             try {
-                GetResponse<? extends Custom> getResponse = openSearchClient.get(getRequest, request.clazz());
-                future.complete(new GetCustomResponse.Builder().id(getResponse.id()).custom(getResponse.source()).build());
+                GetResponse<? extends DataObject> getResponse = openSearchClient.get(getRequest, request.clazz());
+                future.complete(new GetDataObjectResponse.Builder().id(getResponse.id()).dataObject(getResponse.source()).build());
             } catch (IOException e) {
                 future.completeExceptionally(e);
             }
@@ -74,15 +84,15 @@ public class RemoteClusterIndicesClient implements SdkClient {
     }
 
     @Override
-    public CompletionStage<DeleteCustomResponse> deleteCustomAsync(DeleteCustomRequest request) {
-        CompletableFuture<DeleteCustomResponse> future = new CompletableFuture<>();
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
+        CompletableFuture<DeleteDataObjectResponse> future = new CompletableFuture<>();
         DeleteRequest deleteRequest = new DeleteRequest.Builder().index(request.index()).id(request.id()).build();
         AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
             try {
                 DeleteResponse deleteResponse = openSearchClient.delete(deleteRequest);
                 future
                     .complete(
-                        new DeleteCustomResponse.Builder().id(deleteResponse.id()).deleted(deleteResponse.result() == Deleted).build()
+                        new DeleteDataObjectResponse.Builder().id(deleteResponse.id()).deleted(deleteResponse.result() == Deleted).build()
                     );
             } catch (IOException e) {
                 future.completeExceptionally(e);

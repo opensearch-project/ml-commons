@@ -25,7 +25,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.sdk.GetCustomRequest;
+import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
@@ -69,8 +69,12 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                .getCustomAsync(
-                    new GetCustomRequest.Builder().index(ML_CONNECTOR_INDEX).id(connectorId).fetchSourceContext(fetchSourceContext).build()
+                .getDataObjectAsync(
+                    new GetDataObjectRequest.Builder()
+                        .index(ML_CONNECTOR_INDEX)
+                        .id(connectorId)
+                        .fetchSourceContext(fetchSourceContext)
+                        .build()
                 )
                 .whenCompleteAsync((r, throwable) -> {
                     if (throwable != null) {
@@ -78,7 +82,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     } else {
                         context.restore();
                         log.debug("Completed Get Connector Request, id:{}", connectorId);
-                        Connector mlConnector = Connector.class.cast(r.custom());
+                        Connector mlConnector = Connector.class.cast(r.dataObject());
                         mlConnector.removeCredential();
                         if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                             actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());

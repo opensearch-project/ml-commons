@@ -28,36 +28,45 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.sdk.DeleteCustomRequest;
-import org.opensearch.sdk.DeleteCustomResponse;
-import org.opensearch.sdk.GetCustomRequest;
-import org.opensearch.sdk.GetCustomResponse;
-import org.opensearch.sdk.PutCustomRequest;
-import org.opensearch.sdk.PutCustomResponse;
+import org.opensearch.sdk.DeleteDataObjectRequest;
+import org.opensearch.sdk.DeleteDataObjectResponse;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.GetDataObjectResponse;
+import org.opensearch.sdk.PutDataObjectRequest;
+import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 
+/**
+ * An implementation of {@link SdkClient} that stores data in a local OpenSearch cluster using the Node Client.
+ */
 public class LocalClusterIndicesClient implements SdkClient {
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
 
+    /**
+     * Instantiate this object with an OpenSearch client.
+     * @param openSearchClient The client to wrap
+     * @param xContentRegistry the registry of XContent objects
+     */
     public LocalClusterIndicesClient(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
     }
 
     @Override
-    public CompletionStage<PutCustomResponse> putCustomAsync(PutCustomRequest request) {
-        CompletableFuture<PutCustomResponse> future = new CompletableFuture<>();
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request) {
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
         try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
             client
                 .index(
                     new IndexRequest(request.index())
                         .setRefreshPolicy(IMMEDIATE)
-                        .source(request.custom().toXContent(sourceBuilder, EMPTY_PARAMS)),
+                        .source(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS)),
                     ActionListener
                         .wrap(
-                            r -> future.complete(new PutCustomResponse.Builder().id(r.getId()).created(r.getResult() == CREATED).build()),
+                            r -> future
+                                .complete(new PutDataObjectResponse.Builder().id(r.getId()).created(r.getResult() == CREATED).build()),
                             future::completeExceptionally
                         )
                 );
@@ -69,15 +78,18 @@ public class LocalClusterIndicesClient implements SdkClient {
     }
 
     @Override
-    public CompletionStage<GetCustomResponse> getCustomAsync(GetCustomRequest request) {
-        CompletableFuture<GetCustomResponse> future = new CompletableFuture<>();
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
+        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
         client.get(new GetRequest(request.index(), request.id()), ActionListener.wrap(r -> {
             try {
                 XContentParser parser = jsonXContent
                     .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString());
                 future
                     .complete(
-                        new GetCustomResponse.Builder().id(r.getId()).custom(request.clazz().cast(new Object()).parse(parser)).build()
+                        new GetDataObjectResponse.Builder()
+                            .id(r.getId())
+                            .dataObject(request.clazz().cast(new Object()).parse(parser))
+                            .build()
                     );
             } catch (IOException e) {
                 // Parsing error
@@ -88,14 +100,15 @@ public class LocalClusterIndicesClient implements SdkClient {
     }
 
     @Override
-    public CompletionStage<DeleteCustomResponse> deleteCustomAsync(DeleteCustomRequest request) {
-        CompletableFuture<DeleteCustomResponse> future = new CompletableFuture<>();
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
+        CompletableFuture<DeleteDataObjectResponse> future = new CompletableFuture<>();
         client
             .delete(
                 new DeleteRequest(request.index(), request.id()),
                 ActionListener
                     .wrap(
-                        r -> future.complete(new DeleteCustomResponse.Builder().id(r.getId()).deleted(r.getResult() == DELETED).build()),
+                        r -> future
+                            .complete(new DeleteDataObjectResponse.Builder().id(r.getId()).deleted(r.getResult() == DELETED).build()),
                         future::completeExceptionally
                     )
             );

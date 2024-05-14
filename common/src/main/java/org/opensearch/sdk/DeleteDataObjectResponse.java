@@ -8,11 +8,18 @@
  */
 package org.opensearch.sdk;
 
-public class DeleteCustomResponse {
+public class DeleteDataObjectResponse {
     private final String id;
     private final boolean deleted;
 
-    public DeleteCustomResponse(String id, boolean deleted) {
+    /**
+     * Instantiate this request with an id and deletion status.
+     * <p>
+     * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
+     * @param id the document id
+     * @param deleted Whether the object was deleted. Use {@code false} if the object was not found.
+     */
+    public DeleteDataObjectResponse(String id, boolean deleted) {
         this.id = id;
         this.deleted = deleted;
     }
@@ -67,10 +74,10 @@ public class DeleteCustomResponse {
 
         /**
          * Builds the object
-         * @return A {@link DeleteCustomResponse}
+         * @return A {@link DeleteDataObjectResponse}
          */
-        public DeleteCustomResponse build() {
-            return new DeleteCustomResponse(this.id, this.deleted);
+        public DeleteDataObjectResponse build() {
+            return new DeleteDataObjectResponse(this.id, this.deleted);
         }
     }
 }

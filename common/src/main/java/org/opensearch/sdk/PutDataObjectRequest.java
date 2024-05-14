@@ -8,19 +8,21 @@
  */
 package org.opensearch.sdk;
 
-public class PutCustomRequest {
+public class PutDataObjectRequest {
 
     private final String index;
-    private final Custom custom;
+    private final DataObject dataObject;
 
     /**
-     * Instantiate this request with an index and custom object
+     * Instantiate this request with an index and data object.
+     * <p>
+     * For data storage implementations other than OpenSearch, an index may be referred to as a table and the data object may be referred to as an item.
      * @param index the index location to put the object
-     * @param custom the custom object
+     * @param dataObject the data object
      */
-    public PutCustomRequest(String index, Custom custom) {
+    public PutDataObjectRequest(String index, DataObject dataObject) {
         this.index = index;
-        this.custom = custom;
+        this.dataObject = dataObject;
     }
 
     /**
@@ -32,11 +34,11 @@ public class PutCustomRequest {
     }
 
     /**
-     * Returns the custom object
-     * @return the custom object
+     * Returns the data object
+     * @return the data object
      */
-    public Custom custom() {
-        return this.custom;
+    public DataObject dataObject() {
+        return this.dataObject;
     }
 
     /**
@@ -44,7 +46,7 @@ public class PutCustomRequest {
      */
     public static class Builder {
         private String index = null;
-        private Custom custom = null;
+        private DataObject dataObject = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -62,21 +64,21 @@ public class PutCustomRequest {
         }
 
         /**
-         * Add a Custom object to this builder
-         * @param custom the Custom object
+         * Add a data object to this builder
+         * @param dataObject the data object
          * @return the updated builder
          */
-        public Builder custom(Custom custom) {
-            this.custom = custom;
+        public Builder dataObject(DataObject dataObject) {
+            this.dataObject = dataObject;
             return this;
         }
 
         /**
-         * Builds the object
-         * @return A {@link PutCustomRequest}
+         * Builds the request
+         * @return A {@link PutDataObjectRequest}
          */
-        public PutCustomRequest build() {
-            return new PutCustomRequest(this.index, this.custom);
+        public PutDataObjectRequest build() {
+            return new PutDataObjectRequest(this.index, this.dataObject);
         }
     }
 }

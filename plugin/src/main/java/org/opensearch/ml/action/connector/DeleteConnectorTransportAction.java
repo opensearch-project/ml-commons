@@ -32,7 +32,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.sdk.DeleteCustomRequest;
+import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -125,7 +125,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                .deleteCustomAsync(new DeleteCustomRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
+                .deleteDataObjectAsync(new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
                 .whenCompleteAsync((r, throwable) -> {
                     if (throwable != null) {
                         actionListener.onFailure(new RuntimeException(throwable));
