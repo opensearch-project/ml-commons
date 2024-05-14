@@ -256,7 +256,8 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
-import org.opensearch.ml.sdkclient.XContentClient;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientModule;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -653,7 +654,7 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
-        XContentClient xContentClient = new XContentClient(client, xContentRegistry);
+        LocalClusterIndicesClient localClusterIndicesClient = new LocalClusterIndicesClient(client, xContentRegistry);
 
         return List
             .of(
@@ -682,7 +683,7 @@ public class MachineLearningPlugin extends Plugin
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
                 cmHandler,
-                xContentClient
+                localClusterIndicesClient
             );
     }
 
