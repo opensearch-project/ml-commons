@@ -36,12 +36,12 @@ import org.opensearch.sdk.PutCustomRequest;
 import org.opensearch.sdk.PutCustomResponse;
 import org.opensearch.sdk.SdkClient;
 
-public class XContentClient implements SdkClient {
+public class LocalClusterIndicesClient implements SdkClient {
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
 
-    public XContentClient(Client client, NamedXContentRegistry xContentRegistry) {
+    public LocalClusterIndicesClient(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
     }
