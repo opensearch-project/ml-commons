@@ -46,7 +46,7 @@ public class LocalClusterIndicesClient implements SdkClient {
 
     /**
      * Instantiate this object with an OpenSearch client.
-     * @param openSearchClient The client to wrap
+     * @param client The client to wrap
      * @param xContentRegistry the registry of XContent objects
      */
     public LocalClusterIndicesClient(Client client, NamedXContentRegistry xContentRegistry) {
@@ -84,13 +84,7 @@ public class LocalClusterIndicesClient implements SdkClient {
             try {
                 XContentParser parser = jsonXContent
                     .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString());
-                future
-                    .complete(
-                        new GetDataObjectResponse.Builder()
-                            .id(r.getId())
-                            .dataObject(request.clazz().cast(new Object()).parse(parser))
-                            .build()
-                    );
+                future.complete(new GetDataObjectResponse.Builder().id(r.getId()).parser(parser).build());
             } catch (IOException e) {
                 // Parsing error
                 future.completeExceptionally(e);
@@ -108,7 +102,13 @@ public class LocalClusterIndicesClient implements SdkClient {
                 ActionListener
                     .wrap(
                         r -> future
-                            .complete(new DeleteDataObjectResponse.Builder().id(r.getId()).deleted(r.getResult() == DELETED).build()),
+                            .complete(
+                                new DeleteDataObjectResponse.Builder()
+                                    .id(r.getId())
+                                    .shardId(r.getShardId())
+                                    .deleted(r.getResult() == DELETED)
+                                    .build()
+                            ),
                         future::completeExceptionally
                     )
             );

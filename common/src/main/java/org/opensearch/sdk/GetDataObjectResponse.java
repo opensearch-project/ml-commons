@@ -8,20 +8,22 @@
  */
 package org.opensearch.sdk;
 
+import org.opensearch.core.xcontent.XContentParser;
+
 public class GetDataObjectResponse {
     private final String id;
-    private final DataObject dataObject;
+    private final XContentParser parser;
 
     /**
-     * Instantiate this request with an id and data object.
+     * Instantiate this request with an id and parser used to recreate the data object.
      * <p>
-     * For data storage implementations other than OpenSearch, the id may be referred to as a primary key and the data object an Item or Row.
+     * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
      * @param id the document id
-     * @param deleted Whether the object was deleted. Use {@code false} if the object was not found.
+     * @param parser an XContentParser that can be used to create the object.
      */
-    public GetDataObjectResponse(String id, DataObject dataObject) {
+    public GetDataObjectResponse(String id, XContentParser parser) {
         this.id = id;
-        this.dataObject = dataObject;
+        this.parser = parser;
     }
 
     /**
@@ -31,13 +33,13 @@ public class GetDataObjectResponse {
     public String id() {
         return this.id;
     }
-
+    
     /**
-     * Returns the data object
-     * @return the data object
+     * Returns the parser
+     * @return the parser
      */
-    public DataObject dataObject() {
-        return this.dataObject;
+    public XContentParser parser() {
+        return this.parser;
     }
 
     /**
@@ -45,7 +47,7 @@ public class GetDataObjectResponse {
      */
     public static class Builder {
         private String id = null;
-        private DataObject dataObject = null;
+        private XContentParser parser = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -61,23 +63,23 @@ public class GetDataObjectResponse {
             this.id = id;
             return this;
         }
-
+        
         /**
-         * Add a data object to this builder
-         * @param dataObject the data object
+         * Add a parser to this builder
+         * @param parser the parser
          * @return the updated builder
          */
-        public Builder dataObject(DataObject dataObject) {
-            this.dataObject = dataObject;
+        public Builder parser(XContentParser parser) {
+            this.parser = parser;
             return this;
         }
 
         /**
-         * Builds the object
+         * Builds the response
          * @return A {@link GetDataObjectResponse}
          */
         public GetDataObjectResponse build() {
-            return new GetDataObjectResponse(this.id, this.dataObject);
+            return new GetDataObjectResponse(this.id, this.parser);
         }
     }
 }
