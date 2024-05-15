@@ -89,7 +89,7 @@ public class DeleteDataObjectResponse {
 
         /**
          * Adds a generated shard id to this builder
-         * @param shardId the shard id to add
+         * @param indexName the index name to generate a shard id
          * @return the updated builder
          */
         public Builder shardId(String indexName) {

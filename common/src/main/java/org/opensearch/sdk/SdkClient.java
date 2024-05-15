@@ -24,8 +24,7 @@ public interface SdkClient {
     /**
      * Create/Put/Index a data object/document into a table/index.
      * @param request A request encapsulating the data object to store
-     * @return A response on success.
-     * @throws {@link OpenSearchException} wrapping the cause on exception.
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
      */
     default PutDataObjectResponse putDataObject(PutDataObjectRequest request) {
         try {
@@ -42,16 +41,14 @@ public interface SdkClient {
     /**
      * Read/Get a data object/document from a table/index.
      * @param request A request identifying the data object to retrieve
-     * @return A response on success.
-     * @throws {@link OpenSearchException} wrapping the cause on exception.
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
      */
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request);
 
     /**
      * Read/Get a data object/document from a table/index.
      * @param request A request identifying the data object to retrieve
-     * @return A response on success.
-     * @throws {@link OpenSearchException} wrapping the cause on exception.
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
      */
     default GetDataObjectResponse getDataObject(GetDataObjectRequest request) {
         try {
@@ -75,7 +72,7 @@ public interface SdkClient {
     /**
      * Delete a data object/document from a table/index.
      * @param request A request identifying the data object to delete
-     * @return A completion stage encapsulating the response or exception
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
      */
     default DeleteDataObjectResponse deleteDataObject(DeleteDataObjectRequest request) {
         try {

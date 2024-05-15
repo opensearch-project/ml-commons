@@ -25,13 +25,32 @@ import software.amazon.awssdk.regions.Region;
  */
 public class SdkClientModule extends AbstractModule {
 
-    // Constants to configure the remote client
     public static final String REMOTE_METADATA_ENDPOINT = "REMOTE_METADATA_ENDPOINT";
     public static final String REGION = "REGION";
 
+    private final String remoteMetadataEndpoint;
+    private final String region;
+
+    /**
+     * Instantiate this module using environment variables
+     */
+    public SdkClientModule() {
+        this(System.getenv(REMOTE_METADATA_ENDPOINT), System.getenv(REGION));
+    }
+
+    /**
+     * Instantiate this module specifying the endpoint and region. Package private for testing.
+     * @param remoteMetadataEndpoint The remote endpoint
+     * @param region The region
+     */
+    SdkClientModule(String remoteMetadataEndpoint, String region) {
+        this.remoteMetadataEndpoint = remoteMetadataEndpoint;
+        this.region = region;
+    }
+
     @Override
     protected void configure() {
-        boolean local = Strings.isNullOrEmpty(System.getenv(REMOTE_METADATA_ENDPOINT));
+        boolean local = Strings.isNullOrEmpty(remoteMetadataEndpoint);
         if (local) {
             bind(SdkClient.class).to(LocalClusterIndicesClient.class);
         } else {
@@ -43,12 +62,7 @@ public class SdkClientModule extends AbstractModule {
         SdkHttpClient httpClient = ApacheHttpClient.builder().build();
         try {
             return new OpenSearchClient(
-                new AwsSdk2Transport(
-                    httpClient,
-                    System.getenv(REMOTE_METADATA_ENDPOINT),
-                    Region.of(System.getenv(REGION)),
-                    AwsSdk2TransportOptions.builder().build()
-                )
+                new AwsSdk2Transport(httpClient, remoteMetadataEndpoint, Region.of(region), AwsSdk2TransportOptions.builder().build())
             );
         } catch (Exception e) {
             throw new OpenSearchException(e);
