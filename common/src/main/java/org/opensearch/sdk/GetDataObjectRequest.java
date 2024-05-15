@@ -15,7 +15,6 @@ public class GetDataObjectRequest {
     private final String index;
     private final String id;
     private final FetchSourceContext fetchSourceContext;
-    private final Class<? extends DataObject> clazz;
 
     /**
      * Instantiate this request with an index and id
@@ -24,13 +23,11 @@ public class GetDataObjectRequest {
      * @param index the index location to get the object
      * @param id the document id
      * @param fetchSourceContext the context to use when fetching _source
-     * @param clazz the type of data object to parse
      */
-    public GetDataObjectRequest(String index, String id, FetchSourceContext fetchSourceContext, Class<? extends DataObject> clazz) {
+    public GetDataObjectRequest(String index, String id, FetchSourceContext fetchSourceContext) {
         this.index = index;
         this.id = id;
         this.fetchSourceContext = fetchSourceContext;
-        this.clazz = clazz;
     }
 
     /**
@@ -56,14 +53,6 @@ public class GetDataObjectRequest {
     public FetchSourceContext fetchSourceContext() {
         return this.fetchSourceContext;
     }
-    
-    /**
-     * Returns the Data Object Class type
-     * @return the class type
-     */
-    public Class<? extends DataObject> clazz() {
-        return this.clazz;
-    }
 
     /**
      * Class for constructing a Builder for this Request Object
@@ -72,7 +61,6 @@ public class GetDataObjectRequest {
         private String index = null;
         private String id = null;
         private FetchSourceContext fetchSourceContext;
-        private Class<? extends DataObject> clazz = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -100,15 +88,10 @@ public class GetDataObjectRequest {
         }
 
         /**
-         * Add a class type to this builder
-         * @param clazz the class type
+         * Add a fetchSourceContext to this builder
+         * @param fetchSourceContext the fetchSourceContext
          * @return the updated builder
          */
-        public Builder clazz(Class<? extends DataObject> clazz) {
-            this.clazz = clazz;
-            return this;
-        }
-
         public Builder fetchSourceContext(FetchSourceContext fetchSourceContext) {
             this.fetchSourceContext = fetchSourceContext;
             return this;
@@ -119,8 +102,7 @@ public class GetDataObjectRequest {
          * @return A {@link GetDataObjectRequest}
          */
         public GetDataObjectRequest build() {
-            return new GetDataObjectRequest(this.index, this.id, this.fetchSourceContext, this.clazz);
+            return new GetDataObjectRequest(this.index, this.id, this.fetchSourceContext);
         }
-
     }
 }
