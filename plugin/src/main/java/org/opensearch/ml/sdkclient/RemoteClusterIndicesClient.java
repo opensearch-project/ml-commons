@@ -11,7 +11,6 @@ package org.opensearch.ml.sdkclient;
 import static org.opensearch.client.opensearch._types.Result.Created;
 import static org.opensearch.client.opensearch._types.Result.Deleted;
 
-import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
@@ -63,7 +62,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                     .complete(
                         new PutDataObjectResponse.Builder().id(indexResponse.id()).created(indexResponse.result() == Created).build()
                     );
-            } catch (IOException e) {
+            } catch (Exception e) {
                 future.completeExceptionally(e);
             }
             return null;
@@ -102,7 +101,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                     .complete(
                         new DeleteDataObjectResponse.Builder().id(deleteResponse.id()).deleted(deleteResponse.result() == Deleted).build()
                     );
-            } catch (IOException e) {
+            } catch (Exception e) {
                 future.completeExceptionally(e);
             }
             return null;

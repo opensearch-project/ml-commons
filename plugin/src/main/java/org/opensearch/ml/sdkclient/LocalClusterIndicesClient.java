@@ -70,9 +70,8 @@ public class LocalClusterIndicesClient implements SdkClient {
                             future::completeExceptionally
                         )
                 );
-        } catch (IOException ioe) {
-            // Parsing error
-            future.completeExceptionally(ioe);
+        } catch (Exception e) {
+            future.completeExceptionally(e);
         }
         return future;
     }
@@ -80,38 +79,46 @@ public class LocalClusterIndicesClient implements SdkClient {
     @Override
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
         CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        client.get(new GetRequest(request.index(), request.id()), ActionListener.wrap(r -> {
-            try {
-                XContentParser parser = jsonXContent
-                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString());
-                future.complete(new GetDataObjectResponse.Builder().id(r.getId()).parser(parser).build());
-            } catch (IOException e) {
-                // Parsing error
-                future.completeExceptionally(e);
-            }
-        }, future::completeExceptionally));
+        try {
+            client.get(new GetRequest(request.index(), request.id()), ActionListener.wrap(r -> {
+                try {
+                    XContentParser parser = jsonXContent
+                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString());
+                    future.complete(new GetDataObjectResponse.Builder().id(r.getId()).parser(parser).build());
+                } catch (IOException e) {
+                    // Parsing error
+                    future.completeExceptionally(e);
+                }
+            }, future::completeExceptionally));
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+        }
         return future;
     }
 
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
         CompletableFuture<DeleteDataObjectResponse> future = new CompletableFuture<>();
-        client
-            .delete(
-                new DeleteRequest(request.index(), request.id()),
-                ActionListener
-                    .wrap(
-                        r -> future
-                            .complete(
-                                new DeleteDataObjectResponse.Builder()
-                                    .id(r.getId())
-                                    .shardId(r.getShardId())
-                                    .deleted(r.getResult() == DELETED)
-                                    .build()
-                            ),
-                        future::completeExceptionally
-                    )
-            );
+        try {
+            client
+                .delete(
+                    new DeleteRequest(request.index(), request.id()),
+                    ActionListener
+                        .wrap(
+                            r -> future
+                                .complete(
+                                    new DeleteDataObjectResponse.Builder()
+                                        .id(r.getId())
+                                        .shardId(r.getShardId())
+                                        .deleted(r.getResult() == DELETED)
+                                        .build()
+                                ),
+                            future::completeExceptionally
+                        )
+                );
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+        }
         return future;
     }
 }
