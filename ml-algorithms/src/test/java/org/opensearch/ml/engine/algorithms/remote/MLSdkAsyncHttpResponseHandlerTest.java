@@ -11,6 +11,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.engine.algorithms.remote.MLSdkAsyncHttpResponseHandler.AMZ_ERROR_HEADER;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -110,6 +112,13 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     public void test_OnHeaders() {
         mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
         assert mlSdkAsyncHttpResponseHandler.getStatusCode() == 200;
+    }
+
+    @Test
+    public void test_OnHeaders_withError() {
+        when(sdkHttpResponse.statusCode()).thenReturn(HttpStatusCode.BAD_REQUEST);
+        mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
+        assert mlSdkAsyncHttpResponseHandler.getStatusCode() == 400;
     }
 
     @Test
@@ -418,5 +427,30 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         assert captor.getValue() instanceof OpenSearchStatusException;
         System.out.println(captor.getValue().getMessage());
         assert captor.getValue().getMessage().contains("runtime error");
+    }
+
+    @Test
+    public void test_onComplete_throttle_error_headers() {
+        String error = "{\"message\": null}";
+        SdkHttpResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(HttpStatusCode.BAD_REQUEST);
+        Map<String, List<String>> headersMap = Map.of(AMZ_ERROR_HEADER, Arrays.asList("ThrottlingException:request throttled!"));
+        when(response.headers()).thenReturn(headersMap);
+        mlSdkAsyncHttpResponseHandler.onHeaders(response);
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(error.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler.onStream(stream);
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue() instanceof OpenSearchStatusException;
+        System.out.println(captor.getValue().getMessage());
+        assert captor.getValue().getMessage().contains(REMOTE_SERVICE_ERROR);
     }
 }

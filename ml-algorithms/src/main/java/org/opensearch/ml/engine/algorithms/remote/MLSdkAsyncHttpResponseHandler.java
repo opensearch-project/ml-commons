@@ -39,6 +39,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpResponseHandler;
 
 @Log4j2
 public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandler {
+    public static final String AMZ_ERROR_HEADER = "x-amzn-ErrorType";
     @Getter
     private Integer statusCode;
     @Getter
@@ -81,22 +82,9 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
         log.debug("received response headers: " + sdkResponse.headers());
         this.statusCode = sdkResponse.statusCode();
-        if (MapUtils.isEmpty(sdkResponse.headers())) {
-            return;
-        }
-        List<String> errorsInHeader = sdkResponse.headers().get("x-amzn-ErrorType");
-        if (errorsInHeader == null || errorsInHeader.isEmpty()) {
-            return;
-        }
-        boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
-        if (containsThrottlingException) {
-            actionListener
-                .onFailure(
-                    new OpenSearchStatusException(
-                        REMOTE_SERVICE_ERROR + "The request was denied due to request throttling.",
-                        RestStatus.fromCode(statusCode)
-                    )
-                );
+        if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+            handleThrottlingInHeader(sdkResponse);
+            // add more handling here for other exceptions in headers
         }
     }
 
@@ -111,6 +99,29 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         RestStatus status = (statusCode == null) ? RestStatus.INTERNAL_SERVER_ERROR : RestStatus.fromCode(statusCode);
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
+    }
+
+    private void handleThrottlingInHeader(SdkHttpFullResponse sdkResponse) {
+        if (MapUtils.isEmpty(sdkResponse.headers())) {
+            return;
+        }
+        List<String> errorsInHeader = sdkResponse.headers().get(AMZ_ERROR_HEADER);
+        if (errorsInHeader == null || errorsInHeader.isEmpty()) {
+            return;
+        }
+        boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
+        if (containsThrottlingException && executionContext.getExceptionHolder().get() == null) {
+            log.error("Remote server returned error code: {}", statusCode);
+            executionContext
+                .getExceptionHolder()
+                .compareAndSet(
+                    null,
+                    new OpenSearchStatusException(
+                        REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
+                        RestStatus.fromCode(statusCode)
+                    )
+                );
+        }
     }
 
     private void processResponse(
