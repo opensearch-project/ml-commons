@@ -75,7 +75,6 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     new GetDataObjectRequest.Builder()
                         .index(ML_CONNECTOR_INDEX)
                         .id(connectorId)
-                        .clazz(Connector.class)
                         .fetchSourceContext(fetchSourceContext)
                         .build()
                 )

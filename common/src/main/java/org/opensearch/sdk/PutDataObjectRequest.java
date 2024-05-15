@@ -8,10 +8,12 @@
  */
 package org.opensearch.sdk;
 
+import org.opensearch.core.xcontent.ToXContentObject;
+
 public class PutDataObjectRequest {
 
     private final String index;
-    private final DataObject dataObject;
+    private final ToXContentObject dataObject;
 
     /**
      * Instantiate this request with an index and data object.
@@ -20,7 +22,7 @@ public class PutDataObjectRequest {
      * @param index the index location to put the object
      * @param dataObject the data object
      */
-    public PutDataObjectRequest(String index, DataObject dataObject) {
+    public PutDataObjectRequest(String index, ToXContentObject dataObject) {
         this.index = index;
         this.dataObject = dataObject;
     }
@@ -37,7 +39,7 @@ public class PutDataObjectRequest {
      * Returns the data object
      * @return the data object
      */
-    public DataObject dataObject() {
+    public ToXContentObject dataObject() {
         return this.dataObject;
     }
 
@@ -46,7 +48,7 @@ public class PutDataObjectRequest {
      */
     public static class Builder {
         private String index = null;
-        private DataObject dataObject = null;
+        private ToXContentObject dataObject = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -68,7 +70,7 @@ public class PutDataObjectRequest {
          * @param dataObject the data object
          * @return the updated builder
          */
-        public Builder dataObject(DataObject dataObject) {
+        public Builder dataObject(ToXContentObject dataObject) {
             this.dataObject = dataObject;
             return this;
         }
