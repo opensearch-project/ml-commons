@@ -8,6 +8,8 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import java.io.IOException;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -73,6 +75,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     new GetDataObjectRequest.Builder()
                         .index(ML_CONNECTOR_INDEX)
                         .id(connectorId)
+                        .clazz(Connector.class)
                         .fetchSourceContext(fetchSourceContext)
                         .build()
                 )
@@ -82,18 +85,22 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     } else {
                         context.restore();
                         log.debug("Completed Get Connector Request, id:{}", connectorId);
-                        Connector mlConnector = Connector.class.cast(r.dataObject());
-                        mlConnector.removeCredential();
-                        if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
-                            actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
-                        } else {
-                            actionListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        "You don't have permission to access this connector",
-                                        RestStatus.FORBIDDEN
-                                    )
-                                );
+                        try {
+                            Connector mlConnector = Connector.createConnector(r.parser());
+                            mlConnector.removeCredential();
+                            if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
+                                actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
+                            } else {
+                                actionListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "You don't have permission to access this connector",
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            }
+                        } catch (IOException e) {
+                            actionListener.onFailure(e);
                         }
                     }
                 });

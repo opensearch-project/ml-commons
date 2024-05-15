@@ -14,6 +14,7 @@ import static org.opensearch.client.opensearch._types.Result.Deleted;
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -24,7 +25,10 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
-import org.opensearch.sdk.DataObject;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -73,9 +77,13 @@ public class RemoteClusterIndicesClient implements SdkClient {
         GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
         AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
             try {
-                GetResponse<? extends DataObject> getResponse = openSearchClient.get(getRequest, request.clazz());
-                future.complete(new GetDataObjectResponse.Builder().id(getResponse.id()).dataObject(getResponse.source()).build());
-            } catch (IOException e) {
+                @SuppressWarnings("rawtypes")
+                GetResponse<Map> getResponse = openSearchClient.get(getRequest, Map.class);
+                String source = getResponse.fields().get("_source").toJson().toString();
+                XContentParser parser = JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, source);
+                future.complete(new GetDataObjectResponse.Builder().id(getResponse.id()).parser(parser).build());
+            } catch (Exception e) {
                 future.completeExceptionally(e);
             }
             return null;
