@@ -41,6 +41,9 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 public interface Connector extends ToXContentObject, Writeable {
 
     String getName();
+    String getTenantId();
+    void setTenantId(String tenantId);
+
     String getProtocol();
     User getOwner();
     void setOwner(User user);

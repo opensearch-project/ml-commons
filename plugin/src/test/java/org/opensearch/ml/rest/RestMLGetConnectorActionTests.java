@@ -22,7 +22,9 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -42,17 +44,24 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
+    @Mock
+    private ClusterService clusterService;
+
     private RestMLGetConnectorAction restMLGetConnectorAction;
 
     NodeClient client;
     private ThreadPool threadPool;
+
+    Settings settings;
 
     @Mock
     RestChannel channel;
 
     @Before
     public void setup() {
-        restMLGetConnectorAction = new RestMLGetConnectorAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().build();
+        restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -72,7 +81,7 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLGetConnectorAction mlGetConnectorAction = new RestMLGetConnectorAction();
+        RestMLGetConnectorAction mlGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings);
         assertNotNull(mlGetConnectorAction);
     }
 
