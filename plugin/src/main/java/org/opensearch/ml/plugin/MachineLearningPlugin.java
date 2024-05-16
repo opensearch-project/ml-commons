@@ -933,7 +933,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
+                MLCommonsSettings.ML_COMMONS_INDEPENDENT_NODE
             );
         return settings;
     }

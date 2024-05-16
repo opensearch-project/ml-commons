@@ -186,5 +186,5 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_INDEPENDENT_NODE = Setting
-        .boolSetting("plugins.ml_commons.independent_node", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.independent_node", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
