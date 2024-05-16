@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
@@ -85,9 +86,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
-        Map<Integer, ModelTensors> tensorOutputs,
         ExecutionContext executionContext,
-        ActionListener<List<ModelTensors>> actionListener
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
             SdkHttpFullRequest request;
@@ -113,7 +113,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                             executionContext,
                         actionListener,
                         parameters,
-                        tensorOutputs,
                         connector,
                         scriptService,
                         mlGuard

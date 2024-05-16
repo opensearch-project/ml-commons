@@ -26,7 +26,4 @@ import lombok.Data;
 public class ExecutionContext {
     // Should never be null
     private int sequence;
-    private CountDownLatch countDownLatch;
-    // This is to hold any exception thrown in a split-batch request
-    private AtomicReference<Exception> exceptionHolder;
 }
