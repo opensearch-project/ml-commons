@@ -151,6 +151,16 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         response = TestHelper
             .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
         assertEquals(200, response.getStatusLine().getStatusCode());
+
+        String independentEntity = "{\n"
+            + "  \"persistent\" : {\n"
+            + "    \"plugins.ml_commons.independent_node\" : false \n"
+            + "  }\n"
+            + "}";
+
+        response = TestHelper
+            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(independentEntity), null);
+        assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
     @Override
