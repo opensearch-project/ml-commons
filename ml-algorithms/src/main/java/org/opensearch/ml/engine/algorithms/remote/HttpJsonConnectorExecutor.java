@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
@@ -73,6 +74,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
+    @Override
+    public Logger getLogger() {
+        return log;
+    }
+
     @SuppressWarnings("removal")
     @Override
     public void invokeRemoteModel(
@@ -80,7 +86,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         Map<String, String> parameters,
         String payload,
         Map<Integer, ModelTensors> tensorOutputs,
-        ExecutionContext countDownLatch,
+        ExecutionContext executionContext,
         ActionListener<List<ModelTensors>> actionListener
     ) {
         try {
@@ -104,7 +110,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
-                        countDownLatch,
+                            executionContext,
                         actionListener,
                         parameters,
                         tensorOutputs,

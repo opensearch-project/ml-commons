@@ -16,10 +16,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.logging.log4j.Logger;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.bulk.BackoffPolicy;
+import org.opensearch.action.support.RetryableAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
@@ -41,6 +46,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
 
 public interface RemoteConnectorExecutor {
+    String EXECUTOR = "opensearch_ml_predict_remote";
 
     default void executePredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         ActionListener<List<ModelTensors>> tensorActionListener = ActionListener.wrap(r -> {
@@ -130,6 +136,8 @@ public interface RemoteConnectorExecutor {
 
     Client getClient();
 
+    Logger getLogger();
+
     default void setClient(Client client) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
@@ -145,7 +153,7 @@ public interface RemoteConnectorExecutor {
     default void preparePayloadAndInvokeRemoteModel(
         MLInput mlInput,
         Map<Integer, ModelTensors> tensorOutputs,
-        ExecutionContext countDownLatch,
+        ExecutionContext executionContext,
         ActionListener<List<ModelTensors>> actionListener
     ) {
         Connector connector = getConnector();
@@ -188,16 +196,48 @@ public interface RemoteConnectorExecutor {
             if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT)) {
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
-            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs, countDownLatch, actionListener);
+            invokeRemoteModelWithRetry(mlInput, parameters, payload, tensorOutputs, executionContext, actionListener);
         }
     }
+
+    default void invokeRemoteModelWithRetry(
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        Map<Integer, ModelTensors> tensorOutputs,
+        ExecutionContext executionContext,
+        ActionListener<List<ModelTensors>> actionListener
+    ) {
+        final RetryableAction<List<ModelTensors>> invokeRemoteModelAction = new RetryableAction<>(
+                getLogger(),
+                getClient().threadPool(),
+                TimeValue.timeValueMillis(30),
+                TimeValue.timeValueSeconds(5),
+                actionListener,
+                BackoffPolicy.exponentialFullJitterBackoff(50),
+                EXECUTOR
+        ) {
+
+            @Override
+            public void tryAction(ActionListener<List<ModelTensors>> listener) {
+                invokeRemoteModel(mlInput, parameters, payload, tensorOutputs, executionContext, listener);
+            }
+
+            @Override
+            public boolean shouldRetry(Exception e) {
+                final Throwable cause = ExceptionsHelper.unwrapCause(e);
+                return cause instanceof OpenSearchStatusException && cause.getMessage().startsWith("ThrottlingException");
+            }
+        };
+        invokeRemoteModelAction.run();
+    };
 
     void invokeRemoteModel(
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
         Map<Integer, ModelTensors> tensorOutputs,
-        ExecutionContext countDownLatch,
+        ExecutionContext executionContext,
         ActionListener<List<ModelTensors>> actionListener
     );
 }

@@ -18,6 +18,7 @@ import java.util.Map;
 
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -57,6 +58,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private final MLGuard mlGuard;
 
+    private List<String> errorsInHeader = null;
+
     public MLSdkAsyncHttpResponseHandler(
         ExecutionContext executionContext,
         ActionListener<List<ModelTensors>> actionListener,
@@ -80,6 +83,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
         log.debug("received response headers: " + sdkResponse.headers());
         this.statusCode = sdkResponse.statusCode();
+        this.errorsInHeader = sdkResponse.headers().get("x-amzn-ErrorType");
     }
 
     @Override
@@ -112,9 +116,18 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
                 log.error("Remote server returned error code: {}", statusCode);
                 if (executionContext.getExceptionHolder().get() == null) {
-                    executionContext
-                        .getExceptionHolder()
-                        .compareAndSet(null, new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
+                    if (errorsInHeader != null && errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"))) {
+                        executionContext
+                            .getExceptionHolder()
+                            .compareAndSet(null, new OpenSearchStatusException("ThrottlingException", RestStatus.fromCode(statusCode)));
+                    } else {
+                        executionContext
+                            .getExceptionHolder()
+                            .compareAndSet(
+                                null,
+                                new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode))
+                            );
+                    }
                 }
             } else {
                 try {
