@@ -7,6 +7,7 @@ package org.opensearch.ml.utils;
 
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_INDEPENDENT_NODE;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -27,18 +28,21 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -82,6 +86,9 @@ public class RestActionUtils {
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
     static final ObjectMapper objectMapper = new ObjectMapper();
+
+    // This is to identify if this node is in multi-tenancy or not.
+    public static volatile Boolean isIndependentNode;
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -305,6 +312,24 @@ public class RestActionUtils {
             listener.onResponse(emptySearchResponse);
         } else {
             listener.onFailure(e);
+        }
+    }
+
+    public static boolean IsIndependentNode(ClusterService clusterService, Settings settings) {
+        isIndependentNode = ML_COMMONS_INDEPENDENT_NODE.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_INDEPENDENT_NODE, it -> isIndependentNode = it);
+        return isIndependentNode;
+    }
+
+    public static String getTenantID(ClusterService clusterService, Settings settings, RestRequest restRequest) {
+        if (IsIndependentNode(clusterService, settings)) {
+            String tenantId = restRequest.getHeaders().get(Constants.TENANT_ID).get(0);
+            if (tenantId == null) {
+                throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+            }
+            return tenantId;
+        } else {
+            return null;
         }
     }
 

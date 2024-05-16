@@ -43,6 +43,8 @@ public class CommonValue {
         public static final String UNDEPLOYED = "undeployed";
         public static final String NOT_FOUND = "not_found";
 
+        public static final String TENANT_ID = "tenant_id";
+
         public static final String MASTER_KEY = "master_key";
         public static final String CREATE_TIME_FIELD = "create_time";
         public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
@@ -150,6 +152,9 @@ public class CommonValue {
                         + AbstractConnector.PROTOCOL_FIELD
                         + "\" : {\"type\": \"keyword\"},\n"
                         + "      \""
+                        + TENANT_ID
+                        + "\" : {\"type\": \"keyword\"},\n"
+                        + "      \""
                         + AbstractConnector.PARAMETERS_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
@@ -221,6 +226,9 @@ public class CommonValue {
                         + "      \""
                         + MLModel.IS_HIDDEN_FIELD
                         + "\": {\"type\": \"boolean\"},\n"
+                        + "      \""
+                        + TENANT_ID
+                        + "\" : {\"type\": \"keyword\"},\n"
                         + "      \""
                         + MLModel.MODEL_CONFIG_FIELD
                         + "\" : {\"properties\":{\""
@@ -350,6 +358,9 @@ public class CommonValue {
                         + MLTask.ERROR_FIELD
                         + "\": {\"type\": \"text\"},\n"
                         + "      \""
+                        + TENANT_ID
+                        + "\" : {\"type\": \"keyword\"},\n"
+                        + "      \""
                         + MLTask.IS_ASYNC_TASK_FIELD
                         + "\" : {\"type\" : \"boolean\"}, \n"
                         + USER_FIELD_MAPPING
@@ -461,6 +472,9 @@ public class CommonValue {
                         + "      \""
                         + MLAgent.IS_HIDDEN_FIELD
                         + "\": {\"type\": \"boolean\"},\n"
+                        + "      \""
+                        + TENANT_ID
+                        + "\" : {\"type\": \"keyword\"},\n"
                         + "      \""
                         + MLAgent.CREATED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"

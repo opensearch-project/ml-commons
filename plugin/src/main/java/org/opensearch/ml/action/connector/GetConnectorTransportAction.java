@@ -38,6 +38,8 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
 
+import java.util.Objects;
+
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class GetConnectorTransportAction extends HandledTransportAction<ActionRequest, MLConnectorGetResponse> {
@@ -65,6 +67,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLConnectorGetResponse> actionListener) {
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.fromActionRequest(request);
         String connectorId = mlConnectorGetRequest.getConnectorId();
+        String tenantId = mlConnectorGetRequest.getTenantId();
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_CONNECTOR_INDEX).id(connectorId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
@@ -77,6 +80,15 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         Connector mlConnector = Connector.createConnector(parser);
                         mlConnector.removeCredential();
+                        if (!Objects.equals(tenantId, mlConnector.getTenantId())) {
+                            actionListener
+                                    .onFailure(
+                                            new OpenSearchStatusException(
+                                                    "You don't have permission to access this connector",
+                                                    RestStatus.FORBIDDEN
+                                            )
+                                    );
+                        }
                         if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                             actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                         } else {
@@ -114,6 +126,5 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
             log.error("Failed to get ML connector " + connectorId, e);
             actionListener.onFailure(e);
         }
-
     }
 }
