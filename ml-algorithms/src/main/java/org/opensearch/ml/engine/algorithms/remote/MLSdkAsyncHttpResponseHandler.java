@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.collections.MapUtils;
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
@@ -38,6 +39,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpResponseHandler;
 
 @Log4j2
 public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandler {
+    public static final String AMZ_ERROR_HEADER = "x-amzn-ErrorType";
     @Getter
     private Integer statusCode;
     @Getter
@@ -80,6 +82,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         SdkHttpFullResponse sdkResponse = (SdkHttpFullResponse) response;
         log.debug("received response headers: " + sdkResponse.headers());
         this.statusCode = sdkResponse.statusCode();
+        if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+            handleThrottlingInHeader(sdkResponse);
+            // add more handling here for other exceptions in headers
+        }
     }
 
     @Override
@@ -93,6 +99,31 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         RestStatus status = (statusCode == null) ? RestStatus.INTERNAL_SERVER_ERROR : RestStatus.fromCode(statusCode);
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
+    }
+
+    private void handleThrottlingInHeader(SdkHttpFullResponse sdkResponse) {
+        if (MapUtils.isEmpty(sdkResponse.headers())) {
+            return;
+        }
+        List<String> errorsInHeader = sdkResponse.headers().get(AMZ_ERROR_HEADER);
+        if (errorsInHeader == null || errorsInHeader.isEmpty()) {
+            return;
+        }
+        // Check the throttling exception from AMZN servers, e.g. sageMaker.
+        // See [https://github.com/opensearch-project/ml-commons/issues/2429] for more details.
+        boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
+        if (containsThrottlingException && executionContext.getExceptionHolder().get() == null) {
+            log.error("Remote server returned error code: {}", statusCode);
+            executionContext
+                .getExceptionHolder()
+                .compareAndSet(
+                    null,
+                    new OpenSearchStatusException(
+                        REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
+                        RestStatus.fromCode(statusCode)
+                    )
+                );
+        }
     }
 
     private void processResponse(
