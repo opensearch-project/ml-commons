@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -323,11 +324,16 @@ public class RestActionUtils {
 
     public static String getTenantID(ClusterService clusterService, Settings settings, RestRequest restRequest) {
         if (IsIndependentNode(clusterService, settings)) {
-            String tenantId = restRequest.getHeaders().get(Constants.TENANT_ID).get(0);
-            if (tenantId == null) {
-                throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+            Map<String, List<String>> headers = restRequest.getHeaders();
+            if (headers != null) {
+                String tenantId = restRequest.getHeaders().get(Constants.TENANT_ID).get(0);
+                if (tenantId == null) {
+                    throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+                }
+                return tenantId;
+            } else {
+                throw new OpenSearchStatusException("Rest request header can't be null", RestStatus.INTERNAL_SERVER_ERROR);
             }
-            return tenantId;
         } else {
             return null;
         }
