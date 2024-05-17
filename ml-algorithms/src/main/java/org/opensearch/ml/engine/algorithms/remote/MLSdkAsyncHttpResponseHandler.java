@@ -136,10 +136,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
 
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
-            log.error("Remote server returned error code: {}", statusCode);
             if (errorsInHeader != null && errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"))) {
                 actionListener.onFailure(new OpenSearchStatusException("ThrottlingException", RestStatus.fromCode(statusCode)));
             } else {
+                log.error("Remote server returned error code: {}", statusCode);
                 actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
             }
             return;

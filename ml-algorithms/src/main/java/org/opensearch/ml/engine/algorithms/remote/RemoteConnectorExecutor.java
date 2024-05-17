@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -216,12 +217,13 @@ public interface RemoteConnectorExecutor {
         final RetryableAction<Tuple<Integer, ModelTensors>> invokeRemoteModelAction = new RetryableAction<>(
                 getLogger(),
                 getClient().threadPool(),
-                TimeValue.timeValueMillis(30),
-                TimeValue.timeValueSeconds(5),
+                TimeValue.timeValueMillis(100),
+                TimeValue.timeValueSeconds(30),
                 actionListener,
-                BackoffPolicy.exponentialFullJitterBackoff(50),
+                BackoffPolicy.constantBackoff(TimeValue.timeValueMillis(100), Integer.MAX_VALUE),
                 EXECUTOR
         ) {
+            Integer retryTime = 0;
 
             @Override
             public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
@@ -232,6 +234,8 @@ public interface RemoteConnectorExecutor {
 
             @Override
             public boolean shouldRetry(Exception e) {
+                getLogger().debug(String.format(Locale.ROOT, "The %s-th retry for invoke remote model", retryTime.toString()));
+                retryTime++;
                 final Throwable cause = ExceptionsHelper.unwrapCause(e);
                 return cause instanceof OpenSearchStatusException && cause.getMessage().startsWith("ThrottlingException");
             }
