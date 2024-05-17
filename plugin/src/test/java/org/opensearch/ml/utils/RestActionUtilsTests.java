@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_INDEPENDENT_NODE;
 import static org.opensearch.ml.utils.RestActionUtils.OPENSEARCH_DASHBOARDS_USER_AGENT;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ASYNC;
@@ -23,12 +24,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.Version;
 import org.opensearch.action.search.SearchResponse;
@@ -37,6 +40,7 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
@@ -46,6 +50,7 @@ import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -67,10 +72,16 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     String algoName = FunctionName.KMEANS.name();
     String urlPath = MachineLearningPlugin.ML_BASE_URI + "/_train/" + algoName;
 
+    ClusterService clusterService = mock(ClusterService.class);
+    Settings settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), true).build();
+
     @Before
     public void setup() {
         param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, algoName).build();
         fakeRestRequest = createRestRequest(param);
+
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_INDEPENDENT_NODE)));
+        when(clusterService.getSettings()).thenReturn(settings);
 
     }
 
@@ -373,4 +384,57 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         }
     }
+
+    @Test
+    public void testIsIndependentNode() {
+        boolean isIndependentNode = RestActionUtils.IsIndependentNode(clusterService, settings);
+        Assert.assertTrue(isIndependentNode);
+    }
+
+    @Test
+    public void testIsIndependentNode_False() {
+        Settings settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), false).build();
+        boolean isIndependentNode = RestActionUtils.IsIndependentNode(clusterService, settings);
+        Assert.assertFalse(isIndependentNode);
+    }
+
+    @Test
+    public void testGetTenantID_IndependentNode() {
+        String tenantId = "test-tenant";
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));
+        RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
+
+        String actualTenantID = RestActionUtils.getTenantID(clusterService, settings, restRequest);
+        Assert.assertEquals(tenantId, actualTenantID);
+    }
+
+    @Test
+    public void testGetTenantID_IndependentNode_NullTenantID() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(Constants.TENANT_ID, Collections.singletonList(null));
+        RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
+
+        try {
+            RestActionUtils.getTenantID(clusterService, settings, restRequest);
+            Assert.fail("Expected OpenSearchStatusException");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof OpenSearchStatusException);
+            Assert.assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) e).status());
+            Assert.assertEquals("Tenant ID can't be null", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testGetTenantID_NotIndependentNode() {
+        settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), false).build();
+        String tenantId = "test-tenant";
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));
+        RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
+
+        String tenantID = RestActionUtils.getTenantID(clusterService, settings, restRequest);
+        Assert.assertNull(tenantID);
+    }
+
 }
