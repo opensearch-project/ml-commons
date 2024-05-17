@@ -11,6 +11,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.engine.algorithms.remote.MLSdkAsyncHttpResponseHandler.AMZ_ERROR_HEADER;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -50,6 +52,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     private Connector connector;
 
     private Connector noProcessFunctionConnector;
+
+    private Map<String, List<String>> headersMap;
 
     @Mock
     private SdkHttpFullResponse sdkHttpResponse;
@@ -104,12 +108,20 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         responseSubscriber = mlSdkAsyncHttpResponseHandler.new MLResponseSubscriber();
+        headersMap = Map.of(AMZ_ERROR_HEADER, Arrays.asList("ThrottlingException:request throttled!"));
     }
 
     @Test
     public void test_OnHeaders() {
         mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
         assert mlSdkAsyncHttpResponseHandler.getStatusCode() == 200;
+    }
+
+    @Test
+    public void test_OnHeaders_withError() {
+        when(sdkHttpResponse.statusCode()).thenReturn(HttpStatusCode.BAD_REQUEST);
+        mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
+        assert mlSdkAsyncHttpResponseHandler.getStatusCode() == 400;
     }
 
     @Test
@@ -419,4 +431,168 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         System.out.println(captor.getValue().getMessage());
         assert captor.getValue().getMessage().contains("runtime error");
     }
+
+    @Test
+    public void test_onComplete_throttle_error_headers() {
+        String error = "{\"message\": null}";
+        SdkHttpResponse response = mock(SdkHttpFullResponse.class);
+        when(response.statusCode()).thenReturn(HttpStatusCode.BAD_REQUEST);
+        when(response.headers()).thenReturn(headersMap);
+        mlSdkAsyncHttpResponseHandler.onHeaders(response);
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(error.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler.onStream(stream);
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue() instanceof OpenSearchStatusException;
+        System.out.println(captor.getValue().getMessage());
+        assert captor.getValue().getMessage().contains(REMOTE_SERVICE_ERROR);
+    }
+
+    @Test
+    public void test_onComplete_throttle_exceptionFirst() {
+        AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
+        String response1 = "{\n"
+            + "    \"embedding\": [\n"
+            + "        0.46484375,\n"
+            + "        -0.017822266,\n"
+            + "        0.17382812,\n"
+            + "        0.10595703,\n"
+            + "        0.875,\n"
+            + "        0.19140625,\n"
+            + "        -0.36914062,\n"
+            + "        -0.0011978149\n"
+            + "    ]\n"
+            + "}";
+        String response2 = "{\"message\": null}";
+        CountDownLatch count = new CountDownLatch(2);
+        MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0, count, exceptionHolder),
+            actionListener,
+            parameters,
+            tensorOutputs,
+            connector,
+            scriptService,
+            null
+        );
+        MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(1, count, exceptionHolder),
+            actionListener,
+            parameters,
+            tensorOutputs,
+            connector,
+            scriptService,
+            null
+        );
+
+        SdkHttpFullResponse sdkHttpResponse2 = mock(SdkHttpFullResponse.class);
+        when(sdkHttpResponse2.statusCode()).thenReturn(HttpStatusCode.BAD_REQUEST);
+        when(sdkHttpResponse2.headers()).thenReturn(headersMap);
+        mlSdkAsyncHttpResponseHandler2.onHeaders(sdkHttpResponse2);
+        Publisher<ByteBuffer> stream2 = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(response2.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler2.onStream(stream2);
+
+        SdkHttpFullResponse sdkHttpResponse1 = mock(SdkHttpFullResponse.class);
+        when(sdkHttpResponse1.statusCode()).thenReturn(200);
+        mlSdkAsyncHttpResponseHandler1.onHeaders(sdkHttpResponse1);
+        Publisher<ByteBuffer> stream1 = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(response1.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler1.onStream(stream1);
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("Error from remote service: The request was denied due to remote server throttling.");
+        assert captor.getValue().status().getStatus() == HttpStatusCode.BAD_REQUEST;
+    }
+
+    @Test
+    public void test_onComplete_throttle_exceptionSecond() {
+        AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
+        String response1 = "{\n"
+            + "    \"embedding\": [\n"
+            + "        0.46484375,\n"
+            + "        -0.017822266,\n"
+            + "        0.17382812,\n"
+            + "        0.10595703,\n"
+            + "        0.875,\n"
+            + "        0.19140625,\n"
+            + "        -0.36914062,\n"
+            + "        -0.0011978149\n"
+            + "    ]\n"
+            + "}";
+        String response2 = "{\"message\": null}";
+        CountDownLatch count = new CountDownLatch(2);
+        MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(0, count, exceptionHolder),
+            actionListener,
+            parameters,
+            tensorOutputs,
+            connector,
+            scriptService,
+            null
+        );
+        MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(1, count, exceptionHolder),
+            actionListener,
+            parameters,
+            tensorOutputs,
+            connector,
+            scriptService,
+            null
+        );
+        SdkHttpFullResponse sdkHttpResponse1 = mock(SdkHttpFullResponse.class);
+        when(sdkHttpResponse1.statusCode()).thenReturn(200);
+        mlSdkAsyncHttpResponseHandler1.onHeaders(sdkHttpResponse1);
+        Publisher<ByteBuffer> stream1 = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(response1.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler1.onStream(stream1);
+
+        SdkHttpFullResponse sdkHttpResponse2 = mock(SdkHttpFullResponse.class);
+        when(sdkHttpResponse2.statusCode()).thenReturn(HttpStatusCode.BAD_REQUEST);
+        when(sdkHttpResponse2.headers()).thenReturn(headersMap);
+        mlSdkAsyncHttpResponseHandler2.onHeaders(sdkHttpResponse2);
+        Publisher<ByteBuffer> stream2 = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(response2.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler2.onStream(stream2);
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("Error from remote service: The request was denied due to remote server throttling.");
+        assert captor.getValue().status().getStatus() == HttpStatusCode.BAD_REQUEST;
+    }
+
 }
