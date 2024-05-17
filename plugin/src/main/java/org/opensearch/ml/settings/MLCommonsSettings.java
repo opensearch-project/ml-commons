@@ -121,10 +121,22 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.remote_inference.retry_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Integer> ML_COMMONS_REMOTE_INFERENCE_RETRY_BACKOFF_MILLIS = Setting
-        .intSetting("plugins.ml_commons.remote_inference.retry_backoff_millis", 100, 1, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .intSetting(
+            "plugins.ml_commons.remote_inference.retry_backoff_millis",
+            100,
+            1,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     public static final Setting<Integer> ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS = Setting
-        .intSetting("plugins.ml_commons.remote_inference.retry_timeout_seconds", 30, 1, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .intSetting(
+            "plugins.ml_commons.remote_inference.retry_timeout_seconds",
+            30,
+            1,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
