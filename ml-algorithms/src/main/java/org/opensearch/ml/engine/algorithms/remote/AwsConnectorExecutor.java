@@ -11,7 +11,6 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -92,14 +91,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .request(signRequest(request))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
-                    new MLSdkAsyncHttpResponseHandler(
-                        executionContext,
-                        actionListener,
-                        parameters,
-                        connector,
-                        scriptService,
-                        mlGuard
-                    )
+                    new MLSdkAsyncHttpResponseHandler(executionContext, actionListener, parameters, connector, scriptService, mlGuard)
                 )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));

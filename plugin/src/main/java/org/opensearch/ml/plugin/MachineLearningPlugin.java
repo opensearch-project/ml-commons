@@ -273,6 +273,7 @@ import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.ml.tools.GetToolTransportAction;
 import org.opensearch.ml.tools.ListToolsTransportAction;
 import org.opensearch.ml.utils.IndexUtils;
+import org.opensearch.ml.utils.RemoteInferenceRetryUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
@@ -646,6 +647,8 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
+        RemoteInferenceRetryUtils.initialize(clusterService, settings);
+
         return ImmutableList
             .of(
                 encryptor,
@@ -918,6 +921,9 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_BACKOFF_MILLIS,
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,

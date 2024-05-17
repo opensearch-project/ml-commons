@@ -13,7 +13,6 @@ import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -109,14 +108,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .request(request)
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
-                    new MLSdkAsyncHttpResponseHandler(
-                            executionContext,
-                        actionListener,
-                        parameters,
-                        connector,
-                        scriptService,
-                        mlGuard
-                    )
+                    new MLSdkAsyncHttpResponseHandler(executionContext, actionListener, parameters, connector, scriptService, mlGuard)
                 )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));

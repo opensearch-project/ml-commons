@@ -7,9 +7,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -26,4 +23,5 @@ import lombok.Data;
 public class ExecutionContext {
     // Should never be null
     private int sequence;
+    private ConnectorRetryOption connectorRetryOption;
 }
