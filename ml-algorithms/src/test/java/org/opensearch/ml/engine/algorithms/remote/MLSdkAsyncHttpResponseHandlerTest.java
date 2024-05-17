@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,7 +42,7 @@ import software.amazon.awssdk.http.SdkHttpFullResponse;
 import software.amazon.awssdk.http.SdkHttpResponse;
 
 public class MLSdkAsyncHttpResponseHandlerTest {
-    private final ExecutionContext executionContext = new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>());
+    private final ExecutionContext executionContext = new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList());
     @Mock
     private ActionListener<List<ModelTensors>> actionListener;
     @Mock
@@ -260,7 +261,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(0, count, exceptionHolder),
+            new ExecutionContext(0, count, exceptionHolder, Collections.emptyList()),
             actionListener,
             parameters,
             tensorOutputs,
@@ -269,7 +270,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(1, count, exceptionHolder),
+            new ExecutionContext(1, count, exceptionHolder, Collections.emptyList()),
             actionListener,
             parameters,
             tensorOutputs,
@@ -328,7 +329,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(0, count, exceptionHolder),
+            new ExecutionContext(0, count, exceptionHolder, Collections.emptyList()),
             actionListener,
             parameters,
             tensorOutputs,
@@ -337,7 +338,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(1, count, exceptionHolder),
+            new ExecutionContext(1, count, exceptionHolder, Collections.emptyList()),
             actionListener,
             parameters,
             tensorOutputs,

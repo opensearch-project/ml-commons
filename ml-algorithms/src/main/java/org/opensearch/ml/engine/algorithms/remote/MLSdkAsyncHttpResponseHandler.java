@@ -20,6 +20,7 @@ import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
@@ -137,10 +138,25 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     private void reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
         ModelTensors[] modelTensors = new ModelTensors[tensorOutputs.size()];
         log.debug("Reordered tensor outputs size is {}", tensorOutputs.size());
+        // step 1: reorder batches
         for (Map.Entry<Integer, ModelTensors> entry : tensorOutputs.entrySet()) {
             modelTensors[entry.getKey()] = entry.getValue();
         }
-        actionListener.onResponse(Arrays.asList(modelTensors));
+
+        // step 2: restore to original order as textDocs might be sorted
+        List<Integer> originalOrderIndexes = executionContext.getOriginalOrder();
+        List<ModelTensors> modelTensorsList = Arrays.asList(modelTensors);
+        if (CollectionUtils.isEmpty(originalOrderIndexes)) {
+            actionListener.onResponse(modelTensorsList);
+        } else {
+            // if the originalOrder is not empty, reorder based on it
+            List<ModelTensors> sortedModelTensors = Arrays.asList(new ModelTensors[modelTensorsList.size()]);
+            assert (originalOrderIndexes.size() == modelTensors.length);
+            for (int i = 0; i < originalOrderIndexes.size(); ++i) {
+                sortedModelTensors.set(i, modelTensorsList.get(originalOrderIndexes.get(i)));
+            }
+            actionListener.onResponse(sortedModelTensors);
+        }
     }
 
     protected class MLResponseSubscriber implements Subscriber<ByteBuffer> {

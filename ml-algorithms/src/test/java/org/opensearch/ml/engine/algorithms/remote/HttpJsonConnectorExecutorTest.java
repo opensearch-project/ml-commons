@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -94,7 +95,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 "{\"input\": \"hello world\"}",
                 new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList()),
                 actionListener
             );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
@@ -126,7 +127,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 null,
                 new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList()),
                 actionListener
             );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
@@ -158,7 +159,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 null,
                 new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList()),
                 actionListener
             );
     }
@@ -186,7 +187,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 "hello world",
                 new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList()),
                 actionListener
             );
     }
@@ -217,7 +218,7 @@ public class HttpJsonConnectorExecutorTest {
                 new HashMap<>(),
                 "hello world",
                 new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
+                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList()),
                 actionListener
             );
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

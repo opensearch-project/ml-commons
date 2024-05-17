@@ -8,6 +8,9 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
@@ -41,6 +45,9 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
 
 public interface RemoteConnectorExecutor {
+    int DEFAULT_BATCH_SIZE = -1;
+    String MAX_BATCH_SIZE_KEY = "max_batch_size";
+    String STEP_SIZE_KEY = "input_docs_processed_step_size";
 
     default void executePredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         ActionListener<List<ModelTensors>> tensorActionListener = ActionListener.wrap(r -> {
@@ -51,12 +58,23 @@ public interface RemoteConnectorExecutor {
             AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
             if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
                 TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
+                int maxBatchSize = getMaxBatchSize();
+                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(
+                    textDocsInputDataSet,
+                    maxBatchSize
+                );
+                List<Integer> textDocOriginalOrder = Collections.emptyList();
+                if (shouldSortBeforeCuttingBatches(maxBatchSize, calculatedChunkSize)) {
+                    Tuple<TextDocsInputDataSet, List<Integer>> sortedData = sortTextDocsByTextLength(textDocsInputDataSet);
+                    textDocsInputDataSet = sortedData.v1();
+                    textDocOriginalOrder = Collections.unmodifiableList(sortedData.v2());
+                }
+
                 CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
                 int sequence = 0;
-                for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize
-                    .v2()) {
-                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
+                for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize.v2()) {
+                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs,
+                        Math.min(processedDocs + calculatedChunkSize.v2(), textDocsInputDataSet.getDocs().size()));
                     preparePayloadAndInvokeRemoteModel(
                         MLInput
                             .builder()
@@ -64,7 +82,12 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         modelTensors,
-                        new ExecutionContext(sequence++, countDownLatch, exceptionHolder),
+                        new ExecutionContext(
+                            sequence++,
+                            countDownLatch,
+                            exceptionHolder,
+                            textDocOriginalOrder
+                        ),
                         tensorActionListener
                     );
                 }
@@ -72,7 +95,7 @@ public interface RemoteConnectorExecutor {
                 preparePayloadAndInvokeRemoteModel(
                     mlInput,
                     modelTensors,
-                    new ExecutionContext(0, new CountDownLatch(1), exceptionHolder),
+                    new ExecutionContext(0, new CountDownLatch(1), exceptionHolder, Collections.emptyList()),
                     tensorActionListener
                 );
             }
@@ -86,20 +109,16 @@ public interface RemoteConnectorExecutor {
      * @param textDocsInputDataSet
      * @return Tuple of chunk size and step size.
      */
-    private Tuple<Integer, Integer> calculateChunkSize(TextDocsInputDataSet textDocsInputDataSet) {
+    private Tuple<Integer, Integer> calculateChunkSize(TextDocsInputDataSet textDocsInputDataSet, int maxBatchSize) {
         int textDocsLength = textDocsInputDataSet.getDocs().size();
         Map<String, String> parameters = getConnector().getParameters();
-        if (parameters != null && parameters.containsKey("input_docs_processed_step_size")) {
-            int stepSize = Integer.parseInt(parameters.get("input_docs_processed_step_size"));
+        if (parameters != null && parameters.containsKey(STEP_SIZE_KEY)) {
+            int stepSize = Integer.parseInt(parameters.get(STEP_SIZE_KEY));
             // We need to check the parameter on runtime as parameter can be passed into predict request
             if (stepSize <= 0) {
                 throw new IllegalArgumentException("Invalid parameter: input_docs_processed_step_size. It must be positive integer.");
             } else {
-                boolean isDivisible = textDocsLength % stepSize == 0;
-                if (isDivisible) {
-                    return Tuple.tuple(textDocsLength / stepSize, stepSize);
-                }
-                return Tuple.tuple(textDocsLength / stepSize + 1, stepSize);
+                return Tuple.tuple((int) Math.ceil((double) textDocsLength / stepSize), stepSize);
             }
         } else {
             Optional<ConnectorAction> predictAction = getConnector().findPredictAction();
@@ -111,9 +130,53 @@ public interface RemoteConnectorExecutor {
                 // user defined preprocess script, this case, the chunk size is always equals to text docs length.
                 return Tuple.tuple(textDocsLength, 1);
             }
-            // consider as batch.
-            return Tuple.tuple(1, textDocsLength);
+
+            if (maxBatchSize == DEFAULT_BATCH_SIZE || textDocsLength <= maxBatchSize) {
+                return Tuple.tuple(1, textDocsLength);
+            }
+            return Tuple.tuple((int) Math.ceil((double) textDocsLength / maxBatchSize), maxBatchSize);
         }
+    }
+
+    /**
+     * Get user configured max_batch_size parameter, throw IllegalArgumentException if it's invalid.
+     * Return default value if it's not configured.
+     * @return max batch size
+     */
+    private int getMaxBatchSize() {
+        Map<String, String> parameters = getConnector().getParameters();
+        if (parameters == null || !parameters.containsKey(MAX_BATCH_SIZE_KEY)) {
+            return DEFAULT_BATCH_SIZE;
+        }
+        int maxBatchSize = Integer.parseInt(parameters.get(MAX_BATCH_SIZE_KEY));
+        if (maxBatchSize <= 0) {
+            throw new IllegalArgumentException("Invalid parameter: " + MAX_BATCH_SIZE_KEY + ". It must be positive integer.");
+        }
+        return maxBatchSize;
+    }
+
+    private boolean shouldSortBeforeCuttingBatches(int maxBatchSize, Tuple<Integer, Integer> calculatedChunkSize) {
+        if (maxBatchSize <= 1 || calculatedChunkSize.v1() <= 1 || calculatedChunkSize.v2() <= 1) {
+            return false;
+        }
+        // skip step size situation
+        Map<String, String> parameters = getConnector().getParameters();
+        if (parameters != null && parameters.containsKey(STEP_SIZE_KEY)) {
+            return false;
+        }
+        return true;
+    }
+
+    private Tuple<TextDocsInputDataSet, List<Integer>> sortTextDocsByTextLength(TextDocsInputDataSet textDocsInputDataSet) {
+        List<Tuple<Integer, String>> docsWithIndex = new ArrayList<>();
+        for (int i = 0; i < textDocsInputDataSet.getDocs().size(); ++i) {
+            docsWithIndex.add(Tuple.tuple(i, textDocsInputDataSet.getDocs().get(i)));
+        }
+        docsWithIndex.sort(Comparator.comparingInt(t -> t.v2().length()));
+        List<String> sortedDocs = docsWithIndex.stream().map(Tuple::v2).collect(Collectors.toList());
+        List<Integer> originalIndexOrder = docsWithIndex.stream().map(Tuple::v1).collect(Collectors.toList());
+        TextDocsInputDataSet sortedTextDocsInputDataSet = TextDocsInputDataSet.builder().docs(sortedDocs).build();
+        return Tuple.tuple(sortedTextDocsInputDataSet, originalIndexOrder);
     }
 
     default void setScriptService(ScriptService scriptService) {}
