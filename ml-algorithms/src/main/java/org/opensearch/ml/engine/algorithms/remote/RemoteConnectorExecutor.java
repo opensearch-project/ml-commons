@@ -234,8 +234,7 @@ public interface RemoteConnectorExecutor {
 
             @Override
             public boolean shouldRetry(Exception e) {
-                getLogger().debug(String.format(Locale.ROOT, "The %s-th retry for invoke remote model", retryTime.toString()));
-                retryTime++;
+                getLogger().debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTime++));
                 final Throwable cause = ExceptionsHelper.unwrapCause(e);
                 return cause instanceof OpenSearchStatusException && cause.getMessage().startsWith("ThrottlingException");
             }
