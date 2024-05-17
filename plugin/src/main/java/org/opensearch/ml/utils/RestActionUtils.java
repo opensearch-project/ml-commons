@@ -316,14 +316,14 @@ public class RestActionUtils {
         }
     }
 
-    public static boolean IsIndependentNode(ClusterService clusterService, Settings settings) {
+    public static boolean isIndependentNode(ClusterService clusterService, Settings settings) {
         isIndependentNode = ML_COMMONS_INDEPENDENT_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_INDEPENDENT_NODE, it -> isIndependentNode = it);
         return isIndependentNode;
     }
 
     public static String getTenantID(ClusterService clusterService, Settings settings, RestRequest restRequest) {
-        if (IsIndependentNode(clusterService, settings)) {
+        if (isIndependentNode(clusterService, settings)) {
             Map<String, List<String>> headers = restRequest.getHeaders();
             if (headers != null) {
                 String tenantId = restRequest.getHeaders().get(Constants.TENANT_ID).get(0);

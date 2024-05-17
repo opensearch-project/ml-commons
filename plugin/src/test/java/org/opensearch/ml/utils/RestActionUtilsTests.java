@@ -387,14 +387,14 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
 
     @Test
     public void testIsIndependentNode() {
-        boolean isIndependentNode = RestActionUtils.IsIndependentNode(clusterService, settings);
+        boolean isIndependentNode = RestActionUtils.isIndependentNode(clusterService, settings);
         Assert.assertTrue(isIndependentNode);
     }
 
     @Test
     public void testIsIndependentNode_False() {
         Settings settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), false).build();
-        boolean isIndependentNode = RestActionUtils.IsIndependentNode(clusterService, settings);
+        boolean isIndependentNode = RestActionUtils.isIndependentNode(clusterService, settings);
         Assert.assertFalse(isIndependentNode);
     }
 
