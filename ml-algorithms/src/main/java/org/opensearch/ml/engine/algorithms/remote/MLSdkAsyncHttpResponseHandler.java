@@ -109,6 +109,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         if (errorsInHeader == null || errorsInHeader.isEmpty()) {
             return;
         }
+        // Check the throttling exception from AMZN servers, e.g. sageMaker.
+        // See [https://github.com/opensearch-project/ml-commons/issues/2429] for more details.
         boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
         if (containsThrottlingException && executionContext.getExceptionHolder().get() == null) {
             log.error("Remote server returned error code: {}", statusCode);
