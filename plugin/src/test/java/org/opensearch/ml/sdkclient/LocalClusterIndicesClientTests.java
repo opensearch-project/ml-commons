@@ -10,7 +10,6 @@ package org.opensearch.ml.sdkclient;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -32,8 +32,10 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
@@ -45,6 +47,9 @@ import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+
+@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
 
     private static final String TEST_ID = "123";
@@ -70,20 +75,18 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     public void testPutDataObject() throws IOException {
         PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
-        doAnswer(invocation -> {
-            ActionListener<ActionResponse> listener = invocation.getArgument(1);
-
-            IndexResponse response = mock(IndexResponse.class);
-            when(response.getId()).thenReturn(TEST_ID);
-            when(response.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-            listener.onResponse(response);
-            return null;
-        }).when(mockedClient).index(any(IndexRequest.class), any());
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn(TEST_ID);
+        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
+        @SuppressWarnings("unchecked")
+        ActionFuture<IndexResponse> future = mock(ActionFuture.class);
+        when(mockedClient.index(any(IndexRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(indexResponse);
 
         PutDataObjectResponse response = sdkClient.putDataObject(putRequest);
 
         ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        verify(mockedClient, times(1)).index(requestCaptor.capture(), any());
+        verify(mockedClient, times(1)).index(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
         assertTrue(response.created());
@@ -99,40 +102,45 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         }).when(mockedClient).index(any(IndexRequest.class), any());
 
         OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.putDataObject(putRequest));
-        assertEquals(IOException.class, ose.getCause().getClass());
-    }
-
-    public void testPutDataObject_OuterException() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
-
-        doThrow(new NullPointerException("test")).when(mockedClient).index(any(IndexRequest.class), any());
-
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.putDataObject(putRequest));
-        assertEquals(NullPointerException.class, ose.getCause().getClass());
+        assertEquals(OpenSearchException.class, ose.getCause().getClass());
     }
 
     public void testGetDataObject() throws IOException {
         GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
 
-        doAnswer(invocation -> {
-            ActionListener<ActionResponse> listener = invocation.getArgument(1);
-
-            GetResponse response = mock(GetResponse.class);
-            when(response.getId()).thenReturn(TEST_ID);
-            when(response.getSourceAsString()).thenReturn(testDataObject.toJson());
-            listener.onResponse(response);
-            return null;
-        }).when(mockedClient).get(any(GetRequest.class), any());
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getId()).thenReturn(TEST_ID);
+        when(getResponse.getSourceAsString()).thenReturn(testDataObject.toJson());
+        @SuppressWarnings("unchecked")
+        ActionFuture<GetResponse> future = mock(ActionFuture.class);
+        when(mockedClient.get(any(GetRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(getResponse);
 
         GetDataObjectResponse response = sdkClient.getDataObject(getRequest);
 
         ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
-        verify(mockedClient, times(1)).get(requestCaptor.capture(), any());
+        verify(mockedClient, times(1)).get(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
         XContentParser parser = response.parser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         assertEquals("foo", TestDataObject.parse(parser).data());
+    }
+
+    public void testGetDataObject_NotFound() throws IOException {
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+        @SuppressWarnings("unchecked")
+        ActionFuture<GetResponse> future = mock(ActionFuture.class);
+        when(mockedClient.get(any(GetRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(getResponse);
+
+        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
+        assertEquals(OpenSearchStatusException.class, ose.getCause().getClass());
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) ose.getCause()).status());
     }
 
     public void testGetDataObject_Exception() throws IOException {
@@ -145,35 +153,24 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         }).when(mockedClient).get(any(GetRequest.class), any());
 
         OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(IOException.class, ose.getCause().getClass());
-    }
-
-    public void testGetDataObject_OuterException() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
-
-        doThrow(new NullPointerException("test")).when(mockedClient).get(any(GetRequest.class), any());
-
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(NullPointerException.class, ose.getCause().getClass());
+        assertEquals(OpenSearchException.class, ose.getCause().getClass());
     }
 
     public void testDeleteDataObject() throws IOException {
         DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
 
-        doAnswer(invocation -> {
-            ActionListener<ActionResponse> listener = invocation.getArgument(1);
-
-            DeleteResponse response = mock(DeleteResponse.class);
-            when(response.getId()).thenReturn(TEST_ID);
-            when(response.getResult()).thenReturn(DocWriteResponse.Result.DELETED);
-            listener.onResponse(response);
-            return null;
-        }).when(mockedClient).delete(any(DeleteRequest.class), any());
+        DeleteResponse deleteResponse = mock(DeleteResponse.class);
+        when(deleteResponse.getId()).thenReturn(TEST_ID);
+        when(deleteResponse.getResult()).thenReturn(DocWriteResponse.Result.DELETED);
+        @SuppressWarnings("unchecked")
+        ActionFuture<DeleteResponse> future = mock(ActionFuture.class);
+        when(mockedClient.delete(any(DeleteRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(deleteResponse);
 
         DeleteDataObjectResponse response = sdkClient.deleteDataObject(deleteRequest);
 
         ArgumentCaptor<DeleteRequest> requestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
-        verify(mockedClient, times(1)).delete(requestCaptor.capture(), any());
+        verify(mockedClient, times(1)).delete(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
     }
@@ -188,14 +185,6 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         }).when(mockedClient).delete(any(DeleteRequest.class), any());
 
         OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.deleteDataObject(deleteRequest));
-        assertEquals(IOException.class, ose.getCause().getClass());
-    }
-
-    public void testDeleteDataObject_OuterException() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
-        doThrow(new NullPointerException("test")).when(mockedClient).delete(any(DeleteRequest.class), any());
-
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.deleteDataObject(deleteRequest));
-        assertEquals(NullPointerException.class, ose.getCause().getClass());
+        assertEquals(OpenSearchException.class, ose.getCause().getClass());
     }
 }

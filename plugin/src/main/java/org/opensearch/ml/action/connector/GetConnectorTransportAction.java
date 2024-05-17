@@ -8,8 +8,6 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
-import java.io.IOException;
-
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -79,11 +77,11 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                         .build()
                 )
                 .whenCompleteAsync((r, throwable) -> {
+                    context.restore();
+                    log.info("Completed Get Connector Request, id:{}", connectorId);
                     if (throwable != null) {
                         actionListener.onFailure(new RuntimeException(throwable));
                     } else {
-                        context.restore();
-                        log.debug("Completed Get Connector Request, id:{}", connectorId);
                         try {
                             Connector mlConnector = Connector.createConnector(r.parser());
                             mlConnector.removeCredential();
@@ -98,7 +96,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                         )
                                     );
                             }
-                        } catch (IOException e) {
+                        } catch (Exception e) {
                             actionListener.onFailure(e);
                         }
                     }

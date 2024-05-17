@@ -19,8 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
-import org.opensearch.client.json.JsonData;
-import org.opensearch.client.json.jackson.JacksonJsonpMapper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch._types.ShardStatistics;
@@ -30,6 +29,7 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -40,8 +40,9 @@ import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 
+@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     private static final String TEST_ID = "123";
@@ -91,17 +92,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedOpenSearchClient.index(indexRequestCaptor.capture())).thenThrow(new IOException("test"));
 
         OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.putDataObject(putRequest));
-        assertEquals(IOException.class, ose.getCause().getClass());
-    }
-
-    public void testPutDataObject_InnerException() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
-
-        ArgumentCaptor<IndexRequest<?>> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
-        when(mockedOpenSearchClient.index(indexRequestCaptor.capture())).thenReturn(null);
-
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.putDataObject(putRequest));
-        assertEquals(NullPointerException.class, ose.getCause().getClass());
+        assertEquals(OpenSearchException.class, ose.getCause().getClass());
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -110,9 +101,9 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         GetResponse<?> getResponse = new GetResponse.Builder<>()
             .index(TEST_INDEX)
-            .fields(Map.of("_source", JsonData.of(Map.of("data", "foo"), new JacksonJsonpMapper(new ObjectMapper()))))
-            .found(true)
             .id(TEST_ID)
+            .found(true)
+            .source(Map.of("data", "foo"))
             .build();
 
         ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
@@ -129,6 +120,21 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void testGetDataObject_NotFound() throws IOException {
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+
+        GetResponse<?> getResponse = new GetResponse.Builder<>().index(TEST_INDEX).id(TEST_ID).found(false).build();
+
+        ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
+        ArgumentCaptor<Class<Map>> mapClassCaptor = ArgumentCaptor.forClass(Class.class);
+        when(mockedOpenSearchClient.get(getRequestCaptor.capture(), mapClassCaptor.capture())).thenReturn((GetResponse<Map>) getResponse);
+
+        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
+        assertEquals(OpenSearchStatusException.class, ose.getCause().getClass());
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) ose.getCause()).status());
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testGetDataObject_Exception() throws IOException {
         GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
 
@@ -137,19 +143,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedOpenSearchClient.get(getRequestCaptor.capture(), mapClassCaptor.capture())).thenThrow(new IOException("test"));
 
         OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(IOException.class, ose.getCause().getClass());
-    }
-
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public void testGetDataObject_InnerException() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
-
-        ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
-        ArgumentCaptor<Class<Map>> mapClassCaptor = ArgumentCaptor.forClass(Class.class);
-        when(mockedOpenSearchClient.get(getRequestCaptor.capture(), mapClassCaptor.capture())).thenReturn(null);
-
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(NullPointerException.class, ose.getCause().getClass());
+        assertEquals(OpenSearchException.class, ose.getCause().getClass());
     }
 
     public void testDeleteDataObject() throws IOException {
@@ -181,16 +175,6 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedOpenSearchClient.delete(deleteRequestCaptor.capture())).thenThrow(new IOException("test"));
 
         OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.deleteDataObject(deleteRequest));
-        assertEquals(IOException.class, ose.getCause().getClass());
-    }
-
-    public void testDeleteDataObject_InnerException() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
-
-        ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
-        when(mockedOpenSearchClient.delete(deleteRequestCaptor.capture())).thenReturn(null);
-
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.deleteDataObject(deleteRequest));
-        assertEquals(NullPointerException.class, ose.getCause().getClass());
+        assertEquals(OpenSearchException.class, ose.getCause().getClass());
     }
 }

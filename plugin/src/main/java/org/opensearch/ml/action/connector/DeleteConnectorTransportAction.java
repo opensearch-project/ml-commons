@@ -127,17 +127,17 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             sdkClient
                 .deleteDataObjectAsync(new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
                 .whenCompleteAsync((r, throwable) -> {
+                    context.restore();
                     if (throwable != null) {
                         actionListener.onFailure(new RuntimeException(throwable));
                     } else {
-                        context.restore();
                         log.info("Connector deletion result: {}, connector id: {}", r.deleted(), r.id());
                         DeleteResponse response = new DeleteResponse(r.shardId(), r.id(), 0, 0, 0, r.deleted());
                         actionListener.onResponse(response);
                     }
                 });
         } catch (Exception e) {
-            log.error("Failed to delete ML connector: " + connectorId, e);
+            log.error("Failed to delete ML connector: {}", connectorId, e);
             actionListener.onFailure(e);
         }
     }

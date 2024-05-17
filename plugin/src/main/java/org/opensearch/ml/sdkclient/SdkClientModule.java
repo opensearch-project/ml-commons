@@ -8,17 +8,19 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import org.apache.http.HttpHost;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.opensearch.OpenSearchException;
+import org.opensearch.client.RestClient;
+import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.transport.aws.AwsSdk2Transport;
-import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
+import org.opensearch.client.transport.rest_client.RestClientTransport;
 import org.opensearch.common.inject.AbstractModule;
 import org.opensearch.core.common.Strings;
 import org.opensearch.sdk.SdkClient;
 
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.regions.Region;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
 /**
  * A module for binding this plugin's desired implementation of {@link SdkClient}.
@@ -29,7 +31,7 @@ public class SdkClientModule extends AbstractModule {
     public static final String REGION = "REGION";
 
     private final String remoteMetadataEndpoint;
-    private final String region;
+    private final String region; // not using with RestClient
 
     /**
      * Instantiate this module using environment variables
@@ -59,11 +61,22 @@ public class SdkClientModule extends AbstractModule {
     }
 
     private OpenSearchClient createOpenSearchClient() {
-        SdkHttpClient httpClient = ApacheHttpClient.builder().build();
         try {
-            return new OpenSearchClient(
-                new AwsSdk2Transport(httpClient, remoteMetadataEndpoint, Region.of(region), AwsSdk2TransportOptions.builder().build())
-            );
+            // Basic http(not-s) client using RestClient.
+            RestClient restClient = RestClient
+                // This HttpHost syntax works with export REMOTE_METADATA_ENDPOINT=http://127.0.0.1:9200
+                .builder(HttpHost.create(remoteMetadataEndpoint))
+                .setStrictDeprecationMode(true)
+                .setHttpClientConfigCallback(httpClientBuilder -> {
+                    try {
+                        return httpClientBuilder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+                    } catch (Exception e) {
+                        throw new OpenSearchException(e);
+                    }
+                })
+                .build();
+            ObjectMapper objectMapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+            return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
         } catch (Exception e) {
             throw new OpenSearchException(e);
         }

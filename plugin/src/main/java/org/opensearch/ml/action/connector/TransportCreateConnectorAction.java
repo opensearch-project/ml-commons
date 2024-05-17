@@ -132,10 +132,10 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 sdkClient
                     .putDataObjectAsync(new PutDataObjectRequest.Builder().index(ML_CONNECTOR_INDEX).dataObject(connector).build())
                     .whenCompleteAsync((r, throwable) -> {
+                        context.restore();
                         if (throwable != null) {
                             listener.onFailure(new RuntimeException(throwable));
                         } else {
-                            context.restore();
                             log.info("Connector creation result: {}, connector id: {}", r.created(), r.id());
                             MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.id());
                             listener.onResponse(response);

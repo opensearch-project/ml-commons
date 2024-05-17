@@ -14,17 +14,23 @@ import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
-import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -36,9 +42,12 @@ import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 
+import lombok.extern.log4j.Log4j2;
+
 /**
  * An implementation of {@link SdkClient} that stores data in a local OpenSearch cluster using the Node Client.
  */
+@Log4j2
 public class LocalClusterIndicesClient implements SdkClient {
 
     private final Client client;
@@ -56,69 +65,60 @@ public class LocalClusterIndicesClient implements SdkClient {
 
     @Override
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request) {
-        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
-        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
-            client
-                .index(
-                    new IndexRequest(request.index())
-                        .setRefreshPolicy(IMMEDIATE)
-                        .source(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS)),
-                    ActionListener
-                        .wrap(
-                            r -> future
-                                .complete(new PutDataObjectResponse.Builder().id(r.getId()).created(r.getResult() == CREATED).build()),
-                            future::completeExceptionally
-                        )
-                );
-        } catch (Exception e) {
-            future.completeExceptionally(e);
-        }
-        return future;
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
+            try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+                log.info("Indexing data object in {}", request.index());
+                IndexResponse indexResponse = client
+                    .index(
+                        new IndexRequest(request.index())
+                            .setRefreshPolicy(IMMEDIATE)
+                            .source(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS))
+                    )
+                    .actionGet();
+                log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
+                return new PutDataObjectResponse.Builder().id(indexResponse.getId()).created(indexResponse.getResult() == CREATED).build();
+            } catch (Exception e) {
+                throw new OpenSearchException(e);
+            }
+        }));
     }
 
     @Override
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
-        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        try {
-            client.get(new GetRequest(request.index(), request.id()), ActionListener.wrap(r -> {
-                try {
-                    XContentParser parser = jsonXContent
-                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString());
-                    future.complete(new GetDataObjectResponse.Builder().id(r.getId()).parser(parser).build());
-                } catch (IOException e) {
-                    // Parsing error
-                    future.completeExceptionally(e);
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
+            try {
+                log.info("Getting {} from {}", request.id(), request.index());
+                GetResponse getResponse = client.get(new GetRequest(request.index(), request.id())).actionGet();
+                if (!getResponse.isExists()) {
+                    throw new OpenSearchStatusException("Data object with id " + request.id() + " not found", RestStatus.NOT_FOUND);
                 }
-            }, future::completeExceptionally));
-        } catch (Exception e) {
-            future.completeExceptionally(e);
-        }
-        return future;
+                XContentParser parser = jsonXContent
+                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
+                log.info("Retrieved data object");
+                return new GetDataObjectResponse.Builder().id(getResponse.getId()).parser(parser).build();
+            } catch (OpenSearchStatusException notFound) {
+                throw notFound;
+            } catch (Exception e) {
+                throw new OpenSearchException(e);
+            }
+        }));
     }
 
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
-        CompletableFuture<DeleteDataObjectResponse> future = new CompletableFuture<>();
-        try {
-            client
-                .delete(
-                    new DeleteRequest(request.index(), request.id()),
-                    ActionListener
-                        .wrap(
-                            r -> future
-                                .complete(
-                                    new DeleteDataObjectResponse.Builder()
-                                        .id(r.getId())
-                                        .shardId(r.getShardId())
-                                        .deleted(r.getResult() == DELETED)
-                                        .build()
-                                ),
-                            future::completeExceptionally
-                        )
-                );
-        } catch (Exception e) {
-            future.completeExceptionally(e);
-        }
-        return future;
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
+            try {
+                log.info("Deleting {} from {}", request.id(), request.index());
+                DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
+                log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
+                return new DeleteDataObjectResponse.Builder()
+                    .id(deleteResponse.getId())
+                    .shardId(deleteResponse.getShardId())
+                    .deleted(deleteResponse.getResult() == DELETED)
+                    .build();
+            } catch (Exception e) {
+                throw new OpenSearchException(e);
+            }
+        }));
     }
 }
