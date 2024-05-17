@@ -14,7 +14,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 
-public class PutDataObjectRequestTest {
+public class PutDataObjectRequestTests {
 
     private String testIndex;
     private ToXContentObject testDataObject;

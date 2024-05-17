@@ -9,33 +9,23 @@
 package org.opensearch.sdk;
 
 import org.junit.Before;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.mock;
 
-public class GetDataObjectRequestTest {
-
+public class DeleteDataObjectRequestTests {
     private String testIndex;
     private String testId;
-    private FetchSourceContext testFetchSourceContext;
 
     @Before
     public void setUp() {
         testIndex = "test-index";
         testId = "test-id";
-        testFetchSourceContext = mock(FetchSourceContext.class);
     }
 
-    public void testGetDataObjectRequest() {
-        GetDataObjectRequest request = new GetDataObjectRequest.Builder()
-            .index(testIndex)
-            .id(testId)
-            .fetchSourceContext(testFetchSourceContext)
-            .build();
+    public void testDeleteDataObjectRequest() {
+        DeleteDataObjectRequest request = new DeleteDataObjectRequest.Builder().index(testIndex).id(testId).build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());
-        assertEquals(testFetchSourceContext, request.fetchSourceContext());
     }
 }

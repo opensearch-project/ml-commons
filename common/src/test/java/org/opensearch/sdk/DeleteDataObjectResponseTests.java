@@ -14,7 +14,7 @@ import org.opensearch.core.index.shard.ShardId;
 
 import static org.junit.Assert.assertEquals;
 
-public class DeleteDataObjectResponseTest {
+public class DeleteDataObjectResponseTests {
     private String testId;
     private ShardId testShardId;
     private boolean testDeleted;
