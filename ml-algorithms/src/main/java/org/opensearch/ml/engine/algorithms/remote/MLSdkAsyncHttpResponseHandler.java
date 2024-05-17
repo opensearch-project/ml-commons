@@ -17,6 +17,7 @@ import java.util.Map;
 
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
+import org.jetbrains.annotations.NotNull;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.core.action.ActionListener;
@@ -98,7 +99,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         private Subscription subscription;
 
         @Override
-        public void onSubscribe(Subscription s) {
+        public void onSubscribe(@NotNull Subscription s) {
             this.subscription = s;
             s.request(Long.MAX_VALUE);
         }

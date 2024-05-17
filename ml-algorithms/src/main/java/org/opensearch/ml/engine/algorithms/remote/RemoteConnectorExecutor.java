@@ -60,10 +60,15 @@ public interface RemoteConnectorExecutor {
             if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
                 TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
                 Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
+                GroupedActionListener<Tuple<Integer, ModelTensors>> groupedActionListener = new GroupedActionListener<>(
+                        tensorActionListener,
+                        calculatedChunkSize.v1()
+                );
                 int sequence = 0;
                 for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize
                     .v2()) {
-                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
+                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, processedDocs + calculatedChunkSize
+                            .v2());
                     preparePayloadAndInvokeRemoteModel(
                         MLInput
                             .builder()
@@ -71,10 +76,7 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
-                        new GroupedActionListener<>(
-                                tensorActionListener,
-                                calculatedChunkSize.v1()
-                        )
+                        groupedActionListener
                     );
                 }
             } else {
