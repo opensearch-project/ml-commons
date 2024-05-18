@@ -19,6 +19,7 @@ import java.util.concurrent.CompletionStage;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
@@ -107,9 +108,14 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Deleting {} from {}", request.id(), request.index());
                 DeleteResponse deleteResponse = openSearchClient.delete(deleteRequest);
                 log.info("Deletion status for id {}: {}", deleteResponse.id(), deleteResponse.result());
+                ShardInfo shardInfo = new ShardInfo(
+                    deleteResponse.shards().total().intValue(),
+                    deleteResponse.shards().successful().intValue()
+                );
                 return new DeleteDataObjectResponse.Builder()
                     .id(deleteResponse.id())
                     .shardId(deleteResponse.index())
+                    .shardInfo(shardInfo)
                     .deleted(deleteResponse.result() == Deleted)
                     .build();
             } catch (Exception e) {

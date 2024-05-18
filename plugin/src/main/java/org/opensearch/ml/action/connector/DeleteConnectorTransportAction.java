@@ -133,6 +133,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     } else {
                         log.info("Connector deletion result: {}, connector id: {}", r.deleted(), r.id());
                         DeleteResponse response = new DeleteResponse(r.shardId(), r.id(), 0, 0, 0, r.deleted());
+                        response.setShardInfo(r.shardInfo());
                         actionListener.onResponse(response);
                     }
                 });

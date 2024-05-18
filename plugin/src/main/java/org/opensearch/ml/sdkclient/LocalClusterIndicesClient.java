@@ -114,6 +114,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                 return new DeleteDataObjectResponse.Builder()
                     .id(deleteResponse.getId())
                     .shardId(deleteResponse.getShardId())
+                    .shardInfo(deleteResponse.getShardInfo())
                     .deleted(deleteResponse.getResult() == DELETED)
                     .build();
             } catch (Exception e) {

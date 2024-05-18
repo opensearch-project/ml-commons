@@ -155,7 +155,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .primaryTerm(0)
             .result(Result.Deleted)
             .seqNo(0)
-            .shards(new ShardStatistics.Builder().failed(0).successful(1).total(1).build())
+            .shards(new ShardStatistics.Builder().failed(0).successful(2).total(2).build())
             .version(0)
             .build();
 
@@ -166,6 +166,9 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, deleteRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
+        assertEquals(2, response.shardInfo().getTotal());
+        assertEquals(2, response.shardInfo().getSuccessful());
+        assertEquals(0, response.shardInfo().getFailed());
     }
 
     public void testDeleteDataObject_Exception() throws IOException {

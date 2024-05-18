@@ -8,25 +8,29 @@
  */
 package org.opensearch.sdk;
 
+import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.index.shard.ShardId;
 
 public class DeleteDataObjectResponse {
     private final String id;
     private final ShardId shardId;
+    private final ShardInfo shardInfo;
     private final boolean deleted;
 
     /**
-     * Instantiate this request with an id and deletion status.
+     * Instantiate this request.
      * <p>
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param id the document id
      * @param shardId the shard id
+     * @param shardInfo the shard info
      * @param deleted Whether the object was deleted. Use {@code false} if the object was not found.
      */
-    public DeleteDataObjectResponse(String id, ShardId shardId, boolean deleted) {
+    public DeleteDataObjectResponse(String id, ShardId shardId, ShardInfo shardInfo, boolean deleted) {
         this.id = id;
         this.shardId = shardId;
+        this.shardInfo = shardInfo;
         this.deleted = deleted;
     }
 
@@ -45,7 +49,15 @@ public class DeleteDataObjectResponse {
     public ShardId shardId() {
         return shardId;
     }
-    
+
+    /**
+     * Returns the shard info.
+     * @return the shard info, or generated info if shards are not applicable
+     */
+    public ShardInfo shardInfo() {
+        return shardInfo;
+    }
+
     /**
      * Returns whether deletion was successful
      * @return true if deletion was successful, false if the object was not found
@@ -60,6 +72,7 @@ public class DeleteDataObjectResponse {
     public static class Builder {
         private String id = null;
         private ShardId shardId = null;
+        private ShardInfo shardInfo = null;
         private boolean deleted = false;
 
         /**
@@ -98,6 +111,16 @@ public class DeleteDataObjectResponse {
         }
 
         /**
+         * Adds shard information (statistics) to this builder
+         * @param shardInfo the shard info to add
+         * @return the updated builder
+         */
+        public Builder shardInfo(ShardInfo shardInfo) {
+            this.shardInfo = shardInfo;
+            return this;
+        }
+
+        /**
          * Add a deleted status to this builder
          * @param deleted the deleted status to add
          * @return the updated builder
@@ -112,7 +135,7 @@ public class DeleteDataObjectResponse {
          * @return A {@link DeleteDataObjectResponse}
          */
         public DeleteDataObjectResponse build() {
-            return new DeleteDataObjectResponse(this.id, this.shardId, this.deleted);
+            return new DeleteDataObjectResponse(this.id, this.shardId, this.shardInfo, this.deleted);
         }
     }
 }

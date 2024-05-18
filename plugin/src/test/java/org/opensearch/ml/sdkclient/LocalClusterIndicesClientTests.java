@@ -31,6 +31,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
@@ -162,6 +163,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         DeleteResponse deleteResponse = mock(DeleteResponse.class);
         when(deleteResponse.getId()).thenReturn(TEST_ID);
         when(deleteResponse.getResult()).thenReturn(DocWriteResponse.Result.DELETED);
+        when(deleteResponse.getShardInfo()).thenReturn(new ShardInfo(2, 2));
         @SuppressWarnings("unchecked")
         ActionFuture<DeleteResponse> future = mock(ActionFuture.class);
         when(mockedClient.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -173,6 +175,9 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         verify(mockedClient, times(1)).delete(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
+        assertEquals(2, response.shardInfo().getTotal());
+        assertEquals(2, response.shardInfo().getSuccessful());
+        assertEquals(0, response.shardInfo().getFailed());
     }
 
     public void testDeleteDataObject_Exception() throws IOException {
