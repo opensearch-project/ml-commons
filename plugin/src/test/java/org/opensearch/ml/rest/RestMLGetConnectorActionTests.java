@@ -12,7 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_INDEPENDENT_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_CONNECTOR_ID;
 
 import java.util.HashMap;
@@ -64,9 +64,9 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), false).build();
+        settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
         when(clusterService.getSettings()).thenReturn(settings);
-        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_INDEPENDENT_NODE)));
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
         restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");

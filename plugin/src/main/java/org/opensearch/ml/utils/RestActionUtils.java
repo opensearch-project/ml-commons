@@ -7,7 +7,7 @@ package org.opensearch.ml.utils;
 
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_INDEPENDENT_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -89,7 +89,7 @@ public class RestActionUtils {
     static final ObjectMapper objectMapper = new ObjectMapper();
 
     // This is to identify if this node is in multi-tenancy or not.
-    public static volatile Boolean isIndependentNode;
+    public static volatile Boolean isMultiTenant;
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -316,14 +316,14 @@ public class RestActionUtils {
         }
     }
 
-    public static boolean isIndependentNode(ClusterService clusterService, Settings settings) {
-        isIndependentNode = ML_COMMONS_INDEPENDENT_NODE.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_INDEPENDENT_NODE, it -> isIndependentNode = it);
-        return isIndependentNode;
+    public static boolean isMultiTenant(ClusterService clusterService, Settings settings) {
+        isMultiTenant = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MULTI_TENANCY_ENABLED, it -> isMultiTenant = it);
+        return isMultiTenant;
     }
 
     public static String getTenantID(ClusterService clusterService, Settings settings, RestRequest restRequest) {
-        if (isIndependentNode(clusterService, settings)) {
+        if (isMultiTenant(clusterService, settings)) {
             Map<String, List<String>> headers = restRequest.getHeaders();
             if (headers != null) {
                 String tenantId = restRequest.getHeaders().get(Constants.TENANT_ID).get(0);

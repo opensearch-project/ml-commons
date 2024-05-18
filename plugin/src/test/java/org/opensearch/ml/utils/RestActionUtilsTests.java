@@ -10,7 +10,8 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_INDEPENDENT_NODE;
+
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.OPENSEARCH_DASHBOARDS_USER_AGENT;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ASYNC;
@@ -73,14 +74,14 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     String urlPath = MachineLearningPlugin.ML_BASE_URI + "/_train/" + algoName;
 
     ClusterService clusterService = mock(ClusterService.class);
-    Settings settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), true).build();
+    Settings settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), true).build();
 
     @Before
     public void setup() {
         param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, algoName).build();
         fakeRestRequest = createRestRequest(param);
 
-        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_INDEPENDENT_NODE)));
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
         when(clusterService.getSettings()).thenReturn(settings);
 
     }
@@ -387,14 +388,14 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
 
     @Test
     public void testIsIndependentNode() {
-        boolean isIndependentNode = RestActionUtils.isIndependentNode(clusterService, settings);
+        boolean isIndependentNode = RestActionUtils.isMultiTenant(clusterService, settings);
         Assert.assertTrue(isIndependentNode);
     }
 
     @Test
     public void testIsIndependentNode_False() {
-        Settings settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), false).build();
-        boolean isIndependentNode = RestActionUtils.isIndependentNode(clusterService, settings);
+        Settings settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
+        boolean isIndependentNode = RestActionUtils.isMultiTenant(clusterService, settings);
         Assert.assertFalse(isIndependentNode);
     }
 
@@ -427,7 +428,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
 
     @Test
     public void testGetTenantID_NotIndependentNode() {
-        settings = Settings.builder().put(ML_COMMONS_INDEPENDENT_NODE.getKey(), false).build();
+        settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
         String tenantId = "test-tenant";
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));

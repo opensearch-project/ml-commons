@@ -185,6 +185,6 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
         .boolSetting("plugins.ml_commons.agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Boolean> ML_COMMONS_INDEPENDENT_NODE = Setting
-        .boolSetting("plugins.ml_commons.independent_node", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.multi_tenancy_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
