@@ -45,7 +45,7 @@ import lombok.extern.log4j.Log4j2;
 public class DeleteConnectorTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
     Client client;
-    private final SdkClient sdkClient;
+    SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;

@@ -16,6 +16,7 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -30,10 +31,10 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -89,14 +90,14 @@ public class LocalClusterIndicesClient implements SdkClient {
             try {
                 log.info("Getting {} from {}", request.id(), request.index());
                 GetResponse getResponse = client.get(new GetRequest(request.index(), request.id())).actionGet();
-                if (!getResponse.isExists()) {
-                    throw new OpenSearchStatusException("Data object with id " + request.id() + " not found", RestStatus.NOT_FOUND);
+                if (getResponse == null || !getResponse.isExists()) {
+                    return new GetDataObjectResponse.Builder().id(request.id()).build();
                 }
                 XContentParser parser = jsonXContent
                     .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
                 log.info("Retrieved data object");
-                return new GetDataObjectResponse.Builder().id(getResponse.getId()).parser(parser).build();
-            } catch (OpenSearchStatusException notFound) {
+                return new GetDataObjectResponse.Builder().id(getResponse.getId()).parser(Optional.of(parser)).build();
+            } catch (OpenSearchStatusException | IndexNotFoundException notFound) {
                 throw notFound;
             } catch (Exception e) {
                 throw new OpenSearchException(e);

@@ -7,34 +7,40 @@ package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.action.DocWriteResponse.Result.NOT_FOUND;
 
 import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
-import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -44,6 +50,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
@@ -53,14 +60,18 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+
+@ThreadLeakScope(ThreadLeakScope.Scope.NONE) // TODO: implement thread pool executors and remove this
 public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
+    private static final String CONNECTOR_ID = "connector_id";
+
     @Mock
     ThreadPool threadPool;
 
     @Mock
     Client client;
 
-    @Mock
     SdkClient sdkClient;
 
     @Mock
@@ -78,9 +89,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     DeleteConnectorTransportAction deleteConnectorTransportAction;
     MLConnectorDeleteRequest mlConnectorDeleteRequest;
     ThreadContext threadContext;
@@ -93,7 +101,11 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId("connector_id").build();
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(CONNECTOR_ID).build();
+        when(deleteResponse.getId()).thenReturn(CONNECTOR_ID);
+        when(deleteResponse.getShardId()).thenReturn(mock(ShardId.class));
+        when(deleteResponse.getShardInfo()).thenReturn(mock(ShardInfo.class));
 
         Settings settings = Settings.builder().build();
         deleteConnectorTransportAction = spy(
@@ -118,12 +130,11 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void testDeleteConnector_Success() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteConnector_Success() throws IOException, InterruptedException {
+        when(deleteResponse.getResult()).thenReturn(DELETED);
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any(DeleteRequest.class))).thenReturn(future);
 
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
@@ -132,36 +143,45 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
 
-        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
-        // FIXME verify(actionListener).onResponse(deleteResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
+        latch.await();
+        
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(CONNECTOR_ID, captor.getValue().getId());
+        assertEquals(DELETED, captor.getValue().getResult());
     }
 
-    public void testDeleteConnector_ModelIndexNotFoundSuccess() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteConnector_ModelIndexNotFoundSuccess() throws IOException, InterruptedException {
+        when(deleteResponse.getResult()).thenReturn(DELETED);
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any(DeleteRequest.class))).thenReturn(future);
 
-        SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
             ActionListener<Exception> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new IndexNotFoundException("ml_model index not found!"));
             return null;
         }).when(client).search(any(), any());
 
-        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
-        // FIXME verify(actionListener).onResponse(deleteResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(CONNECTOR_ID, captor.getValue().getId());
+        assertEquals(DELETED, captor.getValue().getResult());
     }
 
-    public void testDeleteConnector_ConnectorNotFound() throws IOException {
-        when(deleteResponse.getResult()).thenReturn(DocWriteResponse.Result.NOT_FOUND);
-
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteConnector_ConnectorNotFound() throws IOException, InterruptedException {
+        when(deleteResponse.getResult()).thenReturn(NOT_FOUND);
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any(DeleteRequest.class))).thenReturn(future);
 
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
@@ -170,16 +190,21 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
 
-        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
-        // FIXME verify(actionListener).onResponse(deleteResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(CONNECTOR_ID, captor.getValue().getId());
+        assertEquals(NOT_FOUND, captor.getValue().getResult());
     }
 
-    public void testDeleteConnector_BlockedByModel() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteConnector_BlockedByModel() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any(DeleteRequest.class))).thenReturn(future);
 
         SearchResponse searchResponse = getNonEmptySearchResponse();
         doAnswer(invocation -> {
@@ -188,7 +213,11 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
 
-        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -217,12 +246,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new ResourceNotFoundException("errorMessage"));
-            return null;
-        }).when(client).delete(any(), any());
-
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -238,7 +261,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("Thread Context Error!", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteConnector_ResourceNotFoundException() throws IOException {
+    public void testDeleteConnector_ResourceNotFoundException() throws IOException, InterruptedException {
+        when(client.delete(any(DeleteRequest.class))).thenThrow(new ResourceNotFoundException("errorMessage"));
+
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -246,16 +271,16 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new ResourceNotFoundException("errorMessage"));
-            return null;
-        }).when(client).delete(any(), any());
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
+        latch.await();
 
-        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
-        // FIXME verify(actionListener).onFailure(argumentCaptor.capture());
-        // FIXME assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        // TODO: fix all this exception nesting
+        // java.util.concurrent.CompletionException: OpenSearchException[ResourceNotFoundException[errorMessage]]; nested: ResourceNotFoundException[errorMessage];
+        assertEquals("errorMessage", argumentCaptor.getValue().getCause().getCause().getCause().getMessage());
     }
 
     public void test_ValidationFailedException() throws IOException {

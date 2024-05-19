@@ -19,7 +19,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch._types.ShardStatistics;
@@ -29,7 +28,6 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -114,7 +112,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, getRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        XContentParser parser = response.parser();
+        assertTrue(response.parser().isPresent());
+        XContentParser parser = response.parser().get();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         assertEquals("foo", TestDataObject.parse(parser).data());
     }
@@ -129,9 +128,11 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         ArgumentCaptor<Class<Map>> mapClassCaptor = ArgumentCaptor.forClass(Class.class);
         when(mockedOpenSearchClient.get(getRequestCaptor.capture(), mapClassCaptor.capture())).thenReturn((GetResponse<Map>) getResponse);
 
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(OpenSearchStatusException.class, ose.getCause().getClass());
-        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) ose.getCause()).status());
+        GetDataObjectResponse response = sdkClient.getDataObject(getRequest);
+
+        assertEquals(TEST_INDEX, getRequestCaptor.getValue().index());
+        assertEquals(TEST_ID, response.id());
+        assertFalse(response.parser().isPresent());
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

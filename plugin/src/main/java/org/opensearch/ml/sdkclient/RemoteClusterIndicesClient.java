@@ -14,11 +14,11 @@ import static org.opensearch.client.opensearch._types.Result.Deleted;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import org.opensearch.OpenSearchException;
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch.core.DeleteRequest;
@@ -29,7 +29,6 @@ import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.json.JsonXContent;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
@@ -85,17 +84,15 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 @SuppressWarnings("rawtypes")
                 GetResponse<Map> getResponse = openSearchClient.get(getRequest, Map.class);
                 if (!getResponse.found()) {
-                    throw new OpenSearchStatusException("Data object with id " + request.id() + " not found", RestStatus.NOT_FOUND);
+                    return new GetDataObjectResponse.Builder().id(getResponse.id()).build();
                 }
                 String json = new ObjectMapper().setSerializationInclusion(Include.NON_NULL).writeValueAsString(getResponse.source());
                 log.info("Retrieved data object");
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
-                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(parser).build();
-            } catch (OpenSearchStatusException notFound) {
-                throw notFound;
+                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).build();
             } catch (Exception e) {
-                throw new OpenSearchException("Error occurred while getting data object", e);
+                throw new OpenSearchException(e);
             }
         }));
     }

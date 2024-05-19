@@ -10,18 +10,20 @@ package org.opensearch.sdk;
 
 import org.opensearch.core.xcontent.XContentParser;
 
+import java.util.Optional;
+
 public class GetDataObjectResponse {
     private final String id;
-    private final XContentParser parser;
+    private final Optional<XContentParser> parser;
 
     /**
      * Instantiate this request with an id and parser used to recreate the data object.
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
      * @param id the document id
-     * @param parser an XContentParser that can be used to create the object.
+     * @param parser an optional XContentParser that can be used to create the object if present.
      */
-    public GetDataObjectResponse(String id, XContentParser parser) {
+    public GetDataObjectResponse(String id, Optional<XContentParser> parser) {
         this.id = id;
         this.parser = parser;
     }
@@ -35,10 +37,10 @@ public class GetDataObjectResponse {
     }
     
     /**
-     * Returns the parser
-     * @return the parser
+     * Returns the parser optional
+     * @return the parser optional
      */
-    public XContentParser parser() {
+    public Optional<XContentParser> parser() {
         return this.parser;
     }
 
@@ -47,7 +49,7 @@ public class GetDataObjectResponse {
      */
     public static class Builder {
         private String id = null;
-        private XContentParser parser = null;
+        private Optional<XContentParser> parser = Optional.empty();
 
         /**
          * Empty Constructor for the Builder object
@@ -65,11 +67,11 @@ public class GetDataObjectResponse {
         }
         
         /**
-         * Add a parser to this builder
-         * @param parser the parser
+         * Add an optional parser to this builder
+         * @param parser an {@link Optional} which may contain the parser
          * @return the updated builder
          */
-        public Builder parser(XContentParser parser) {
+        public Builder parser(Optional<XContentParser> parser) {
             this.parser = parser;
             return this;
         }

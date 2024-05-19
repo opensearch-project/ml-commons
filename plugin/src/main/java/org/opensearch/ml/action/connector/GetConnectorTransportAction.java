@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -18,7 +19,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
@@ -40,8 +42,7 @@ import lombok.extern.log4j.Log4j2;
 public class GetConnectorTransportAction extends HandledTransportAction<ActionRequest, MLConnectorGetResponse> {
 
     Client client;
-    private final SdkClient sdkClient;
-    NamedXContentRegistry xContentRegistry;
+    SdkClient sdkClient;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
 
@@ -51,13 +52,11 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
-        NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper
     ) {
         super(MLConnectorGetAction.NAME, transportService, actionFilters, MLConnectorGetRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
-        this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
     }
 
@@ -66,24 +65,31 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.fromActionRequest(request);
         String connectorId = mlConnectorGetRequest.getConnectorId();
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
+        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+            .index(ML_CONNECTOR_INDEX)
+            .id(connectorId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient
-                .getDataObjectAsync(
-                    new GetDataObjectRequest.Builder()
-                        .index(ML_CONNECTOR_INDEX)
-                        .id(connectorId)
-                        .fetchSourceContext(fetchSourceContext)
-                        .build()
-                )
-                .whenCompleteAsync((r, throwable) -> {
-                    context.restore();
-                    log.info("Completed Get Connector Request, id:{}", connectorId);
-                    if (throwable != null) {
-                        actionListener.onFailure(new RuntimeException(throwable));
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenCompleteAsync((r, throwable) -> {
+                context.restore();
+                log.debug("Completed Get Connector Request, id:{}", connectorId);
+                if (throwable != null) {
+                    Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                    if (cause instanceof IndexNotFoundException) {
+                        log.error("Failed to get connector index", cause);
+                        actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                     } else {
+                        log.error("Failed to get ML connector " + connectorId, cause);
+                        actionListener.onFailure(new RuntimeException(cause));
+                    }
+                } else {
+                    if (r != null && r.parser().isPresent()) {
                         try {
-                            Connector mlConnector = Connector.createConnector(r.parser());
+                            XContentParser parser = r.parser().get();
+                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            Connector mlConnector = Connector.createConnector(parser);
                             mlConnector.removeCredential();
                             if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                                 actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
@@ -97,10 +103,20 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                     );
                             }
                         } catch (Exception e) {
+                            log.error("Failed to parse ml connector" + r.id(), e);
                             actionListener.onFailure(e);
                         }
+                    } else {
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Failed to find connector with the provided connector id: " + connectorId,
+                                    RestStatus.NOT_FOUND
+                                )
+                            );
                     }
-                });
+                }
+            });
         } catch (Exception e) {
             log.error("Failed to get ML connector " + connectorId, e);
             actionListener.onFailure(e);

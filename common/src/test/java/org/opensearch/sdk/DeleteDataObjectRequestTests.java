@@ -9,6 +9,7 @@
 package org.opensearch.sdk;
 
 import org.junit.Before;
+import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
@@ -22,6 +23,7 @@ public class DeleteDataObjectRequestTests {
         testId = "test-id";
     }
 
+    @Test
     public void testDeleteDataObjectRequest() {
         DeleteDataObjectRequest request = new DeleteDataObjectRequest.Builder().index(testIndex).id(testId).build();
 

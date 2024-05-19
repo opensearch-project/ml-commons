@@ -9,7 +9,10 @@
 package org.opensearch.sdk;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.core.xcontent.XContentParser;
+
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -25,10 +28,11 @@ public class GetDataObjectResponseTests {
         testParser = mock(XContentParser.class);
     }
 
+    @Test
     public void testGetDataObjectResponse() {
-        GetDataObjectResponse response = new GetDataObjectResponse.Builder().id(testId).parser(testParser).build();
+        GetDataObjectResponse response = new GetDataObjectResponse.Builder().id(testId).parser(Optional.of(testParser)).build();
 
         assertEquals(testId, response.id());
-        assertEquals(testParser, response.parser());
+        assertEquals(testParser, response.parser().get());
     }
 }

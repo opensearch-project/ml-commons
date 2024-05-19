@@ -8,18 +8,21 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -35,19 +38,24 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+
+@ThreadLeakScope(ThreadLeakScope.Scope.NONE) // TODO: implement thread pool executors and remove this
 public class GetConnectorTransportActionTests extends OpenSearchTestCase {
+    private static final String CONNECTOR_ID = "connector_id";
+
     @Mock
     ThreadPool threadPool;
 
     @Mock
     Client client;
 
-    @Mock
     SdkClient sdkClient;
 
     @Mock
@@ -63,10 +71,11 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     ActionListener<MLConnectorGetResponse> actionListener;
 
     @Mock
+    GetResponse getResponse;
+
+    @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
     GetConnectorTransportAction getConnectorTransportAction;
     MLConnectorGetRequest mlConnectorGetRequest;
     ThreadContext threadContext;
@@ -74,18 +83,15 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId("connector_id").build();
+
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).build();
+        when(getResponse.getId()).thenReturn(CONNECTOR_ID);
+        when(getResponse.getSourceAsString()).thenReturn("{}");
         Settings settings = Settings.builder().build();
 
         getConnectorTransportAction = spy(
-            new GetConnectorTransportAction(
-                transportService,
-                actionFilters,
-                client,
-                sdkClient,
-                xContentRegistry,
-                connectorAccessControlHelper
-            )
+            new GetConnectorTransportAction(transportService, actionFilters, client, sdkClient, connectorAccessControlHelper)
         );
 
         doAnswer(invocation -> {
@@ -99,7 +105,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void testGetConnector_UserHasNodeAccess() throws IOException {
+    public void testGetConnector_UserHasNodeAccess() throws IOException, InterruptedException {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
@@ -107,19 +113,21 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
 
         GetResponse getResponse = prepareConnector();
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        // FIXME verify(actionListener).onFailure(argumentCaptor.capture());
-        // FIXME assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetConnector_ValidateAccessFailed() throws IOException {
+    public void testGetConnector_ValidateAccessFailed() throws IOException, InterruptedException {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new Exception("Failed to validate access"));
@@ -127,53 +135,65 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
 
         GetResponse getResponse = prepareConnector();
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        // FIXME verify(actionListener).onFailure(argumentCaptor.capture());
-        // FIXME assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetConnector_NullResponse() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
-            return null;
-        }).when(client).get(any(), any());
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
+    public void testGetConnector_NullResponse() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(null);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        // FIXME verify(actionListener).onFailure(argumentCaptor.capture());
-        // FIXME assertEquals("Failed to find connector with the provided connector id: connector_id",
-        // argumentCaptor.getValue().getMessage());
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find connector with the provided connector id: connector_id", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetConnector_IndexNotFoundException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IndexNotFoundException("Fail to find model"));
-            return null;
-        }).when(client).get(any(), any());
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
+    public void testGetConnector_IndexNotFoundException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new IndexNotFoundException("Fail to find model"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        // FIXME verify(actionListener).onFailure(argumentCaptor.capture());
-        // FIXME assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetConnector_RuntimeException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("errorMessage"));
-            return null;
-        }).when(client).get(any(), any());
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
+    public void testGetConnector_RuntimeException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new RuntimeException("errorMessage"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        // FIXME verify(actionListener).onFailure(argumentCaptor.capture());
-        // FIXME assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        // TODO: Fix this nesting
+        // [OpenSearchException[java.lang.RuntimeException: errorMessage]; nested: RuntimeException[errorMessage];
+        assertEquals("errorMessage", argumentCaptor.getValue().getCause().getCause().getMessage());
     }
 
     public GetResponse prepareConnector() throws IOException {

@@ -9,6 +9,7 @@
 package org.opensearch.sdk;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import static org.junit.Assert.assertEquals;
@@ -27,6 +28,7 @@ public class GetDataObjectRequestTests {
         testFetchSourceContext = mock(FetchSourceContext.class);
     }
 
+    @Test
     public void testGetDataObjectRequest() {
         GetDataObjectRequest request = new GetDataObjectRequest.Builder()
             .index(testIndex)

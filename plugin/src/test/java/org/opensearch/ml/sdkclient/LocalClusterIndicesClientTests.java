@@ -23,7 +23,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -31,12 +30,12 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
@@ -124,7 +123,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         verify(mockedClient, times(1)).get(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        XContentParser parser = response.parser();
+        assertTrue(response.parser().isPresent());
+        XContentParser parser = response.parser().get();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         assertEquals("foo", TestDataObject.parse(parser).data());
     }
@@ -139,9 +139,13 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedClient.get(any(GetRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(getResponse);
 
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(OpenSearchStatusException.class, ose.getCause().getClass());
-        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) ose.getCause()).status());
+        GetDataObjectResponse response = sdkClient.getDataObject(getRequest);
+
+        ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
+        verify(mockedClient, times(1)).get(requestCaptor.capture());
+        assertEquals(TEST_INDEX, requestCaptor.getValue().index());
+        assertEquals(TEST_ID, response.id());
+        assertFalse(response.parser().isPresent());
     }
 
     public void testGetDataObject_Exception() throws IOException {
@@ -164,10 +168,9 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         when(deleteResponse.getId()).thenReturn(TEST_ID);
         when(deleteResponse.getResult()).thenReturn(DocWriteResponse.Result.DELETED);
         when(deleteResponse.getShardInfo()).thenReturn(new ShardInfo(2, 2));
-        @SuppressWarnings("unchecked")
-        ActionFuture<DeleteResponse> future = mock(ActionFuture.class);
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
         when(mockedClient.delete(any(DeleteRequest.class))).thenReturn(future);
-        when(future.actionGet()).thenReturn(deleteResponse);
 
         DeleteDataObjectResponse response = sdkClient.deleteDataObject(deleteRequest);
 

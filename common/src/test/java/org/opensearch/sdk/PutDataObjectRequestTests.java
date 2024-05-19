@@ -9,6 +9,7 @@
 package org.opensearch.sdk;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.core.xcontent.ToXContentObject;
 
 import static org.junit.Assert.assertEquals;
@@ -25,6 +26,7 @@ public class PutDataObjectRequestTests {
         testDataObject = mock(ToXContentObject.class);
     }
 
+    @Test
     public void testPutDataObjectRequest() {
         PutDataObjectRequest request = new PutDataObjectRequest.Builder().index(testIndex).dataObject(testDataObject).build();
 
