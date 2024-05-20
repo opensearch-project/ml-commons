@@ -60,11 +60,11 @@ public interface RemoteConnectorExecutor {
                 TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
                 int maxBatchSize = getMaxBatchSize();
                 Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet, maxBatchSize);
-                List<Integer> textDocOriginalOrder = Collections.emptyList();
+                Map<Integer, Integer> textDocOriginalOrder = Collections.emptyMap();
                 if (shouldSortBeforeCuttingBatches(maxBatchSize, calculatedChunkSize)) {
-                    Tuple<TextDocsInputDataSet, List<Integer>> sortedData = sortTextDocsByTextLength(textDocsInputDataSet);
+                    Tuple<TextDocsInputDataSet, Map<Integer, Integer>> sortedData = sortTextDocsByTextLength(textDocsInputDataSet);
                     textDocsInputDataSet = sortedData.v1();
-                    textDocOriginalOrder = Collections.unmodifiableList(sortedData.v2());
+                    textDocOriginalOrder = Collections.unmodifiableMap(sortedData.v2());
                 }
 
                 CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
@@ -89,7 +89,7 @@ public interface RemoteConnectorExecutor {
                 preparePayloadAndInvokeRemoteModel(
                     mlInput,
                     modelTensors,
-                    new ExecutionContext(0, new CountDownLatch(1), exceptionHolder, Collections.emptyList()),
+                    new ExecutionContext(0, new CountDownLatch(1), exceptionHolder, Collections.emptyMap()),
                     tensorActionListener
                 );
             }
@@ -161,16 +161,19 @@ public interface RemoteConnectorExecutor {
         return true;
     }
 
-    private Tuple<TextDocsInputDataSet, List<Integer>> sortTextDocsByTextLength(TextDocsInputDataSet textDocsInputDataSet) {
+    private Tuple<TextDocsInputDataSet, Map<Integer, Integer>> sortTextDocsByTextLength(TextDocsInputDataSet textDocsInputDataSet) {
         List<Tuple<Integer, String>> docsWithIndex = new ArrayList<>();
         for (int i = 0; i < textDocsInputDataSet.getDocs().size(); ++i) {
             docsWithIndex.add(Tuple.tuple(i, textDocsInputDataSet.getDocs().get(i)));
         }
         docsWithIndex.sort(Comparator.comparingInt(t -> t.v2().length()));
         List<String> sortedDocs = docsWithIndex.stream().map(Tuple::v2).collect(Collectors.toList());
-        List<Integer> originalIndexOrder = docsWithIndex.stream().map(Tuple::v1).collect(Collectors.toList());
+        Map<Integer, Integer> originalOrderMap = new HashMap<>();
+        for (int i = 0; i < docsWithIndex.size(); ++i) {
+            originalOrderMap.put(i, docsWithIndex.get(i).v1());
+        }
         TextDocsInputDataSet sortedTextDocsInputDataSet = TextDocsInputDataSet.builder().docs(sortedDocs).build();
-        return Tuple.tuple(sortedTextDocsInputDataSet, originalIndexOrder);
+        return Tuple.tuple(sortedTextDocsInputDataSet, originalOrderMap);
     }
 
     default void setScriptService(ScriptService scriptService) {}

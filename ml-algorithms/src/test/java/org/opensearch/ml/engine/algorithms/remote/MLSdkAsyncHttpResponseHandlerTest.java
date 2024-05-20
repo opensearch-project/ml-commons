@@ -46,7 +46,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         0,
         new CountDownLatch(1),
         new AtomicReference<>(),
-        Collections.emptyList()
+        Collections.emptyMap()
     );
     @Mock
     private ActionListener<List<ModelTensors>> actionListener;
@@ -266,7 +266,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(0, count, exceptionHolder, Collections.emptyList()),
+            new ExecutionContext(0, count, exceptionHolder, Collections.emptyMap()),
             actionListener,
             parameters,
             tensorOutputs,
@@ -275,7 +275,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(1, count, exceptionHolder, Collections.emptyList()),
+            new ExecutionContext(1, count, exceptionHolder, Collections.emptyMap()),
             actionListener,
             parameters,
             tensorOutputs,
@@ -334,7 +334,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         String response2 = "Model current status is: FAILED";
         CountDownLatch count = new CountDownLatch(2);
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(0, count, exceptionHolder, Collections.emptyList()),
+            new ExecutionContext(0, count, exceptionHolder, Collections.emptyMap()),
             actionListener,
             parameters,
             tensorOutputs,
@@ -343,7 +343,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             null
         );
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler2 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(1, count, exceptionHolder, Collections.emptyList()),
+            new ExecutionContext(1, count, exceptionHolder, Collections.emptyMap()),
             actionListener,
             parameters,
             tensorOutputs,

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hc.core5.http.HttpHeaders;
@@ -517,6 +518,90 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             String stackTrace = ExceptionUtils.getStackTrace(exception);
             assertTrue(stackTrace.contains("'utf-8' codec can't decode byte 0xeb"));
         });
+    }
+
+    public void testOpenAITextEmbeddingBatchIngestion() throws IOException, InterruptedException {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        String entity = "{\n"
+            + "  \"name\": \"OpenAI text embedding model Connector\",\n"
+            + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
+            + "  \"version\": 1,\n"
+            + "\"client_config\": {\n"
+            + "    \"max_connection\": 20,\n"
+            + "    \"connection_timeout\": 50000,\n"
+            + "    \"read_timeout\": 50000\n"
+            + "  },\n"
+            + "  \"protocol\": \"http\",\n"
+            + "  \"parameters\": {\n"
+            + "      \"model\": \"text-embedding-ada-002\",\n"
+            + "      \"temperature\": 0,\n"
+            + "      \"max_batch_size\": 2\n"
+            + "  },\n"
+            + "  \"credential\": {\n"
+            + "      \"openAI_key\": \""
+            + OPENAI_KEY
+            + "\"\n"
+            + "  },\n"
+            + "  \"actions\": [\n"
+            + "      {\n"
+            + "      \"action_type\": \"predict\",\n"
+            + "          \"method\": \"POST\",\n"
+            + "          \"url\": \"https://api.openai.com/v1/embeddings\",\n"
+            + "          \"headers\": { \n"
+            + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
+            + "          },\n"
+            + "          \"request_body\": \"{ \\\"input\\\": ${parameters.input}, \\\"model\\\": \\\"${parameters.model}\\\" }\",\n"
+            + "          \"pre_process_function\": \"connector.pre_process.openai.embedding\",\n"
+            + "          \"post_process_function\": \"connector.post_process.openai.embedding\"\n"
+            + "      }\n"
+            + "  ]\n"
+            + "}";
+        Response response = createConnector(entity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("openAI text embedding model", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        List outputAll = openAITextEmbeddingInferenceOutput("\"fantastic\", \"hello\", \"day\"", modelId);
+
+        Map outputDay = (Map) (openAITextEmbeddingInferenceOutput("\"day\"", modelId).get(0));
+        Map outputHello = (Map) (openAITextEmbeddingInferenceOutput("\"hello\"", modelId).get(0));
+        Map outputFantastic = (Map) (openAITextEmbeddingInferenceOutput("\"fantastic\"", modelId).get(0));
+
+        Map outputAllFantastic = (Map) (outputAll.get(0));
+        Map outputAllHello = (Map) (outputAll.get(1));
+        Map outputAllDay = (Map) (outputAll.get(2));
+
+        assertEquals(outputFantastic.get("data"), outputAllFantastic.get("data"));
+        assertEquals(outputDay.get("data"), outputAllDay.get("data"));
+        assertEquals(outputHello.get("data"), outputAllHello.get("data"));
+    }
+
+    private List openAITextEmbeddingInferenceOutput(String input, String modelId) throws IOException {
+        String predictInput = "{\n" + "  \"text_docs\": [{{input}}]\n" + "}";
+
+        predictInput = predictInput.replace("{{input}}", input);
+        Response response = textEmbeddingPredictRemoteModel(modelId, predictInput);
+        Map responseMap = parseResponseToMap(response);
+        List responseList = (List) responseMap.get("inference_results");
+        return (List) responseList
+            .stream()
+            .map(Map.class::cast)
+            .map(t -> ((Map) t).get("output"))
+            .map(List.class::cast)
+            .flatMap(t -> ((List) t).stream())
+            .collect(Collectors.toList());
     }
 
     private void testOpenAITextEmbeddingModel(String charset, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
@@ -1037,6 +1122,10 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     public Response predictRemoteModel(String modelId, String input) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, input, null);
+    }
+
+    public Response textEmbeddingPredictRemoteModel(String modelId, String input) throws IOException {
+        return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, input, null);
     }
 
     public Response undeployRemoteModel(String modelId) throws IOException {

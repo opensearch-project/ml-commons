@@ -164,7 +164,13 @@ public class RemoteConnectorExecutorTest {
         verifyBatch(mlInputCaptor.getAllValues().get(1), 2, Arrays.asList("22", "444"));
         // third batch
         verifyBatch(mlInputCaptor.getAllValues().get(2), 1, List.of("5555"));
-        assertEquals(Arrays.asList(4, 1, 2, 0, 3), executionContextCaptor.getValue().getOriginalOrder());
+        Map<Integer, Integer> expectedMap = new HashMap<>();
+        expectedMap.put(3, 0);
+        expectedMap.put(1, 1);
+        expectedMap.put(2, 2);
+        expectedMap.put(0, 4);
+        expectedMap.put(4, 3);
+        assertEquals(expectedMap, executionContextCaptor.getValue().getOriginalOrder());
     }
 
     @Test

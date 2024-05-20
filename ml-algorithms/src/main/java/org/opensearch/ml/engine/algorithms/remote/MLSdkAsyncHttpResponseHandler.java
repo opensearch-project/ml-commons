@@ -20,11 +20,11 @@ import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.model.MLGuard;
+import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
@@ -144,18 +144,30 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
 
         // step 2: restore to original order as textDocs might be sorted
-        List<Integer> originalOrderIndexes = executionContext.getOriginalOrder();
+        Map<Integer, Integer> originalOrder = executionContext.getOriginalOrder();
         List<ModelTensors> modelTensorsList = Arrays.asList(modelTensors);
-        if (CollectionUtils.isEmpty(originalOrderIndexes)) {
+        if (originalOrder == null || originalOrder.isEmpty()) {
             actionListener.onResponse(modelTensorsList);
         } else {
             // if the originalOrder is not empty, reorder based on it
-            List<ModelTensors> sortedModelTensors = Arrays.asList(new ModelTensors[modelTensorsList.size()]);
-            assert (originalOrderIndexes.size() == modelTensors.length);
-            for (int i = 0; i < originalOrderIndexes.size(); ++i) {
-                sortedModelTensors.set(i, modelTensorsList.get(originalOrderIndexes.get(i)));
+            List<ModelTensor> sortedModelTensors = Arrays.asList(new ModelTensor[originalOrder.size()]);
+            int index = 0;
+            for (ModelTensors tensors : modelTensorsList) {
+                for (ModelTensor tensor : tensors.getMlModelTensors()) {
+                    if (originalOrder.containsKey(index) && originalOrder.get(index) < originalOrder.size()) {
+                        sortedModelTensors.set(originalOrder.get(index), tensor);
+                    }
+                    ++index;
+                }
             }
-            actionListener.onResponse(sortedModelTensors);
+            index = 0;
+            for (ModelTensors tensors : modelTensorsList) {
+                for (int i = 0; i < tensors.getMlModelTensors().size(); ++i) {
+                    tensors.getMlModelTensors().set(i, sortedModelTensors.get(index));
+                    ++index;
+                }
+            }
+            actionListener.onResponse(modelTensorsList);
         }
     }
 

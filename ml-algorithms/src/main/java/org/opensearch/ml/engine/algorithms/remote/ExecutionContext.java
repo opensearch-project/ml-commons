@@ -7,7 +7,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -30,5 +30,5 @@ public class ExecutionContext {
     private CountDownLatch countDownLatch;
     // This is to hold any exception thrown in a split-batch request
     private AtomicReference<Exception> exceptionHolder;
-    private List<Integer> originalOrder;
+    private Map<Integer, Integer> originalOrder;
 }
