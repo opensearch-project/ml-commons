@@ -1,10 +1,10 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
+import java.io.IOException;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.rest.RestStatus;
-
-import java.io.IOException;
 
 public class RetryableException extends OpenSearchStatusException {
     public RetryableException(String msg, RestStatus status, Throwable cause, Object... args) {

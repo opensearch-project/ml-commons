@@ -155,10 +155,13 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
             if (containsThrottlingException) {
-                actionListener.onFailure(new RetryableException(
-                        REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
-                        RestStatus.fromCode(statusCode)
-                ));
+                actionListener
+                    .onFailure(
+                        new RetryableException(
+                            REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
+                            RestStatus.fromCode(statusCode)
+                        )
+                    );
             } else {
                 log.error("Remote server returned error code: {}", statusCode);
                 actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
