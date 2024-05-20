@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_CONNECTOR_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.RestActionUtils.getTenantID;
 import static org.opensearch.ml.utils.RestActionUtils.returnContent;
 
 import java.io.IOException;
@@ -15,6 +16,8 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -27,10 +30,17 @@ import com.google.common.collect.ImmutableList;
 public class RestMLGetConnectorAction extends BaseRestHandler {
     private static final String ML_GET_CONNECTOR_ACTION = "ml_get_connector_action";
 
+    private ClusterService clusterService;
+
+    private Settings settings;
+
     /**
      * Constructor
      */
-    public RestMLGetConnectorAction() {}
+    public RestMLGetConnectorAction(ClusterService clusterService, Settings settings) {
+        this.clusterService = clusterService;
+        this.settings = settings;
+    }
 
     @Override
     public String getName() {
@@ -59,7 +69,7 @@ public class RestMLGetConnectorAction extends BaseRestHandler {
     MLConnectorGetRequest getRequest(RestRequest request) throws IOException {
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
         boolean returnContent = returnContent(request);
-
-        return new MLConnectorGetRequest(connectorId, returnContent);
+        String tenantId = getTenantID(clusterService, settings, request);
+        return new MLConnectorGetRequest(connectorId, tenantId, returnContent);
     }
 }

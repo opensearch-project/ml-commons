@@ -726,7 +726,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
-        RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
+        RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings);
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
@@ -933,7 +933,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
+                MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED
             );
         return settings;
     }

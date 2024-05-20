@@ -25,17 +25,20 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLConnectorGetRequest extends ActionRequest {
 
     String connectorId;
+    String tenantId;
     boolean returnContent;
 
     @Builder
-    public MLConnectorGetRequest(String connectorId, boolean returnContent) {
+    public MLConnectorGetRequest(String connectorId, String tenantId, boolean returnContent) {
         this.connectorId = connectorId;
+        this.tenantId = tenantId;
         this.returnContent = returnContent;
     }
 
     public MLConnectorGetRequest(StreamInput in) throws IOException {
         super(in);
         this.connectorId = in.readString();
+        this.tenantId = in.readOptionalString();
         this.returnContent = in.readBoolean();
     }
 
@@ -43,6 +46,7 @@ public class MLConnectorGetRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.connectorId);
+        out.writeOptionalString(this.tenantId);
         out.writeBoolean(returnContent);
     }
 
