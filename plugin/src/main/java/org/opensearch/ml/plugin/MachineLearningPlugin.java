@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +92,6 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
 import org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -103,6 +103,7 @@ import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.memory.Memory;
@@ -169,6 +170,8 @@ import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.SearchIndexTool;
+import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -200,6 +203,7 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
@@ -273,6 +277,7 @@ import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
+import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -296,7 +301,13 @@ import com.google.common.annotations.VisibleForTesting;
 
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin, ExtensiblePlugin {
+public class MachineLearningPlugin extends Plugin
+    implements
+        ActionPlugin,
+        SearchPlugin,
+        SearchPipelinePlugin,
+        ExtensiblePlugin,
+        IngestPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -566,11 +577,15 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         AgentTool.Factory.getInstance().init(client);
         CatIndexTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
+        SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
+        VisualizationsTool.Factory.getInstance().init(client);
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
+        toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
+        toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
@@ -976,5 +991,16 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 externalToolFactories.put(annotationValue, toolFactory);
             }
         }
+    }
+
+    /**
+     * To get ingest processors
+     */
+    @Override
+    public Map<String, org.opensearch.ingest.Processor.Factory> getProcessors(org.opensearch.ingest.Processor.Parameters parameters) {
+        Map<String, org.opensearch.ingest.Processor.Factory> processors = new HashMap<>();
+        processors
+            .put(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
+        return Collections.unmodifiableMap(processors);
     }
 }

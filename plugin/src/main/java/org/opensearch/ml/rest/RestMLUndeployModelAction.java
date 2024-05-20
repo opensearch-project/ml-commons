@@ -9,16 +9,14 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
@@ -102,24 +100,15 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
                 }
                 targetNodeIds = nodeIds;
             } else {
-                targetNodeIds = getAllNodes();
+                targetNodeIds = getAllNodes(clusterService);
             }
             if (ArrayUtils.isNotEmpty(modelIds)) {
                 targetModelIds = modelIds;
             }
         } else {
-            targetNodeIds = getAllNodes();
+            targetNodeIds = getAllNodes(clusterService);
         }
 
         return new MLUndeployModelsRequest(targetModelIds, targetNodeIds);
-    }
-
-    private String[] getAllNodes() {
-        Iterator<DiscoveryNode> iterator = clusterService.state().nodes().iterator();
-        List<String> nodeIds = new ArrayList<>();
-        while (iterator.hasNext()) {
-            nodeIds.add(iterator.next().getId());
-        }
-        return nodeIds.toArray(new String[0]);
     }
 }

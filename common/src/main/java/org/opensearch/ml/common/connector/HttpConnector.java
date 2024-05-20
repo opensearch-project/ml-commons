@@ -11,9 +11,9 @@ import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
@@ -361,7 +361,7 @@ public class HttpConnector extends AbstractConnector {
 
     @Override
     public Connector cloneConnector() {
-        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
             return new HttpConnector(streamInput);

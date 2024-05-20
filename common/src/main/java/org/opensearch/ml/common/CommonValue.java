@@ -56,7 +56,7 @@ public class CommonValue {
         public static final String ML_MODEL_INDEX = ".plugins-ml-model";
         public static final String ML_TASK_INDEX = ".plugins-ml-task";
         public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
-        public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 10;
+        public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 11;
         public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
         public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
         public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
@@ -82,59 +82,56 @@ public class CommonValue {
                         + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
                         + "        }\n"
                         + "      }\n";
-        public static final String ML_MODEL_GROUP_INDEX_MAPPING = "{\n" +
-                        "  \"_meta\": {\n" +
-                        "    \"schema_version\": " + ML_MODEL_GROUP_INDEX_SCHEMA_VERSION + "\n" +
-                        "  },\n" +
-                        "  \"properties\": {\n" +
-                        "    \"" + MLModelGroup.MODEL_GROUP_NAME_FIELD + "\": {\n" +
-                        "      \"type\": \"text\",\n" +
-                        "      \"fields\": {\n" +
-                        "        \"keyword\": {\n" +
-                        "          \"type\": \"keyword\",\n" +
-                        "          \"ignore_above\": 256\n" +
-                        "        }\n" +
-                        "      }\n" +
-                        "    },\n" +
-                        "    \"" + MLModelGroup.DESCRIPTION_FIELD + "\": {\n" +
-                        "      \"type\": \"text\"\n" +
-                        "    },\n" +
-                        "    \"" + MLModelGroup.LATEST_VERSION_FIELD + "\": {\n" +
-                        "      \"type\": \"integer\"\n" +
-                        "    },\n" +
-                        "   \"" + MLModelGroup.MODEL_GROUP_ID_FIELD + "\": {\n" +
-                        "      \"type\": \"keyword\"\n" +
-                        "    },\n" +
-                        "    \"" + MLModelGroup.BACKEND_ROLES_FIELD + "\": {\n" +
-                        "      \"type\": \"text\",\n" +
-                        "      \"fields\": {\n" +
-                        "        \"keyword\": {\n" +
-                        "          \"type\": \"keyword\",\n" +
-                        "          \"ignore_above\": 256\n" +
-                        "        }\n" +
-                        "      }\n" +
-                        "    },\n" +
-                        "   \"" + MLModelGroup.ACCESS + "\": {\n" +
-                        "      \"type\": \"keyword\"\n" +
-                        "    },\n" +
-                        "    \"" + MLModelGroup.OWNER + "\": {\n" +
-                        "      \"type\": \"nested\",\n" +
-                        "        \"properties\": {\n" +
-                        "          \"name\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\", \"ignore_above\":256}}},\n"
-                        +
-                        "          \"backend_roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
-                        +
-                        "          \"roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n" +
-                        "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
-                        +
-                        "        }\n" +
-                        "    },\n" +
-                        "     \"" + MLModelGroup.CREATED_TIME_FIELD + "\": {\n" +
-                        "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n" +
-                        "    \"" + MLModelGroup.LAST_UPDATED_TIME_FIELD + "\": {\n" +
-                        "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n" +
-                        "  }\n" +
-                        "}";
+        public static final String ML_MODEL_GROUP_INDEX_MAPPING = "{\n"
+                        + "  \"_meta\": {\n"
+                        + "    \"schema_version\": " + ML_MODEL_GROUP_INDEX_SCHEMA_VERSION + "\n"
+                        + "  },\n"
+                        + "  \"properties\": {\n"
+                        + "    \"" + MLModelGroup.MODEL_GROUP_NAME_FIELD + "\": {\n"
+                        + "      \"type\": \"text\",\n"
+                        + "      \"fields\": {\n"
+                        + "        \"keyword\": {\n"
+                        + "          \"type\": \"keyword\",\n"
+                        + "          \"ignore_above\": 256\n"
+                        + "        }\n"
+                        + "      }\n"
+                        + "    },\n"
+                        + "    \"" + MLModelGroup.DESCRIPTION_FIELD + "\": {\n"
+                        + "      \"type\": \"text\"\n"
+                        + "    },\n"
+                        + "    \"" + MLModelGroup.LATEST_VERSION_FIELD + "\": {\n"
+                        + "      \"type\": \"integer\"\n"
+                        + "    },\n"
+                        + "   \"" + MLModelGroup.MODEL_GROUP_ID_FIELD + "\": {\n"
+                        + "      \"type\": \"keyword\"\n"
+                        + "    },\n"
+                        + "    \"" + MLModelGroup.BACKEND_ROLES_FIELD + "\": {\n"
+                        + "      \"type\": \"text\",\n"
+                        + "      \"fields\": {\n"
+                        + "        \"keyword\": {\n"
+                        + "          \"type\": \"keyword\",\n"
+                        + "          \"ignore_above\": 256\n"
+                        + "        }\n"
+                        + "      }\n"
+                        + "    },\n"
+                        + "   \"" + MLModelGroup.ACCESS + "\": {\n"
+                        + "      \"type\": \"keyword\"\n"
+                        + "    },\n"
+                        + "    \"" + MLModelGroup.OWNER + "\": {\n"
+                        + "      \"type\": \"nested\",\n"
+                        + "        \"properties\": {\n"
+                        + "          \"name\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\", \"ignore_above\":256}}},\n"
+                        + "          \"backend_roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
+                        + "          \"roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
+                        + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
+                        + "        }\n"
+                        + "    },\n"
+                        + "     \"" + MLModelGroup.CREATED_TIME_FIELD + "\": {\n"
+                        + "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+                        + "    \"" + MLModelGroup.LAST_UPDATED_TIME_FIELD + "\": {\n"
+                        + "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+                        + "  }\n"
+                        + "}";
 
         public static final String ML_CONNECTOR_INDEX_FIELDS = "    \"properties\": {\n"
                         + "      \""
@@ -232,6 +229,9 @@ public class CommonValue {
                         + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
                         + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
                         + "      \""
+                        + MLModel.DEPLOY_SETTING_FIELD
+                        + "\" : {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + MLModel.IS_ENABLED_FIELD
                         + "\" : {\"type\": \"boolean\"},\n"
                         + "      \""
@@ -262,45 +262,48 @@ public class CommonValue {
                         + MLModel.LAST_UNDEPLOYED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
+                        + MLModel.INTERFACE_FIELD
+                        + "\": {\"type\": \"flat_object\"},\n"
+                        + "      \""
                         + MLModel.GUARDRAILS_FIELD
-                        + "\" : {\n" +
-                "          \"properties\": {\n" +
-                "            \"input_guardrail\": {\n" +
-                "              \"properties\": {\n" +
-                "                \"regex\": {\n" +
-                "                  \"type\": \"text\"\n" +
-                "                },\n" +
-                "                \"stop_words\": {\n" +
-                "                  \"properties\": {\n" +
-                "                    \"index_name\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    },\n" +
-                "                    \"source_fields\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    }\n" +
-                "                  }\n" +
-                "                }\n" +
-                "              }\n" +
-                "            },\n" +
-                "            \"output_guardrail\": {\n" +
-                "              \"properties\": {\n" +
-                "                \"regex\": {\n" +
-                "                  \"type\": \"text\"\n" +
-                "                },\n" +
-                "                \"stop_words\": {\n" +
-                "                  \"properties\": {\n" +
-                "                    \"index_name\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    },\n" +
-                "                    \"source_fields\": {\n" +
-                "                      \"type\": \"text\"\n" +
-                "                    }\n" +
-                "                  }\n" +
-                "                }\n" +
-                "              }\n" +
-                "            }\n" +
-                "          }\n" +
-                "        },\n"
+                        + "\" : {\n"
+                        + "          \"properties\": {\n"
+                        + "            \"input_guardrail\": {\n"
+                        + "              \"properties\": {\n"
+                        + "                \"regex\": {\n"
+                        + "                  \"type\": \"text\"\n"
+                        + "                },\n"
+                        + "                \"stop_words\": {\n"
+                        + "                  \"properties\": {\n"
+                        + "                    \"index_name\": {\n"
+                        + "                      \"type\": \"text\"\n"
+                        + "                    },\n"
+                        + "                    \"source_fields\": {\n"
+                        + "                      \"type\": \"text\"\n"
+                        + "                    }\n"
+                        + "                  }\n"
+                        + "                }\n"
+                        + "              }\n"
+                        + "            },\n"
+                        + "            \"output_guardrail\": {\n"
+                        + "              \"properties\": {\n"
+                        + "                \"regex\": {\n"
+                        + "                  \"type\": \"text\"\n"
+                        + "                },\n"
+                        + "                \"stop_words\": {\n"
+                        + "                  \"properties\": {\n"
+                        + "                    \"index_name\": {\n"
+                        + "                      \"type\": \"text\"\n"
+                        + "                    },\n"
+                        + "                    \"source_fields\": {\n"
+                        + "                      \"type\": \"text\"\n"
+                        + "                    }\n"
+                        + "                  }\n"
+                        + "                }\n"
+                        + "              }\n"
+                        + "            }\n"
+                        + "          }\n"
+                        + "        },\n"
                         + "      \""
                         + MLModel.CONNECTOR_FIELD
                         + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"

@@ -404,10 +404,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "User doesn't have privilege to perform this operation on this model, model ID test_model_id",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -651,9 +648,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
         doReturn(MLModelState.REGISTERED).when(mockModel).getModelState();
 
-        doThrow(new IOException("Exception occurred during building update request."))
-            .when(mockUpdateModelInput)
-            .toXContentForUpdateRequestDoc(any(), any());
+        doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
         transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -702,9 +697,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelGroupManager).getModelGroupResponse(eq("mockUpdateModelGroupId"), isA(ActionListener.class));
 
-        doThrow(new IOException("Exception occurred during building update request."))
-            .when(mockUpdateModelInput)
-            .toXContentForUpdateRequestDoc(any(), any());
+        doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
         transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

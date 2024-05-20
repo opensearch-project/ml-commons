@@ -305,6 +305,7 @@ public class MLModelAutoReDeployer {
         mlModelManager
             .updateModel(
                 modelId,
+                false,
                 ImmutableMap.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
             );
 

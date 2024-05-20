@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.model;
 
+import java.time.Instant;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
 import java.util.Map;
@@ -47,10 +48,13 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationCPU;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationGPU;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLGuard mlGuard;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Map<String, String> modelInterface;
 
     // In rare case, this could be null, e.g. model info not synced up yet a predict request comes in.
     @Setter
     private Boolean deployToAllNodes;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Instant lastAccessTime;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isAutoDeploying;
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
@@ -169,6 +173,7 @@ public class MLModelCache {
         rateLimiter = null;
         userRateLimiterMap = null;
         mlGuard = null;
+        modelInterface = null;
     }
 
     public void addModelInferenceDuration(double duration, long maxRequestCount) {

@@ -14,7 +14,6 @@ plugins {
     id 'jacoco'
     id 'java-library'
     id 'com.diffplug.spotless' version '6.23.0'
-    id 'checkstyle'
 }
 
 ext {
@@ -29,10 +28,6 @@ ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
     noticeFile = rootProject.file('NOTICE')
-}
-
-checkstyle {
-    toolVersion = '10.12.2'
 }
 
 lombok {
@@ -57,6 +52,7 @@ dependencies {
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+    implementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
@@ -65,8 +61,7 @@ dependencies {
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.15.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
-
-    checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
+    implementation 'com.jayway.jsonpath:json-path:2.9.0'
 }
 
 publishing {
@@ -108,17 +103,19 @@ compileJava {
     options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
 }
 
+compileTestJava {
+    options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
+}
+
 //TODO: check which one should be enabled
 licenseHeaders.enabled = true
 testingConventions.enabled = false
-checkstyleTest.enabled = false
 forbiddenApis.ignoreFailures = false
 dependencyLicenses.enabled = false
 thirdPartyAudit.enabled = false
 forbiddenApisTest.ignoreFailures = true
 forbiddenApisMain.ignoreFailures = true
 validateNebulaPom.enabled = false
-checkstyleMain.enabled = false
 loggerUsageCheck.enabled = false
 
 def _numNodes = findProperty('numNodes') as Integer ?: 1
@@ -153,6 +150,8 @@ integTest {
     if (System.getProperty("tests.rest.cluster") != null) {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*IT"
+            // mock LLM run in localhost, it will not reachable for docker or remote cluster
+            excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
     }
 
@@ -193,6 +192,14 @@ integTest {
     // Set this to true this if you want to see the logs in the terminal test output.
     // note: if left false the log output will still show in your IDE
     testLogging.showStandardStreams = true
+
+    // Exclude integration test for search index tool for multiple nodes
+    // because we cannot get concrete exception message in multi-node cluster
+    if (_numNodes > 1) {
+        filter {
+            excludeTestsMatching "org.opensearch.ml.rest.RestSearchIndexToolIT.*"
+        }
+    }
 }
 
 testClusters.integTest {
@@ -233,6 +240,8 @@ task integTestRemote(type: RestIntegTestTask) {
     if (System.getProperty("tests.rest.cluster") != null) {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*IT"
+            // mock LLM run in localhost, it will not reachable for docker or remote cluster
+            excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
     }
 }
@@ -344,6 +353,7 @@ configurations.all {
     resolutionStrategy.force 'commons-codec:commons-codec:1.15'
     resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
     resolutionStrategy.force 'org.codehaus.plexus:plexus-utils:3.3.0'
+    exclude group: "org.jetbrains", module: "annotations"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

@@ -5,12 +5,11 @@
 
 package org.opensearch.ml.common.model;
 
+import com.google.common.collect.ImmutableSet;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
@@ -20,7 +19,6 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import java.security.AccessController;
@@ -30,15 +28,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
@@ -52,6 +49,7 @@ public class MLGuard {
     private List<Pattern> outputRegexPattern;
     private NamedXContentRegistry xContentRegistry;
     private Client client;
+    private Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
 
     public MLGuard(Guardrails guardrails, NamedXContentRegistry xContentRegistry, Client client) {
         this.xContentRegistry = xContentRegistry;
@@ -79,7 +77,9 @@ public class MLGuard {
             return;
         }
         for (StopWords e : stopWords) {
-            map.put(e.getIndex(), Arrays.asList(e.getSourceFields()));
+            if (e.getIndex() != null && e.getSourceFields() != null) {
+                map.put(e.getIndex(), Arrays.asList(e.getSourceFields()));
+            }
         }
     }
 
@@ -95,6 +95,9 @@ public class MLGuard {
     }
 
     public Boolean validateRegexList(String input, List<Pattern> regexPatterns) {
+        if (regexPatterns == null || regexPatterns.isEmpty()) {
+            return true;
+        }
         for (Pattern pattern : regexPatterns) {
             if (!validateRegex(input, pattern)) {
                 return false;
@@ -109,6 +112,9 @@ public class MLGuard {
     }
 
     public Boolean validateStopWords(String input, Map<String, List<String>> stopWordsIndices) {
+        if (stopWordsIndices == null || stopWordsIndices.isEmpty()) {
+            return true;
+        }
         for (Map.Entry entry : stopWordsIndices.entrySet()) {
             if (!validateStopWordsSingleIndex(input, (String) entry.getKey(), (List<String>) entry.getValue())) {
                 return false;
@@ -128,27 +134,44 @@ public class MLGuard {
         Map<String, Object> queryBodyMap = Map
                 .of("query", Map.of("percolate", Map.of("field", "query", "document", documentMap)));
         CountDownLatch latch = new CountDownLatch(1);
+        ThreadContext.StoredContext context = null;
 
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try {
             queryBody = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(queryBodyMap));
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, queryBody);
             searchSourceBuilder.parseXContent(queryParser);
             searchSourceBuilder.size(1); //Only need 1 doc returned, if hit.
             searchRequest = new SearchRequest().source(searchSourceBuilder).indices(indexName);
-            context.restore();
-            client.search(searchRequest, ActionListener.runBefore(new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
-                if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+            if (isStopWordsSystemIndex(indexName)) {
+                context = client.threadPool().getThreadContext().stashContext();
+                ThreadContext.StoredContext finalContext = context;
+                client.search(searchRequest, ActionListener.runBefore(new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
+                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                        hitStopWords.set(true);
+                    }
+                }, e -> {
+                    log.error("Failed to search stop words index {}", indexName, e);
                     hitStopWords.set(true);
-                }
-            }, e -> {
-                log.error("Failed to search stop words index {}", indexName, e);
-                hitStopWords.set(true);
-            }), latch), () -> context.restore()));
+                }), latch), () -> finalContext.restore()));
+            } else {
+                client.search(searchRequest, new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
+                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                        hitStopWords.set(true);
+                    }
+                }, e -> {
+                    log.error("Failed to search stop words index {}", indexName, e);
+                    hitStopWords.set(true);
+                }), latch));
+            }
         } catch (Exception e) {
             log.error("[validateStopWords] Searching stop words index failed.", e);
             latch.countDown();
             hitStopWords.set(true);
+        } finally {
+            if (context != null) {
+                context.close();
+            }
         }
 
         try {
@@ -158,6 +181,10 @@ public class MLGuard {
             throw new IllegalStateException(e);
         }
         return hitStopWords.get();
+    }
+
+    private boolean isStopWordsSystemIndex(String index) {
+        return stopWordsIndices.contains(index);
     }
 
     public enum Type {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.dataset;
+package org.opensearch.ml.common.input.parameter.textembedding;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -33,7 +33,7 @@ import lombok.Data;
  * `query_prefix` and `passage_prefix` configuration parameters.
  */
 @Data
-@MLAlgoParameter(algorithms = { FunctionName.TEXT_EMBEDDING })
+@MLAlgoParameter(algorithms={FunctionName.TEXT_EMBEDDING})
 public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
 
     public enum EmbeddingContentType {

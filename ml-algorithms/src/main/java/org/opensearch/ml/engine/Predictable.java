@@ -7,9 +7,11 @@ package org.opensearch.ml.engine;
 
 import java.util.Map;
 
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 
 /**
@@ -31,7 +33,13 @@ public interface Predictable {
      * @param mlInput input data
      * @return predicted results
      */
-    MLOutput predict(MLInput mlInput);
+    default MLOutput predict(MLInput mlInput) {
+        throw new IllegalStateException("Method is not implemented");
+    }
+
+    default void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        actionListener.onFailure(new IllegalStateException("Method is not implemented"));
+    }
 
     /**
      * Init model (load model into memory) with ML model content and params.

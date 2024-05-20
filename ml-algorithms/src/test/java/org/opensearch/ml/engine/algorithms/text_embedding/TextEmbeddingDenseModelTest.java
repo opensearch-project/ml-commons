@@ -8,6 +8,8 @@ package org.opensearch.ml.engine.algorithms.text_embedding;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -30,14 +32,16 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -262,7 +266,13 @@ public class TextEmbeddingDenseModelTest {
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("what is the meaning of life?", "who won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY))
             .build();
@@ -270,7 +280,13 @@ public class TextEmbeddingDenseModelTest {
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("The meaning of life is 42", "I won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("The meaning of life is 42", "I won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .parameters(new AsymmetricTextEmbeddingParameters(EmbeddingContentType.PASSAGE))
             .build();
@@ -285,19 +301,37 @@ public class TextEmbeddingDenseModelTest {
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("what is the meaning of life?", "who won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("what is the meaning of life?", "who won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .build();
         MLInput symmetricMlInputPassages = MLInput
             .builder()
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .inputDataset(
-                TextDocsInputDataSet.builder().docs(Arrays.asList("The meaning of life is 42", "I won this year's us open")).build()
+                TextDocsInputDataSet
+                    .builder()
+                    .docs(Arrays.asList("The meaning of life is 42", "I won this year's us open"))
+                    .resultFilter(
+                        ModelResultFilter.builder().targetResponse(List.of(SENTENCE_EMBEDDING)).returnBytes(true).returnNumber(true).build()
+                    )
+                    .build()
             )
             .build();
 
         ModelTensorOutput symmetricQueryEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(symmetricMlInputQueries);
         ModelTensorOutput symmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(symmetricMlInputPassages);
+
+        assertTrue(
+            "asymmetric and symmetric embeddings should have the same number of tensors",
+            asymmetricQueryEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().size() == 1
+                && symmetricQueryEmbeddings.getMlModelOutputs().get(0).getMlModelTensors().size() == 1
+        );
 
         assertTrue(
             "asymmetric and symmetric query embeddings should be different",
@@ -595,6 +629,16 @@ public class TextEmbeddingDenseModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
         textEmbeddingDenseModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
+    }
+
+    @Test
+    public void test_async_inference() {
+        ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
+        ActionListener actionListener = mock(ActionListener.class);
+        textEmbeddingDenseModel
+            .asyncPredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+        verify(actionListener).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("Method is not implemented");
     }
 
     @After

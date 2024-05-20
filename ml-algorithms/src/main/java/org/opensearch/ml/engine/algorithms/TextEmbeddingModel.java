@@ -6,12 +6,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters;
-import org.opensearch.ml.common.dataset.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -83,7 +83,7 @@ public abstract class TextEmbeddingModel extends DLModel {
             : modelConfig.getQueryPrefix();
         if (prefix != null) {
             List<String> prefixedDocs = inputDataSet.getDocs().stream().map(s -> prefix + s).collect(Collectors.toList());
-            return TextDocsInputDataSet.builder().docs(prefixedDocs).build();
+            return TextDocsInputDataSet.builder().docs(prefixedDocs).resultFilter(inputDataSet.getResultFilter()).build();
         }
         return inputDataSet;
     }

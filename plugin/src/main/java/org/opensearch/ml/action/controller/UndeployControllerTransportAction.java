@@ -114,8 +114,8 @@ public class UndeployControllerTransportAction extends
         String localNodeId = clusterService.localNode().getId();
 
         mlModelManager.undeployController(modelId, ActionListener.wrap(r -> {
-            log.info("Successfully undeployed model controller for model {} on node {}", modelId, localNodeId);
-        }, e -> { log.error("Failed to undeploy model controller for model {} on node {}", modelId, localNodeId, e); }));
+            log.info("Successfully undeployed model controller for the given model on node {}", localNodeId);
+        }, e -> { log.error("Failed to undeploy model controller for the given model on node {}", localNodeId, e); }));
         return new MLUndeployControllerNodeResponse(clusterService.localNode(), controllerUndeployStatus);
     }
 }

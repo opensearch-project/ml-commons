@@ -171,12 +171,14 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         String[] deployedModelIds = new String[] { "123" };
         String[] runningDeployModelIds = new String[] { "model1" };
         String[] runningDeployModelTaskIds = new String[] { "1" };
+        String[] expiredModelIds = new String[] { "modelExpired" };
         MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(
             mlNode1,
             "DEPLOYED",
             deployedModelIds,
             runningDeployModelIds,
-            runningDeployModelTaskIds
+            runningDeployModelTaskIds,
+            expiredModelIds
         );
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
@@ -285,7 +287,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
         action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
-        verify(mlModelManager, never()).updateModel(anyString(), any());
+        verify(mlModelManager, never()).updateModel(anyString(), (Boolean) any(), any());
     }
 
     public void testCleanUpLocalCache_ExpiredMLTask_Deploy_NullWorkerNode() {
@@ -324,7 +326,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlModelManager, never()).updateModel(eq(modelId), argumentCaptor.capture());
+        verify(mlModelManager, never()).updateModel(eq(modelId), eq(false), argumentCaptor.capture());
     }
 
     private MLSyncUpInput prepareRequest() {

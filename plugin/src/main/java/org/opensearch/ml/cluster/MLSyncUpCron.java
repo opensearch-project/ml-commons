@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,6 +42,9 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.search.SearchHit;
@@ -95,14 +99,31 @@ public class MLSyncUpCron implements Runnable {
         // gather running model/tasks on nodes
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
             List<MLSyncUpNodeResponse> responses = r.getNodes();
+            if (r.failures() != null && r.failures().size() != 0) {
+                log
+                    .debug(
+                        "Received {} failures in the sync up response on nodes. Error messages are {}",
+                        r.failures().size(),
+                        r.failures().stream().map(Exception::getMessage).collect(Collectors.joining(", "))
+                    );
+            }
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
             // key is task id, value is set of worker node ids
             Map<String, Set<String>> runningDeployModelTasks = new HashMap<>();
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> deployingModels = new HashMap<>();
+            // key is expired model_id, value is set of worker node ids
+            Map<String, Set<String>> expiredModelToNodes = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
+                String[] expiredModelIds = response.getExpiredModelIds();
+                if (expiredModelIds != null && expiredModelIds.length > 0) {
+                    Arrays
+                        .stream(expiredModelIds)
+                        .forEach(modelId -> { expiredModelToNodes.computeIfAbsent(modelId, it -> new HashSet<>()).add(nodeId); });
+                }
+
                 String[] deployedModelIds = response.getDeployedModelIds();
                 if (deployedModelIds != null && deployedModelIds.length > 0) {
                     for (String modelId : deployedModelIds) {
@@ -126,6 +147,16 @@ public class MLSyncUpCron implements Runnable {
                     }
                 }
             }
+
+            Set<String> modelsToUndeploy = new HashSet<>();
+            for (String modelId : expiredModelToNodes.keySet()) {
+                if (modelWorkerNodes.containsKey(modelId)
+                    && expiredModelToNodes.get(modelId).size() == modelWorkerNodes.get(modelId).size()) {
+                    // this model has expired in all the nodes
+                    modelsToUndeploy.add(modelId);
+                }
+            }
+
             for (Map.Entry<String, Set<String>> entry : modelWorkerNodes.entrySet()) {
                 String modelId = entry.getKey();
                 log.debug("will sync model worker nodes for model: {}: {}", modelId, entry.getValue().toArray(new String[0]));
@@ -146,21 +177,44 @@ public class MLSyncUpCron implements Runnable {
             MLSyncUpInput syncUpInput = inputBuilder.build();
             MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
             // sync up running model/tasks on nodes
-            client
-                .execute(
-                    MLSyncUpAction.INSTANCE,
-                    syncUpRequest,
-                    ActionListener.wrap(re -> { log.debug("sync model routing job finished"); }, ex -> {
-                        log.error("Failed to sync model routing", ex);
-                    })
-                );
+            client.execute(MLSyncUpAction.INSTANCE, syncUpRequest, ActionListener.wrap(re -> {
+                log.debug("sync model routing job finished");
+                if (!modelsToUndeploy.isEmpty()) {
+                    // Undeploy expired models
+                    undeployExpiredModels(modelsToUndeploy, modelWorkerNodes, deployingModels);
+                    return;
+                }
+                // refresh model status
+                mlIndicesHandler
+                    .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
+                        log.error("Failed to init model index", e);
+                    }));
+            }, ex -> { log.error("Failed to sync model routing", ex); }));
+        }, e -> { log.error("Failed to sync model routing", e); }));
+    }
 
-            // refresh model status
+    private void undeployExpiredModels(
+        Set<String> expiredModels,
+        Map<String, Set<String>> modelWorkerNodes,
+        Map<String, Set<String>> deployingModels
+    ) {
+        String[] targetNodeIds = getAllNodes(clusterService);
+        MLUndeployModelsRequest mlUndeployModelsRequest = new MLUndeployModelsRequest(
+            expiredModels.toArray(new String[expiredModels.size()]),
+            targetNodeIds
+        );
+
+        client.execute(MLUndeployModelsAction.INSTANCE, mlUndeployModelsRequest, ActionListener.wrap(r -> {
+            MLUndeployModelNodesResponse mlUndeployModelNodesResponse = r.getResponse();
+            if (mlUndeployModelNodesResponse.failures() != null && mlUndeployModelNodesResponse.failures().size() != 0) {
+                log.debug("Received failures in undeploying expired models", mlUndeployModelNodesResponse.failures());
+            }
+
             mlIndicesHandler
                 .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
                     log.error("Failed to init model index", e);
                 }));
-        }, e -> { log.error("Failed to sync model routing", e); }));
+        }, e -> { log.error("Failed to undeploy models {}", expiredModels, e); }));
     }
 
     @VisibleForTesting

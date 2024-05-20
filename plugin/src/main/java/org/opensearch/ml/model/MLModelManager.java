@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
@@ -293,15 +294,18 @@ public class MLModelManager {
                     .version(version)
                     .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
                     .description(mlRegisterModelMetaInput.getDescription())
+                    .isEnabled(mlRegisterModelMetaInput.getIsEnabled())
                     .rateLimiter(mlRegisterModelMetaInput.getRateLimiter())
                     .isEnabled(mlRegisterModelMetaInput.getIsEnabled())
                     .modelFormat(mlRegisterModelMetaInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(mlRegisterModelMetaInput.getModelConfig())
+                    .deploySetting(mlRegisterModelMetaInput.getDeploySetting())
                     .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
                     .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
                     .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
                     .isHidden(mlRegisterModelMetaInput.getIsHidden())
+                    .modelInterface(mlRegisterModelMetaInput.getModelInterface())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .build();
@@ -532,10 +536,12 @@ public class MLModelManager {
                     .connector(registerModelInput.getConnector())
                     .connectorId(registerModelInput.getConnectorId())
                     .modelConfig(registerModelInput.getModelConfig())
+                    .deploySetting(registerModelInput.getDeploySetting())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
+                    .modelInterface(registerModelInput.getModelInterface())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
@@ -598,10 +604,12 @@ public class MLModelManager {
                     .connector(registerModelInput.getConnector())
                     .connectorId(registerModelInput.getConnectorId())
                     .modelConfig(registerModelInput.getModelConfig())
+                    .deploySetting(registerModelInput.getDeploySetting())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
+                    .modelInterface(registerModelInput.getModelInterface())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
@@ -664,10 +672,12 @@ public class MLModelManager {
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(registerModelInput.getModelConfig())
+                    .deploySetting(registerModelInput.getDeploySetting())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
+                    .modelInterface(registerModelInput.getModelInterface())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
@@ -745,6 +755,7 @@ public class MLModelManager {
                             .version(version)
                             .modelFormat(registerModelInput.getModelFormat())
                             .rateLimiter(registerModelInput.getRateLimiter())
+                            .isEnabled(registerModelInput.getIsEnabled())
                             .chunkNumber(chunkNum)
                             .totalChunks(chunkFiles.size())
                             .content(Base64.getEncoder().encodeToString(bytes))
@@ -752,6 +763,7 @@ public class MLModelManager {
                             .lastUpdateTime(now)
                             .isHidden(registerModelInput.getIsHidden())
                             .guardrails(registerModelInput.getGuardrails())
+                            .modelInterface(registerModelInput.getModelInterface())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                         if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {
@@ -821,7 +833,7 @@ public class MLModelManager {
 
     /**
      * Check if exceed running task limit and if circuit breaker is open.
-     * 
+     *
      * @param mlTask           ML task
      * @param runningTaskLimit limit
      */
@@ -962,6 +974,7 @@ public class MLModelManager {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
                 modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
+                modelCacheHelper.refreshLastAccessTime(modelId);
             }
             listener.onResponse("successful");
             return;
@@ -974,19 +987,21 @@ public class MLModelManager {
         if (!autoDeployModel) {
             modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         } else {
-            modelCacheHelper.initModelStateLocal(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
+            modelCacheHelper.initModelStateAutoDeploy(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
         }
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
                 context.restore();
                 modelCacheHelper.removeAutoDeployModel(modelId);
+                modelCacheHelper.setIsAutoDeploying(modelId, false);
             });
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
+                modelCacheHelper.setModelInfo(modelId, mlModel);
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
@@ -1017,6 +1032,7 @@ public class MLModelManager {
 
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, mlModel.getGuardrails());
+                setupModelInterface(modelId, mlModel.getModelInterface());
                 deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
@@ -1036,6 +1052,7 @@ public class MLModelManager {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+                            modelCacheHelper.refreshLastAccessTime(modelId);
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
@@ -1048,6 +1065,7 @@ public class MLModelManager {
                             modelCacheHelper.setPredictor(modelId, predictable);
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+                            modelCacheHelper.refreshLastAccessTime(modelId);
                             Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
                             long contentSize = modelContentSizeInBytes == null
                                 ? mlModel.getTotalChunks() * CHUNK_SIZE
@@ -1096,10 +1114,12 @@ public class MLModelManager {
         String modelId = mlModel.getModelId();
         setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
         setupMLGuard(modelId, mlModel.getGuardrails());
+        setupModelInterface(modelId, mlModel.getModelInterface());
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+            modelCacheHelper.refreshLastAccessTime(modelId);
             wrappedListener.onResponse("successful");
             return;
         }
@@ -1109,6 +1129,7 @@ public class MLModelManager {
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+            modelCacheHelper.refreshLastAccessTime(modelId);
             wrappedListener.onResponse("successful");
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, wrappedListener::onFailure));
@@ -1150,7 +1171,6 @@ public class MLModelManager {
             params.put(GUARDRAILS, mlGuard);
             log.info("Setting up ML guard parameter for ML predictor.");
         }
-
         return Collections.unmodifiableMap(params);
     }
 
@@ -1174,6 +1194,7 @@ public class MLModelManager {
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, mlModel.getGuardrails());
+                setupModelInterface(modelId, mlModel.getModelInterface());
                 if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
                     if (mlModel.getConnector() != null) {
                         setupParamsAndPredictable(modelId, mlModel);
@@ -1421,7 +1442,7 @@ public class MLModelManager {
 
     /**
      * Construct a TokenBucket object from its rate limiter config.
-     * 
+     *
      * @param eligibleNodeCount eligible node count
      * @param rateLimiter       model rate limiter config
      * @return a TokenBucket object to enable throttling
@@ -1451,7 +1472,7 @@ public class MLModelManager {
 
     /**
      * Get model-level rate limiter with model id.
-     * 
+     *
      * @param modelId model id
      * @return a TokenBucket object to enable model-level throttling
      */
@@ -1469,6 +1490,35 @@ public class MLModelManager {
     public Map<String, TokenBucket> getUserRateLimiterMap(String modelId) {
         return modelCacheHelper.getUserRateLimiterMap(modelId);
     }
+
+    /**
+     * Set up model interface with model id.
+     */
+    private void setupModelInterface(String modelId, Map<String, String> modelInterface) {
+        log.debug("Model interface for model: {} loaded into cache.", modelId);
+        if (modelInterface != null) {
+            modelCacheHelper.setModelInterface(modelId, modelInterface);
+        } else {
+            modelCacheHelper.removeModelInterface(modelId);
+        }
+    }
+
+    /**
+     * Get model interface with model id.
+     *
+     * @param modelId model id
+     * @return a Map containing the model interface
+     */
+    public Map<String, String> getModelInterface(String modelId) {
+        return modelCacheHelper.getModelInterface(modelId);
+    }
+
+    /**
+     * Set up ML guard with model id.
+     *
+     * @param modelId
+     * @param guardrails
+     */
 
     private void setupMLGuard(String modelId, Guardrails guardrails) {
         if (guardrails != null) {
@@ -1495,7 +1545,7 @@ public class MLModelManager {
 
     /**
      * Get model from model index.
-     * 
+     *
      * @param modelId  model id
      * @param listener action listener
      */
@@ -1505,7 +1555,7 @@ public class MLModelManager {
 
     /**
      * Get model from model index with includes/excludes filter.
-     * 
+     *
      * @param modelId  model id
      * @param includes fields included
      * @param excludes fields excluded
@@ -1536,7 +1586,7 @@ public class MLModelManager {
 
     /**
      * Get model controller from model controller index.
-     * 
+     *
      * @param modelId  model id
      * @param listener action listener
      */
@@ -1591,7 +1641,7 @@ public class MLModelManager {
 
     /**
      * Retreive a model's all chunks.
-     * 
+     *
      * @param mlModelMeta model meta
      * @param listener    action listener
      */
@@ -1638,23 +1688,23 @@ public class MLModelManager {
 
     /**
      * Update model with build-in listener.
-     * 
+     *
      * @param modelId       model id
      * @param updatedFields updated fields
      */
-    public void updateModel(String modelId, Map<String, Object> updatedFields) {
+    public void updateModel(String modelId, Boolean isHidden, Map<String, Object> updatedFields) {
         updateModel(modelId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
-                log.debug("Updated ML model successfully: {}, model id: {}", response.status(), modelId);
+                log.debug(getErrorMessage("Updated ML model successfully: {}", modelId, isHidden), response.status());
             } else {
-                log.error("Failed to update ML model {}, status: {}", modelId, response.status());
+                log.error(getErrorMessage("Failed to update provided ML model, status: {}", modelId, isHidden), response.status());
             }
-        }, e -> { log.error("Failed to update ML model: " + modelId, e); }));
+        }, e -> { log.error(getErrorMessage("Failed to update the provided ML model", modelId, isHidden), e); }));
     }
 
     /**
      * Update model.
-     * 
+     *
      * @param modelId       model id
      * @param updatedFields updated fields
      * @param listener      action listener
@@ -1683,7 +1733,7 @@ public class MLModelManager {
 
     /**
      * Get model chunk id.
-     * 
+     *
      * @param modelId     model id
      * @param chunkNumber model chunk number
      * @return model chunk id
@@ -1694,7 +1744,7 @@ public class MLModelManager {
 
     /**
      * Add model worker node to cache.
-     * 
+     *
      * @param modelId model id
      * @param nodeIds node ids
      */
@@ -1852,6 +1902,10 @@ public class MLModelManager {
         return modelCacheHelper.getDeployedModels();
     }
 
+    public String[] getExpiredModels() {
+        return modelCacheHelper.getExpiredModels();
+    }
+
     /**
      * Sync model routing table.
      *
@@ -1879,6 +1933,12 @@ public class MLModelManager {
         double durationInMs = (end - start) / 1e6;
         modelCacheHelper.addModelInferenceDuration(modelId, durationInMs);
         return t;
+    }
+
+    public void trackPredictDuration(String modelId, long startTime) {
+        long end = System.nanoTime();
+        double durationInMs = (end - startTime) / 1e6;
+        modelCacheHelper.addModelInferenceDuration(modelId, durationInMs);
     }
 
     public FunctionName getModelFunctionName(String modelId) {

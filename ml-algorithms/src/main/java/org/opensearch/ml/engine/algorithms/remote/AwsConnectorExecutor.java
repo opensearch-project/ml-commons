@@ -5,25 +5,19 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
-import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
@@ -31,20 +25,16 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import software.amazon.awssdk.core.internal.http.loader.DefaultSdkHttpClientBuilder;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.http.AbortableInputStream;
-import software.amazon.awssdk.http.HttpExecuteRequest;
-import software.amazon.awssdk.http.HttpExecuteResponse;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.SdkHttpConfigurationOption;
+import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
-import software.amazon.awssdk.utils.AttributeMap;
+import software.amazon.awssdk.http.async.AsyncExecuteRequest;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
@@ -52,7 +42,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private AwsConnector connector;
-    private SdkHttpClient httpClient;
     @Setter
     @Getter
     private ScriptService scriptService;
@@ -69,103 +58,52 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
-    public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
-        this.connector = (AwsConnector) connector;
-        this.httpClient = httpClient;
-    }
+    private SdkAsyncHttpClient httpClient;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
-        Duration connectionTimeout = Duration.ofMillis(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofMillis(super.getConnectorClientConfig().getReadTimeout());
-        try (
-            AttributeMap attributeMap = AttributeMap
-                .builder()
-                .put(SdkHttpConfigurationOption.CONNECTION_TIMEOUT, connectionTimeout)
-                .put(SdkHttpConfigurationOption.READ_TIMEOUT, readTimeout)
-                .put(SdkHttpConfigurationOption.MAX_CONNECTIONS, super.getConnectorClientConfig().getMaxConnections())
-                .build()
-        ) {
-            log
-                .info(
-                    "Initializing aws connector http client with attributes: connectionTimeout={}, readTimeout={}, maxConnections={}",
-                    connectionTimeout,
-                    readTimeout,
-                    super.getConnectorClientConfig().getMaxConnections()
-                );
-            this.httpClient = new DefaultSdkHttpClientBuilder().buildWithDefaults(attributeMap);
-        } catch (RuntimeException e) {
-            log.error("Error initializing AWS connector HTTP client.", e);
-            throw e;
-        } catch (Throwable e) {
-            log.error("Error initializing AWS connector HTTP client.", e);
-            throw new MLException(e);
-        }
+        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     @SuppressWarnings("removal")
     @Override
-    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
+    public void invokeRemoteModel(
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        Map<Integer, ModelTensors> tensorOutputs,
+        ExecutionContext countDownLatch,
+        ActionListener<List<ModelTensors>> actionListener
+    ) {
         try {
-            String endpoint = connector.getPredictEndpoint(parameters);
-            RequestBody requestBody = RequestBody.fromString(payload);
-
-            SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
-                .builder()
-                .method(POST)
-                .uri(URI.create(endpoint))
-                .contentStreamProvider(requestBody.contentStreamProvider());
-            Map<String, String> headers = connector.getDecryptedHeaders();
-            if (headers != null) {
-                for (String key : headers.keySet()) {
-                    builder.putHeader(key, headers.get(key));
-                }
-            }
-            SdkHttpFullRequest request = builder.build();
-            HttpExecuteRequest executeRequest = HttpExecuteRequest
+            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
+            AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
-                .contentStreamProvider(request.contentStreamProvider().orElse(null))
+                .requestContentPublisher(new SimpleHttpContentPublisher(request))
+                .responseHandler(
+                    new MLSdkAsyncHttpResponseHandler(
+                        countDownLatch,
+                        actionListener,
+                        parameters,
+                        tensorOutputs,
+                        connector,
+                        scriptService,
+                        mlGuard
+                    )
+                )
                 .build();
-
-            HttpExecuteResponse response = AccessController
-                .doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> httpClient.prepareRequest(executeRequest).call());
-            int statusCode = response.httpResponse().statusCode();
-
-            AbortableInputStream body = null;
-            if (response.responseBody().isPresent()) {
-                body = response.responseBody().get();
-            }
-
-            StringBuilder responseBuilder = new StringBuilder();
-            if (body != null) {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        responseBuilder.append(line);
-                    }
-                }
-            } else {
-                throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
-            }
-            String modelResponse = responseBuilder.toString();
-            if (getMlGuard() != null && !getMlGuard().validate(modelResponse, MLGuard.Type.OUTPUT)) {
-                throw new IllegalArgumentException("guardrails triggered for LLM output");
-            }
-            if (statusCode < 200 || statusCode >= 300) {
-                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
-            }
-
-            ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
-            tensors.setStatusCode(statusCode);
-            tensorOutputs.add(tensors);
+            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
-            throw exception;
+            actionListener.onFailure(exception);
         } catch (Throwable e) {
             log.error("Failed to execute predict in aws connector", e);
-            throw new MLException("Fail to execute predict in aws connector", e);
+            actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
         }
     }
 

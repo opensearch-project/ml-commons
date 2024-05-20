@@ -88,6 +88,21 @@ public class MLGuardTests {
     }
 
     @Test
+    public void validateInitializedStopWordsEmpty() {
+        stopWords = new StopWords(null, null);
+        regex = List.of("(.|\n)*stop words(.|\n)*").toArray(new String[0]);
+        regexPatterns = List.of(Pattern.compile("(.|\n)*stop words(.|\n)*"));
+        inputGuardrail = new Guardrail(List.of(stopWords), regex);
+        outputGuardrail = new Guardrail(List.of(stopWords), regex);
+        guardrails = new Guardrails("test_type", inputGuardrail, outputGuardrail);
+        mlGuard = new MLGuard(guardrails, xContentRegistry, client);
+
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validate(input, MLGuard.Type.INPUT);
+        Assert.assertTrue(res);
+    }
+
+    @Test
     public void validateOutput() {
         String input = "\n\nHuman:hello stop words.\n\nAssistant:";
         Boolean res = mlGuard.validate(input, MLGuard.Type.OUTPUT);
@@ -109,6 +124,22 @@ public class MLGuardTests {
         Boolean res = mlGuard.validateRegexList(input, regexPatterns);
 
         Assert.assertFalse(res);
+    }
+
+    @Test
+    public void validateRegexListNull() {
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validateRegexList(input, null);
+
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateRegexListEmpty() {
+        String input = "\n\nHuman:hello good words.\n\nAssistant:";
+        Boolean res = mlGuard.validateRegexList(input, List.of());
+
+        Assert.assertTrue(res);
     }
 
     @Test
@@ -135,6 +166,18 @@ public class MLGuardTests {
         when(this.client.search(any())).thenReturn(future);
 
         Boolean res = mlGuard.validateStopWords("hello world", stopWordsIndices);
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateStopWordsNull() {
+        Boolean res = mlGuard.validateStopWords("hello world", null);
+        Assert.assertTrue(res);
+    }
+
+    @Test
+    public void validateStopWordsEmpty() {
+        Boolean res = mlGuard.validateStopWords("hello world", Map.of());
         Assert.assertTrue(res);
     }
 

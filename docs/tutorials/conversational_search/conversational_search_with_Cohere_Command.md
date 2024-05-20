@@ -4,6 +4,8 @@ This tutorial explains how to use conversational search with the Cohere Command 
 
 Note: Replace the placeholders that start with `your_` with your own values.
 
+The other way to build RAG/conversational search is using Agent Framework, see [RAG_with_conversational_flow_agent](../agent_framework/RAG_with_conversational_flow_agent.md)
+
 # Steps
 
 ## 0. Preparation

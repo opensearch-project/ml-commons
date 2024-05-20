@@ -8,6 +8,7 @@ package org.opensearch.ml.task;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
@@ -19,6 +20,7 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
@@ -30,10 +32,13 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -47,6 +52,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -60,6 +66,7 @@ import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
@@ -142,16 +149,32 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     request.setDispatchTask(false);
                     transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
                 }
-            }, e -> { listener.onFailure(e); });
+            }, listener::onFailure);
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
             if (workerNodes == null || workerNodes.length == 0) {
                 if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                         mlModelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(model -> {
+                            Boolean isHidden = model.getIsHidden();
+                            if (!checkModelAutoDeployEnabled(model)) {
+                                final String errorMsg = getErrorMessage(
+                                    "Auto deployment disabled for this model, please deploy model first",
+                                    modelId,
+                                    isHidden
+                                );
+                                log.info(errorMsg);
+                                listener.onFailure(new IllegalArgumentException(errorMsg));
+                                return;
+                            }
                             String[] planningWorkerNodes = model.getPlanningWorkerNodes();
+                            boolean deployToAllNodes = model.isDeployToAllNodes();
+                            if (deployToAllNodes) {
+                                planningWorkerNodes = null;
+                            }
                             MLModel modelBeingAutoDeployed = mlModelManager.addModelToAutoDeployCache(modelId, model);
                             if (modelBeingAutoDeployed == model) {
-                                log.info("Automatically deploy model {}", modelId);
+                                log.info(getErrorMessage("Automatically deploy model", modelId, isHidden));
+
                                 MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(
                                     modelId,
                                     planningWorkerNodes,
@@ -160,8 +183,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                     false
                                 );
                                 client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, ActionListener.wrap(r -> {
-                                    log.info("Auto deployment action triggered for model {}", modelId);
-                                }, e -> { log.error("Auto deployment action failed for model " + modelId, e); }));
+                                    log.info(getErrorMessage("Auto deployment action triggered for the model", modelId, isHidden));
+                                },
+                                    e -> log
+                                        .info(getErrorMessage("Auto deployment action failed for the given model {}", modelId, isHidden), e)
+                                ));
                             }
                             if (planningWorkerNodes == null || planningWorkerNodes.length == 0) {
                                 planningWorkerNodes = nodeHelper.getEligibleNodeIds(functionName);
@@ -174,12 +200,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     }
                     return;
                 } else if (FunctionName.needDeployFirst(functionName)) {
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException(
-                                "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + modelId + "/_deploy"
-                            )
-                        );
+                    listener.onFailure(new IllegalArgumentException("Model not ready yet. Please deploy the model first."));
                     return;
                 } else {
                     workerNodes = nodeHelper.getEligibleNodeIds(functionName);
@@ -239,6 +260,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 threadPool.executor(threadPoolName).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
                 break;
         }
+    }
+
+    private boolean checkModelAutoDeployEnabled(MLModel mlModel) {
+        if (mlModel.getDeploySetting() == null || mlModel.getDeploySetting().getIsAutoDeployEnabled() == null) {
+            return true;
+        }
+        return mlModel.getDeploySetting().getIsAutoDeployEnabled();
     }
 
     private String getPredictThreadPool(FunctionName functionName) {
@@ -303,17 +331,32 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (!predictor.isModelReady()) {
                         throw new IllegalArgumentException("Model not ready: " + modelId);
                     }
-                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
-                    if (output instanceof MLPredictionOutput) {
-                        ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                    if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
+                        long startTime = System.nanoTime();
+                        ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
+                            if (output.getOutput() instanceof ModelTensorOutput) {
+                                validateOutputSchema(modelId, (ModelTensorOutput) output.getOutput());
+                            }
+                            handleAsyncMLTaskComplete(mlTask);
+                            mlModelManager.trackPredictDuration(modelId, startTime);
+                            internalListener.onResponse(output);
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId));
+                        predictor.asyncPredict(mlInput, trackPredictDurationListener);
+                    } else {
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
+                        if (output instanceof MLPredictionOutput) {
+                            ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                        }
+                        if (output instanceof ModelTensorOutput) {
+                            validateOutputSchema(modelId, (ModelTensorOutput) output);
+                        }
+                        // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
+                        handleAsyncMLTaskComplete(mlTask);
+                        internalListener.onResponse(new MLTaskResponse(output));
                     }
-
-                    // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
-                    handleAsyncMLTaskComplete(mlTask);
-                    MLTaskResponse response = MLTaskResponse.builder().output(output).build();
-                    internalListener.onResponse(response);
                     return;
                 } catch (Exception e) {
+                    log.error("Failed to predict model " + modelId, e);
                     handlePredictFailure(mlTask, internalListener, e, false, modelId);
                     return;
                 }
@@ -356,7 +399,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }
-
+                        if (output instanceof ModelTensorOutput) {
+                            validateOutputSchema(modelId, (ModelTensorOutput) output);
+                        }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
                         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
@@ -411,5 +456,20 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
+    }
+
+    public void validateOutputSchema(String modelId, ModelTensorOutput output) {
+        if (mlModelManager.getModelInterface(modelId) != null && mlModelManager.getModelInterface(modelId).get("output") != null) {
+            String outputSchemaString = mlModelManager.getModelInterface(modelId).get("output");
+            try {
+                MLNodeUtils
+                    .validateSchema(
+                        outputSchemaString,
+                        output.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
+                    );
+            } catch (Exception e) {
+                throw new OpenSearchStatusException("Error validating output schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+            }
+        }
     }
 }

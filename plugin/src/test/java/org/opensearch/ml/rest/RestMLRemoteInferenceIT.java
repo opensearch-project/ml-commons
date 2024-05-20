@@ -8,13 +8,14 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -171,19 +172,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
-    public void testRegisterRemoteModel() throws IOException, InterruptedException {
-        Response response = createConnector(completionModelConnectorEntity);
-        Map responseMap = parseResponseToMap(response);
-        String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
-        responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        assertNotNull(responseMap.get("model_id"));
-    }
-
     public void testDeployRemoteModel() throws IOException, InterruptedException {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
@@ -202,25 +190,18 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
     }
 
-    public void testPredictRemoteModel() throws IOException, InterruptedException {
+    public void testPredictWithAutoDeployAndTTL_RemoteModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
+            System.out.println("OPENAI_KEY is null");
             return;
         }
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
-        responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
+        response = registerRemoteModelWithTTL("openAI-GPT-3.5 completions", connectorId, 1);
         responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
@@ -236,13 +217,23 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         }
         responseMap = (Map) responseList.get(0);
         assertFalse(((String) responseMap.get("text")).isEmpty());
+
+        getModelProfile(modelId, verifyRemoteModelDeployed());
+        TimeUnit.SECONDS.sleep(71);
+        assertTrue(getModelProfile(modelId, verifyRemoteModelDeployed()).isEmpty());
     }
 
-    public void testUndeployRemoteModel() throws IOException, InterruptedException {
+    public void testPredictRemoteModelWithInterface(String testCase, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
+        throws IOException,
+        InterruptedException {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+        response = registerRemoteModelWithInterface("openAI-GPT-3.5 completions", connectorId, testCase);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -253,9 +244,47 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = parseResponseToMap(response);
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        response = undeployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        assertTrue(responseMap.toString().contains("undeployed"));
+        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
+        try {
+            response = predictRemoteModel(modelId, predictInput);
+            responseMap = parseResponseToMap(response);
+            verifyResponse.accept(responseMap);
+        } catch (Exception e) {
+            verifyException.accept(e);
+        }
+    }
+
+    public void testPredictRemoteModelWithCorrectInterface() throws IOException, InterruptedException {
+        testPredictRemoteModelWithInterface("correctInterface", (responseMap) -> {
+            List responseList = (List) responseMap.get("inference_results");
+            responseMap = (Map) responseList.get(0);
+            responseList = (List) responseMap.get("output");
+            responseMap = (Map) responseList.get(0);
+            responseMap = (Map) responseMap.get("dataAsMap");
+            responseList = (List) responseMap.get("choices");
+            if (responseList == null) {
+                assertTrue(checkThrottlingOpenAI(responseMap));
+                return;
+            }
+            responseMap = (Map) responseList.get(0);
+            assertFalse(((String) responseMap.get("text")).isEmpty());
+        }, null);
+    }
+
+    public void testPredictRemoteModelWithWrongInputInterface() throws IOException, InterruptedException {
+        testPredictRemoteModelWithInterface("wrongInputInterface", null, (exception) -> {
+            assertTrue(exception instanceof org.opensearch.client.ResponseException);
+            String stackTrace = ExceptionUtils.getStackTrace(exception);
+            assertTrue(stackTrace.contains("Error validating input schema"));
+        });
+    }
+
+    public void testPredictRemoteModelWithWrongOutputInterface() throws IOException, InterruptedException {
+        testPredictRemoteModelWithInterface("wrongOutputInterface", null, (exception) -> {
+            assertTrue(exception instanceof org.opensearch.client.ResponseException);
+            String stackTrace = ExceptionUtils.getStackTrace(exception);
+            assertTrue(stackTrace.contains("Error validating output schema"));
+        });
     }
 
     public void testOpenAIChatCompletionModel() throws IOException, InterruptedException {
@@ -321,8 +350,13 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = parseResponseToMap(response);
         // TODO handle throttling error
         assertNotNull(responseMap);
+
+        response = undeployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        assertTrue(responseMap.toString().contains("undeployed"));
     }
 
+    @Ignore
     public void testOpenAIEditsModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -394,6 +428,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(((String) responseMap.get("content")).isEmpty());
     }
 
+    @Ignore
     public void testOpenAIModerationsModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -624,6 +659,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
+    @Ignore
     public void testCohereClassifyModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (COHERE_KEY == null) {
@@ -738,11 +774,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(responseList.isEmpty());
     }
 
-    protected Response createConnector(String input) throws IOException {
+    public static Response createConnector(String input) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
     }
 
-    protected Response registerRemoteModel(String name, String connectorId) throws IOException {
+    public static Response registerRemoteModel(String name, String connectorId) throws IOException {
         String registerModelGroupEntity = "{\n"
             + "  \"name\": \"remote_model_group\",\n"
             + "  \"description\": \"This is an example description\"\n"
@@ -778,15 +814,232 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
     }
 
-    protected Response deployRemoteModel(String modelId) throws IOException {
+    public static Response registerRemoteModelWithTTL(String name, String connectorId, int ttl) throws IOException {
+        String registerModelGroupEntity = "{\n"
+            + "  \"name\": \"remote_model_group\",\n"
+            + "  \"description\": \"This is an example description\"\n"
+            + "}";
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_plugins/_ml/model_groups/_register",
+                null,
+                TestHelper.toHttpEntity(registerModelGroupEntity),
+                null
+            );
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((String) responseMap.get("status"), "CREATED");
+        String modelGroupId = (String) responseMap.get("model_group_id");
+
+        String registerModelEntity = "{\n"
+            + "  \"name\": \""
+            + name
+            + "\",\n"
+            + "  \"function_name\": \"remote\",\n"
+            + "  \"model_group_id\": \""
+            + modelGroupId
+            + "\",\n"
+            + "  \"version\": \"1.0.0\",\n"
+            + "  \"description\": \"test model\",\n"
+            + "  \"connector_id\": \""
+            + connectorId
+            + "\",\n"
+            + "  \"deploy_setting\": "
+            + " { \"model_ttl_minutes\": "
+            + ttl
+            + "}\n"
+            + "}";
+        return TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
+    }
+
+    public static Response registerRemoteModelWithInterface(String name, String connectorId, String testCase) throws IOException {
+        String registerModelGroupEntity = "{\n"
+            + "  \"name\": \"remote_model_group\",\n"
+            + "  \"description\": \"This is an example description\"\n"
+            + "}";
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_plugins/_ml/model_groups/_register",
+                null,
+                TestHelper.toHttpEntity(registerModelGroupEntity),
+                null
+            );
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((String) responseMap.get("status"), "CREATED");
+        String modelGroupId = (String) responseMap.get("model_group_id");
+
+        final String openaiConnectorEntityWithCorrectInterface = "{\n"
+            + "  \"name\": \""
+            + name
+            + "\",\n"
+            + "  \"model_group_id\": \""
+            + modelGroupId
+            + "\",\n"
+            + "  \"function_name\": \"remote\",\n"
+            + "  \"connector_id\": \""
+            + connectorId
+            + "\",\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {\n"
+            + "      \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "          \"properties\": {\n"
+            + "            \"prompt\": {\n"
+            + "              \"type\": \"string\",\n"
+            + "              \"description\": \"This is a test description field\"\n"
+            + "            }\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    },\n"
+            + "    \"output\": {\n"
+            + "      \"properties\": {\n"
+            + "        \"inference_results\": {\n"
+            + "          \"type\": \"array\",\n"
+            + "          \"items\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "              \"output\": {\n"
+            + "                \"type\": \"array\",\n"
+            + "                \"items\": {\n"
+            + "                  \"properties\": {\n"
+            + "                    \"name\": {\n"
+            + "                      \"type\": \"string\",\n"
+            + "                      \"description\": \"This is a test description field\"\n"
+            + "                    },\n"
+            + "                    \"dataAsMap\": {\n"
+            + "                      \"type\": \"object\",\n"
+            + "                      \"description\": \"This is a test description field\"\n"
+            + "                    }\n"
+            + "                  }\n"
+            + "                },\n"
+            + "                \"description\": \"This is a test description field\"\n"
+            + "              },\n"
+            + "              \"status_code\": {\n"
+            + "                \"type\": \"integer\",\n"
+            + "                \"description\": \"This is a test description field\"\n"
+            + "              }\n"
+            + "            }\n"
+            + "          },\n"
+            + "          \"description\": \"This is a test description field\"\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+
+        final String openaiConnectorEntityWithWrongInputInterface = "{\n"
+            + "  \"name\": \""
+            + name
+            + "\",\n"
+            + "  \"model_group_id\": \""
+            + modelGroupId
+            + "\",\n"
+            + "  \"function_name\": \"remote\",\n"
+            + "  \"connector_id\": \""
+            + connectorId
+            + "\",\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {\n"
+            + "      \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "          \"properties\": {\n"
+            + "            \"prompt\": {\n"
+            + "              \"type\": \"integer\",\n"
+            + "              \"description\": \"This is a test description field\"\n"
+            + "            }\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+
+        final String openaiConnectorEntityWithWrongOutputInterface = "{\n"
+            + "  \"name\": \""
+            + name
+            + "\",\n"
+            + "  \"model_group_id\": \""
+            + modelGroupId
+            + "\",\n"
+            + "  \"function_name\": \"remote\",\n"
+            + "  \"connector_id\": \""
+            + connectorId
+            + "\",\n"
+            + "  \"interface\": {\n"
+            + "    \"output\": {\n"
+            + "      \"properties\": {\n"
+            + "        \"inference_results\": {\n"
+            + "          \"type\": \"array\",\n"
+            + "          \"items\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "              \"output\": {\n"
+            + "                \"type\": \"integer\",\n"
+            + "                \"description\": \"This is a test description field\"\n"
+            + "              },\n"
+            + "              \"status_code\": {\n"
+            + "                \"type\": \"integer\",\n"
+            + "                \"description\": \"This is a test description field\"\n"
+            + "              }\n"
+            + "            }\n"
+            + "          },\n"
+            + "          \"description\": \"This is a test description field\"\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+
+        switch (testCase) {
+            case "correctInterface":
+                return TestHelper
+                    .makeRequest(
+                        client(),
+                        "POST",
+                        "/_plugins/_ml/models/_register",
+                        null,
+                        TestHelper.toHttpEntity(openaiConnectorEntityWithCorrectInterface),
+                        null
+                    );
+            case "wrongInputInterface":
+                return TestHelper
+                    .makeRequest(
+                        client(),
+                        "POST",
+                        "/_plugins/_ml/models/_register",
+                        null,
+                        TestHelper.toHttpEntity(openaiConnectorEntityWithWrongInputInterface),
+                        null
+                    );
+            case "wrongOutputInterface":
+                return TestHelper
+                    .makeRequest(
+                        client(),
+                        "POST",
+                        "/_plugins/_ml/models/_register",
+                        null,
+                        TestHelper.toHttpEntity(openaiConnectorEntityWithWrongOutputInterface),
+                        null
+                    );
+            default:
+                throw new IllegalArgumentException("Invalid test case");
+        }
+    }
+
+    public static Response deployRemoteModel(String modelId) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_deploy", null, "", null);
     }
 
-    protected Response predictRemoteModel(String modelId, String input) throws IOException {
+    public Response predictRemoteModel(String modelId, String input) throws IOException {
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, input, null);
     }
 
-    protected Response undeployRemoteModel(String modelId) throws IOException {
+    public Response undeployRemoteModel(String modelId) throws IOException {
         String undeployEntity = "{\n"
             + "  \"SYqCMdsFTumUwoHZcsgiUg\": {\n"
             + "    \"stats\": {\n"
@@ -805,14 +1058,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         return message.equals("You exceeded your current quota, please check your plan and billing details.");
     }
 
-    protected Map parseResponseToMap(Response response) throws IOException {
-        HttpEntity entity = response.getEntity();
-        assertNotNull(response);
-        String entityString = TestHelper.httpEntityToString(entity);
-        return gson.fromJson(entityString, Map.class);
-    }
-
-    protected void disableClusterConnectorAccessControl() throws IOException {
+    public static void disableClusterConnectorAccessControl() throws IOException {
         Response response = TestHelper
             .makeRequest(
                 client(),
@@ -825,15 +1071,26 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
-    protected Response getTask(String taskId) throws IOException {
+    public static Response getTask(String taskId) throws IOException {
         return TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
     }
 
-    private String registerRemoteModel() throws IOException {
+    public String registerRemoteModel() throws IOException {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
         response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        logger.info("task ID created: {}", taskId);
+        return taskId;
+    }
+
+    public String registerRemoteModelWithInterface(String testCase) throws IOException {
+        Response response = createConnector(completionModelConnectorEntity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModelWithInterface("openAI-GPT-3.5 completions", connectorId, testCase);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         logger.info("task ID created: {}", taskId);

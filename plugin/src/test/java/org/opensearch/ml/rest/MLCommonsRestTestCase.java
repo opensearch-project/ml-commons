@@ -27,6 +27,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -64,11 +65,13 @@ import org.opensearch.common.io.PathUtils;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
@@ -87,6 +90,7 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.utils.TestData;
@@ -113,6 +117,27 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
 
         return isHttps;
+    }
+
+    protected void updateClusterSettings(String settingKey, Object value) throws IOException {
+        XContentBuilder builder = XContentFactory
+            .jsonBuilder()
+            .startObject()
+            .startObject("persistent")
+            .field(settingKey, value)
+            .endObject()
+            .endObject();
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                builder.toString(),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+
+        assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
     }
 
     @Before
@@ -827,16 +852,19 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return taskId;
     }
 
-    Map parseResponseToMap(Response response) throws IOException {
+    public static Map parseResponseToMap(Response response) throws IOException {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
         String entityString = TestHelper.httpEntityToString(entity);
-        return gson.fromJson(entityString, Map.class);
+        return StringUtils.gson.fromJson(entityString, Map.class);
     }
 
     public Map getModelProfile(String modelId, Consumer verifyFunction) throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/profile/models/" + modelId, null, (String) null, null);
         Map profile = parseResponseToMap(response);
+        if (profile == null || profile.get("nodes") == null) {
+            return new HashMap();
+        }
         Map<String, Object> nodeProfiles = (Map) profile.get("nodes");
         for (Map.Entry<String, Object> entry : nodeProfiles.entrySet()) {
             Map<String, Object> modelProfiles = (Map) entry.getValue();
@@ -888,6 +916,17 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             if (modelProfile.containsKey("model_state")) {
                 assertEquals(MLModelState.DEPLOYED.name(), modelProfile.get("model_state"));
                 assertTrue(((String) modelProfile.get("predictor")).startsWith("org.opensearch.ml.engine.algorithms.TextEmbeddingModel@"));
+            }
+            List<String> workNodes = (List) modelProfile.get("worker_nodes");
+            assertTrue(workNodes.size() > 0);
+        };
+    }
+
+    public Consumer<Map<String, Object>> verifyRemoteModelDeployed() {
+        return (modelProfile) -> {
+            if (modelProfile.containsKey("model_state")) {
+                assertEquals(MLModelState.DEPLOYED.name(), modelProfile.get("model_state"));
+                assertTrue(((String) modelProfile.get("predictor")).startsWith("org.opensearch.ml.engine.algorithms.remote.RemoteModel@"));
             }
             List<String> workNodes = (List) modelProfile.get("worker_nodes");
             assertTrue(workNodes.size() > 0);

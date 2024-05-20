@@ -7,6 +7,8 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +17,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.BooleanUtils;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
@@ -59,7 +62,7 @@ public class MLModelCacheHelper {
         List<String> targetWorkerNodes,
         boolean deployToAllNodes
     ) {
-        if (isModelRunningOnNode(modelId)) {
+        if (isModelRunningOnNode(modelId) && !isAutoDeploying(modelId)) {
             throw new MLLimitExceededException("Duplicate deploy model task");
         }
         log.debug("init model state for model {}, state: {}", modelId, state);
@@ -68,10 +71,11 @@ public class MLModelCacheHelper {
         modelCache.setFunctionName(functionName);
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(deployToAllNodes);
+        modelCache.setLastAccessTime(Instant.now());
         modelCaches.put(modelId, modelCache);
     }
 
-    public synchronized void initModelStateLocal(
+    public synchronized void initModelStateAutoDeploy(
         String modelId,
         MLModelState state,
         FunctionName functionName,
@@ -87,7 +91,9 @@ public class MLModelCacheHelper {
         modelCache.setFunctionName(functionName);
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(false);
+        modelCache.setLastAccessTime(Instant.now());
         modelCaches.put(modelId, modelCache);
+        setIsAutoDeploying(modelId, true);
     }
 
     /**
@@ -184,9 +190,43 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Set the ml interface for the model
+     *
+     * @param modelId model id
+     * @param modelInterface model interface
+     */
+    public synchronized void setModelInterface(String modelId, Map<String, String> modelInterface) {
+        log.debug("Setting ML Interface {} for Model {}", modelInterface, modelId);
+        getExistingModelCache(modelId).setModelInterface(modelInterface);
+    }
+
+    /**
+     * Get the current ml interface for the model
+     *
+     * @param modelId model id
+     */
+    public Map<String, String> getModelInterface(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getModelInterface();
+    }
+
+    /**
+     * Remove the ml interface from cache
+     *
+     * @param modelId model id
+     */
+    public synchronized void removeModelInterface(String modelId) {
+        log.debug("Removing the ML Interface from Model {}", modelId);
+        getExistingModelCache(modelId).setModelInterface(null);
+    }
+
+    /**
      * Set a ml guard
      *
-     * @param modelId     model id
+     * @param modelId model id
      * @param mlGuard mlGuard
      */
     public synchronized void setMLGuard(String modelId, MLGuard mlGuard) {
@@ -239,6 +279,28 @@ public class MLModelCacheHelper {
             return null;
         }
         return modelCache.getIsModelEnabled();
+    }
+
+    /**
+     * Set a flag to show if model is in auto deploying status
+     *
+     * @param modelId        model id
+     * @param isModelAutoDeploying auto deploy flag
+     */
+    public synchronized void setIsAutoDeploying(String modelId, Boolean isModelAutoDeploying) {
+        log.debug("Setting the auto deploying flag for Model {}", modelId);
+        getExistingModelCache(modelId).setIsAutoDeploying(isModelAutoDeploying);
+    }
+
+    /**
+     * Check if model is in auto deploying.
+     *
+     * @param modelId model id
+     * @return true if model is auto deploying.
+     */
+    public boolean isAutoDeploying(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        return modelCache != null && BooleanUtils.isTrue(modelCache.getIsAutoDeploying());
     }
 
     /**
@@ -342,6 +404,30 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Get expired models on node.
+     *
+     * @return array of expired model id
+     */
+    public String[] getExpiredModels() {
+        return modelCaches.entrySet().stream().filter(entry -> {
+            MLModelCache modelCache = entry.getValue();
+            MLModel mlModel = modelCache.getCachedModelInfo();
+            MLModelState modelState = modelCache.getModelState();
+            if (mlModel == null || mlModel.getDeploySetting() == null) {
+                return false; // no TTL, never expire
+            }
+            Duration liveDuration = Duration.between(entry.getValue().getLastAccessTime(), Instant.now());
+            Long ttlInMinutes = mlModel.getDeploySetting().getModelTTLInMinutes();
+            if (ttlInMinutes < 0) {
+                return false;
+            }
+            Duration ttl = Duration.ofMinutes(ttlInMinutes);
+            boolean isModelExpired = liveDuration.getSeconds() >= ttl.getSeconds();
+            return isModelExpired && (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED);
+        }).map(entry -> entry.getKey()).collect(Collectors.toList()).toArray(new String[0]);
+    }
+
+    /**
      * Check if model is running on node.
      * 
      * @param modelId model id
@@ -401,6 +487,16 @@ public class MLModelCacheHelper {
         if (modelCache != null) {
             modelCache.setTargetWorkerNodes(targetWorkerNodes);
         }
+    }
+
+    /**
+     * Set the last access time to Instant.now()
+     *
+     * @param modelId           model id
+     */
+    public void refreshLastAccessTime(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        modelCache.setLastAccessTime(Instant.now());
     }
 
     /**

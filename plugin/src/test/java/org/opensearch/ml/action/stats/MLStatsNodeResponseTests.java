@@ -101,7 +101,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         algoStats.put(FunctionName.KMEANS, new MLAlgoStats(stats));
 
         Map<String, MLModelStats> modelStats = new HashMap<>();
-        modelStats.put(modelId, new MLModelStats(stats));
+        modelStats.put(modelId, new MLModelStats(stats, false));
 
         MLStatsNodeResponse response = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
         return response;
@@ -127,7 +127,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         modelActionStatMap.put(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, 111);
         modelActionStatMap.put(MLActionLevelStat.ML_ACTION_FAILURE_COUNT, 22);
         modelActionStats.put(ActionName.PREDICT, new MLActionStats(modelActionStatMap));
-        modelStats.put(modelId, new MLModelStats(modelActionStats));
+        modelStats.put(modelId, new MLModelStats(modelActionStats, true));
 
         response = new MLStatsNodeResponse(node, statsToValues, algoStats, modelStats);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -135,8 +135,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         String taskContent = TestHelper.xContentBuilderToString(builder);
         Set<String> validResult = ImmutableSet
             .of(
-                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
-                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22},\"is_hidden\":true}}}",
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111},\"is_hidden\":true}}}"
             );
         assertTrue(validResult.contains(taskContent));
     }
