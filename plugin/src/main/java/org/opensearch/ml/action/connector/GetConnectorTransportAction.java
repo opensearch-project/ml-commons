@@ -10,6 +10,8 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import java.util.Objects;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -37,8 +39,6 @@ import org.opensearch.transport.TransportService;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
-
-import java.util.Objects;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
@@ -97,6 +97,15 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector mlConnector = Connector.createConnector(parser);
                                 mlConnector.removeCredential();
+                                if (!Objects.equals(tenantId, mlConnector.getTenantId())) {
+                                    actionListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "You don't have permission to access this connector",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
                                 if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                                     actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                                 } else {
