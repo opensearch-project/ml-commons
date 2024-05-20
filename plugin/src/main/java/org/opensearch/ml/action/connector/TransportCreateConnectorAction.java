@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.util.HashSet;
@@ -130,8 +131,11 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
-                    .putDataObjectAsync(new PutDataObjectRequest.Builder().index(ML_CONNECTOR_INDEX).dataObject(connector).build())
-                    .whenCompleteAsync((r, throwable) -> {
+                    .putDataObjectAsync(
+                        new PutDataObjectRequest.Builder().index(ML_CONNECTOR_INDEX).dataObject(connector).build(),
+                        client.threadPool().executor(GENERAL_THREAD_POOL)
+                    )
+                    .whenComplete((r, throwable) -> {
                         context.restore();
                         if (throwable != null) {
                             listener.onFailure(new RuntimeException(throwable));

@@ -7,6 +7,7 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -108,7 +109,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                         }
                         log.error("Failed to delete ML connector: " + connectorId, e);
                         actionListener.onFailure(e);
-                    }), () -> context.restore()));
+                    }), context::restore));
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);
                     actionListener.onFailure(e);
@@ -125,8 +126,11 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                .deleteDataObjectAsync(new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
-                .whenCompleteAsync((r, throwable) -> {
+                .deleteDataObjectAsync(
+                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
+                    client.threadPool().executor(GENERAL_THREAD_POOL)
+                )
+                .whenComplete((r, throwable) -> {
                     context.restore();
                     if (throwable != null) {
                         actionListener.onFailure(new RuntimeException(throwable));

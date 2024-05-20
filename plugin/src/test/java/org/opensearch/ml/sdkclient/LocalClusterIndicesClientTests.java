@@ -15,9 +15,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -34,6 +40,9 @@ import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -46,14 +55,25 @@ import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
+import org.opensearch.threadpool.ThreadPool;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
-
-@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
 
     private static final String TEST_ID = "123";
     private static final String TEST_INDEX = "test_index";
+
+    private static TestThreadPool testThreadPool = new TestThreadPool(
+        LocalClusterIndicesClientTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
 
     @Mock
     private Client mockedClient;
@@ -72,6 +92,11 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         testDataObject = new TestDataObject("foo");
     }
 
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
+    }
+
     public void testPutDataObject() throws IOException {
         PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
@@ -83,7 +108,10 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedClient.index(any(IndexRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(indexResponse);
 
-        PutDataObjectResponse response = sdkClient.putDataObject(putRequest);
+        PutDataObjectResponse response = sdkClient
+            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
 
         ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(mockedClient, times(1)).index(requestCaptor.capture());
@@ -101,8 +129,12 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
             return null;
         }).when(mockedClient).index(any(IndexRequest.class), any());
 
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.putDataObject(putRequest));
-        assertEquals(OpenSearchException.class, ose.getCause().getClass());
+        CompletableFuture<PutDataObjectResponse> future = sdkClient
+            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        assertEquals(OpenSearchException.class, ce.getCause().getClass());
     }
 
     public void testGetDataObject() throws IOException {
@@ -117,7 +149,10 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedClient.get(any(GetRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(getResponse);
 
-        GetDataObjectResponse response = sdkClient.getDataObject(getRequest);
+        GetDataObjectResponse response = sdkClient
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
 
         ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         verify(mockedClient, times(1)).get(requestCaptor.capture());
@@ -139,7 +174,10 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         when(mockedClient.get(any(GetRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(getResponse);
 
-        GetDataObjectResponse response = sdkClient.getDataObject(getRequest);
+        GetDataObjectResponse response = sdkClient
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
 
         ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         verify(mockedClient, times(1)).get(requestCaptor.capture());
@@ -157,8 +195,12 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
             return null;
         }).when(mockedClient).get(any(GetRequest.class), any());
 
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.getDataObject(getRequest));
-        assertEquals(OpenSearchException.class, ose.getCause().getClass());
+        CompletableFuture<GetDataObjectResponse> future = sdkClient
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        assertEquals(OpenSearchException.class, ce.getCause().getClass());
     }
 
     public void testDeleteDataObject() throws IOException {
@@ -172,7 +214,10 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         future.onResponse(deleteResponse);
         when(mockedClient.delete(any(DeleteRequest.class))).thenReturn(future);
 
-        DeleteDataObjectResponse response = sdkClient.deleteDataObject(deleteRequest);
+        DeleteDataObjectResponse response = sdkClient
+            .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
 
         ArgumentCaptor<DeleteRequest> requestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         verify(mockedClient, times(1)).delete(requestCaptor.capture());
@@ -192,7 +237,11 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
             return null;
         }).when(mockedClient).delete(any(DeleteRequest.class), any());
 
-        OpenSearchException ose = assertThrows(OpenSearchException.class, () -> sdkClient.deleteDataObject(deleteRequest));
-        assertEquals(OpenSearchException.class, ose.getCause().getClass());
+        CompletableFuture<DeleteDataObjectResponse> future = sdkClient
+            .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        assertEquals(OpenSearchException.class, ce.getCause().getClass());
     }
 }

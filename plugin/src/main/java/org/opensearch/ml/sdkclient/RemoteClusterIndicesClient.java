@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
@@ -61,7 +62,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
     }
 
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try {
                 IndexRequest<?> indexRequest = new IndexRequest.Builder<>().index(request.index()).document(request.dataObject()).build();
@@ -72,11 +73,11 @@ public class RemoteClusterIndicesClient implements SdkClient {
             } catch (Exception e) {
                 throw new OpenSearchException("Error occurred while indexing data object", e);
             }
-        }));
+        }), executor);
     }
 
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
@@ -94,11 +95,11 @@ public class RemoteClusterIndicesClient implements SdkClient {
             } catch (Exception e) {
                 throw new OpenSearchException(e);
             }
-        }));
+        }), executor);
     }
 
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 DeleteRequest deleteRequest = new DeleteRequest.Builder().index(request.index()).id(request.id()).build();
@@ -118,6 +119,6 @@ public class RemoteClusterIndicesClient implements SdkClient {
             } catch (Exception e) {
                 throw new OpenSearchException("Error occurred while deleting data object", e);
             }
-        }));
+        }), executor);
     }
 }

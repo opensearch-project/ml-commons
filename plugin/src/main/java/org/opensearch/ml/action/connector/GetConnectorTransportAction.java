@@ -7,6 +7,7 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.opensearch.OpenSearchStatusException;
@@ -72,51 +73,53 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
             .build();
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient.getDataObjectAsync(getDataObjectRequest).whenCompleteAsync((r, throwable) -> {
-                context.restore();
-                log.debug("Completed Get Connector Request, id:{}", connectorId);
-                if (throwable != null) {
-                    Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
-                    if (cause instanceof IndexNotFoundException) {
-                        log.error("Failed to get connector index", cause);
-                        actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
-                    } else {
-                        log.error("Failed to get ML connector " + connectorId, cause);
-                        actionListener.onFailure(new RuntimeException(cause));
-                    }
-                } else {
-                    if (r != null && r.parser().isPresent()) {
-                        try {
-                            XContentParser parser = r.parser().get();
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            Connector mlConnector = Connector.createConnector(parser);
-                            mlConnector.removeCredential();
-                            if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
-                                actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
-                            } else {
-                                actionListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "You don't have permission to access this connector",
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            }
-                        } catch (Exception e) {
-                            log.error("Failed to parse ml connector" + r.id(), e);
-                            actionListener.onFailure(e);
+            sdkClient
+                .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    log.debug("Completed Get Connector Request, id:{}", connectorId);
+                    if (throwable != null) {
+                        Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                        if (cause instanceof IndexNotFoundException) {
+                            log.error("Failed to get connector index", cause);
+                            actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                        } else {
+                            log.error("Failed to get ML connector " + connectorId, cause);
+                            actionListener.onFailure(new RuntimeException(cause));
                         }
                     } else {
-                        actionListener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "Failed to find connector with the provided connector id: " + connectorId,
-                                    RestStatus.NOT_FOUND
-                                )
-                            );
+                        if (r != null && r.parser().isPresent()) {
+                            try {
+                                XContentParser parser = r.parser().get();
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                Connector mlConnector = Connector.createConnector(parser);
+                                mlConnector.removeCredential();
+                                if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
+                                    actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
+                                } else {
+                                    actionListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "You don't have permission to access this connector",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
+                            } catch (Exception e) {
+                                log.error("Failed to parse ml connector" + r.id(), e);
+                                actionListener.onFailure(e);
+                            }
+                        } else {
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "Failed to find connector with the provided connector id: " + connectorId,
+                                        RestStatus.NOT_FOUND
+                                    )
+                                );
+                        }
                     }
-                }
-            });
+                });
         } catch (Exception e) {
             log.error("Failed to get ML connector " + connectorId, e);
             actionListener.onFailure(e);

@@ -19,6 +19,7 @@ import java.security.PrivilegedAction;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
@@ -65,7 +66,7 @@ public class LocalClusterIndicesClient implements SdkClient {
     }
 
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Indexing data object in {}", request.index());
@@ -81,11 +82,11 @@ public class LocalClusterIndicesClient implements SdkClient {
             } catch (Exception e) {
                 throw new OpenSearchException(e);
             }
-        }));
+        }), executor);
     }
 
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 log.info("Getting {} from {}", request.id(), request.index());
@@ -102,11 +103,11 @@ public class LocalClusterIndicesClient implements SdkClient {
             } catch (Exception e) {
                 throw new OpenSearchException(e);
             }
-        }));
+        }), executor);
     }
 
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 log.info("Deleting {} from {}", request.id(), request.index());
@@ -121,6 +122,6 @@ public class LocalClusterIndicesClient implements SdkClient {
             } catch (Exception e) {
                 throw new OpenSearchException(e);
             }
-        }));
+        }), executor);
     }
 }
