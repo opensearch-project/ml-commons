@@ -197,7 +197,7 @@ public interface RemoteConnectorExecutor {
             if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT)) {
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
-            if (executionContext.getConnectorRetryOption().getRetryEnabled()) {
+            if (executionContext.getConnectorRetryOption().isRetryEnabled()) {
                 invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
             } else {
                 invokeRemoteModel(mlInput, parameters, payload, executionContext, actionListener);
@@ -223,7 +223,7 @@ public interface RemoteConnectorExecutor {
                     TimeValue.timeValueMillis(executionContext.getConnectorRetryOption().getRetryBackoffMillis()),
                     Integer.MAX_VALUE
                 ),
-            executionContext.getConnectorRetryOption().getRetryExecutor()
+            executionContext.getConnectorRetryOption().getRetyExecutor()
         ) {
             Integer retryTimes = 0;
 

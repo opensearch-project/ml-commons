@@ -1,19 +1,17 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
-public interface ConnectorRetryOption {
-    default boolean getRetryEnabled() {
-        return false;
-    }
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-    default Integer getRetryBackoffMillis() {
-        throw new UnsupportedOperationException();
-    };
-
-    default Integer getRetryTimeoutSeconds() {
-        throw new UnsupportedOperationException();
-    };
-
-    default String getRetryExecutor() {
-        throw new UnsupportedOperationException();
-    };
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class ConnectorRetryOption {
+    private boolean retryEnabled = false;
+    private Integer retryBackoffMillis;
+    private Integer retryTimeoutSeconds;
+    private String retyExecutor;
 }

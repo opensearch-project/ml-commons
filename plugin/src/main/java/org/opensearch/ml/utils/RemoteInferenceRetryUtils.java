@@ -28,26 +28,11 @@ public class RemoteInferenceRetryUtils {
     }
 
     public static ConnectorRetryOption getRetryOptionFromClusterSettings() {
-        return new ConnectorRetryOption() {
-            @Override
-            public boolean getRetryEnabled() {
-                return retryEnabled;
-            }
-
-            @Override
-            public Integer getRetryBackoffMillis() {
-                return retryBackoffMillis;
-            }
-
-            @Override
-            public Integer getRetryTimeoutSeconds() {
-                return retryTimeoutSeconds;
-            }
-
-            @Override
-            public String getRetryExecutor() {
-                return REMOTE_PREDICT_THREAD_POOL;
-            }
-        };
+        ConnectorRetryOption connectorRetryOption = new ConnectorRetryOption();
+        connectorRetryOption.setRetryEnabled(retryEnabled);
+        connectorRetryOption.setRetryBackoffMillis(retryBackoffMillis);
+        connectorRetryOption.setRetryTimeoutSeconds(retryTimeoutSeconds);
+        connectorRetryOption.setRetyExecutor(REMOTE_PREDICT_THREAD_POOL);
+        return connectorRetryOption;
     }
 }
