@@ -42,7 +42,12 @@ import software.amazon.awssdk.http.SdkHttpFullResponse;
 import software.amazon.awssdk.http.SdkHttpResponse;
 
 public class MLSdkAsyncHttpResponseHandlerTest {
-    private final ExecutionContext executionContext = new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>(), Collections.emptyList());
+    private final ExecutionContext executionContext = new ExecutionContext(
+        0,
+        new CountDownLatch(1),
+        new AtomicReference<>(),
+        Collections.emptyList()
+    );
     @Mock
     private ActionListener<List<ModelTensors>> actionListener;
     @Mock

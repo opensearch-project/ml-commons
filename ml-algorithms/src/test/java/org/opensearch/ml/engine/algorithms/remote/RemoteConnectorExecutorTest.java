@@ -1,5 +1,24 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -22,25 +41,6 @@ import org.opensearch.node.Node;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 public class RemoteConnectorExecutorTest {
     @Mock
     private ScriptService scriptService;
@@ -61,7 +61,8 @@ public class RemoteConnectorExecutorTest {
 
     private RemoteConnectorExecutor remoteConnectorExecutor;
 
-    private static final String USER_DEFINED_PREPROCESS = "\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"inputText\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";";
+    private static final String USER_DEFINED_PREPROCESS =
+        "\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"inputText\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";";
 
     @Before
     public void setup() {
@@ -130,8 +131,7 @@ public class RemoteConnectorExecutorTest {
         when(mockMlInput.getInputDataset()).thenReturn(dataSet);
         when(connectorAction.getPreProcessFunction()).thenReturn(USER_DEFINED_PREPROCESS);
         String preprocessResult = "{\"parameters\": { \"input\": \"test doc1\" } }";
-        when(scriptService.compile(any(), any()))
-            .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult));
+        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult));
 
         remoteConnectorExecutor.executePredict(mockMlInput, callback);
         ArgumentCaptor<MLInput> mlInputCaptor = ArgumentCaptor.forClass(MLInput.class);
@@ -156,8 +156,8 @@ public class RemoteConnectorExecutorTest {
         remoteConnectorExecutor.executePredict(mockMlInput, callback);
         ArgumentCaptor<MLInput> mlInputCaptor = ArgumentCaptor.forClass(MLInput.class);
         ArgumentCaptor<ExecutionContext> executionContextCaptor = ArgumentCaptor.forClass(ExecutionContext.class);
-        verify(mockRemoteConnectorExecutor, times(3)).invokeRemoteModel(mlInputCaptor.capture(),
-            any(), any(), any(), executionContextCaptor.capture(), any());
+        verify(mockRemoteConnectorExecutor, times(3))
+            .invokeRemoteModel(mlInputCaptor.capture(), any(), any(), any(), executionContextCaptor.capture(), any());
         // first batch
         verifyBatch(mlInputCaptor.getAllValues().get(0), 2, Arrays.asList("1", "33"));
         // second batch
@@ -179,8 +179,8 @@ public class RemoteConnectorExecutorTest {
         remoteConnectorExecutor.executePredict(mockMlInput, callback);
         ArgumentCaptor<MLInput> mlInputCaptor = ArgumentCaptor.forClass(MLInput.class);
         ArgumentCaptor<ExecutionContext> executionContextCaptor = ArgumentCaptor.forClass(ExecutionContext.class);
-        verify(mockRemoteConnectorExecutor, times(5)).invokeRemoteModel(mlInputCaptor.capture(),
-            any(), any(), any(), executionContextCaptor.capture(), any());
+        verify(mockRemoteConnectorExecutor, times(5))
+            .invokeRemoteModel(mlInputCaptor.capture(), any(), any(), any(), executionContextCaptor.capture(), any());
         for (int i = 0; i < 5; ++i) {
             verifyBatch(mlInputCaptor.getAllValues().get(i), 1, Collections.singletonList(docs.get(i)));
             assertTrue(executionContextCaptor.getAllValues().get(i).getOriginalOrder().isEmpty());
@@ -197,7 +197,6 @@ public class RemoteConnectorExecutorTest {
         }
     }
 
-
     private TextDocsInputDataSet prepareTextDocsInputDataSet(int count) {
         List<String> docs = new ArrayList<>();
         for (int i = 0; i < count; ++i) {
@@ -210,7 +209,9 @@ public class RemoteConnectorExecutorTest {
 
         final private RemoteConnectorExecutor delegate;
 
-        private TestRemoteConnectorExecutor(RemoteConnectorExecutor delegate) {this.delegate = delegate;}
+        private TestRemoteConnectorExecutor(RemoteConnectorExecutor delegate) {
+            this.delegate = delegate;
+        }
 
         @Override
         public ScriptService getScriptService() {

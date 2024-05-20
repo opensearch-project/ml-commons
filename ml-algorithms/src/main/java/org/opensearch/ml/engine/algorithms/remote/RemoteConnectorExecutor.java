@@ -59,10 +59,7 @@ public interface RemoteConnectorExecutor {
             if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
                 TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
                 int maxBatchSize = getMaxBatchSize();
-                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(
-                    textDocsInputDataSet,
-                    maxBatchSize
-                );
+                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet, maxBatchSize);
                 List<Integer> textDocOriginalOrder = Collections.emptyList();
                 if (shouldSortBeforeCuttingBatches(maxBatchSize, calculatedChunkSize)) {
                     Tuple<TextDocsInputDataSet, List<Integer>> sortedData = sortTextDocsByTextLength(textDocsInputDataSet);
@@ -72,9 +69,11 @@ public interface RemoteConnectorExecutor {
 
                 CountDownLatch countDownLatch = new CountDownLatch(calculatedChunkSize.v1());
                 int sequence = 0;
-                for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize.v2()) {
-                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs,
-                        Math.min(processedDocs + calculatedChunkSize.v2(), textDocsInputDataSet.getDocs().size()));
+                for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize
+                    .v2()) {
+                    List<String> textDocs = textDocsInputDataSet
+                        .getDocs()
+                        .subList(processedDocs, Math.min(processedDocs + calculatedChunkSize.v2(), textDocsInputDataSet.getDocs().size()));
                     preparePayloadAndInvokeRemoteModel(
                         MLInput
                             .builder()
@@ -82,12 +81,7 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         modelTensors,
-                        new ExecutionContext(
-                            sequence++,
-                            countDownLatch,
-                            exceptionHolder,
-                            textDocOriginalOrder
-                        ),
+                        new ExecutionContext(sequence++, countDownLatch, exceptionHolder, textDocOriginalOrder),
                         tensorActionListener
                     );
                 }
