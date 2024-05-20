@@ -325,11 +325,11 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         Predictable predictor = mock(Predictable.class);
         when(predictor.isModelReady()).thenReturn(true);
         doAnswer(invocation -> {
-            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
             actionListener
                 .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
         when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
         when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
         taskRunner.dispatchTask(FunctionName.REMOTE, textDocsInputRequest, transportService, listener);

@@ -131,7 +131,12 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
@@ -170,7 +175,11 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
     }
 
     @Test
@@ -206,11 +215,19 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
 
         MLInputDataset inputDataSet1 = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(), actionListener);
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
     }
 
     @Test
@@ -247,7 +264,12 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
@@ -285,7 +307,11 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
@@ -322,7 +348,11 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
@@ -364,6 +394,10 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
     }
 }

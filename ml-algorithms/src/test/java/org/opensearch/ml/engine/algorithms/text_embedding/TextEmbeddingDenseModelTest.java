@@ -51,6 +51,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.algorithms.remote.ConnectorRetryOption;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
@@ -636,7 +637,11 @@ public class TextEmbeddingDenseModelTest {
         ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
         ActionListener actionListener = mock(ActionListener.class);
         textEmbeddingDenseModel
-            .asyncPredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .asyncPredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
         verify(actionListener).onFailure(captor.capture());
         assert captor.getValue().getMessage().equals("Method is not implemented");
     }
