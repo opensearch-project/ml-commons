@@ -6,24 +6,21 @@
 package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.util.HashSet;
 import java.util.List;
 
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
@@ -41,6 +38,8 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.sdk.PutDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -50,6 +49,7 @@ import lombok.extern.log4j.Log4j2;
 public class TransportCreateConnectorAction extends HandledTransportAction<ActionRequest, MLCreateConnectorResponse> {
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final SdkClient sdkClient;
     private final MLEngine mlEngine;
     private final MLModelManager mlModelManager;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -62,6 +62,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         ActionFilters actionFilters,
         MLIndicesHandler mlIndicesHandler,
         Client client,
+        SdkClient sdkClient,
         MLEngine mlEngine,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         Settings settings,
@@ -71,6 +72,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         super(MLCreateConnectorAction.NAME, transportService, actionFilters, MLCreateConnectorRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.mlEngine = mlEngine;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
@@ -128,16 +130,21 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 return;
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
-                    log.info("Connector saved into index, result:{}, connector id: {}", r.getResult(), r.getId());
-                    MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.getId());
-                    listener.onResponse(response);
-                }, listener::onFailure);
-
-                IndexRequest indexRequest = new IndexRequest(ML_CONNECTOR_INDEX);
-                indexRequest.source(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
-                indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(indexRequest, ActionListener.runBefore(indexResponseListener, context::restore));
+                sdkClient
+                    .putDataObjectAsync(
+                        new PutDataObjectRequest.Builder().index(ML_CONNECTOR_INDEX).dataObject(connector).build(),
+                        client.threadPool().executor(GENERAL_THREAD_POOL)
+                    )
+                    .whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            listener.onFailure(new RuntimeException(throwable));
+                        } else {
+                            log.info("Connector creation result: {}, connector id: {}", r.created(), r.id());
+                            MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.id());
+                            listener.onResponse(response);
+                        }
+                    });
             } catch (Exception e) {
                 log.error("Failed to save ML connector", e);
                 listener.onFailure(e);
