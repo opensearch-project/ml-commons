@@ -8,6 +8,8 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -20,6 +22,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -29,6 +32,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.collect.Tuple;
@@ -594,5 +599,175 @@ public class AwsConnectorExecutorTest {
                 new ConnectorRetryOption(),
                 actionListener
             );
+    }
+
+    @Test
+    public void executePredict_whenRetryEnabled_thenInvokeRemoteModelWithRetry() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        ExecutorService executorService = mock(ExecutorService.class);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(any())).thenReturn(executorService);
+        doNothing().when(executorService).execute(any());
+
+        // execute with retry disabled
+        ConnectorRetryOption connectorRetryOption = new ConnectorRetryOption();
+        connectorRetryOption.setRetryEnabled(false);
+        connectorRetryOption.setRetryBackoffMillis(1);
+        connectorRetryOption.setRetryTimeoutSeconds(1);
+        connectorRetryOption.setRetyExecutor("test");
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                connectorRetryOption,
+                actionListener
+            );
+
+        Mockito.verify(executor, times(0)).invokeRemoteModelWithRetry(any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(1)).invokeRemoteModel(any(), any(), any(), any(), any());
+
+        // execute with retry enabled
+        connectorRetryOption.setRetryEnabled(true);
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                connectorRetryOption,
+                actionListener
+            );
+
+        Mockito.verify(executor, times(1)).invokeRemoteModelWithRetry(any(), any(), any(), any(), any());
+        Mockito.verify(actionListener, times(0)).onFailure(any());
+    }
+
+    @Test
+    public void invokeRemoteModelWithRetry_whenRetryableException_thenRetryUntilSuccess() {
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map.of();
+        String payload = "";
+        ConnectorRetryOption connectorRetryOption = new ConnectorRetryOption();
+        connectorRetryOption.setRetryEnabled(true);
+        connectorRetryOption.setRetryBackoffMillis(1);
+        connectorRetryOption.setRetryTimeoutSeconds(10);
+        connectorRetryOption.setRetyExecutor("test");
+        ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        ExecutorService executorService = mock(ExecutorService.class);
+
+        doAnswer(new Answer() {
+            private int countOfInvocation = 0;
+
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+                // fail the first 10 invocation, then success
+                if (countOfInvocation++ < 10) {
+                    actionListener.onFailure(new RetryableException("test failure retryable", RestStatus.BAD_REQUEST));
+                } else {
+                    actionListener.onResponse(new Tuple<>(123, mock(ModelTensors.class)));
+                }
+                return null;
+            }
+        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.executor(any())).thenReturn(executorService);
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(threadPool).schedule(any(), any(), any());
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any());
+
+        executor.invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+        Mockito.verify(actionListener, times(0)).onFailure(any());
+        Mockito.verify(actionListener, times(1)).onResponse(any());
+        Mockito.verify(executor, times(11)).invokeRemoteModel(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void invokeRemoteModelWithRetry_whenNonRetryableException_thenCallOnFailure() {
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map.of();
+        String payload = "";
+        ConnectorRetryOption connectorRetryOption = new ConnectorRetryOption();
+        connectorRetryOption.setRetryEnabled(true);
+        connectorRetryOption.setRetryBackoffMillis(1);
+        connectorRetryOption.setRetryTimeoutSeconds(10);
+        connectorRetryOption.setRetyExecutor("test");
+        ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        ExecutorService executorService = mock(ExecutorService.class);
+
+        doAnswer(new Answer() {
+            private int countOfInvocation = 0;
+
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+                // fail the first 2 invocation with retryable exception, then fail with non-retryable exception
+                if (countOfInvocation++ < 2) {
+                    actionListener.onFailure(new RetryableException("test failure retryable", RestStatus.BAD_REQUEST));
+                } else {
+                    actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
+                }
+                return null;
+            }
+        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.executor(any())).thenReturn(executorService);
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(threadPool).schedule(any(), any(), any());
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any());
+
+        ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
+
+        executor.invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        Mockito.verify(actionListener, times(0)).onResponse(any());
+        Mockito.verify(executor, times(3)).invokeRemoteModel(any(), any(), any(), any(), any());
+        assert exceptionArgumentCaptor.getValue() instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionArgumentCaptor.getValue().getMessage());
+        assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[0].getMessage());
+        assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[1].getMessage());
     }
 }
