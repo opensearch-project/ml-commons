@@ -196,7 +196,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             ML_COMMONS_MONITORING_REQUEST_COUNT,
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE
         );
-        clusterService = spy(new ClusterService(settings, clusterSettings, null));
+        clusterService = spy(new ClusterService(settings, clusterSettings, (ThreadPool) null, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;
 
         modelName = "model_name1";

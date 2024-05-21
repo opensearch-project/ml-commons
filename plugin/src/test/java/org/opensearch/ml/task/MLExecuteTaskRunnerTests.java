@@ -115,7 +115,7 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
             ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL
         );
-        clusterService = spy(new ClusterService(settings, clusterSettings, null));
+        clusterService = spy(new ClusterService(settings, clusterSettings, (ThreadPool) null, null));
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
