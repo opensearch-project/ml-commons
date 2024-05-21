@@ -66,7 +66,9 @@ public interface RemoteConnectorExecutor {
                 int sequence = 0;
                 for (int processedDocs = 0; processedDocs < textDocsInputDataSet.getDocs().size(); processedDocs += calculatedChunkSize
                     .v2()) {
-                    List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, processedDocs + calculatedChunkSize.v2());
+                    List<String> textDocs = textDocsInputDataSet
+                        .getDocs()
+                        .subList(processedDocs, Math.min(processedDocs + calculatedChunkSize.v2(), textDocsInputDataSet.getDocs().size()));
                     preparePayloadAndInvokeRemoteModel(
                         MLInput
                             .builder()

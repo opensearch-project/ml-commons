@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIEL
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -27,10 +29,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
@@ -41,6 +46,10 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -72,6 +81,15 @@ public class AwsConnectorExecutorTest {
 
     @Mock
     private ScriptService scriptService;
+
+    Map<String, ?> dataAsMap = Map.of("completion", "answer");
+
+    List<ModelTensor> modelTensors = List
+        .of(
+            new ModelTensor("tensor0", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap),
+            new ModelTensor("tensor1", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap),
+            new ModelTensor("tensor2", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap)
+        );
 
     @Before
     public void setUp() {
@@ -228,6 +246,183 @@ public class AwsConnectorExecutorTest {
                 new ConnectorRetryOption(),
                 actionListener
             );
+
+        Mockito.verify(actionListener, times(0)).onFailure(any());
+        Mockito.verify(executor, times(3)).preparePayloadAndInvokeRemoteModel(any(), any(), any());
+    }
+
+    @Test
+    public void executePredict_TextDocsInferenceInput_withStepSize_returnOrderedResults() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(0);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+            String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
+            Integer idx = Integer.parseInt(doc.substring(doc.length() - 1));
+            actionListener.onResponse(new Tuple<>(3 - idx, new ModelTensors(modelTensors.subList(3 - idx, 4 - idx))));
+            return null;
+        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        Mockito.verify(actionListener, times(1)).onResponse(responseCaptor.capture());
+        for (int idx = 0; idx < 3; idx++) {
+            assert ((ModelTensorOutput) responseCaptor.getValue().getOutput())
+                .getMlModelOutputs()
+                .get(idx)
+                .getMlModelTensors()
+                .get(0)
+                .equals(modelTensors.get(idx));
+        }
+    }
+
+    @Test
+    public void executePredict_TextDocsInferenceInput_withStepSize_partiallyFailed_thenFail() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(0);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+            String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
+            if (doc.endsWith("1")) {
+                actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
+            } else {
+                actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
+            }
+            return null;
+        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void executePredict_TextDocsInferenceInput_withStepSize_failWithMultipleFailures() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap
+            .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(0);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+            String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
+            if (!doc.endsWith("1")) {
+                actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
+            } else {
+                actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
+            }
+            return null;
+        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
+        executor
+            .executePredict(
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                new ConnectorRetryOption(),
+                actionListener
+            );
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionCaptor.getValue().getMessage());
+        assert exceptionCaptor.getValue().getSuppressed().length == 1;
+        assert exceptionCaptor.getValue().getSuppressed()[0] instanceof OpenSearchStatusException;
+        assertEquals("test failure", exceptionCaptor.getValue().getSuppressed()[0].getMessage());
     }
 
     @Test
