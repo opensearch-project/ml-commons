@@ -29,6 +29,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
@@ -49,18 +50,23 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public GetConnectorTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+
     ) {
         super(MLConnectorGetAction.NAME, transportService, actionFilters, MLConnectorGetRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -96,8 +102,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 XContentParser parser = r.parser().get();
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector mlConnector = Connector.createConnector(parser);
-                                mlConnector.removeCredential();
-                                if (!Objects.equals(tenantId, mlConnector.getTenantId())) {
+                                if (mlFeatureEnabledSetting.isMultiTenancyEnabled()
+                                    && !Objects.equals(tenantId, mlConnector.getTenantId())) {
                                     actionListener
                                         .onFailure(
                                             new OpenSearchStatusException(
@@ -106,6 +112,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                             )
                                         );
                                 }
+                                mlConnector.removeCredential();
+
                                 if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                                     actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                                 } else {

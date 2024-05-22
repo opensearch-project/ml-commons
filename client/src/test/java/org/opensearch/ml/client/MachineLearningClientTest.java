@@ -206,6 +206,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
             public void listTools(ActionListener<List<ToolMetadata>> listener) {
                 listener.onResponse(toolsList);
             }

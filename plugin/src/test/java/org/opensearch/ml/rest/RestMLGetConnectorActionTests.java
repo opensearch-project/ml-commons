@@ -15,6 +15,8 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_CONNECTOR_ID;
 
+import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -53,6 +56,9 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
 
     private RestMLGetConnectorAction restMLGetConnectorAction;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     NodeClient client;
     private ThreadPool threadPool;
 
@@ -67,7 +73,8 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
-        restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -87,7 +94,7 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLGetConnectorAction mlGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings);
+        RestMLGetConnectorAction mlGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
         assertNotNull(mlGetConnectorAction);
     }
 
@@ -107,7 +114,7 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void test_PrepareRequest() throws Exception {
-        RestRequest request = getRestRequest();
+        RestRequest request = getRestRequest("connector_id", null, true);
         restMLGetConnectorAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLConnectorGetRequest> argumentCaptor = ArgumentCaptor.forClass(MLConnectorGetRequest.class);
@@ -116,10 +123,44 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
         assertEquals(taskId, "connector_id");
     }
 
-    private RestRequest getRestRequest() {
-        Map<String, String> params = new HashMap<>();
-        params.put(PARAMETER_CONNECTOR_ID, "connector_id");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
-        return request;
+    public void testGetRequest_MultiTenancyEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        RestRequest request = getRestRequest("connector_id", "tenant_id", true);
+        MLConnectorGetRequest mlConnectorGetRequest = restMLGetConnectorAction.getRequest(request);
+
+        assertEquals("connector_id", mlConnectorGetRequest.getConnectorId());
+        assertEquals("tenant_id", mlConnectorGetRequest.getTenantId());
     }
+
+    public void testGetRequest_MissingConnectorId() throws IOException {
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Request should contain connector_id");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).build();
+        restMLGetConnectorAction.getRequest(request);
+    }
+
+    public void testGetRequest_ReturnContent() throws IOException {
+        RestRequest request = getRestRequest("connector_id", null, true);
+        MLConnectorGetRequest mlConnectorGetRequest = restMLGetConnectorAction.getRequest(request);
+
+        assertEquals("connector_id", mlConnectorGetRequest.getConnectorId());
+        assertTrue(mlConnectorGetRequest.isReturnContent());
+    }
+
+    private RestRequest getRestRequest(String connectorId, String tenantId, boolean returnContent) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_CONNECTOR_ID, connectorId);
+        if (returnContent) {
+            params.put("return_content", "true");
+        }
+
+        Map<String, List<String>> headers = new HashMap<>();
+        if (tenantId != null) {
+            headers.put("tenant_id", Collections.singletonList(tenantId));
+        }
+
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();
+    }
+
 }

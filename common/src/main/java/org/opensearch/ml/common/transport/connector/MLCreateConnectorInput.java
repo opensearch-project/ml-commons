@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.connector;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.Setter;
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @Data
@@ -54,6 +56,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private String description;
     private String version;
     private String protocol;
+    @Setter
+    private String tenantId;
     private Map<String, String> parameters;
     private Map<String, String> credential;
     private List<ConnectorAction> actions;
@@ -78,7 +82,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   AccessMode access,
                                   boolean dryRun,
                                   boolean updateConnector,
-                                  ConnectorClientConfig connectorClientConfig
+                                  ConnectorClientConfig connectorClientConfig,
+                                  String tenantId
 
     ) {
         if (!dryRun && !updateConnector) {
@@ -105,6 +110,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.dryRun = dryRun;
         this.updateConnector = updateConnector;
         this.connectorClientConfig = connectorClientConfig;
+        this.tenantId = tenantId;
 
     }
 
@@ -125,6 +131,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         AccessMode access = null;
         boolean dryRun = false;
         ConnectorClientConfig connectorClientConfig = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -176,13 +183,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case AbstractConnector.CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
+                case TENANT_ID:
+                    tenantId = parser.text();
                 default:
                     parser.skipChildren();
                     break;
             }
         }
         return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions,
-                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorClientConfig);
+                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorClientConfig, tenantId);
     }
 
     @Override
@@ -220,6 +229,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (connectorClientConfig != null) {
             builder.field(AbstractConnector.CLIENT_CONFIG_FIELD, connectorClientConfig);
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
         }
         builder.endObject();
         return builder;
@@ -275,6 +287,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             } else {
                 output.writeBoolean(false);
             }
+
+            // Just adding this here as a placeholder for BWC. I might put it in the Constants.java class with later OS version.
+            output.writeOptionalString(tenantId);
         }
     }
 
@@ -310,6 +325,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             if (input.readBoolean()) {
                 this.connectorClientConfig = new ConnectorClientConfig(input);
             }
+            this.tenantId = input.readOptionalString();
         }
 
     }

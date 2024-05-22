@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.connector;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -23,22 +24,34 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 
 public class MLConnectorDeleteRequest extends ActionRequest {
     @Getter
-    String connectorId;
+    private final String connectorId;
+    @Getter
+    private final String tenantId;
+
+    public MLConnectorDeleteRequest(String connectorId) {
+
+        this.connectorId = connectorId;
+        this.tenantId = null;
+    }
 
     @Builder
-    public MLConnectorDeleteRequest(String connectorId) {
+    public MLConnectorDeleteRequest(String connectorId, String tenantId) {
+
         this.connectorId = connectorId;
+        this.tenantId = tenantId;
     }
 
     public MLConnectorDeleteRequest(StreamInput input) throws IOException {
         super(input);
         this.connectorId = input.readString();
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(connectorId);
+        output.writeOptionalString(tenantId);
     }
 
     @Override

@@ -5,13 +5,16 @@
 
 package org.opensearch.ml.action.connector;
 
+
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.input.Constants.TENANT_ID;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -32,8 +35,12 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
+import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.DeleteDataObjectRequest;
+import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -51,6 +58,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public DeleteConnectorTransportAction(
         TransportService transportService,
@@ -58,19 +67,27 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         Client client,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLConnectorDeleteAction.NAME, transportService, actionFilters, MLConnectorDeleteRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
+        String tenantId = mlConnectorDeleteRequest.getTenantId();
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.isNull(tenantId)) {
+            actionListener
+                .onFailure(new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN));
+            return;
+        }
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
         connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
             if (Boolean.TRUE.equals(x)) {
@@ -78,11 +95,14 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
                     SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
                     sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+                    if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+                        sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
+                    }
                     searchRequest.source(sourceBuilder);
                     client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                         SearchHit[] searchHits = searchResponse.getHits().getHits();
                         if (searchHits.length == 0) {
-                            deleteConnector(deleteRequest, connectorId, actionListener);
+                            deleteConnector(deleteRequest, connectorId, tenantId, actionListener);
                         } else {
                             log
                                 .error(
@@ -104,7 +124,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                         }
                     }, e -> {
                         if (e instanceof IndexNotFoundException) {
-                            deleteConnector(deleteRequest, connectorId, actionListener);
+                            deleteConnector(deleteRequest, connectorId, tenantId, actionListener);
                             return;
                         }
                         log.error("Failed to delete ML connector: " + connectorId, e);
@@ -123,27 +143,61 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }));
     }
 
-    private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient
-                .deleteDataObjectAsync(
-                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
-                    client.threadPool().executor(GENERAL_THREAD_POOL)
-                )
-                .whenComplete((r, throwable) -> {
-                    context.restore();
-                    if (throwable != null) {
-                        actionListener.onFailure(new RuntimeException(throwable));
-                    } else {
-                        log.info("Connector deletion result: {}, connector id: {}", r.deleted(), r.id());
-                        DeleteResponse response = new DeleteResponse(r.shardId(), r.id(), 0, 0, 0, r.deleted());
-                        response.setShardInfo(r.shardInfo());
-                        actionListener.onResponse(response);
-                    }
-                });
-        } catch (Exception e) {
-            log.error("Failed to delete ML connector: {}", connectorId, e);
-            actionListener.onFailure(e);
+    private void deleteConnector(
+        DeleteRequest deleteRequest,
+        String connectorId,
+        String tenantId,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.nonNull(tenantId)) {
+            checkConnectorPermission(connectorId, tenantId, actionListener, () -> {
+                try {
+                    sdkClient
+                        .deleteDataObjectAsync(
+                            new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
+                            client.threadPool().executor(GENERAL_THREAD_POOL)
+                        )
+                        .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));
+                } catch (Exception e) {
+                    log.error("Failed to delete ML connector: {}", connectorId, e);
+                    actionListener.onFailure(e);
+                }
+            });
+        }
+    }
+
+    private void checkConnectorPermission(
+        String connectorId,
+        String tenantId,
+        ActionListener<DeleteResponse> actionListener,
+        Runnable deleteAction
+    ) {
+        MLConnectorGetRequest mlConnectorGetRequest = new MLConnectorGetRequest(connectorId, tenantId, true);
+        client.execute(MLConnectorGetAction.INSTANCE, mlConnectorGetRequest, ActionListener.wrap(getResponse -> {
+            if (getResponse.getMlConnector().getTenantId() != null && !getResponse.getMlConnector().getTenantId().equals(tenantId)) {
+                actionListener
+                    .onFailure(new OpenSearchStatusException("You are not allowed to delete this connector", RestStatus.FORBIDDEN));
+            } else {
+                System.out.println("Delete Action");
+                deleteAction.run();
+            }
+        }, actionListener::onFailure));
+    }
+
+    private void handleDeleteResponse(
+        DeleteDataObjectResponse response,
+        Throwable throwable,
+        String connectorId,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        if (throwable != null) {
+            log.error("Failed to delete ML connector: {}", connectorId, throwable);
+            actionListener.onFailure(new RuntimeException(throwable));
+        } else {
+            log.info("Connector deletion result: {}, connector id: {}", response.deleted(), response.id());
+            DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
+            deleteResponse.setShardInfo(response.shardInfo());
+            actionListener.onResponse(deleteResponse);
         }
     }
 }

@@ -30,6 +30,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -57,6 +58,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -128,6 +130,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private Settings settings;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
@@ -149,6 +154,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
         action = new TransportCreateConnectorAction(
             transportService,
             actionFilters,
@@ -159,7 +166,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             connectorAccessControlHelper,
             settings,
             clusterService,
-            mlModelManager
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build();
         threadContext = new ThreadContext(settings);
@@ -217,11 +225,42 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
         latch.await();
-        
+
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    public void test_execute_connector_registration_multi_tenancy_fail() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        when(indexResponse.getResult()).thenReturn(CREATED);
+
+        PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(mock(IndexResponse.class));
+        when(client.index(any(IndexRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        action.doExecute(task, request, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "Tenant ID is required for multi-tenancy",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_execute_connectorAccessControl_notEnabled_withPermissionInfo_exception() throws InterruptedException {
@@ -240,7 +279,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
         latch.await();
 
@@ -268,7 +307,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
         latch.await();
 
@@ -291,7 +330,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
         latch.await();
 
@@ -368,7 +407,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             connectorAccessControlHelper,
             settings,
             clusterService,
-            mlModelManager
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -405,7 +445,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             connectorAccessControlHelper,
             settings,
             clusterService,
-            mlModelManager
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -445,7 +486,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             connectorAccessControlHelper,
             settings,
             clusterService,
-            mlModelManager
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -506,7 +548,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             connectorAccessControlHelper,
             settings,
             clusterService,
-            mlModelManager
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
