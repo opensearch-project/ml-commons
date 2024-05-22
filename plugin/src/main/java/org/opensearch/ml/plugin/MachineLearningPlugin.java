@@ -924,6 +924,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_BACKOFF_MILLIS,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS,
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_MAX_RETRY_TIMES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,

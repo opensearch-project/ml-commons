@@ -7,6 +7,7 @@ package org.opensearch.ml.utils;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_MAX_RETRY_TIMES;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_BACKOFF_MILLIS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS;
@@ -29,6 +30,7 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
     public static boolean TEST_RETRY_ENABLED = false;
     public static Integer TEST_RETRY_BACKOFF_MILLIS = 123;
     public static Integer TEST_RETRY_TIMEOUT_SECONDS = 45;
+    public static Integer TEST_MAX_RETRY_TIMES = 789;
 
     private Settings settings;
     private ClusterSettings clusterSettings;
@@ -44,7 +46,8 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
                     .of(
                         ML_COMMONS_REMOTE_INFERENCE_RETRY_ENABLED,
                         ML_COMMONS_REMOTE_INFERENCE_RETRY_BACKOFF_MILLIS,
-                        ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS
+                        ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS,
+                        ML_COMMONS_REMOTE_INFERENCE_MAX_RETRY_TIMES
                     )
             )
             .collect(Collectors.toSet());
@@ -60,6 +63,7 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
         assertEquals(true, connectorRetryOption.isRetryEnabled());
         assertEquals(Optional.of(100), Optional.of(connectorRetryOption.getRetryBackoffMillis()));
         assertEquals(Optional.of(30), Optional.of(connectorRetryOption.getRetryTimeoutSeconds()));
+        assertEquals(Optional.of(-1), Optional.of(connectorRetryOption.getMaxRetryTimes()));
         assertEquals("opensearch_ml_predict_remote", connectorRetryOption.getRetyExecutor());
     }
 
@@ -70,6 +74,7 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
             .put("plugins.ml_commons.remote_inference.retry_enabled", TEST_RETRY_ENABLED)
             .put("plugins.ml_commons.remote_inference.retry_backoff_millis", TEST_RETRY_BACKOFF_MILLIS)
             .put("plugins.ml_commons.remote_inference.retry_timeout_seconds", TEST_RETRY_TIMEOUT_SECONDS)
+            .put("plugins.ml_commons.remote_inference.max_retry_times", TEST_MAX_RETRY_TIMES)
             .build();
 
         clusterSettings.applySettings(newSettings);
@@ -77,6 +82,7 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
         assertEquals(TEST_RETRY_ENABLED, connectorRetryOption.isRetryEnabled());
         assertEquals(Optional.of(TEST_RETRY_BACKOFF_MILLIS), Optional.of(connectorRetryOption.getRetryBackoffMillis()));
         assertEquals(Optional.of(TEST_RETRY_TIMEOUT_SECONDS), Optional.of(connectorRetryOption.getRetryTimeoutSeconds()));
+        assertEquals(Optional.of(TEST_MAX_RETRY_TIMES), Optional.of(connectorRetryOption.getMaxRetryTimes()));
         assertEquals("opensearch_ml_predict_remote", connectorRetryOption.getRetyExecutor());
     }
 }

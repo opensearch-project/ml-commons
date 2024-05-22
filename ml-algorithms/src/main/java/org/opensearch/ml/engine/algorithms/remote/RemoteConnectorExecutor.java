@@ -238,10 +238,14 @@ public interface RemoteConnectorExecutor {
 
             @Override
             public boolean shouldRetry(Exception e) {
-                final Throwable cause = ExceptionsHelper.unwrapCause(e);
+                Throwable cause = ExceptionsHelper.unwrapCause(e);
+                Integer maxRetryTimes = executionContext.getConnectorRetryOption().getMaxRetryTimes();
                 boolean shouldRetry = cause instanceof RetryableException;
                 if (shouldRetry) {
                     getLogger().debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", ++retryTimes));
+                    if (maxRetryTimes != -1 && retryTimes > maxRetryTimes) {
+                        shouldRetry = false;
+                    }
                 }
                 return shouldRetry;
             }

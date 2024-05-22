@@ -640,6 +640,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryEnabled(false);
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(1);
+        connectorRetryOption.setMaxRetryTimes(-1);
         connectorRetryOption.setRetyExecutor("test");
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
@@ -674,6 +675,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryEnabled(true);
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(10);
+        connectorRetryOption.setMaxRetryTimes(-1);
         connectorRetryOption.setRetyExecutor("test");
         ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
@@ -716,6 +718,57 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
+    public void invokeRemoteModelWithRetry_whenRetryExceedMaxRetryTimes_thenCallOnFailure() {
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map.of();
+        String payload = "";
+        ConnectorRetryOption connectorRetryOption = new ConnectorRetryOption();
+        connectorRetryOption.setRetryEnabled(true);
+        connectorRetryOption.setRetryBackoffMillis(1);
+        connectorRetryOption.setRetryTimeoutSeconds(10);
+        connectorRetryOption.setMaxRetryTimes(5);
+        connectorRetryOption.setRetyExecutor("test");
+        ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        ExecutorService executorService = mock(ExecutorService.class);
+
+        doAnswer(new Answer() {
+            private int countOfInvocation = 0;
+
+            @Override
+            public Void answer(InvocationOnMock invocation) {
+                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+                // fail the first 10 invocation, then success
+                if (countOfInvocation++ < 10) {
+                    actionListener.onFailure(new RetryableException("test failure retryable", RestStatus.BAD_REQUEST));
+                } else {
+                    actionListener.onResponse(new Tuple<>(123, mock(ModelTensors.class)));
+                }
+                return null;
+            }
+        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        when(executor.getClient()).thenReturn(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.executor(any())).thenReturn(executorService);
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(threadPool).schedule(any(), any(), any());
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any());
+
+        executor.invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+        Mockito.verify(actionListener, times(1)).onFailure(any());
+        Mockito.verify(actionListener, times(0)).onResponse(any());
+        Mockito.verify(executor, times(6)).invokeRemoteModel(any(), any(), any(), any(), any());
+    }
+
+    @Test
     public void invokeRemoteModelWithRetry_whenNonRetryableException_thenCallOnFailure() {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
@@ -724,6 +777,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryEnabled(true);
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(10);
+        connectorRetryOption.setMaxRetryTimes(-1);
         connectorRetryOption.setRetyExecutor("test");
         ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);

@@ -125,6 +125,7 @@ public final class MLCommonsSettings {
             "plugins.ml_commons.remote_inference.retry_backoff_millis",
             100,
             1,
+            50000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -134,6 +135,17 @@ public final class MLCommonsSettings {
             "plugins.ml_commons.remote_inference.retry_timeout_seconds",
             30,
             1,
+            60,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_REMOTE_INFERENCE_MAX_RETRY_TIMES = Setting
+        .intSetting(
+            "plugins.ml_commons.remote_inference.max_retry_times",
+            -1,
+            -1,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
