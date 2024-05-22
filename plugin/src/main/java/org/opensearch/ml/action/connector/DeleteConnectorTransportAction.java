@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.connector;
 
-
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.input.Constants.TENANT_ID;
