@@ -349,7 +349,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -374,6 +374,8 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testCheckConnectorPermission_NotAllowedToDelete() {
+        // Enable multi-tenancy
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
         String connectorId = "connector_id";
         String tenantId = "tenant_id";
         String differentTenantId = "different_tenant_id";
@@ -396,7 +398,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assert exception instanceof OpenSearchStatusException;
         OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
         assert statusException.status() == RestStatus.FORBIDDEN;
-        assert statusException.getMessage().equals("You are not allowed to delete this connector");
+        assert statusException.getMessage().equals("You don't have permission to access this resource");
     }
 
     public GetResponse prepareMLConnector(String tenantId) throws IOException {

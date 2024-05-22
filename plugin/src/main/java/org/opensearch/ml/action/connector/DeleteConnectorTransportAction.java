@@ -38,6 +38,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
@@ -58,6 +59,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private final NamedXContentRegistry xContentRegistry;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private TenantAwareHelper tenantAwareHelper;
 
     @Inject
     public DeleteConnectorTransportAction(
@@ -75,6 +77,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
     }
 
     @Override
@@ -82,12 +85,9 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
         String tenantId = mlConnectorDeleteRequest.getTenantId();
-
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.isNull(tenantId)) {
-            actionListener
-                .onFailure(new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN));
+        tenantAwareHelper.setTenantId(tenantId);
+        if (!tenantAwareHelper.validateTenantId(actionListener))
             return;
-        }
 
         connectorAccessControlHelper
             .validateConnectorAccess(
@@ -185,12 +185,15 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     ) {
         MLConnectorGetRequest mlConnectorGetRequest = new MLConnectorGetRequest(connectorId, tenantId, true);
         client.execute(MLConnectorGetAction.INSTANCE, mlConnectorGetRequest, ActionListener.wrap(getResponse -> {
-            if (getResponse.getMlConnector().getTenantId() != null && !getResponse.getMlConnector().getTenantId().equals(tenantId)) {
-                actionListener
-                    .onFailure(new OpenSearchStatusException("You are not allowed to delete this connector", RestStatus.FORBIDDEN));
-            } else {
+            if (tenantAwareHelper.validateTenantResource(getResponse.getMlConnector().getTenantId(), actionListener)) {
                 deleteAction.run();
             }
+            // if (getResponse.getMlConnector().getTenantId() != null && !getResponse.getMlConnector().getTenantId().equals(tenantId)) {
+            // actionListener
+            // .onFailure(new OpenSearchStatusException("You are not allowed to delete this connector", RestStatus.FORBIDDEN));
+            // } else {
+            // deleteAction.run();
+            // }
         }, actionListener::onFailure));
     }
 

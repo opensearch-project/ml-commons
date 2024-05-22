@@ -10,8 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
-import java.util.Objects;
-
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -31,6 +29,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -52,6 +51,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    private TenantAwareHelper tenantAwareHelper;
+
     @Inject
     public GetConnectorTransportAction(
         TransportService transportService,
@@ -67,6 +68,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
     }
 
     @Override
@@ -74,6 +76,9 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.fromActionRequest(request);
         String connectorId = mlConnectorGetRequest.getConnectorId();
         String tenantId = mlConnectorGetRequest.getTenantId();
+        tenantAwareHelper.setTenantId(tenantId);
+        if (!tenantAwareHelper.validateTenantId(actionListener))
+            return;
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
         GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
             .index(ML_CONNECTOR_INDEX)
@@ -102,17 +107,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 XContentParser parser = r.parser().get();
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector mlConnector = Connector.createConnector(parser);
-                                if (mlFeatureEnabledSetting.isMultiTenancyEnabled()
-                                    && !Objects.equals(tenantId, mlConnector.getTenantId())) {
-                                    actionListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "You don't have permission to access this connector",
-                                                RestStatus.FORBIDDEN
-                                            )
-                                        );
+                                if (!tenantAwareHelper.validateTenantResource(mlConnector.getTenantId(), actionListener))
                                     return;
-                                }
                                 mlConnector.removeCredential();
 
                                 if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {

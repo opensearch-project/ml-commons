@@ -11,9 +11,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CO
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -26,7 +24,6 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
@@ -42,6 +39,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
@@ -61,6 +59,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     private volatile List<String> trustedConnectorEndpointsRegex;
+    private TenantAwareHelper tenantAwareHelper;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -84,6 +83,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -94,9 +94,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.isNull(mlCreateConnectorInput.getTenantId())) {
-            listener.onFailure(new OpenSearchStatusException("Tenant ID is required for multi-tenancy", RestStatus.BAD_REQUEST));
-        }
+        tenantAwareHelper.setTenantId(mlCreateConnectorInput.getTenantId());
+        if (!tenantAwareHelper.validateTenantId(listener))
+            return;
         if (mlCreateConnectorInput.isDryRun()) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);
