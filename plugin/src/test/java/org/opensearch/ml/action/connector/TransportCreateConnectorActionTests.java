@@ -258,7 +258,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Tenant ID is required for multi-tenancy",
+                "You don't have permission to access this resource",
                 argumentCaptor.getValue().getMessage()
         );
     }

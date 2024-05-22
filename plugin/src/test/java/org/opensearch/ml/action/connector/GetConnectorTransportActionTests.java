@@ -270,7 +270,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
     }
 
     public GetResponse prepareConnector(String tenantId) throws IOException {
