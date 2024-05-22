@@ -385,19 +385,6 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         }
     }
 
-    // @Test
-    // public void testIsIndependentNode() {
-    // boolean isIndependentNode = RestActionUtils.isMultiTenant(clusterService, settings);
-    // Assert.assertTrue(isIndependentNode);
-    // }
-    //
-    // @Test
-    // public void testIsIndependentNode_False() {
-    // Settings settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
-    // boolean isIndependentNode = RestActionUtils.isMultiTenant(clusterService, settings);
-    // Assert.assertFalse(isIndependentNode);
-    // }
-
     @Test
     public void testGetTenantID_IndependentNode() {
         String tenantId = "test-tenant";

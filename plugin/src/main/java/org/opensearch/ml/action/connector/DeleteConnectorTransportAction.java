@@ -188,12 +188,6 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             if (tenantAwareHelper.validateTenantResource(getResponse.getMlConnector().getTenantId(), actionListener)) {
                 deleteAction.run();
             }
-            // if (getResponse.getMlConnector().getTenantId() != null && !getResponse.getMlConnector().getTenantId().equals(tenantId)) {
-            // actionListener
-            // .onFailure(new OpenSearchStatusException("You are not allowed to delete this connector", RestStatus.FORBIDDEN));
-            // } else {
-            // deleteAction.run();
-            // }
         }, actionListener::onFailure));
     }
 
