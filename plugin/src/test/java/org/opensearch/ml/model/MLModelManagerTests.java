@@ -76,6 +76,7 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -177,7 +178,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private ScriptService scriptService;
 
     @Mock
-    private MLTask pretrainedMLTask;
+    ClusterApplierService clusterApplierService;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -196,7 +197,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             ML_COMMONS_MONITORING_REQUEST_COUNT,
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE
         );
-        clusterService = spy(new ClusterService(settings, clusterSettings, null));
+        clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
         xContentRegistry = NamedXContentRegistry.EMPTY;
 
         modelName = "model_name1";

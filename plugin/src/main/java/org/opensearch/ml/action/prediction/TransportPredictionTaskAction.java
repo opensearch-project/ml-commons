@@ -25,6 +25,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -177,6 +178,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                     );
                             } else if (e instanceof MLResourceNotFoundException) {
                                 wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                            } else if (e instanceof MLLimitExceededException) {
+                                wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.SERVICE_UNAVAILABLE));
                             } else {
                                 wrappedListener
                                     .onFailure(
