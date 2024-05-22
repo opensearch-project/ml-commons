@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.collections.MapUtils;
 import org.apache.http.HttpStatus;
@@ -58,7 +59,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private final MLGuard mlGuard;
 
-    boolean containsThrottlingException = false;
+    private AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
 
     public MLSdkAsyncHttpResponseHandler(
         ExecutionContext executionContext,
@@ -110,7 +111,18 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
         // Check the throttling exception from AMZN servers, e.g. sageMaker.
         // See [https://github.com/opensearch-project/ml-commons/issues/2429] for more details.
-        containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
+        boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
+        if (containsThrottlingException && exceptionHolder.get() == null) {
+            log.error("Remote server returned error code: {}", statusCode);
+            exceptionHolder
+                .compareAndSet(
+                    null,
+                    new RetryableException(
+                        REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
+                        RestStatus.fromCode(statusCode)
+                    )
+                );
+        }
     }
 
     protected class MLResponseSubscriber implements Subscriber<ByteBuffer> {
@@ -149,33 +161,31 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         String body = responseBody.toString();
         if (Strings.isBlank(body)) {
             log.error("Remote model response body is empty!");
-            actionListener.onFailure(new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
-            return;
-        }
-
-        if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
-            if (containsThrottlingException) {
-                actionListener
-                    .onFailure(
-                        new RetryableException(
-                            REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
-                            RestStatus.fromCode(statusCode)
-                        )
-                    );
-            } else {
-                log.error("Remote server returned error code: {}", statusCode);
-                actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
+            if (exceptionHolder.get() == null) {
+                exceptionHolder.compareAndSet(null, new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
             }
-            return;
+        } else {
+            if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+                if (exceptionHolder.get() == null) {
+                    log.error("Remote server returned error code: {}", statusCode);
+                    exceptionHolder
+                        .compareAndSet(null, new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
+                }
+            } else {
+                try {
+                    ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
+                    tensors.setStatusCode(statusCode);
+                    actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
+                    return;
+                } catch (Exception e) {
+                    log.error("Failed to process response body: {}", body, e);
+                    if (exceptionHolder.get() == null) {
+                        exceptionHolder.compareAndSet(null, new MLException("Fail to execute predict in aws connector", e));
+                    }
+                }
+            }
         }
 
-        try {
-            ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
-            tensors.setStatusCode(statusCode);
-            actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
-        } catch (Exception e) {
-            log.error("Failed to process response body: {}", body, e);
-            actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
-        }
+        actionListener.onFailure(exceptionHolder.get());
     }
 }
