@@ -101,7 +101,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                         SearchHit[] searchHits = searchResponse.getHits().getHits();
                         if (searchHits.length == 0) {
-                            deleteConnector(deleteRequest, connectorId, tenantId, actionListener);
+                            checkMultiTenancy(deleteRequest, connectorId, tenantId, actionListener);
                         } else {
                             log
                                 .error(
@@ -123,7 +123,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                         }
                     }, e -> {
                         if (e instanceof IndexNotFoundException) {
-                            deleteConnector(deleteRequest, connectorId, tenantId, actionListener);
+                            checkMultiTenancy(deleteRequest, connectorId, tenantId, actionListener);
                             return;
                         }
                         log.error("Failed to delete ML connector: " + connectorId, e);
@@ -142,26 +142,35 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }));
     }
 
-    private void deleteConnector(
+    private void checkMultiTenancy(
         DeleteRequest deleteRequest,
         String connectorId,
         String tenantId,
         ActionListener<DeleteResponse> actionListener
     ) {
         if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.nonNull(tenantId)) {
-            checkConnectorPermission(connectorId, tenantId, actionListener, () -> {
-                try {
-                    sdkClient
-                        .deleteDataObjectAsync(
-                            new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
-                            client.threadPool().executor(GENERAL_THREAD_POOL)
-                        )
-                        .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));
-                } catch (Exception e) {
-                    log.error("Failed to delete ML connector: {}", connectorId, e);
-                    actionListener.onFailure(e);
-                }
-            });
+            checkConnectorPermission(
+                connectorId,
+                tenantId,
+                actionListener,
+                () -> { deleteConnector(deleteRequest, connectorId, actionListener); }
+            );
+        } else {
+            deleteConnector(deleteRequest, connectorId, actionListener);
+        }
+    }
+
+    private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
+        try {
+            sdkClient
+                .deleteDataObjectAsync(
+                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
+                    client.threadPool().executor(GENERAL_THREAD_POOL)
+                )
+                .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));
+        } catch (Exception e) {
+            log.error("Failed to delete ML connector: {}", connectorId, e);
+            actionListener.onFailure(e);
         }
     }
 

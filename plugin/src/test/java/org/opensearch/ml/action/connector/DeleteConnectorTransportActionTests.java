@@ -159,7 +159,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
-    @Ignore
     public void testDeleteConnector_Success() throws IOException, InterruptedException {
         when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -184,7 +183,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals(DELETED, captor.getValue().getResult());
     }
 
-    @Ignore
     public void testDeleteConnector_ModelIndexNotFoundSuccess() throws IOException, InterruptedException {
         when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -208,7 +206,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals(DELETED, captor.getValue().getResult());
     }
 
-    @Ignore
     public void testDeleteConnector_ConnectorNotFound() throws IOException, InterruptedException {
         when(deleteResponse.getResult()).thenReturn(NOT_FOUND);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -293,7 +290,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("Thread Context Error!", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void testDeleteConnector_ResourceNotFoundException() throws IOException, InterruptedException {
         when(client.delete(any(DeleteRequest.class))).thenThrow(new ResourceNotFoundException("errorMessage"));
 
