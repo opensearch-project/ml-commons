@@ -46,17 +46,17 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class DeleteConnectorTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
-    Client client;
-    SdkClient sdkClient;
-    NamedXContentRegistry xContentRegistry;
-
-    ConnectorAccessControlHelper connectorAccessControlHelper;
-
+    private final Client client;
+    private final SdkClient sdkClient;
+    private final NamedXContentRegistry xContentRegistry;
+    private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
@@ -82,99 +82,102 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
         String tenantId = mlConnectorDeleteRequest.getTenantId();
+
         if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.isNull(tenantId)) {
             actionListener
                 .onFailure(new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN));
             return;
         }
-        DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
-        connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
-            if (Boolean.TRUE.equals(x)) {
-                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
-                    SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-                    sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
-                    if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-                        sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
-                    }
-                    searchRequest.source(sourceBuilder);
-                    client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
-                        SearchHit[] searchHits = searchResponse.getHits().getHits();
-                        if (searchHits.length == 0) {
-                            checkMultiTenancy(deleteRequest, connectorId, tenantId, actionListener);
-                        } else {
-                            log
-                                .error(
-                                    searchHits.length + " models are still using this connector, please delete or update the models first!"
-                                );
-                            List<String> modelIds = new ArrayList<>();
-                            for (SearchHit hit : searchHits) {
-                                modelIds.add(hit.getId());
-                            }
-                            actionListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        searchHits.length
-                                            + " models are still using this connector, please delete or update the models first: "
-                                            + Arrays.toString(modelIds.toArray(new String[0])),
-                                        RestStatus.CONFLICT
-                                    )
-                                );
-                        }
-                    }, e -> {
-                        if (e instanceof IndexNotFoundException) {
-                            checkMultiTenancy(deleteRequest, connectorId, tenantId, actionListener);
-                            return;
-                        }
-                        log.error("Failed to delete ML connector: " + connectorId, e);
-                        actionListener.onFailure(e);
-                    }), context::restore));
-                } catch (Exception e) {
-                    log.error(e.getMessage(), e);
-                    actionListener.onFailure(e);
-                }
-            } else {
-                actionListener.onFailure(new MLValidationException("You are not allowed to delete this connector"));
-            }
-        }, e -> {
-            log.error("Failed to delete ML connector: " + connectorId, e);
-            actionListener.onFailure(e);
-        }));
+
+        connectorAccessControlHelper
+            .validateConnectorAccess(
+                client,
+                connectorId,
+                ActionListener
+                    .wrap(
+                        isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, actionListener),
+                        e -> handleConnectorAccessValidationFailure(connectorId, e, actionListener)
+                    )
+            );
     }
 
-    private void checkMultiTenancy(
-        DeleteRequest deleteRequest,
+    private void handleConnectorAccessValidation(
         String connectorId,
         String tenantId,
+        boolean isAllowed,
         ActionListener<DeleteResponse> actionListener
     ) {
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.nonNull(tenantId)) {
-            checkConnectorPermission(
-                connectorId,
-                tenantId,
-                actionListener,
-                () -> { deleteConnector(deleteRequest, connectorId, actionListener); }
-            );
+        if (isAllowed) {
+            checkForModelsUsingConnector(connectorId, tenantId, actionListener);
         } else {
-            deleteConnector(deleteRequest, connectorId, actionListener);
+            actionListener.onFailure(new MLValidationException("You are not allowed to delete this connector"));
         }
     }
 
-    private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
-        try {
-            sdkClient
-                .deleteDataObjectAsync(
-                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
-                    client.threadPool().executor(GENERAL_THREAD_POOL)
-                )
-                .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));
+    private void handleConnectorAccessValidationFailure(String connectorId, Exception e, ActionListener<DeleteResponse> actionListener) {
+        log.error("Failed to delete ML connector: " + connectorId, e);
+        actionListener.onFailure(e);
+    }
+
+    private void checkForModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+            sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+            if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+                sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
+            }
+            searchRequest.source(sourceBuilder);
+            client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
+                SearchHit[] searchHits = searchResponse.getHits().getHits();
+                if (searchHits.length == 0) {
+                    handleNoModelsUsingConnector(connectorId, tenantId, actionListener);
+                } else {
+                    handleModelsUsingConnector(searchHits, connectorId, actionListener);
+                }
+            }, e -> handleSearchFailure(connectorId, tenantId, e, actionListener)), context::restore));
         } catch (Exception e) {
-            log.error("Failed to delete ML connector: {}", connectorId, e);
+            log.error("Failed to check for models using connector: " + connectorId, e);
             actionListener.onFailure(e);
         }
     }
 
-    private void checkConnectorPermission(
+    private void handleNoModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.nonNull(tenantId)) {
+            checkConnectorPermission(connectorId, tenantId, actionListener, () -> deleteConnector(connectorId, actionListener));
+        } else {
+            deleteConnector(connectorId, actionListener);
+        }
+    }
+
+    private void handleModelsUsingConnector(SearchHit[] searchHits, String connectorId, ActionListener<DeleteResponse> actionListener) {
+        log.error(searchHits.length + " models are still using this connector, please delete or update the models first!");
+        List<String> modelIds = new ArrayList<>();
+        for (SearchHit hit : searchHits) {
+            modelIds.add(hit.getId());
+        }
+        actionListener
+            .onFailure(
+                new OpenSearchStatusException(
+                    searchHits.length
+                        + " models are still using this connector, please delete or update the models first: "
+                        + Arrays.toString(modelIds.toArray(new String[0])),
+                    RestStatus.CONFLICT
+                )
+            );
+    }
+
+    private void handleSearchFailure(String connectorId, String tenantId, Exception e, ActionListener<DeleteResponse> actionListener) {
+        if (e instanceof IndexNotFoundException) {
+            handleNoModelsUsingConnector(connectorId, tenantId, actionListener);
+            return;
+        }
+        log.error("Failed to search for models using connector: {}", connectorId, e);
+        actionListener.onFailure(e);
+    }
+
+    @VisibleForTesting
+    void checkConnectorPermission(
         String connectorId,
         String tenantId,
         ActionListener<DeleteResponse> actionListener,
@@ -186,10 +189,24 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                 actionListener
                     .onFailure(new OpenSearchStatusException("You are not allowed to delete this connector", RestStatus.FORBIDDEN));
             } else {
-                System.out.println("Delete Action");
                 deleteAction.run();
             }
         }, actionListener::onFailure));
+    }
+
+    private void deleteConnector(String connectorId, ActionListener<DeleteResponse> actionListener) {
+        DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
+        try {
+            sdkClient
+                .deleteDataObjectAsync(
+                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
+                    client.threadPool().executor(GENERAL_THREAD_POOL)
+                )
+                .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));
+        } catch (Exception e) {
+            log.error("Failed to delete ML connector: {}", connectorId, e);
+            actionListener.onFailure(e);
+        }
     }
 
     private void handleDeleteResponse(
