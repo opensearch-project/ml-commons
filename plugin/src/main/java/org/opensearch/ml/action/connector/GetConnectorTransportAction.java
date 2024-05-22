@@ -93,7 +93,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                             log.error("Failed to get connector index", cause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                         } else {
-                            log.error("Failed to get ML connector " + connectorId, cause);
+                            log.error("Failed to get ML connector {}", connectorId, cause);
                             actionListener.onFailure(new RuntimeException(cause));
                         }
                     } else {
@@ -111,6 +111,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                                 RestStatus.FORBIDDEN
                                             )
                                         );
+                                    return;
                                 }
                                 mlConnector.removeCredential();
 
@@ -126,7 +127,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                         );
                                 }
                             } catch (Exception e) {
-                                log.error("Failed to parse ml connector" + r.id(), e);
+                                log.error("Failed to parse ml connector {}", r.id(), e);
                                 actionListener.onFailure(e);
                             }
                         } else {
