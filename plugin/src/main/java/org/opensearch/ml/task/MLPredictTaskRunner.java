@@ -143,13 +143,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 if (clusterService.localNode().getId().equals(node.getId())) {
                     log.debug("Execute ML predict request {} locally on node {}", request.getRequestID(), node.getId());
                     request.setDispatchTask(false);
-                    run(
-                        // This is by design to NOT use mlPredictionTaskRequest.getMlInput().getAlgorithm() here
-                        functionName,
-                        request,
-                        transportService,
-                        listener
-                    );
+                    checkCBAndExecute(functionName, request, listener);
                 } else {
                     log.debug("Execute ML predict request {} remotely on node {}", request.getRequestID(), node.getId());
                     request.setDispatchTask(false);

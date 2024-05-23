@@ -199,7 +199,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModelWithTTL("openAI-GPT-3.5 completions", connectorId, 1);
+        response = registerRemoteModelWithTTLAndSkipHeapMemCheck("openAI-GPT-3.5 completions", connectorId, 1);
         responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
@@ -814,11 +814,13 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
     }
 
-    public static Response registerRemoteModelWithTTL(String name, String connectorId, int ttl) throws IOException {
+    public static Response registerRemoteModelWithTTLAndSkipHeapMemCheck(String name, String connectorId, int ttl) throws IOException {
         String registerModelGroupEntity = "{\n"
             + "  \"name\": \"remote_model_group\",\n"
             + "  \"description\": \"This is an example description\"\n"
             + "}";
+        String updateJVMHeapThreshold = "{\"persistent\":{\"plugins.ml_commons.jvm_heap_memory_threshold\":0}}";
+        TestHelper.makeRequest(client(), "PUT", "/_cluster/settings", null, TestHelper.toHttpEntity(updateJVMHeapThreshold), null);
         Response response = TestHelper
             .makeRequest(
                 client(),
