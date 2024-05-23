@@ -28,6 +28,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -48,7 +49,6 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.TransportService;
 
 public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
 
@@ -71,12 +71,11 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     MLCircuitBreakerService mlCircuitBreakerService;
 
     @Mock
-    TransportService transportService;
-
-    @Mock
     ActionListener<MLExecuteTaskResponse> listener;
     @Mock
     DiscoveryNodeHelper nodeHelper;
+    @Mock
+    ClusterApplierService clusterApplierService;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -115,7 +114,7 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
             ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL
         );
-        clusterService = spy(new ClusterService(settings, clusterSettings, null));
+        clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
