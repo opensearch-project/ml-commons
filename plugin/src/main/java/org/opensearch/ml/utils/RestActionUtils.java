@@ -322,19 +322,16 @@ public class RestActionUtils {
                         if (tenantId != null) {
                             return tenantId;
                         } else {
-                            throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+                            throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.FORBIDDEN);
                         }
                     } else {
-                        throw new OpenSearchStatusException(
-                            "Tenant ID header is present but has no value",
-                            RestStatus.INTERNAL_SERVER_ERROR
-                        );
+                        throw new OpenSearchStatusException("Tenant ID header is present but has no value", RestStatus.FORBIDDEN);
                     }
                 } else {
-                    throw new OpenSearchStatusException("Tenant ID header is missing", RestStatus.INTERNAL_SERVER_ERROR);
+                    throw new OpenSearchStatusException("Tenant ID header is missing", RestStatus.FORBIDDEN);
                 }
             } else {
-                throw new OpenSearchStatusException("Rest request header can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+                throw new OpenSearchStatusException("Rest request header can't be null", RestStatus.FORBIDDEN);
             }
         } else {
             return null;

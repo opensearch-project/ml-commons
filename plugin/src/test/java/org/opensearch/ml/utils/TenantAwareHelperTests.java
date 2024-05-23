@@ -33,16 +33,12 @@ public class TenantAwareHelperTests {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
     }
 
     @Test
     public void testValidateTenantId_MultiTenancyEnabled_TenantIdNull() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        tenantAwareHelper.setTenantId(null);
-
-        boolean result = tenantAwareHelper.validateTenantId(actionListener);
-
+        boolean result = tenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, null, actionListener);
         assertFalse(result);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(captor.capture());
@@ -54,19 +50,15 @@ public class TenantAwareHelperTests {
     @Test
     public void testValidateTenantId_MultiTenancyEnabled_TenantIdPresent() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        tenantAwareHelper.setTenantId("tenant_id");
-
-        boolean result = tenantAwareHelper.validateTenantId(actionListener);
-
+        boolean result = tenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, "tenant_id", actionListener);
         assertTrue(result);
     }
 
     @Test
     public void testValidateTenantId_MultiTenancyDisabled() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        tenantAwareHelper.setTenantId(null);
 
-        boolean result = tenantAwareHelper.validateTenantId(actionListener);
+        boolean result = tenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, null, actionListener);
 
         assertTrue(result);
     }
@@ -74,10 +66,7 @@ public class TenantAwareHelperTests {
     @Test
     public void testValidateTenantResource_MultiTenancyEnabled_TenantIdMismatch() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-//        tenantAwareHelper.setTenantId("tenant_id");
-
-        boolean result = tenantAwareHelper.validateTenantResource("different_tenant_id", actionListener);
-
+        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, null, "different_tenant_id", actionListener);
         assertFalse(result);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(captor.capture());
@@ -89,20 +78,14 @@ public class TenantAwareHelperTests {
     @Test
     public void testValidateTenantResource_MultiTenancyEnabled_TenantIdMatch() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        tenantAwareHelper.setTenantId("tenant_id");
-
-        boolean result = tenantAwareHelper.validateTenantResource("tenant_id", actionListener);
-
+        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "tenant_id", "tenant_id", actionListener);
         assertTrue(result);
     }
 
     @Test
     public void testValidateTenantResource_MultiTenancyDisabled() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        tenantAwareHelper.setTenantId("tenant_id");
-
-        boolean result = tenantAwareHelper.validateTenantResource("different_tenant_id", actionListener);
-
+        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "tenant_id", "different_tenant_id", actionListener);
         assertTrue(result);
     }
 }

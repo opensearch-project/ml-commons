@@ -59,7 +59,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     private volatile List<String> trustedConnectorEndpointsRegex;
-    private TenantAwareHelper tenantAwareHelper;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -83,7 +82,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -94,9 +92,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
-        tenantAwareHelper.setTenantId(mlCreateConnectorInput.getTenantId());
-        if (!tenantAwareHelper.validateTenantId(listener))
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
             return;
+        }
         if (mlCreateConnectorInput.isDryRun()) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);

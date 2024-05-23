@@ -407,7 +407,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             Assert.fail("Expected OpenSearchStatusException");
         } catch (Exception e) {
             Assert.assertTrue(e instanceof OpenSearchStatusException);
-            Assert.assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) e).status());
+            Assert.assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) e).status());
             Assert.assertEquals("Tenant ID can't be null", e.getMessage());
         }
     }

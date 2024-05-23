@@ -51,8 +51,6 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private TenantAwareHelper tenantAwareHelper;
-
     @Inject
     public GetConnectorTransportAction(
         TransportService transportService,
@@ -68,7 +66,6 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
     }
 
     @Override
@@ -76,9 +73,9 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.fromActionRequest(request);
         String connectorId = mlConnectorGetRequest.getConnectorId();
         String tenantId = mlConnectorGetRequest.getTenantId();
-        tenantAwareHelper.setTenantId(tenantId);
-        if (!tenantAwareHelper.validateTenantId(actionListener))
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
+        }
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
         GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
             .index(ML_CONNECTOR_INDEX)
@@ -107,7 +104,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 XContentParser parser = r.parser().get();
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector mlConnector = Connector.createConnector(parser);
-                                if (!tenantAwareHelper.validateTenantResource(mlConnector.getTenantId(), actionListener))
+                                if (!TenantAwareHelper
+                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlConnector.getTenantId(), actionListener))
                                     return;
                                 mlConnector.removeCredential();
 

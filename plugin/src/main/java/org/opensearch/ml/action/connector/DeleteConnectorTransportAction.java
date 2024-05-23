@@ -59,7 +59,6 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private final NamedXContentRegistry xContentRegistry;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private TenantAwareHelper tenantAwareHelper;
 
     @Inject
     public DeleteConnectorTransportAction(
@@ -77,7 +76,6 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.tenantAwareHelper = new TenantAwareHelper(mlFeatureEnabledSetting);
     }
 
     @Override
@@ -85,10 +83,9 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
         String tenantId = mlConnectorDeleteRequest.getTenantId();
-        tenantAwareHelper.setTenantId(tenantId);
-        if (!tenantAwareHelper.validateTenantId(actionListener))
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
-
+        }
         connectorAccessControlHelper
             .validateConnectorAccess(
                 client,
@@ -185,7 +182,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     ) {
         MLConnectorGetRequest mlConnectorGetRequest = new MLConnectorGetRequest(connectorId, tenantId, true);
         client.execute(MLConnectorGetAction.INSTANCE, mlConnectorGetRequest, ActionListener.wrap(getResponse -> {
-            if (tenantAwareHelper.validateTenantResource(getResponse.getMlConnector().getTenantId(), actionListener)) {
+            if (TenantAwareHelper
+                .validateTenantResource(mlFeatureEnabledSetting, tenantId, getResponse.getMlConnector().getTenantId(), actionListener)) {
                 deleteAction.run();
             }
         }, actionListener::onFailure));
