@@ -9,6 +9,7 @@ package org.opensearch.ml.settings;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 
 import org.opensearch.cluster.service.ClusterService;
@@ -21,10 +22,14 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isLocalModelEnabled;
 
+    // This is to identify if this node is in multi-tenancy or not.
+    private volatile Boolean isMultiTenancyEnabled;
+
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
+        isMultiTenancyEnabled = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -33,6 +38,7 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MULTI_TENANCY_ENABLED, it -> isMultiTenancyEnabled = it);
     }
 
     /**
@@ -57,6 +63,14 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isLocalModelEnabled() {
         return isLocalModelEnabled;
+    }
+
+    /**
+     * Whether the multi-tenancy feature is enabled. If disabled, tenant id will be null.
+     * @return whether the multi tenancy feature is enabled.
+     */
+    public boolean isMultiTenancyEnabled() {
+        return isMultiTenancyEnabled;
     }
 
 }

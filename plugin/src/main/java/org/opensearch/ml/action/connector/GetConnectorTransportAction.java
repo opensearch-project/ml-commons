@@ -10,8 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
-import java.util.Objects;
-
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -29,7 +27,9 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -49,18 +49,23 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public GetConnectorTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+
     ) {
         super(MLConnectorGetAction.NAME, transportService, actionFilters, MLConnectorGetRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -68,6 +73,9 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.fromActionRequest(request);
         String connectorId = mlConnectorGetRequest.getConnectorId();
         String tenantId = mlConnectorGetRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
         GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
             .index(ML_CONNECTOR_INDEX)
@@ -87,7 +95,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                             log.error("Failed to get connector index", cause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                         } else {
-                            log.error("Failed to get ML connector " + connectorId, cause);
+                            log.error("Failed to get ML connector {}", connectorId, cause);
                             actionListener.onFailure(new RuntimeException(cause));
                         }
                     } else {
@@ -96,16 +104,12 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 XContentParser parser = r.parser().get();
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector mlConnector = Connector.createConnector(parser);
-                                mlConnector.removeCredential();
-                                if (!Objects.equals(tenantId, mlConnector.getTenantId())) {
-                                    actionListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "You don't have permission to access this connector",
-                                                RestStatus.FORBIDDEN
-                                            )
-                                        );
+                                if (!TenantAwareHelper
+                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlConnector.getTenantId(), actionListener)) {
+                                    return;
                                 }
+                                mlConnector.removeCredential();
+
                                 if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                                     actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                                 } else {
@@ -118,7 +122,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                         );
                                 }
                             } catch (Exception e) {
-                                log.error("Failed to parse ml connector" + r.id(), e);
+                                log.error("Failed to parse ml connector {}", r.id(), e);
                                 actionListener.onFailure(e);
                             }
                         } else {

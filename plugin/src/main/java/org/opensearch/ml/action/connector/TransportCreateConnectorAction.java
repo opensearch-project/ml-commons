@@ -37,7 +37,9 @@ import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
@@ -52,6 +54,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final SdkClient sdkClient;
     private final MLEngine mlEngine;
     private final MLModelManager mlModelManager;
+
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     private volatile List<String> trustedConnectorEndpointsRegex;
@@ -67,7 +71,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         ConnectorAccessControlHelper connectorAccessControlHelper,
         Settings settings,
         ClusterService clusterService,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLCreateConnectorAction.NAME, transportService, actionFilters, MLCreateConnectorRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
@@ -76,6 +81,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         this.mlEngine = mlEngine;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -86,6 +92,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
+            return;
+        }
         if (mlCreateConnectorInput.isDryRun()) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);

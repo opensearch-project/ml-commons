@@ -217,7 +217,11 @@ public class TestHelper {
         return request;
     }
 
-    public static RestRequest getCreateConnectorRestRequest() {
+    public static RestRequest getCreateConnectorRestRequest(String tenantId) {
+        Map<String, List<String>> headers = new HashMap<>();
+        if (tenantId != null) {
+            headers.put("tenant_id", Collections.singletonList(tenantId));
+        }
         final String requestContent = "{\n"
             + "    \"name\": \"OpenAI Connector\",\n"
             + "    \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
@@ -248,6 +252,7 @@ public class TestHelper {
             + "    \"access_mode\": \"public\"\n"
             + "}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;

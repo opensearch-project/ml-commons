@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.RestActionUtils.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -71,6 +72,8 @@ public class RestMLCreateConnectorAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.parse(parser);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        mlCreateConnectorInput.setTenantId(tenantId);
         return new MLCreateConnectorRequest(mlCreateConnectorInput);
     }
 }

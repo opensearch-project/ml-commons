@@ -282,6 +282,14 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener) {
+        MLConnectorDeleteRequest connectorDeleteRequest = new MLConnectorDeleteRequest(connectorId, tenantId);
+        client.execute(MLConnectorDeleteAction.INSTANCE, connectorDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
     public void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
         MLRegisterAgentRequest mlRegisterAgentRequest = MLRegisterAgentRequest.builder().mlAgent(mlAgent).build();
         client.execute(MLRegisterAgentAction.INSTANCE, mlRegisterAgentRequest, getMLRegisterAgentResponseActionListener(listener));

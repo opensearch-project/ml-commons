@@ -46,6 +46,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
@@ -97,6 +98,9 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     MLConnectorGetRequest mlConnectorGetRequest;
     ThreadContext threadContext;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -105,10 +109,18 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).build();
         when(getResponse.getId()).thenReturn(CONNECTOR_ID);
         when(getResponse.getSourceAsString()).thenReturn("{}");
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         Settings settings = Settings.builder().build();
 
         getConnectorTransportAction = spy(
-            new GetConnectorTransportAction(transportService, actionFilters, client, sdkClient, connectorAccessControlHelper)
+            new GetConnectorTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                connectorAccessControlHelper,
+                mlFeatureEnabledSetting
+            )
         );
 
         doAnswer(invocation -> {
@@ -135,7 +147,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
 
-        GetResponse getResponse = prepareConnector();
+        GetResponse getResponse = prepareConnector(null);
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(future);
@@ -157,7 +169,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
 
-        GetResponse getResponse = prepareConnector();
+        GetResponse getResponse = prepareConnector(null);
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(future);
@@ -219,8 +231,50 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("errorMessage", argumentCaptor.getValue().getCause().getCause().getMessage());
     }
 
-    public GetResponse prepareConnector() throws IOException {
-        HttpConnector httpConnector = HttpConnector.builder().name("test_connector").protocol("http").build();
+    public void testGetConnector_MultiTenancyEnabled_Success() throws IOException, InterruptedException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.hasPermission(any(), any())).thenReturn(true);
+        String tenantId = "test_tenant";
+        mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).tenantId(tenantId).build();
+
+        GetResponse getResponse = prepareConnector(tenantId);
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<MLConnectorGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLConnectorGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(tenantId, argumentCaptor.getValue().getMlConnector().getTenantId());
+    }
+
+    public void testGetConnector_MultiTenancyEnabled_ForbiddenAccess() throws IOException, InterruptedException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.hasPermission(any(), any())).thenReturn(true);
+        String tenantId = "test_tenant";
+        mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).tenantId(tenantId).build();
+
+        GetResponse getResponse = prepareConnector("different_tenant");
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
+    public GetResponse prepareConnector(String tenantId) throws IOException {
+        HttpConnector httpConnector = HttpConnector.builder().name("test_connector").protocol("http").tenantId(tenantId).build();
 
         XContentBuilder content = httpConnector.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);

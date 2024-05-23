@@ -7,7 +7,6 @@ package org.opensearch.ml.utils;
 
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -36,7 +35,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -87,9 +85,6 @@ public class RestActionUtils {
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
     static final ObjectMapper objectMapper = new ObjectMapper();
-
-    // This is to identify if this node is in multi-tenancy or not.
-    public static volatile Boolean isMultiTenant;
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -316,23 +311,27 @@ public class RestActionUtils {
         }
     }
 
-    public static boolean isMultiTenant(ClusterService clusterService, Settings settings) {
-        isMultiTenant = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MULTI_TENANCY_ENABLED, it -> isMultiTenant = it);
-        return isMultiTenant;
-    }
-
-    public static String getTenantID(ClusterService clusterService, Settings settings, RestRequest restRequest) {
-        if (isMultiTenant(clusterService, settings)) {
+    public static String getTenantID(Boolean isMultiTenancyEnabled, RestRequest restRequest) {
+        if (isMultiTenancyEnabled) {
             Map<String, List<String>> headers = restRequest.getHeaders();
             if (headers != null) {
-                String tenantId = restRequest.getHeaders().get(Constants.TENANT_ID).get(0);
-                if (tenantId == null) {
-                    throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+                if (headers.containsKey(Constants.TENANT_ID)) {
+                    List<String> tenantIdList = headers.get(Constants.TENANT_ID);
+                    if (tenantIdList != null && !tenantIdList.isEmpty()) {
+                        String tenantId = tenantIdList.get(0);
+                        if (tenantId != null) {
+                            return tenantId;
+                        } else {
+                            throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.FORBIDDEN);
+                        }
+                    } else {
+                        throw new OpenSearchStatusException("Tenant ID header is present but has no value", RestStatus.FORBIDDEN);
+                    }
+                } else {
+                    throw new OpenSearchStatusException("Tenant ID header is missing", RestStatus.FORBIDDEN);
                 }
-                return tenantId;
             } else {
-                throw new OpenSearchStatusException("Rest request header can't be null", RestStatus.INTERNAL_SERVER_ERROR);
+                throw new OpenSearchStatusException("Rest request header can't be null", RestStatus.FORBIDDEN);
             }
         } else {
             return null;

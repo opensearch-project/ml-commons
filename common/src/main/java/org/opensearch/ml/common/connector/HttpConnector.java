@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
+import static org.opensearch.ml.common.input.Constants.TENANT_ID;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -53,7 +54,7 @@ public class HttpConnector extends AbstractConnector {
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
                          List<String> backendRoles, AccessMode accessMode, User owner,
-                         ConnectorClientConfig connectorClientConfig) {
+                         ConnectorClientConfig connectorClientConfig, String tenantId) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -66,6 +67,7 @@ public class HttpConnector extends AbstractConnector {
         this.access = accessMode;
         this.owner = owner;
         this.connectorClientConfig = connectorClientConfig;
+        this.tenantId = tenantId;
 
     }
 
@@ -127,6 +129,8 @@ public class HttpConnector extends AbstractConnector {
                 case CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
+                case TENANT_ID:
+                    tenantId = parser.text();
                 default:
                     parser.skipChildren();
                     break;
@@ -176,6 +180,9 @@ public class HttpConnector extends AbstractConnector {
         if (connectorClientConfig != null) {
             builder.field(CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -219,6 +226,7 @@ public class HttpConnector extends AbstractConnector {
         if (input.readBoolean()) {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
@@ -269,6 +277,7 @@ public class HttpConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(tenantId);
     }
 
     @Override

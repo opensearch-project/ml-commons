@@ -386,26 +386,13 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testIsIndependentNode() {
-        boolean isIndependentNode = RestActionUtils.isMultiTenant(clusterService, settings);
-        Assert.assertTrue(isIndependentNode);
-    }
-
-    @Test
-    public void testIsIndependentNode_False() {
-        Settings settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
-        boolean isIndependentNode = RestActionUtils.isMultiTenant(clusterService, settings);
-        Assert.assertFalse(isIndependentNode);
-    }
-
-    @Test
     public void testGetTenantID_IndependentNode() {
         String tenantId = "test-tenant";
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));
         RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
 
-        String actualTenantID = RestActionUtils.getTenantID(clusterService, settings, restRequest);
+        String actualTenantID = RestActionUtils.getTenantID(Boolean.TRUE, restRequest);
         Assert.assertEquals(tenantId, actualTenantID);
     }
 
@@ -416,11 +403,11 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
 
         try {
-            RestActionUtils.getTenantID(clusterService, settings, restRequest);
+            RestActionUtils.getTenantID(Boolean.TRUE, restRequest);
             Assert.fail("Expected OpenSearchStatusException");
         } catch (Exception e) {
             Assert.assertTrue(e instanceof OpenSearchStatusException);
-            Assert.assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) e).status());
+            Assert.assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) e).status());
             Assert.assertEquals("Tenant ID can't be null", e.getMessage());
         }
     }
@@ -433,7 +420,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));
         RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
 
-        String tenantID = RestActionUtils.getTenantID(clusterService, settings, restRequest);
+        String tenantID = RestActionUtils.getTenantID(Boolean.FALSE, restRequest);
         Assert.assertNull(tenantID);
     }
 
