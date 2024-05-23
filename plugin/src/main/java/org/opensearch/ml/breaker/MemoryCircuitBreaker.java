@@ -50,6 +50,6 @@ public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
 
     @Override
     public boolean isOpen() {
-        return jvmService.stats().getMem().getHeapUsedPercent() > this.getThreshold();
+        return getThreshold() < 100 && jvmService.stats().getMem().getHeapUsedPercent() > getThreshold();
     }
 }

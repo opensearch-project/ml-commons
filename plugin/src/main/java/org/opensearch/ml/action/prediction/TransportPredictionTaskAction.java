@@ -20,6 +20,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -177,6 +178,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                     );
                             } else if (e instanceof MLResourceNotFoundException) {
                                 wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                            } else if (e instanceof CircuitBreakingException) {
+                                wrappedListener.onFailure(e);
                             } else {
                                 wrappedListener
                                     .onFailure(
