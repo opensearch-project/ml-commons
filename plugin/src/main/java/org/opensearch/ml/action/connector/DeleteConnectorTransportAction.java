@@ -125,6 +125,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                 sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
             }
             searchRequest.source(sourceBuilder);
+            // TODO: User SDK client not client.
             client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                 SearchHit[] searchHits = searchResponse.getHits().getHits();
                 if (searchHits.length == 0) {
@@ -173,6 +174,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         actionListener.onFailure(e);
     }
 
+    // TODO: merge this method with validateConnectorAccess and use sdkClient not client.
     @VisibleForTesting
     void checkConnectorPermission(
         String connectorId,

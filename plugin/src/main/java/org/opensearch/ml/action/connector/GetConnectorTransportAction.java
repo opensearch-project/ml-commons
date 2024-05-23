@@ -105,8 +105,9 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector mlConnector = Connector.createConnector(parser);
                                 if (!TenantAwareHelper
-                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlConnector.getTenantId(), actionListener))
+                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlConnector.getTenantId(), actionListener)) {
                                     return;
+                                }
                                 mlConnector.removeCredential();
 
                                 if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
