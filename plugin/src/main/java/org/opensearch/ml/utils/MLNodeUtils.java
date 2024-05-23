@@ -18,12 +18,13 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.breaker.CircuitBreaker;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
-import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 
@@ -92,7 +93,10 @@ public class MLNodeUtils {
         ThresholdCircuitBreaker openCircuitBreaker = mlCircuitBreakerService.checkOpenCB();
         if (openCircuitBreaker != null) {
             mlStats.getStat(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-            throw new MLLimitExceededException(openCircuitBreaker.getName() + " is open, please check your resources!");
+            throw new CircuitBreakingException(
+                openCircuitBreaker.getName() + " is open, please check your resources!",
+                CircuitBreaker.Durability.TRANSIENT
+            );
         }
     }
 }
