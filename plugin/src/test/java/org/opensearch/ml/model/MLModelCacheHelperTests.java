@@ -39,7 +39,6 @@ import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseMode
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableSet;
 
