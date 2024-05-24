@@ -390,7 +390,7 @@ POST /_plugins/_ml/connectors/_create
       "url": "${parameters.endpoint}",
       "headers": {
         "X-Amz-Target": "${parameters.api}",
-        "content-type": "application/x-amz-json-1.1",
+        "content-type": "application/x-amz-json-1.1"
       },
       "request_body": "{ \"Text\": \"${parameters.Text}\", \"LanguageCode\": \"${parameters.LanguageCode}\"}"
     }
