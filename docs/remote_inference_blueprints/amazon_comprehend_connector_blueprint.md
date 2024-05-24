@@ -665,4 +665,4 @@ Sample response:
 }
 ```
 
-Congratulations! You've successfully created Amazon Comprehend DetectEntities connector and ingest pipeline.
+You have now successfully created an Amazon Comprehend Detect Entities connector and ingest pipeline.
