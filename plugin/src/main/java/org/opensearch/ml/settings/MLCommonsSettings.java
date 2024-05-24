@@ -117,39 +117,6 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_REMOTE_INFERENCE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.remote_inference.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Boolean> ML_COMMONS_REMOTE_INFERENCE_RETRY_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.remote_inference.retry_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
-    public static final Setting<Integer> ML_COMMONS_REMOTE_INFERENCE_RETRY_BACKOFF_MILLIS = Setting
-        .intSetting(
-            "plugins.ml_commons.remote_inference.retry_backoff_millis",
-            100,
-            1,
-            50000,
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
-
-    public static final Setting<Integer> ML_COMMONS_REMOTE_INFERENCE_RETRY_TIMEOUT_SECONDS = Setting
-        .intSetting(
-            "plugins.ml_commons.remote_inference.retry_timeout_seconds",
-            30,
-            1,
-            60,
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
-
-    public static final Setting<Integer> ML_COMMONS_REMOTE_INFERENCE_MAX_RETRY_TIMES = Setting
-        .intSetting(
-            "plugins.ml_commons.remote_inference.max_retry_times",
-            -1,
-            -1,
-            10000,
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
-
     public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
