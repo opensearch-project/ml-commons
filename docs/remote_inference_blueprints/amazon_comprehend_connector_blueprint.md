@@ -68,8 +68,11 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Comprehend service.
-For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Comprehend service. For more information, see following documents:
+- [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+- [AIConnectorHelper tutorial](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/tutorials/aws/AIConnectorHelper.ipynb)
+- [Semantic search with Amazon Bedrock Titan embedding text model](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/tutorials/aws/semantic_search_with_bedrock_titan_embedding_model.md)
+
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -418,8 +421,11 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Comprehend service.
-For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Comprehend service. For more information, see following documents:
+- [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+- [AIConnectorHelper tutorial](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/tutorials/aws/AIConnectorHelper.ipynb)
+- [Semantic search with Amazon Bedrock Titan embedding text model](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/tutorials/aws/semantic_search_with_bedrock_titan_embedding_model.md)
+
 
 ```json
 POST /_plugins/_ml/connectors/_create
