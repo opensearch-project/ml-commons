@@ -641,7 +641,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(1);
         connectorRetryOption.setMaxRetryTimes(-1);
-        connectorRetryOption.setRetyExecutor("test");
+        connectorRetryOption.setRetryExecutor("test");
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
             .executePredict(
@@ -676,7 +676,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(10);
         connectorRetryOption.setMaxRetryTimes(-1);
-        connectorRetryOption.setRetyExecutor("test");
+        connectorRetryOption.setRetryExecutor("test");
         ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -727,7 +727,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(10);
         connectorRetryOption.setMaxRetryTimes(5);
-        connectorRetryOption.setRetyExecutor("test");
+        connectorRetryOption.setRetryExecutor("test");
         ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -778,7 +778,7 @@ public class AwsConnectorExecutorTest {
         connectorRetryOption.setRetryBackoffMillis(1);
         connectorRetryOption.setRetryTimeoutSeconds(10);
         connectorRetryOption.setMaxRetryTimes(-1);
-        connectorRetryOption.setRetyExecutor("test");
+        connectorRetryOption.setRetryExecutor("test");
         ExecutionContext executionContext = new ExecutionContext(123, connectorRetryOption);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));

@@ -64,7 +64,7 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
         assertEquals(Optional.of(100), Optional.of(connectorRetryOption.getRetryBackoffMillis()));
         assertEquals(Optional.of(30), Optional.of(connectorRetryOption.getRetryTimeoutSeconds()));
         assertEquals(Optional.of(-1), Optional.of(connectorRetryOption.getMaxRetryTimes()));
-        assertEquals("opensearch_ml_predict_remote", connectorRetryOption.getRetyExecutor());
+        assertEquals("opensearch_ml_predict_remote", connectorRetryOption.getRetryExecutor());
     }
 
     @Test
@@ -83,6 +83,6 @@ public class RemoteInferenceRetryUtilsTests extends OpenSearchTestCase {
         assertEquals(Optional.of(TEST_RETRY_BACKOFF_MILLIS), Optional.of(connectorRetryOption.getRetryBackoffMillis()));
         assertEquals(Optional.of(TEST_RETRY_TIMEOUT_SECONDS), Optional.of(connectorRetryOption.getRetryTimeoutSeconds()));
         assertEquals(Optional.of(TEST_MAX_RETRY_TIMES), Optional.of(connectorRetryOption.getMaxRetryTimes()));
-        assertEquals("opensearch_ml_predict_remote", connectorRetryOption.getRetyExecutor());
+        assertEquals("opensearch_ml_predict_remote", connectorRetryOption.getRetryExecutor());
     }
 }

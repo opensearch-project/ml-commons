@@ -225,7 +225,7 @@ public interface RemoteConnectorExecutor {
                     TimeValue.timeValueMillis(executionContext.getConnectorRetryOption().getRetryBackoffMillis()),
                     Integer.MAX_VALUE
                 ),
-            executionContext.getConnectorRetryOption().getRetyExecutor()
+            executionContext.getConnectorRetryOption().getRetryExecutor()
         ) {
             Integer retryTimes = 0;
 

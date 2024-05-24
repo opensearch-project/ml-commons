@@ -19,5 +19,5 @@ public class ConnectorRetryOption {
     private Integer retryBackoffMillis;
     private Integer retryTimeoutSeconds;
     private Integer maxRetryTimes;
-    private String retyExecutor;
+    private String retryExecutor;
 }

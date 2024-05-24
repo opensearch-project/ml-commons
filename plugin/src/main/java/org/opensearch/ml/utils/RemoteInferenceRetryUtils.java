@@ -44,7 +44,7 @@ public class RemoteInferenceRetryUtils {
         connectorRetryOption.setRetryBackoffMillis(retryBackoffMillis);
         connectorRetryOption.setRetryTimeoutSeconds(retryTimeoutSeconds);
         connectorRetryOption.setMaxRetryTimes(maxRetryTimes);
-        connectorRetryOption.setRetyExecutor(REMOTE_PREDICT_THREAD_POOL);
+        connectorRetryOption.setRetryExecutor(REMOTE_PREDICT_THREAD_POOL);
         return connectorRetryOption;
     }
 }
