@@ -21,9 +21,16 @@ PUT /_cluster/settings
 }
 ```
 
-### Step 2: Create a connector for Amazon Bedrock
+### Step 2: Create a connector for Amazon Comprehend
 
-If you are using self-managed Opensearch, provide your AWS credentials:
+- If you are using self-managed Opensearch, supply your AWS credentials. Credential owner has to have a permission to access Amazon Comprehend [DetectDominantLanguage API](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectDominantLanguage.html) API. For more information, see [AWS documentation](https://docs.aws.amazon.com/comprehend/latest/dg/security-iam-awsmanpol.html)
+
+- You can choose any region from [supported regions](https://docs.aws.amazon.com/general/latest/gr/comprehend.html)
+
+- AWS recommends to lock API version for production to avoid disruption by new API version released [1]. You can find the latest API version from SDK reference [2] or botocore code [3].
+  - [1] https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/locking-api-versions.html
+  - [2] https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/Comprehend.html
+  - [3] https://github.com/boto/botocore/tree/master/botocore/data
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -39,9 +46,11 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "service_name": "comprehend",
-    "region": "ap-northeast-1",
+    "region": "us-east-1",
     "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
-    "api": "Comprehend_20171127.DetectDominantLanguage",
+    "api_version": "20171127",
+    "api_name": "DetectDominantLanguage",
+    "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
     "response_filter": "$"
   },
   "actions": [
@@ -59,7 +68,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Bedrock service.
+If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Comprehend service.
 For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
 ```json
@@ -74,9 +83,11 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "service_name": "comprehend",
-    "region": "ap-northeast-1",
+    "region": "us-east-1",
     "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
-    "api": "Comprehend_20171127.DetectDominantLanguage",
+    "api_version": "20171127",
+    "api_name": "DetectDominantLanguage",
+    "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
     "response_filter": "$"
   },
   "actions": [
@@ -360,9 +371,16 @@ PUT /_cluster/settings
 }
 ```
 
-### Step 2: Create a connector for Amazon Bedrock
+### Step 2: Create a connector for Amazon Comprehend
 
-If you are using self-managed Opensearch, supply your AWS credentials:
+- If you are using self-managed Opensearch, supply your AWS credentials. Credential owner has to have a permission to access Amazon Comprehend [DetectEntities API](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectEntities.html) API. For more information, see [AWS documentation](https://docs.aws.amazon.com/comprehend/latest/dg/security-iam-awsmanpol.html)
+
+- You can choose any region from [supported regions](https://docs.aws.amazon.com/general/latest/gr/comprehend.html)
+
+- AWS recommends to lock API version for production to avoid disruption by new API version released [1]. You can find the latest API version from SDK reference [2] or botocore code [3].
+  - [1] https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/locking-api-versions.html
+  - [2] https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/Comprehend.html
+  - [3] https://github.com/boto/botocore/tree/master/botocore/data
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -378,9 +396,11 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "service_name": "comprehend",
-    "region": "ap-northeast-1",
+    "region": "us-east-1",
     "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
-    "api": "Comprehend_20171127.DetectEntities",
+    "api_version": "20171127",
+    "api_name": "DetectEntities",
+    "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
     "response_filter": "$"
   },
   "actions": [
@@ -398,7 +418,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Bedrock service.
+If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Comprehend service.
 For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
 ```json
@@ -413,9 +433,11 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "service_name": "comprehend",
-    "region": "ap-northeast-1",
+    "region": "us-east-1",
     "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
-    "api": "Comprehend_20171127.DetectEntities",
+    "api_version": "20171127",
+    "api_name": "DetectEntities",
+    "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
     "response_filter": "$"
   },
   "actions": [
