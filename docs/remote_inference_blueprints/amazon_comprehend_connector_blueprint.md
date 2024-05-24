@@ -1,14 +1,14 @@
-# Amazon Comprehend connector blueprint example for metadata embedding:
+# Amazon Comprehend connector blueprint example for metadata embedding
 
-Amazon Comprehend uses natural language processing (NLP) to extract insights about the content of documents without the need of any special preprocessing. You can get details of Amazon Comprehend from [Amazon Comprehend Documentation](https://docs.aws.amazon.com/comprehend/).
+Amazon Comprehend uses natural language processing (NLP) to extract insights about the content of documents without the need for any special preprocessing. For more information about Amazon Comprehend, see  [Amazon Comprehend](https://docs.aws.amazon.com/comprehend/).
 
-## Language detection with [DetectDominantLanguage](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectDominantLanguage.html) API
+## Language detection with DetectDominantLanguage API
 
-This instruction shows how to create OpenSearch connector having capability to set detected language code based on input text using Amazon Comrehend DetectDominantLanguage API.
+This tutorial shows how to create an OpenSearch connector for an Amazon Comprehend model. The model examines the input text, detects the language using the Amazon Comrehend [DetectDominantLanguage API](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectDominantLanguage.html), and sets a corresponding language code.
 
-Note: Need to do this on 2.14.0 or later.
+Note: This functionality is available in OpenSearch 2.14.0 or later.
 
-### 1. Add connector endpoint to trusted URLs:
+### Step 1: Add the connector endpoint to trusted URLs
 
 ```json
 PUT /_cluster/settings
@@ -21,9 +21,9 @@ PUT /_cluster/settings
 }
 ```
 
-### 2. Create connector for Amazon Bedrock:
+### Step 2: Create a connector for Amazon Bedrock
 
-If you are using self-managed Opensearch, you should supply AWS credentials:
+If you are using self-managed Opensearch, provide your AWS credentials:
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -59,8 +59,8 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
-Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Bedrock service.
+For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -101,7 +101,7 @@ Sample response:
 }
 ```
 
-### 3. Create model group:
+### Step 3: Create a model group
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -119,7 +119,7 @@ Sample response:
 }
 ```
 
-### 4. Register model to model group & deploy model:
+### Step 4: Register and deploy the model
 
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
@@ -140,7 +140,7 @@ Sample response:
   "model_id": "mNBeno8Bk4Evvk2c4lRF"
 }
 ```
-### 5. Test model inference:
+### Step 5: Test the model inference
 
 ```json
 POST /_plugins/_ml/models/mNBeno8Bk4Evvk2c4lRF/_predict
@@ -181,15 +181,15 @@ Sample response:
 }
 ```
 
-### 6. Create ingest pipeline with ml_inference processor:
+### Step 6: Create an ingest pipeline with an `ml_inference` processor
 
-[ML inference processor](https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/) passes source field to a model, extracts model output and insert into target field. 
+The [ML inference processor](https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/) passes a source field to a model, extracts the model output, and inserts it into a target field. 
 
 This example processor works as follows:
-1. Extract values from `message` field and pass values to `Text` parameter.
-1. Invoke Amazon Comprehend DetectDominantLanguage API with `Text` parameter.
-1. Extract values from DetectDominantLanguage result.
-1. Insert extracted values into `detected_dominant_language`.
+1. Extracts values from the `message` field and passes the values to the `Text` parameter.
+1. Invokes the Amazon Comprehend DetectDominantLanguage API providing the `Text` parameter.
+1. Extracts values from the DetectDominantLanguage API response.
+1. Inserts the extracted values into the `detected_dominant_language` field.
 
 ```json
 PUT /_ingest/pipeline/detect_dominant_language_pipeline
@@ -197,7 +197,7 @@ PUT /_ingest/pipeline/detect_dominant_language_pipeline
   "processors": [
     {
       "ml_inference": {
-        "model_id": comprehend_model_id,
+        "model_id": "mNBeno8Bk4Evvk2c4lRF",
         "input_map": [
           {
             "Text": "message" 
@@ -221,7 +221,7 @@ Sample response:
 }
 ```
 
-### 7. Test ingest pipeline processor
+### Step 7: Test the ingest pipeline processor
 
 ```json
 POST /_ingest/pipeline/detect_dominant_language_pipeline/_simulate
@@ -339,30 +339,30 @@ Sample response:
 }
 ```
 
-Congratulations! You've successfully created Amazon Comprehend DetectDominantLanguage connector and ingest pipeline.
+You have now successfully created an Amazon Comprehend Detect Dominant Language connector and ingest pipeline.
 
-## Entity detection with [DetectEntities](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectEntities.html) API
+## Entity detection with the DetectEntities API
 
-This instruction shows how to create OpenSearch connector having capability to extract entities from input text.
+This tutorial shows how to create an OpenSearch connector that can extract entities from input text using the [DetectEntities API](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectEntities.html).
 
-Note: Need to do this on 2.14.0 or later.
+Note: This functionality is available in OpenSearch 2.14.0 or later.
 
-### 1. Add connector endpoint to trusted URLs:
+### Step 1: Add the connector endpoint to trusted URLs
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
+            "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$"
         ]
     }
 }
 ```
 
-### 2. Create connector for Amazon Bedrock:
+### Step 2: Create a connector for Amazon Bedrock
 
-If you are using self-managed Opensearch, you should supply AWS credentials:
+If you are using self-managed Opensearch, supply your AWS credentials:
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -398,8 +398,8 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
-Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+If using the AWS Opensearch Service, you can provide an IAM role ARN that allows access to the Amazon Bedrock service.
+For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -425,7 +425,7 @@ POST /_plugins/_ml/connectors/_create
       "url": "${parameters.endpoint}",
       "headers": {
         "X-Amz-Target": "${parameters.api}",
-        "content-type": "application/x-amz-json-1.1",
+        "content-type": "application/x-amz-json-1.1"
       },
       "request_body": "{ \"Text\": \"${parameters.Text}\", \"LanguageCode\": \"${parameters.LanguageCode}\"}"
     }
@@ -440,7 +440,7 @@ Sample response:
 }
 ```
 
-### 3. Create model group:
+### Step 3: Create a model group
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -458,7 +458,7 @@ Sample response:
 }
 ```
 
-### 4. Register model to model group & deploy model:
+### Step 4: Register and deploy the model:
 
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
@@ -479,7 +479,7 @@ Sample response:
   "model_id": "mNBeno8Bk4Evvk2c4lRF"
 }
 ```
-### 5. Test model inference:
+### Step 5: Test the model inference
 
 ```json
 POST /_plugins/_ml/models/mNBeno8Bk4Evvk2c4lRF/_predict
@@ -548,15 +548,15 @@ Sample response:
 }
 ```
 
-### 6. Create ingest pipeline with ml_inference processor:
+### Step 6: Create an ingest pipeline with an `ml_inference` processor
 
-ml_inference passes source field to a model, extracts model output and insert into target field. Read more details on https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/
+The [ML inference processor](https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/) passes a source field to a model, extracts the model output, and inserts it into a target field. 
 
 This example processor works as follows:
-1. Extract values from `message` field and pass values to `Text` parameter.
-1. Invoke Amazon Comprehend DetectEntities API with `Text` parameter and `LanguageCode` parameter. LanguageCode is specified in model_config section.
-1. Extract values from DetectEntities result.
-1. Insert extracted values into `detected_entities`.
+1. Extracts values from the `message` field and passes the values to the `Text` parameter.
+1. Invokes the Amazon Comprehend DetectEntities API providing the `Text` parameter and the `LanguageCode` parameter. The `LanguageCode` is specified in the `model_config` section.
+1. Extracts values from the Detect Entities API response.
+1. Insert extracted values into the `detected_entities` field.
 
 ```json
 PUT /_ingest/pipeline/detect_entities_pipeline
@@ -564,7 +564,7 @@ PUT /_ingest/pipeline/detect_entities_pipeline
   "processors": [
     {
       "ml_inference": {
-        "model_id": mNBeno8Bk4Evvk2c4lRF,
+        "model_id": "mNBeno8Bk4Evvk2c4lRF",
         "input_map": [
           {
             "Text": "message"
