@@ -32,6 +32,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
@@ -378,5 +379,35 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue().getMessage().equals("Error from remote service: The request was denied due to remote server throttling.");
         assert captor.getValue().status().getStatus() == HttpStatusCode.BAD_REQUEST;
+    }
+
+    @Test
+    public void test_onComplete_processOutputFail_onFailure() {
+        String response = "{\"message\": \"test message\"}";
+        Connector testConnector = HttpConnector.builder().name("test connector").version("1").protocol("http").build();
+        MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
+            new ExecutionContext(1),
+            actionListener,
+            parameters,
+            testConnector,
+            scriptService,
+            null
+        );
+
+        mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(response.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler.onStream(stream);
+
+        ArgumentCaptor<MLException> captor = ArgumentCaptor.forClass(MLException.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue().getMessage().equals("Fail to execute predict in aws connector");
     }
 }

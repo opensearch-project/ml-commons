@@ -2,7 +2,9 @@ package org.opensearch.ml.common.connector;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -33,6 +35,32 @@ public class ConnectorClientConfigTest {
         ConnectorClientConfig readConfig = new ConnectorClientConfig(output.bytes().streamInput());
 
         Assert.assertEquals(config, readConfig);
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_diffVersionThenNotProcessRetryOptions() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig.builder()
+                .maxConnections(10)
+                .connectionTimeout(5000)
+                .readTimeout(3000)
+                .retryBackoffMillis(123)
+                .retryTimeoutSeconds(456)
+                .maxRetryTimes(789)
+                .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(Version.V_2_14_0);
+        config.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(Version.V_2_14_0);
+        ConnectorClientConfig readConfig = ConnectorClientConfig.fromStream(input);
+
+        Assert.assertEquals(Integer.valueOf(10),readConfig.getMaxConnections());
+        Assert.assertEquals(Integer.valueOf(5000),readConfig.getConnectionTimeout());
+        Assert.assertEquals(Integer.valueOf(3000),readConfig.getReadTimeout());
+        Assert.assertNull(readConfig.getRetryBackoffMillis());
+        Assert.assertNull(readConfig.getRetryTimeoutSeconds());
+        Assert.assertNull(readConfig.getMaxRetryTimes());
     }
 
     @Test
@@ -83,6 +111,18 @@ public class ConnectorClientConfigTest {
         Assert.assertNull(config.getRetryBackoffMillis());
         Assert.assertNull(config.getRetryTimeoutSeconds());
         Assert.assertNull(config.getMaxRetryTimes());
+    }
+
+    @Test
+    public void testDefaultValuesInitByNewInstance() {
+        ConnectorClientConfig config = new ConnectorClientConfig();
+
+        Assert.assertEquals(Integer.valueOf(30),config.getMaxConnections());
+        Assert.assertEquals(Integer.valueOf(30000),config.getConnectionTimeout());
+        Assert.assertEquals(Integer.valueOf(30000),config.getReadTimeout());
+        Assert.assertEquals(Integer.valueOf(200),config.getRetryBackoffMillis());
+        Assert.assertEquals(Integer.valueOf(30),config.getRetryTimeoutSeconds());
+        Assert.assertEquals(Integer.valueOf(-1),config.getMaxRetryTimes());
     }
 }
 
