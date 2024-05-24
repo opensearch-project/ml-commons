@@ -59,8 +59,8 @@ public class MLRegisterModelInputTest {
             "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
-            "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
-            "\"read_timeout\":30000}},\"is_hidden\":false}";
+            "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000," +
+            "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1}},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
     private final String modelName = "modelName";
     private final String version = "version";
@@ -183,8 +183,8 @@ public class MLRegisterModelInputTest {
                 "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
                 "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
                 "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
-                "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000," +
-                "\"read_timeout\":30000}},\"is_hidden\":false}";
+                "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000," +
+                "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1}},\"is_hidden\":false}";
         input.setUrl(null);
         input.setModelConfig(null);
         input.setModelFormat(null);

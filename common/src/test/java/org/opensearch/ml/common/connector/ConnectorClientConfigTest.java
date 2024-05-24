@@ -23,6 +23,9 @@ public class ConnectorClientConfigTest {
                 .maxConnections(10)
                 .connectionTimeout(5000)
                 .readTimeout(3000)
+                .retryBackoffMillis(123)
+                .retryTimeoutSeconds(456)
+                .maxRetryTimes(789)
                 .build();
 
         BytesStreamOutput output = new BytesStreamOutput();
@@ -38,19 +41,24 @@ public class ConnectorClientConfigTest {
                 .maxConnections(10)
                 .connectionTimeout(5000)
                 .readTimeout(3000)
+                .retryBackoffMillis(123)
+                .retryTimeoutSeconds(456)
+                .maxRetryTimes(789)
                 .build();
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         config.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
-        String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000}";
+        String expectedJson = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000," +
+                "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789}";
         Assert.assertEquals(expectedJson, content);
     }
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000}";
+        String jsonStr = "{\"max_connection\":10,\"connection_timeout\":5000,\"read_timeout\":3000," +
+                "\"retry_backoff_millis\":123,\"retry_timeout_seconds\":456,\"max_retry_times\":789}";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
@@ -60,6 +68,9 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(10), config.getMaxConnections());
         Assert.assertEquals(Integer.valueOf(5000), config.getConnectionTimeout());
         Assert.assertEquals(Integer.valueOf(3000), config.getReadTimeout());
+        Assert.assertEquals(Integer.valueOf(123), config.getRetryBackoffMillis());
+        Assert.assertEquals(Integer.valueOf(456), config.getRetryTimeoutSeconds());
+        Assert.assertEquals(Integer.valueOf(789), config.getMaxRetryTimes());
     }
 
     @Test
@@ -69,6 +80,9 @@ public class ConnectorClientConfigTest {
         Assert.assertNull(config.getMaxConnections());
         Assert.assertNull(config.getConnectionTimeout());
         Assert.assertNull(config.getReadTimeout());
+        Assert.assertNull(config.getRetryBackoffMillis());
+        Assert.assertNull(config.getRetryTimeoutSeconds());
+        Assert.assertNull(config.getMaxRetryTimes());
     }
 }
 

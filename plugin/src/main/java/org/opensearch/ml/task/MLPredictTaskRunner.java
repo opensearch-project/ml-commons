@@ -67,7 +67,6 @@ import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.utils.MLNodeUtils;
-import org.opensearch.ml.utils.RemoteInferenceRetryUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
@@ -342,12 +341,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             mlModelManager.trackPredictDuration(modelId, startTime);
                             internalListener.onResponse(output);
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId));
-                        predictor
-                            .asyncPredict(
-                                mlInput,
-                                RemoteInferenceRetryUtils.getRetryOptionFromClusterSettings(),
-                                trackPredictDurationListener
-                            );
+                        predictor.asyncPredict(mlInput, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
                         if (output instanceof MLPredictionOutput) {

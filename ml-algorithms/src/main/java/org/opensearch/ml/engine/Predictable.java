@@ -12,7 +12,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.engine.algorithms.remote.ConnectorRetryOption;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 
 /**
@@ -38,7 +37,7 @@ public interface Predictable {
         throw new IllegalStateException("Method is not implemented");
     }
 
-    default void asyncPredict(MLInput mlInput, ConnectorRetryOption connectorRetryOption, ActionListener<MLTaskResponse> actionListener) {
+    default void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         actionListener.onFailure(new IllegalStateException("Method is not implemented"));
     }
 

@@ -42,7 +42,7 @@ import software.amazon.awssdk.http.SdkHttpFullResponse;
 import software.amazon.awssdk.http.SdkHttpResponse;
 
 public class MLSdkAsyncHttpResponseHandlerTest {
-    private final ExecutionContext executionContext = new ExecutionContext(0, new ConnectorRetryOption());
+    private final ExecutionContext executionContext = new ExecutionContext(0);
     @Mock
     private ActionListener<Tuple<Integer, ModelTensors>> actionListener;
     @Mock
@@ -255,7 +255,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     public void test_onComplete_failed() {
         String response = "Model current status is: FAILED";
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler1 = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(0, new ConnectorRetryOption()),
+            new ExecutionContext(0),
             actionListener,
             parameters,
             connector,
@@ -351,7 +351,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     public void test_onComplete_throttle_exception_onFailure() {
         String response = "{\"message\": null}";
         MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
-            new ExecutionContext(1, new ConnectorRetryOption()),
+            new ExecutionContext(1),
             actionListener,
             parameters,
             connector,

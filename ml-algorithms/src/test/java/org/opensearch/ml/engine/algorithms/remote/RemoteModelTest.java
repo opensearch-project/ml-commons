@@ -75,7 +75,7 @@ public class RemoteModelTest {
     @Test
     public void predict_NullConnectorExecutor() {
         ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
-        remoteModel.asyncPredict(mlInput, new ConnectorRetryOption(), actionListener);
+        remoteModel.asyncPredict(mlInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue() instanceof RuntimeException;
@@ -91,7 +91,7 @@ public class RemoteModelTest {
         when(mlModel.getConnector()).thenReturn(connector);
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
         ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
-        remoteModel.asyncPredict(mlInput, new ConnectorRetryOption(), actionListener);
+        remoteModel.asyncPredict(mlInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue() instanceof RuntimeException;

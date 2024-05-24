@@ -35,6 +35,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -47,7 +48,9 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
 
 public interface RemoteConnectorExecutor {
-    default void executePredict(MLInput mlInput, ConnectorRetryOption connectorRetryOption, ActionListener<MLTaskResponse> actionListener) {
+    public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
+
+    default void executePredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         ActionListener<Collection<Tuple<Integer, ModelTensors>>> tensorActionListener = ActionListener.wrap(r -> {
             // Only all sub-requests success will call logics here
             ModelTensors[] modelTensors = new ModelTensors[r.size()];
@@ -75,16 +78,12 @@ public interface RemoteConnectorExecutor {
                             .algorithm(FunctionName.TEXT_EMBEDDING)
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
-                        new ExecutionContext(sequence++, connectorRetryOption),
+                        new ExecutionContext(sequence++),
                         groupedActionListener
                     );
                 }
             } else {
-                preparePayloadAndInvokeRemoteModel(
-                    mlInput,
-                    new ExecutionContext(0, connectorRetryOption),
-                    new GroupedActionListener<>(tensorActionListener, 1)
-                );
+                preparePayloadAndInvokeRemoteModel(mlInput, new ExecutionContext(0), new GroupedActionListener<>(tensorActionListener, 1));
             }
         } catch (Exception e) {
             actionListener.onFailure(e);
@@ -141,6 +140,8 @@ public interface RemoteConnectorExecutor {
     Client getClient();
 
     Logger getLogger();
+
+    ConnectorClientConfig getConnectorClientConfig();
 
     default void setClient(Client client) {}
 
@@ -199,7 +200,7 @@ public interface RemoteConnectorExecutor {
             if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT)) {
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
-            if (executionContext.getConnectorRetryOption().isRetryEnabled()) {
+            if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
             } else {
                 invokeRemoteModel(mlInput, parameters, payload, executionContext, actionListener);
@@ -217,15 +218,11 @@ public interface RemoteConnectorExecutor {
         final RetryableAction<Tuple<Integer, ModelTensors>> invokeRemoteModelAction = new RetryableAction<>(
             getLogger(),
             getClient().threadPool(),
-            TimeValue.timeValueMillis(executionContext.getConnectorRetryOption().getRetryBackoffMillis()),
-            TimeValue.timeValueSeconds(executionContext.getConnectorRetryOption().getRetryTimeoutSeconds()),
+            TimeValue.timeValueMillis(getConnectorClientConfig().getRetryBackoffMillis()),
+            TimeValue.timeValueSeconds(getConnectorClientConfig().getRetryTimeoutSeconds()),
             actionListener,
-            BackoffPolicy
-                .constantBackoff(
-                    TimeValue.timeValueMillis(executionContext.getConnectorRetryOption().getRetryBackoffMillis()),
-                    Integer.MAX_VALUE
-                ),
-            executionContext.getConnectorRetryOption().getRetryExecutor()
+            BackoffPolicy.constantBackoff(TimeValue.timeValueMillis(getConnectorClientConfig().getRetryBackoffMillis()), Integer.MAX_VALUE),
+            RETRY_EXECUTOR
         ) {
             Integer retryTimes = 0;
 
@@ -239,7 +236,7 @@ public interface RemoteConnectorExecutor {
             @Override
             public boolean shouldRetry(Exception e) {
                 Throwable cause = ExceptionsHelper.unwrapCause(e);
-                Integer maxRetryTimes = executionContext.getConnectorRetryOption().getMaxRetryTimes();
+                Integer maxRetryTimes = getConnectorClientConfig().getMaxRetryTimes();
                 boolean shouldRetry = cause instanceof RetryableException;
                 if (maxRetryTimes != -1 && ++retryTimes > maxRetryTimes) {
                     shouldRetry = false;

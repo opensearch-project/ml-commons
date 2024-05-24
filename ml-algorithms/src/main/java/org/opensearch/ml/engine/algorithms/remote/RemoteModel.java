@@ -57,7 +57,7 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void asyncPredict(MLInput mlInput, ConnectorRetryOption connectorRetryOption, ActionListener<MLTaskResponse> actionListener) {
+    public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         if (!isModelReady()) {
             actionListener
                 .onFailure(
@@ -66,7 +66,7 @@ public class RemoteModel implements Predictable {
             return;
         }
         try {
-            connectorExecutor.executePredict(mlInput, connectorRetryOption, actionListener);
+            connectorExecutor.executePredict(mlInput, actionListener);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
             actionListener.onFailure(e);
