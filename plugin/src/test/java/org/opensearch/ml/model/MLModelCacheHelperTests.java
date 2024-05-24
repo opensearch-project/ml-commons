@@ -24,6 +24,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -65,13 +66,16 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     @Mock
     private TokenBucket rateLimiter;
 
+    @Mock
+    ClusterApplierService clusterApplierService;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
         maxMonitoringRequests = 10;
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), maxMonitoringRequests).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_MONITORING_REQUEST_COUNT);
-        clusterService = spy(new ClusterService(settings, clusterSettings, (ThreadPool) null, null));
+        clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
 
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         cacheHelper = new MLModelCacheHelper(clusterService, settings);
