@@ -15,7 +15,7 @@ PUT /_cluster/settings
 {
     "persistent": {
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
+            "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$"
         ]
     }
 }
