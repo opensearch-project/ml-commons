@@ -7,6 +7,7 @@ package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -23,9 +24,9 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -40,6 +41,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -95,6 +97,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ClusterService clusterService;
 
+    @Mock
+    ExecutorService executorService;
+
     DeleteModelTransportAction deleteModelTransportAction;
     MLModelDeleteRequest mlModelDeleteRequest;
     ThreadContext threadContext;
@@ -107,7 +112,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
+        mlModelDeleteRequest = MLModelDeleteRequest
+            .builder()
+            .modelId("test_id")
+            .retry(false)
+            .maxRetry(1)
+            .retryDelay(TimeValue.timeValueMillis(100))
+            .retryTimeout(TimeValue.timeValueSeconds(30))
+            .build();
 
         Settings settings = Settings.builder().build();
         deleteModelTransportAction = spy(
@@ -115,10 +127,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
-                settings,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlModelManager
             )
         );
 
@@ -132,6 +144,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         when(clusterService.getSettings()).thenReturn(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(any())).thenReturn(executorService);
+
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(threadPool).schedule(any(), any(), any());
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any());
     }
 
     public void testDeleteModel_Success() throws IOException {
@@ -148,12 +172,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
@@ -173,12 +203,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
+        MLModel mlModel = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
@@ -202,12 +238,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
+        MLModel mlModel = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -233,12 +275,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.TEXT_EMBEDDING);
+        MLModel mlModel = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.TEXT_EMBEDDING);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -259,12 +307,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -286,12 +340,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, true);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         doReturn(true).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
@@ -312,12 +372,24 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, true);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         doReturn(false).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
@@ -340,24 +412,48 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
     }
 
     public void test_UserHasNoAccessException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID", false);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, "modelGroupID", false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -371,13 +467,25 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteModel_CheckModelState() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING, null, false);
+    public void testDeleteModel_CheckModelStateDeploying() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.DEPLOYING, null, false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.DEPLOYING);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -388,12 +496,166 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         );
     }
 
+    public void testDeleteModel_CheckModelStateLoading() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.LOADING, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.LOADING);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_CheckModelStateDeployed() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.DEPLOYED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.DEPLOYED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_CheckModelStateLoaded() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.LOADED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.LOADED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_CheckModelStatePartiallyDeployed() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.PARTIALLY_DEPLOYED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.PARTIALLY_DEPLOYED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_CheckModelStatePartiallyLoaded() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.PARTIALLY_LOADED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.PARTIALLY_LOADED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_CheckModelStateNotFound() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    public void testDeleteModel_CheckModelStateOtherException() throws IOException {
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Some Exception occurred. Please check log for more details."));
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Some Exception occurred. Please check log for more details.", argumentCaptor.getValue().getMessage());
+    }
+
     public void testDeleteModel_ModelNotFoundException() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new Exception("Fail to find model"));
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Fail to find model"));
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -419,12 +681,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
@@ -432,12 +700,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void test_ValidationFailedException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -469,12 +743,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
+        MLModel mlModel = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -500,12 +780,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
+        MLModel mlModel = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
@@ -515,10 +801,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
     public void testModelNotFound_modelChunks_modelController_delete_success() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(null);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(null);
             return null;
-        }).when(client).get(any(), any());
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
@@ -550,13 +836,11 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(deleteChunksListener).onResponse(true);
     }
 
-    @Ignore
     public void testDeleteModel_ThreadContextError() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("thread context error");
         when(threadPool.getThreadContext()).thenThrow(new RuntimeException("thread context error"));
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("thread context error", argumentCaptor.getValue().getMessage());
     }
 
     public void test_FailToDeleteModel() {
@@ -625,7 +909,98 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID, boolean isHidden) throws IOException {
+    public void testDeleteModel_FailedWithMaxRetry() throws IOException {
+        mlModelDeleteRequest = MLModelDeleteRequest
+            .builder()
+            .modelId("test_id")
+            .retry(true)
+            .maxRetry(1)
+            .retryDelay(TimeValue.timeValueMillis(100))
+            .retryTimeout(TimeValue.timeValueSeconds(30))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.DEPLOYED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        verify(mlModelManager, times(2)).getModelState(any(), any());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_SuccessWithMaxRetry() throws IOException {
+        mlModelDeleteRequest = MLModelDeleteRequest
+            .builder()
+            .modelId("test_id")
+            .retry(true)
+            .maxRetry(1)
+            .retryDelay(TimeValue.timeValueMillis(100))
+            .retryTimeout(TimeValue.timeValueSeconds(30))
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        MLModel mlModel = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.DEPLOYED);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModelState> listener = invocation.getArgument(1);
+            listener.onResponse(MLModelState.REGISTERED);
+            return null;
+        }).when(mlModelManager).getModelState(eq("test_id"), isA(ActionListener.class));
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        verify(mlModelManager, times(2)).getModelState(any(), any());
+        verify(actionListener).onResponse(deleteResponse);
+    }
+
+    private MLModel prepareMLModel(MLModelState mlModelState, String modelGroupID, boolean isHidden) {
         MLModel mlModel = MLModel
             .builder()
             .modelId("test_id")
@@ -633,11 +1008,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             .modelGroupId(modelGroupID)
             .isHidden(isHidden)
             .build();
-        return buildResponse(mlModel);
+        return mlModel;
     }
 
-    public GetResponse prepareModelWithFunction(MLModelState mlModelState, String modelGroupID, boolean isHidden, FunctionName functionName)
-        throws IOException {
+    private MLModel prepareModelWithFunction(MLModelState mlModelState, String modelGroupID, boolean isHidden, FunctionName functionName) {
         MLModel mlModel = MLModel
             .builder()
             .modelId("test_id")
@@ -646,7 +1020,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             .modelGroupId(modelGroupID)
             .isHidden(isHidden)
             .build();
-        return buildResponse(mlModel);
+        return mlModel;
     }
 
     private GetResponse buildResponse(MLModel mlModel) throws IOException {

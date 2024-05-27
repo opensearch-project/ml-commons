@@ -70,6 +70,10 @@ public class RestActionUtils {
     public static final String PARAMETER_VERSION = "version";
     public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
     public static final String PARAMETER_CONFIG_ID = "config_id";
+    public static final String PARAMETER_RETRY = "retry";
+    public static final String PARAMETER_MAX_RETRY = "max_retry";
+    public static final String PARAMETER_RETRY_DELAY = "retry_delay";
+    public static final String PARAMETER_RETRY_TIMEOUT = "retry_timeout";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 

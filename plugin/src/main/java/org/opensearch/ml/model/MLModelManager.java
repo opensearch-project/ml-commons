@@ -1690,6 +1690,20 @@ public class MLModelManager {
     }
 
     /**
+     * Get model state with model id.
+     *
+     * @param modelId  model id
+     * @param listener action listener
+     */
+    public void getModelState(String modelId, ActionListener<MLModelState> listener) {
+        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
+        getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> { listener.onResponse(mlModel.getModelState()); }, e -> {
+            log.error("Failed to get model state for model: " + modelId, e);
+            listener.onFailure(e);
+        }));
+    }
+
+    /**
      * Update model with build-in listener.
      *
      * @param modelId       model id

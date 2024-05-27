@@ -5,39 +5,34 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
-import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.RetryableAction;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -46,10 +41,9 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
-import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -67,12 +61,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     static final String BULK_FAILURE_MSG = "Bulk failure while deleting model of ";
     static final String SEARCH_FAILURE_MSG = "Search failure while deleting model of ";
     static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks";
+
     Client client;
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
-    Settings settings;
-
+    MLModelManager mlModelManager;
     ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
@@ -80,94 +74,61 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLModelManager mlModelManager
     ) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlModelManager = mlModelManager;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.fromActionRequest(request);
         String modelId = mlModelDeleteRequest.getModelId();
-        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
-        FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
-        GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
-
+        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            client.get(getRequest, ActionListener.wrap(r -> {
-                if (r != null && r.isExists()) {
-                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        GetResponse getResponse = r;
-                        String algorithmName = "";
-                        if (getResponse.getSource() != null && getResponse.getSource().get(ALGORITHM_FIELD) != null) {
-                            algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
+            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                if (mlModel != null) {
+                    Boolean isHidden = mlModel.getIsHidden();
+                    if (isHidden != null && isHidden) {
+                        if (!isSuperAdmin) {
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "User doesn't have privilege to perform this operation on this model",
+                                        RestStatus.FORBIDDEN
+                                    )
+                                );
+                        } else {
+                            retryDeleteModel(modelId, isHidden, mlModelDeleteRequest, wrappedListener);
                         }
-                        MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        Boolean isHidden = (Boolean) r.getSource().get(IS_HIDDEN_FIELD);
-                        MLModelState mlModelState = mlModel.getModelState();
-                        if (isHidden != null && isHidden) {
-                            if (!isSuperAdmin) {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model",
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            } else {
-                                if (isModelNotDeployed(mlModelState)) {
-                                    deleteModel(modelId, isHidden, actionListener);
-                                } else {
+                    } else {
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                                if (!access) {
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
-                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                RestStatus.BAD_REQUEST
+                                                "User doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
                                             )
                                         );
+                                } else {
+                                    retryDeleteModel(modelId, isHidden, mlModelDeleteRequest, wrappedListener);
                                 }
-                            }
-                        } else {
-                            modelAccessControlHelper
-                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                    if (!access) {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "User doesn't have privilege to perform this operation on this model",
-                                                    RestStatus.FORBIDDEN
-                                                )
-                                            );
-                                    } else if (isModelNotDeployed(mlModelState)) {
-                                        deleteModel(modelId, isHidden, actionListener);
-                                    } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                    RestStatus.BAD_REQUEST
-                                                )
-                                            );
-                                    }
-                                }, e -> {
-                                    log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
-                                    wrappedListener.onFailure(e);
-                                }));
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to parse ml model " + r.getId(), e);
-                        wrappedListener.onFailure(e);
+                            }, e -> {
+                                log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
+                                wrappedListener.onFailure(e);
+                            }));
                     }
                 } else {
                     // when model metadata is not found, model chunk and controller might still there, delete them here and return success
@@ -180,6 +141,70 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             actionListener.onFailure(e);
         }
     }
+
+    @VisibleForTesting
+    void retryDeleteModel(
+        String modelId,
+        Boolean isHidden,
+        MLModelDeleteRequest mlModelDeleteRequest,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        Boolean isRetry = mlModelDeleteRequest.getRetry() == null || mlModelDeleteRequest.getRetry();
+        TimeValue retryDelay = mlModelDeleteRequest.getRetryDelay();
+        TimeValue retryTimeout = mlModelDeleteRequest.getRetryTimeout();
+
+        final RetryableAction<DeleteResponse> deleteModelAction = new RetryableAction<>(
+            log,
+            client.threadPool(),
+            retryDelay,
+            retryTimeout,
+            actionListener
+        ) {
+
+            Integer retryTimes = 0;
+
+            @Override
+            public void tryAction(ActionListener<DeleteResponse> actionListener) {
+                mlModelManager.getModelState(modelId, ActionListener.wrap(mlModelState -> {
+                    // the listener here is RetryingListener
+                    // If the request success, or can not retry, will call delegate listener
+                    if (isModelNotDeployed(mlModelState)) {
+                        deleteModel(modelId, isHidden, actionListener);
+                    } else {
+                        log.error("Model delete failed due to model is in deploying or deployed state for modelId {}", modelId);
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                    RestStatus.CONFLICT
+                                )
+                            );
+                    }
+                }, e -> {
+                    log.error(getErrorMessage("Failed to get model state", modelId, isHidden), e);
+                    actionListener.onFailure(e);
+                }));
+            }
+
+            @Override
+            public boolean shouldRetry(Exception e) {
+                Throwable cause = ExceptionsHelper.unwrapCause(e);
+                Integer maxRetry = mlModelDeleteRequest.getMaxRetry();
+                boolean shouldRetry = cause instanceof OpenSearchStatusException
+                    && ((OpenSearchStatusException) cause).status() == RestStatus.CONFLICT
+                    && isRetry;
+                if (shouldRetry) {
+                    retryTimes++;
+                    log.debug(String.format(Locale.ROOT, "The %d-th retry for model deletion", retryTimes));
+                    if (retryTimes > maxRetry) {
+                        shouldRetry = false;
+                    }
+                }
+                return shouldRetry;
+            }
+        };
+        deleteModelAction.run();
+    };
 
     @VisibleForTesting
     void deleteModelChunks(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {

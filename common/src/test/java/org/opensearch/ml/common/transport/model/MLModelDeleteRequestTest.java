@@ -10,6 +10,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class MLModelDeleteRequestTest {
     private String modelId;
@@ -52,6 +54,62 @@ public class MLModelDeleteRequestTest {
 
         ActionRequestValidationException exception = mlModelDeleteRequest.validate();
         assertEquals("Validation Failed: 1: ML model id can't be null;", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_NegativeMaxRetry() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).maxRetry(-1).build();
+
+        ActionRequestValidationException exception = mlModelDeleteRequest.validate();
+        assertEquals("Validation Failed: 1: Retry count should be greater than or equal to 0 and less than 5;", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_ExceedMaxRetry() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).maxRetry(6).build();
+
+        ActionRequestValidationException exception = mlModelDeleteRequest.validate();
+        assertEquals("Validation Failed: 1: Retry count should be greater than or equal to 0 and less than 5;", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_NegativeRetryDelay() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).retryDelay(TimeValue.timeValueMillis(-1)).build();
+
+        ActionRequestValidationException exception = mlModelDeleteRequest.validate();
+        assertEquals("Validation Failed: 1: Retry delay should be greater than or equal to 0 or less than 30000 milliseconds;", exception.getMessage());
+    }
+
+
+    @Test
+    public void validate_Exception_ExceedRetryDelay() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).retryDelay(TimeValue.timeValueMillis(50000)).build();
+
+        ActionRequestValidationException exception = mlModelDeleteRequest.validate();
+        assertEquals("Validation Failed: 1: Retry delay should be greater than or equal to 0 or less than 30000 milliseconds;", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_NegativeRetryTimeout() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).retryTimeout(TimeValue.timeValueMillis(-1)).build();
+
+        ActionRequestValidationException exception = mlModelDeleteRequest.validate();
+        assertEquals("Validation Failed: 1: Retry delay should be greater than or equal to 0 or less than 30000 milliseconds;", exception.getMessage());
+    }
+
+
+    @Test
+    public void validate_Exception_ExceedRetryTimeout() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).retryTimeout(TimeValue.timeValueSeconds(60)).build();
+
+        ActionRequestValidationException exception = mlModelDeleteRequest.validate();
+        assertEquals("Validation Failed: 1: Retry delay should be greater than or equal to 0 or less than 30000 milliseconds;", exception.getMessage());
     }
 
     @Test
