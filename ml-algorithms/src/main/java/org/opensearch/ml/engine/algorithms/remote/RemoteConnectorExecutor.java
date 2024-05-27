@@ -208,6 +208,23 @@ public interface RemoteConnectorExecutor {
         }
     }
 
+    default BackoffPolicy getRetryBackoffPolicy(ConnectorClientConfig connectorClientConfig) {
+        // we've validated the value of retryBackOffPolicy at ConnectorClientConfig.parse
+        switch (connectorClientConfig.getRetryBackoffPolicy()) {
+            case "exponential_equal_jitter":
+                return BackoffPolicy
+                    .exponentialEqualJitterBackoff(
+                        connectorClientConfig.getRetryBackoffMillis(),
+                        connectorClientConfig.getRetryTimeoutSeconds()
+                    );
+            case "exponential_full_jitter":
+                return BackoffPolicy.exponentialFullJitterBackoff(connectorClientConfig.getRetryBackoffMillis());
+            default:
+                return BackoffPolicy
+                    .constantBackoff(TimeValue.timeValueMillis(connectorClientConfig.getRetryBackoffMillis()), Integer.MAX_VALUE);
+        }
+    }
+
     default void invokeRemoteModelWithRetry(
         MLInput mlInput,
         Map<String, String> parameters,
@@ -221,7 +238,7 @@ public interface RemoteConnectorExecutor {
             TimeValue.timeValueMillis(getConnectorClientConfig().getRetryBackoffMillis()),
             TimeValue.timeValueSeconds(getConnectorClientConfig().getRetryTimeoutSeconds()),
             actionListener,
-            BackoffPolicy.constantBackoff(TimeValue.timeValueMillis(getConnectorClientConfig().getRetryBackoffMillis()), Integer.MAX_VALUE),
+            getRetryBackoffPolicy(getConnectorClientConfig()),
             RETRY_EXECUTOR
         ) {
             Integer retryTimes = 0;

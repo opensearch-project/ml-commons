@@ -70,7 +70,7 @@ public class MLConnectorGetResponseTests {
                 "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
                 "\"client_config\":{\"max_connection\":30," +
                 "\"connection_timeout\":30000,\"read_timeout\":30000," +
-                "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1}}", jsonStr);
+                "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}", jsonStr);
     }
 
     @Test

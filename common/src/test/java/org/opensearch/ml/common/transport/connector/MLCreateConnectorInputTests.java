@@ -57,7 +57,7 @@ public class MLCreateConnectorInputTests {
             "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
             "\"access_mode\":\"PUBLIC\",\"client_config\":{\"max_connection\":20," +
             "\"connection_timeout\":10000,\"read_timeout\":10000," +
-            "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1}}";
+            "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
     @Before
     public void setUp(){
@@ -70,7 +70,7 @@ public class MLCreateConnectorInputTests {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1, "constant");
 
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
