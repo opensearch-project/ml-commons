@@ -779,8 +779,14 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public static Response registerRemoteModel(String name, String connectorId) throws IOException {
+        return registerRemoteModel("remote_model_group", name, connectorId);
+    }
+
+    public static Response registerRemoteModel(String modelGroupName, String name, String connectorId) throws IOException {
         String registerModelGroupEntity = "{\n"
-            + "  \"name\": \"remote_model_group\",\n"
+            + "  \"name\": \""
+            + modelGroupName
+            + "\",\n"
             + "  \"description\": \"This is an example description\"\n"
             + "}";
         Response response = TestHelper

@@ -15,14 +15,14 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
-import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.jayway.jsonpath.JsonPath;
 
 public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
-    private String modelId;
+    private String openAIChatModelId;
+    private String bedrockEmbeddingModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -49,26 +49,58 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         + "  ]\n"
         + "}";
 
+    private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
+    private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
+    private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
+    private static final String GITHUB_CI_AWS_REGION = "us-west-2";
+
+    private final String bedrockEmbeddingModelConnectorEntity = "{\n"
+        + "  \"name\": \"Amazon Bedrock Connector: embedding\",\n"
+        + "  \"description\": \"The connector to bedrock Titan embedding model\",\n"
+        + "  \"version\": 1,\n"
+        + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"parameters\": {\n"
+        + "    \"region\": \""
+        + GITHUB_CI_AWS_REGION
+        + "\",\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"model_name\": \"amazon.titan-embed-text-v1\"\n"
+        + "  },\n"
+        + "  \"credential\": {\n"
+        + "    \"access_key\": \""
+        + AWS_ACCESS_KEY_ID
+        + "\",\n"
+        + "    \"secret_key\": \""
+        + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
+        + "\"\n"
+        + "  },\n"
+        + "  \"actions\": [\n"
+        + "    {\n"
+        + "      \"action_type\": \"predict\",\n"
+        + "      \"method\": \"POST\",\n"
+        + "      \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke\",\n"
+        + "      \"headers\": {\n"
+        + "        \"content-type\": \"application/json\",\n"
+        + "        \"x-amz-content-sha256\": \"required\"\n"
+        + "      },\n"
+        + "      \"request_body\": \"{ \\\"inputText\\\": \\\"${parameters.input}\\\" }\",\n"
+        + "      \"pre_process_function\": \"connector.pre_process.bedrock.embedding\",\n"
+        + "      \"post_process_function\": \"connector.post_process.bedrock.embedding\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
     @Before
     public void setup() throws IOException, InterruptedException {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
         Thread.sleep(20000);
-
-        // create connectors for OPEN AI and register model
-        Response response = RestMLRemoteInferenceIT.createConnector(completionModelConnectorEntity);
-        Map responseMap = parseResponseToMap(response);
-        String openAIConnectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("openAI-GPT-3.5 chat model", openAIConnectorId);
-        responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = RestMLRemoteInferenceIT.getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        this.modelId = (String) responseMap.get("model_id");
-        response = RestMLRemoteInferenceIT.deployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
+        String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
+        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
+        String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
+        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
     }
 
     public void testMLInferenceProcessorWithObjectFieldType() throws Exception {
@@ -79,7 +111,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
             + "    {\n"
             + "      \"ml_inference\": {\n"
             + "        \"model_id\": \""
-            + this.modelId
+            + this.openAIChatModelId
             + "\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
@@ -138,7 +170,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
             + "    {\n"
             + "      \"ml_inference\": {\n"
             + "        \"model_id\": \""
-            + this.modelId
+            + this.openAIChatModelId
             + "\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
@@ -223,6 +255,96 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         List embedding4 = JsonPath.parse(document).read("_source.book[1].chunk.text[1].context_embedding");
         Assert.assertEquals(1536, embedding4.size());
         Assert.assertEquals(0.014352738, (Double) embedding4.get(0), 0.005);
+    }
+
+    public void testMLInferenceProcessorWithForEachProcessor() throws Exception {
+        String indexName = "my_books";
+        String pipelineName = "my_books_bedrock_embedding_pipeline";
+        String createIndexRequestBody = "{\n"
+            + "  \"settings\": {\n"
+            + "    \"index\": {\n"
+            + "      \"default_pipeline\": \""
+            + pipelineName
+            + "\"\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"mappings\": {\n"
+            + "    \"properties\": {\n"
+            + "      \"books\": {\n"
+            + "        \"type\": \"nested\",\n"
+            + "        \"properties\": {\n"
+            + "          \"title_embedding\": {\n"
+            + "            \"type\": \"float\"\n"
+            + "          },\n"
+            + "          \"title\": {\n"
+            + "            \"type\": \"text\"\n"
+            + "          },\n"
+            + "          \"description\": {\n"
+            + "            \"type\": \"text\"\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+        createIndex(indexName, createIndexRequestBody);
+
+        String createPipelineRequestBody = "{\n"
+            + "  \"description\": \"Test bedrock embeddings\",\n"
+            + "  \"processors\": [\n"
+            + "    {\n"
+            + "      \"foreach\": {\n"
+            + "        \"field\": \"books\",\n"
+            + "        \"processor\": {\n"
+            + "          \"ml_inference\": {\n"
+            + "            \"model_id\": \""
+            + this.bedrockEmbeddingModelId
+            + "\",\n"
+            + "            \"input_map\": [\n"
+            + "              {\n"
+            + "                \"input\": \"_ingest._value.title\"\n"
+            + "              }\n"
+            + "            ],\n"
+            + "            \"output_map\": [\n"
+            + "              {\n"
+            + "                \"_ingest._value.title_embedding\": \"$.embedding\"\n"
+            + "              }\n"
+            + "            ],\n"
+            + "            \"ignore_missing\": false,\n"
+            + "            \"ignore_failure\": false\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        createPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
+        String uploadDocumentRequestBody = "{\n"
+            + "    \"books\": [{\n"
+            + "            \"title\": \"first book\",\n"
+            + "            \"description\": \"This is first book\"\n"
+            + "        },\n"
+            + "        {\n"
+            + "            \"title\": \"second book\",\n"
+            + "            \"description\": \"This is second book\"\n"
+            + "        }\n"
+            + "    ]\n"
+            + "}";
+        uploadDocument(indexName, "1", uploadDocumentRequestBody);
+        Map document = getDocument(indexName, "1");
+
+        List embeddingList = JsonPath.parse(document).read("_source.books[*].title_embedding");
+        Assert.assertEquals(2, embeddingList.size());
+
+        List embedding1 = JsonPath.parse(document).read("_source.books[0].title_embedding");
+        Assert.assertEquals(1536, embedding1.size());
+        List embedding2 = JsonPath.parse(document).read("_source.books[1].title_embedding");
+        Assert.assertEquals(1536, embedding2.size());
     }
 
     protected void createPipelineProcessor(String requestBody, final String pipelineName) throws Exception {
