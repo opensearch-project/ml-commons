@@ -10,6 +10,7 @@ import static org.mockito.Mockito.*;
 import static org.opensearch.ml.processor.MLInferenceIngestProcessor.DEFAULT_OUTPUT_FIELD_NAME;
 
 import java.nio.ByteBuffer;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -1041,6 +1043,43 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         when(mockTensor.getData()).thenReturn(new Number[] { 1, 0, 1 });
         Object result = ModelExecutor.parseDataInTensor(mockTensor);
         assertEquals(List.of(true, false, true), result);
+    }
+
+    public void testWriteNewDotPathForNestedObject() {
+        Map<String, Object> docSourceAndMetaData = new HashMap<>();
+        docSourceAndMetaData.put("_id", randomAlphaOfLength(5));
+        docSourceAndMetaData.put("_index", "my_books");
+
+        List<Map<String, String>> books = new ArrayList<>();
+        Map<String, String> book1 = new HashMap<>();
+        book1.put("title", "first book");
+        book1.put("description", "this is first book");
+        Map<String, String> book2 = new HashMap<>();
+        book2.put("title", "second book");
+        book2.put("description", "this is second book");
+        books.add(book1);
+        books.add(book2);
+        docSourceAndMetaData.put("books", books);
+
+        Map<String, Object> ingestMetadata = new HashMap<>();
+        ingestMetadata.put("pipeline", "test_pipeline");
+        ingestMetadata.put("timeestamp", ZonedDateTime.now());
+        Map<String, String> ingestValue = new HashMap<>();
+        ingestValue.put("title", "first book");
+        ingestValue.put("description", "this is first book");
+        ingestMetadata.put("_value", ingestValue);
+        docSourceAndMetaData.put("_ingest", ingestMetadata);
+
+        String path = "_ingest._value.title";
+        List<String> newPath = modelExecutor.writeNewDotPathForNestedObject(docSourceAndMetaData, path);
+        Assert.assertEquals(1, newPath.size());
+        Assert.assertEquals(path, newPath.get(0));
+
+        String path2 = "books.*.title";
+        List<String> newPath2 = modelExecutor.writeNewDotPathForNestedObject(docSourceAndMetaData, path2);
+        Assert.assertEquals(2, newPath2.size());
+        Assert.assertEquals("books.0.title", newPath2.get(0));
+        Assert.assertEquals("books.1.title", newPath2.get(1));
     }
 
     private static Map<String, Object> getNestedObjectWithAnotherNestedObjectSource() {
