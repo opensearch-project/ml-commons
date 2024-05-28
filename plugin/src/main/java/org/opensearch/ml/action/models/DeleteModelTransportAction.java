@@ -48,7 +48,9 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -74,6 +76,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     Settings settings;
 
     ModelAccessControlHelper modelAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public DeleteModelTransportAction(
@@ -83,20 +86,26 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.fromActionRequest(request);
         String modelId = mlModelDeleteRequest.getModelId();
-        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
+        String tenantId = mlModelDeleteRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false, tenantId);
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
@@ -114,6 +123,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                             algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
                         }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
+                        if (!TenantAwareHelper
+                            .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
+                            return;
+                        }
                         Boolean isHidden = (Boolean) r.getSource().get(IS_HIDDEN_FIELD);
                         MLModelState mlModelState = mlModel.getModelState();
                         if (isHidden != null && isHidden) {

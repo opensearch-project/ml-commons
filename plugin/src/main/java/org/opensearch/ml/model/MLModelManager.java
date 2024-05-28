@@ -540,6 +540,7 @@ public class MLModelManager {
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
                     .modelInterface(registerModelInput.getModelInterface())
+                    .tenantId(registerModelInput.getTenantId())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
@@ -607,6 +608,7 @@ public class MLModelManager {
                     .isHidden(registerModelInput.getIsHidden())
                     .guardrails(registerModelInput.getGuardrails())
                     .modelInterface(registerModelInput.getModelInterface())
+                    .tenantId(registerModelInput.getTenantId())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (registerModelInput.getIsHidden() != null && registerModelInput.getIsHidden()) {

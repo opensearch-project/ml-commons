@@ -702,8 +702,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
-        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
-        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
+        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
+        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
         RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();

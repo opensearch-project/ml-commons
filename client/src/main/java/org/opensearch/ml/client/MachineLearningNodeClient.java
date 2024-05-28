@@ -166,6 +166,13 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, getMlGetModelResponseActionListener(listener));
     }
 
+    @Override
+    public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
+
+        client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, getMlGetModelResponseActionListener(listener));
+    }
+
     private ActionListener<MLModelGetResponse> getMlGetModelResponseActionListener(ActionListener<MLModel> listener) {
         ActionListener<MLModelGetResponse> internalListener = ActionListener.wrap(predictionResponse -> {
             listener.onResponse(predictionResponse.getMlModel());

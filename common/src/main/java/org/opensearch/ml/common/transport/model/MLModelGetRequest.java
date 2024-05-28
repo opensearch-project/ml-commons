@@ -35,12 +35,14 @@ public class MLModelGetRequest extends ActionRequest {
     // delete/update options, we also perform get operation. This field is to distinguish between
     // these two situations.
     boolean isUserInitiatedGetRequest;
+    String tenantId;
 
     @Builder
-    public MLModelGetRequest(String modelId, boolean returnContent, boolean isUserInitiatedGetRequest) {
+    public MLModelGetRequest(String modelId, boolean returnContent, boolean isUserInitiatedGetRequest, String tenantId) {
         this.modelId = modelId;
         this.returnContent = returnContent;
         this.isUserInitiatedGetRequest = isUserInitiatedGetRequest;
+        this.tenantId = tenantId;
     }
 
     public MLModelGetRequest(StreamInput in) throws IOException {
@@ -48,6 +50,7 @@ public class MLModelGetRequest extends ActionRequest {
         this.modelId = in.readString();
         this.returnContent = in.readBoolean();
         this.isUserInitiatedGetRequest = in.readBoolean();
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -56,6 +59,7 @@ public class MLModelGetRequest extends ActionRequest {
         out.writeString(this.modelId);
         out.writeBoolean(returnContent);
         out.writeBoolean(isUserInitiatedGetRequest);
+        out.writeOptionalString(tenantId);
     }
 
     @Override

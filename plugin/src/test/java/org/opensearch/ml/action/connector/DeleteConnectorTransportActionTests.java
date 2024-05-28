@@ -23,7 +23,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.lucene.search.TotalHits;
 import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -48,7 +47,6 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -57,8 +55,6 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
@@ -162,11 +158,17 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
-    public void testDeleteConnector_Success() throws IOException, InterruptedException {
+    public void testDeleteConnector_Success() throws InterruptedException {
         when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
@@ -193,6 +195,12 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
 
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
             ActionListener<Exception> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new IndexNotFoundException("ml_model index not found!"));
             return null;
@@ -209,11 +217,18 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals(DELETED, captor.getValue().getResult());
     }
 
+    // TODO need to check if it has any value in it or not.
     public void testDeleteConnector_ConnectorNotFound() throws IOException, InterruptedException {
         when(deleteResponse.getResult()).thenReturn(NOT_FOUND);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
@@ -238,6 +253,12 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
 
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+
         SearchResponse searchResponse = getNonEmptySearchResponse();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
@@ -260,10 +281,10 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
     public void test_UserHasNoAccessException() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -272,6 +293,13 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteConnector_SearchFailure() throws IOException {
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new RuntimeException("Search Failed!"));
@@ -285,7 +313,15 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteConnector_SearchException() throws IOException {
+
         when(client.threadPool()).thenThrow(new RuntimeException("Thread Context Error!"));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
@@ -295,6 +331,13 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
     public void testDeleteConnector_ResourceNotFoundException() throws IOException, InterruptedException {
         when(client.delete(any(DeleteRequest.class))).thenThrow(new ResourceNotFoundException("errorMessage"));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+
 
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
@@ -316,18 +359,11 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void test_ValidationFailedException() throws IOException {
-        GetResponse getResponse = prepareMLConnector(null);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -350,55 +386,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void testCheckConnectorPermission_AllowedToDelete() {
-        String connectorId = "connector_id";
-        String tenantId = "tenant_id";
-        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").tenantId(tenantId).build();
-        MLConnectorGetResponse getResponse = new MLConnectorGetResponse(connector);
-
-        doAnswer(invocation -> {
-            ActionListener<MLConnectorGetResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).execute(any(), any(MLConnectorGetRequest.class), any());
-
-        Runnable deleteAction = mock(Runnable.class);
-
-        deleteConnectorTransportAction.checkConnectorPermission(connectorId, tenantId, actionListener, deleteAction);
-
-        verify(deleteAction).run();
-    }
-
-    @Test
-    public void testCheckConnectorPermission_NotAllowedToDelete() {
-        // Enable multi-tenancy
-        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        String connectorId = "connector_id";
-        String tenantId = "tenant_id";
-        String differentTenantId = "different_tenant_id";
-        HttpConnector connector = HttpConnector.builder().name("test_connector").protocol("http").tenantId(differentTenantId).build();
-        MLConnectorGetResponse getResponse = new MLConnectorGetResponse(connector);
-
-        doAnswer(invocation -> {
-            ActionListener<MLConnectorGetResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).execute(any(), any(MLConnectorGetRequest.class), any());
-
-        Runnable deleteAction = mock(Runnable.class);
-
-        deleteConnectorTransportAction.checkConnectorPermission(connectorId, tenantId, actionListener, deleteAction);
-
-        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(captor.capture());
-        Exception exception = captor.getValue();
-        assert exception instanceof OpenSearchStatusException;
-        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
-        assert statusException.status() == RestStatus.FORBIDDEN;
-        assert statusException.getMessage().equals("You don't have permission to access this resource");
     }
 
     public GetResponse prepareMLConnector(String tenantId) throws IOException {

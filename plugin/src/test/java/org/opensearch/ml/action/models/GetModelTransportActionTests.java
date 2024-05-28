@@ -40,6 +40,9 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -60,6 +63,8 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ActionFilters actionFilters;
 
+    SdkClient sdkClient;
+
     @Mock
     ActionListener<MLModelGetResponse> actionListener;
 
@@ -78,21 +83,28 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").build();
         settings = Settings.builder().build();
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
 
         getModelTransportAction = spy(
             new GetModelTransportAction(
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 settings,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
 
