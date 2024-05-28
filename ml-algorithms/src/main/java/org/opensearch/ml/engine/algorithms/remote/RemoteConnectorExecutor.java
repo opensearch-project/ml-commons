@@ -260,7 +260,7 @@ public interface RemoteConnectorExecutor {
             public boolean shouldRetry(Exception e) {
                 Throwable cause = ExceptionsHelper.unwrapCause(e);
                 Integer maxRetryTimes = getConnectorClientConfig().getMaxRetryTimes();
-                boolean shouldRetry = cause instanceof RetryableException;
+                boolean shouldRetry = cause instanceof SageMakerThrottlingException;
                 if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
                     shouldRetry = false;
                 }

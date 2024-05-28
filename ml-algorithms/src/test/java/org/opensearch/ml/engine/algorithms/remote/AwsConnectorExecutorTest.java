@@ -682,7 +682,7 @@ public class AwsConnectorExecutorTest {
                 ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
                 // fail the first 10 invocation, then success
                 if (countOfInvocation++ < 10) {
-                    actionListener.onFailure(new RetryableException("test failure retryable", RestStatus.BAD_REQUEST));
+                    actionListener.onFailure(new SageMakerThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
                 } else {
                     actionListener.onResponse(new Tuple<>(123, mock(ModelTensors.class)));
                 }
@@ -729,7 +729,7 @@ public class AwsConnectorExecutorTest {
                 ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
                 // fail the first 10 invocation, then success
                 if (countOfInvocation++ < 10) {
-                    actionListener.onFailure(new RetryableException("test failure retryable", RestStatus.BAD_REQUEST));
+                    actionListener.onFailure(new SageMakerThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
                 } else {
                     actionListener.onResponse(new Tuple<>(123, mock(ModelTensors.class)));
                 }
@@ -776,7 +776,7 @@ public class AwsConnectorExecutorTest {
                 ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
                 // fail the first 2 invocation with retryable exception, then fail with non-retryable exception
                 if (countOfInvocation++ < 2) {
-                    actionListener.onFailure(new RetryableException("test failure retryable", RestStatus.BAD_REQUEST));
+                    actionListener.onFailure(new SageMakerThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
                 } else {
                     actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
                 }

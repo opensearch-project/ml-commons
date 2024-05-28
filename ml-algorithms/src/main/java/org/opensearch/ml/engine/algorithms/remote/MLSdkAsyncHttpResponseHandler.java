@@ -121,7 +121,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
         if (containsThrottlingException) {
             handleException(
-                new RetryableException(
+                new SageMakerThrottlingException(
                     REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
                     RestStatus.fromCode(statusCode)
                 )
