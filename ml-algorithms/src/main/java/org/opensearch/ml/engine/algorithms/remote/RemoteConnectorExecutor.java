@@ -261,7 +261,7 @@ public interface RemoteConnectorExecutor {
                 Throwable cause = ExceptionsHelper.unwrapCause(e);
                 Integer maxRetryTimes = getConnectorClientConfig().getMaxRetryTimes();
                 boolean shouldRetry = cause instanceof RetryableException;
-                if (maxRetryTimes != -1 && ++retryTimes > maxRetryTimes) {
+                if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
                     shouldRetry = false;
                 }
                 if (shouldRetry) {
