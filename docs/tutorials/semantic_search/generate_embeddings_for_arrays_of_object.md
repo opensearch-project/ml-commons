@@ -81,7 +81,7 @@ PUT my_books
 Create sub-pipeline to generate embedding for one item in the array.
 
 This pipeline contains 3 processors
-- set processor: The `text_embedding` processor is unable to identify "_ingest._value.title". You need to copy "_ingest._value.title" to a temporary field for text_embedding to process it.
+- set processor: The `text_embedding` processor is unable to identify "_ingest._value.title". You need to copy "_ingest._value.title" to a non-existing temporary field for text_embedding to process it.
 - text_embedding processor: convert value of the temporary field to embedding
 - remove processor: remove temporary field
 ```
@@ -228,7 +228,6 @@ Response
               "description": "This is first book"
             },
             {
-              "title": "second book",
               "description": "This is second book"
             }
           ]
