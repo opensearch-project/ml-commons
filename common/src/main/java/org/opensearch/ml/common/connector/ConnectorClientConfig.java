@@ -175,6 +175,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                     break;
                 case RETRY_BACKOFF_POLICY_FIELD:
                     retryBackoffPolicy = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

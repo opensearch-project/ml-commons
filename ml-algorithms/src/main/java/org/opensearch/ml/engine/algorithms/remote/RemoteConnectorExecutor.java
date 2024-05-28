@@ -220,6 +220,12 @@ public interface RemoteConnectorExecutor {
             case "exponential_full_jitter":
                 return BackoffPolicy.exponentialFullJitterBackoff(connectorClientConfig.getRetryBackoffMillis());
             default:
+                // The second parameter is the maxNumberOfRetries for ConstantBackoff.
+                // However, we can't reuse it, because the ConstantBackoffIterator.next() throws exception when it reaches the limit,
+                // but the RetryableAction doesn't handle the exception from iterator, and will make the request hanging.
+                //
+                // Setting it to Integer.MAX_VALUE to avoid throwing this exception. Instead, we handle the max retry numbers at
+                // shouldRetry.
                 return BackoffPolicy
                     .constantBackoff(TimeValue.timeValueMillis(connectorClientConfig.getRetryBackoffMillis()), Integer.MAX_VALUE);
         }
@@ -241,7 +247,7 @@ public interface RemoteConnectorExecutor {
             getRetryBackoffPolicy(getConnectorClientConfig()),
             RETRY_EXECUTOR
         ) {
-            Integer retryTimes = 0;
+            int retryTimes = 0;
 
             @Override
             public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
@@ -259,7 +265,7 @@ public interface RemoteConnectorExecutor {
                     shouldRetry = false;
                 }
                 if (shouldRetry) {
-                    getLogger().debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes));
+                    getLogger().debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
                 }
                 return shouldRetry;
             }
