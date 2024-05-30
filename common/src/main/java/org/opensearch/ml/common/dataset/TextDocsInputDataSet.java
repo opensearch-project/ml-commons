@@ -12,6 +12,7 @@ import lombok.experimental.FieldDefaults;
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
@@ -29,7 +30,7 @@ public class TextDocsInputDataSet extends MLInputDataset{
 
     private List<String> docs;
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL = Version.fromString("2.11.0");
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL = CommonValue.VERSION_2_11_0;
 
     @Builder(toBuilder = true)
     public TextDocsInputDataSet(List<String> docs, ModelResultFilter resultFilter) {
