@@ -322,12 +322,15 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
             modelOutputValue = getModelOutputValue(modelTensorOutput, modelOutputFieldName, ignoreMissing);
 
-            List<String> dotPathsInArray = writeNewDotPathForNestedObject(ingestDocument.getSourceAndMetadata(), newDocumentFieldName);
+            Map<String, Object> ingestDocumentSourceAndMetaData = new HashMap<>();
+            ingestDocumentSourceAndMetaData.putAll(ingestDocument.getSourceAndMetadata());
+            ingestDocumentSourceAndMetaData.put(IngestDocument.INGEST_KEY, ingestDocument.getIngestMetadata());
+            List<String> dotPathsInArray = writeNewDotPathForNestedObject(ingestDocumentSourceAndMetaData, newDocumentFieldName);
 
             if (dotPathsInArray.size() == 1) {
                 ValueSource ingestValue = ValueSource.wrap(modelOutputValue, scriptService);
                 TemplateScript.Factory ingestField = ConfigurationUtils
-                    .compileTemplate(TYPE, tag, newDocumentFieldName, newDocumentFieldName, scriptService);
+                    .compileTemplate(TYPE, tag, dotPathsInArray.get(0), dotPathsInArray.get(0), scriptService);
                 ingestDocument.setFieldValue(ingestField, ingestValue, ignoreMissing);
             } else {
                 if (!(modelOutputValue instanceof List)) {
