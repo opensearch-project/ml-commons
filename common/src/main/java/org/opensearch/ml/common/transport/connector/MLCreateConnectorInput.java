@@ -48,7 +48,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = Version.V_2_13_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = Version.fromString("2.13.0");
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 

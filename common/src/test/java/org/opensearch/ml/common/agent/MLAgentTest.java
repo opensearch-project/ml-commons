@@ -206,10 +206,10 @@ public class MLAgentTest {
         assertNull(agentOldVersion.getIsHidden()); // Hidden should be null for old versions
 
         output = new BytesStreamOutput();
-        output.setVersion(Version.V_2_13_0); // Version at or after MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
+        output.setVersion(Version.fromString("2.13.0")); // Version at or after MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
         agent.writeTo(output);
         StreamInput streamInput1 = output.bytes().streamInput();
-        streamInput1.setVersion(Version.V_2_13_0);
+        streamInput1.setVersion(Version.fromString("2.13.0"));
         MLAgent agentNewVersion = new MLAgent(output.bytes().streamInput());
         assertEquals(Boolean.TRUE, agentNewVersion.getIsHidden()); // Hidden should be true for new versions
     }

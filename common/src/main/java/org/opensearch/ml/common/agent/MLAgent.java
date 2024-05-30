@@ -47,7 +47,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String IS_HIDDEN_FIELD = "is_hidden";
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = Version.V_2_13_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = Version.fromString("2.13.0");
 
     private String name;
     private String type;

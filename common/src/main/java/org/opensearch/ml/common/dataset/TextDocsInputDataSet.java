@@ -29,7 +29,7 @@ public class TextDocsInputDataSet extends MLInputDataset{
 
     private List<String> docs;
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL = Version.V_2_11_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_MULTI_MODAL = Version.fromString("2.11.0");
 
     @Builder(toBuilder = true)
     public TextDocsInputDataSet(List<String> docs, ModelResultFilter resultFilter) {

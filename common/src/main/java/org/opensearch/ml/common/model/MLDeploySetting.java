@@ -27,7 +27,7 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
     public static final String IS_AUTO_DEPLOY_ENABLED_FIELD = "is_auto_deploy_enabled";
     public static final String MODEL_TTL_MINUTES_FIELD = "model_ttl_minutes";
     private static final long DEFAULT_TTL_MINUTES = -1;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = Version.V_2_14_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = Version.fromString("2.14.0");
 
     private Boolean isAutoDeployEnabled;
     private Long modelTTLInMinutes; // in minutes
