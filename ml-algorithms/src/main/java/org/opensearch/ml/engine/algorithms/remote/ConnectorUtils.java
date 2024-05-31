@@ -190,7 +190,13 @@ public class ConnectorUtils {
         if (modelResponse == null) {
             throw new IllegalArgumentException("model response is null");
         }
-        if (mlGuard != null && !mlGuard.validate(modelResponse, MLGuard.Type.OUTPUT)) {
+        if (mlGuard != null
+            && !mlGuard
+                .validate(
+                    modelResponse,
+                    MLGuard.Type.OUTPUT,
+                    Map.of("question", org.opensearch.ml.common.utils.StringUtils.processTextDoc(modelResponse))
+                )) {
             throw new IllegalArgumentException("guardrails triggered for LLM output");
         }
         List<ModelTensor> modelTensors = new ArrayList<>();
