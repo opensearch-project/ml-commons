@@ -185,7 +185,7 @@ public interface RemoteConnectorExecutor {
                 RestStatus.TOO_MANY_REQUESTS
             );
         } else {
-            if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT)) {
+            if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT, parameters)) {
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
             invokeRemoteModel(mlInput, parameters, payload, tensorOutputs, countDownLatch, actionListener);
