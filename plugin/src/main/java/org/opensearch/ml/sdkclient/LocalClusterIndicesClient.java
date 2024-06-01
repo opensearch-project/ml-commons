@@ -97,7 +97,11 @@ public class LocalClusterIndicesClient implements SdkClient {
                 XContentParser parser = jsonXContent
                     .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
                 log.info("Retrieved data object");
-                return new GetDataObjectResponse.Builder().id(getResponse.getId()).parser(Optional.of(parser)).build();
+                return new GetDataObjectResponse.Builder()
+                    .id(getResponse.getId())
+                    .parser(Optional.of(parser))
+                    .source(getResponse.getSource())
+                    .build();
             } catch (OpenSearchStatusException | IndexNotFoundException notFound) {
                 throw notFound;
             } catch (Exception e) {

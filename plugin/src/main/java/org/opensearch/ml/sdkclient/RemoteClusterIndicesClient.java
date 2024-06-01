@@ -87,11 +87,13 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 if (!getResponse.found()) {
                     return new GetDataObjectResponse.Builder().id(getResponse.id()).build();
                 }
-                String json = new ObjectMapper().setSerializationInclusion(Include.NON_NULL).writeValueAsString(getResponse.source());
-                log.info("Retrieved data object");
+                // Since we use the JacksonJsonBMapper we know this is String-Object map
+                @SuppressWarnings("unchecked")
+                Map<String, Object> source = getResponse.source();
+                String json = new ObjectMapper().setSerializationInclusion(Include.NON_NULL).writeValueAsString(source);
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
-                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).build();
+                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).source(source).build();
             } catch (Exception e) {
                 throw new OpenSearchException(e);
             }
