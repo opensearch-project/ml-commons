@@ -6,16 +6,25 @@
 package org.opensearch.ml.processor;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.google.gson.Gson;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -25,11 +34,16 @@ import org.opensearch.ml.common.utils.StringUtils;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+import org.opensearch.ml.repackage.com.google.common.reflect.TypeToken;
+
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 /**
  * General ModelExecutor interface.
  */
 public interface ModelExecutor {
+
+    Logger logger = LogManager.getLogger(ModelExecutor.class);
 
     Configuration suppressExceptionConfiguration = Configuration
         .builder()
@@ -45,13 +59,31 @@ public interface ModelExecutor {
      * @return an ActionRequest instance for remote model inference
      * @throws IllegalArgumentException if the input parameters are null
      */
-    default <T> ActionRequest getRemoteModelInferenceRequest(Map<String, String> parameters, String modelId) {
+    default <T> ActionRequest getRemoteModelInferenceRequest(Map<String, String> parameters, String modelId, String functionName) {
+        MLInput mlInput = new MLInput();
         if (parameters == null) {
             throw new IllegalArgumentException("wrong input. The model input cannot be empty.");
         }
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        if (functionName.equals("remote")) {
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+            mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+        } else if (functionName.equals("text_embedding") || functionName.equals("sparse_encoding")) {
+            Gson gson = new Gson();
+            String textDocs = parameters.getOrDefault("text_docs", "");
+            if (!textDocs.startsWith("[") || !textDocs.endsWith("]") ) {
+                textDocs = "[\"" + textDocs + "\"]";
+            }
+            List<String> docs = gson.fromJson(textDocs, List.class);
+            Boolean returnBytes = gson.fromJson(parameters.getOrDefault("return_bytes", "false"), Boolean.class);
+            Boolean returnNumber = gson.fromJson(parameters.getOrDefault("return_number", "true"), Boolean.class);
+            List<String> targetResponse = gson.fromJson(parameters.getOrDefault("target_response", "[]"), List.class);
+            Type listType = new TypeToken<List<Integer>>() {}.getType();
+            List<Integer> targetResponsePositions = gson.fromJson(parameters.getOrDefault("target_response_positions", "[]"), listType);
+            ModelResultFilter resultFilter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
 
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+            TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(docs).resultFilter(resultFilter).build();
+            mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+        }
 
         ActionRequest request = new MLPredictionTaskRequest(modelId, mlInput, null);
 
