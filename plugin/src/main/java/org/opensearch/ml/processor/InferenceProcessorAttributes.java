@@ -19,6 +19,7 @@ public class InferenceProcessorAttributes {
     protected List<Map<String, String>> outputMaps;
 
     protected String modelId;
+    protected String functionName;
     protected int maxPredictionTask;
 
     protected Map<String, String> modelConfigMaps;
@@ -59,6 +60,7 @@ public class InferenceProcessorAttributes {
      *
      */
     public static final String OUTPUT_MAP = "output_map";
+    public static final String FUNCTION_NAME = "function_name";
     public static final String MODEL_CONFIG = "model_config";
     public static final String MAX_PREDICTION_TASKS = "max_prediction_tasks";
 
@@ -68,12 +70,14 @@ public class InferenceProcessorAttributes {
 
     public InferenceProcessorAttributes(
         String modelId,
+        String functionName,
         List<Map<String, String>> inputMaps,
         List<Map<String, String>> outputMaps,
         Map<String, String> modelConfigMaps,
         int maxPredictionTask
     ) {
         this.modelId = modelId;
+        this.functionName = functionName;
         this.modelConfigMaps = modelConfigMaps;
         this.inputMaps = inputMaps;
         this.outputMaps = outputMaps;

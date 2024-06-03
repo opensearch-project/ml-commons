@@ -64,6 +64,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
     protected MLInferenceIngestProcessor(
         String modelId,
+        String functionName,
         List<Map<String, String>> inputMaps,
         List<Map<String, String>> outputMaps,
         Map<String, String> modelConfigMaps,
@@ -78,6 +79,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
         super(tag, description);
         this.inferenceProcessorAttributes = new InferenceProcessorAttributes(
             modelId,
+            functionName,
             inputMaps,
             outputMaps,
             modelConfigMaps,
@@ -184,12 +186,13 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             }
         }
 
-        ActionRequest request = getRemoteModelInferenceRequest(modelParameters, inferenceProcessorAttributes.getModelId());
+        ActionRequest request = getRemoteModelInferenceRequest(modelParameters, inferenceProcessorAttributes.getModelId(), inferenceProcessorAttributes.getFunctionName());
 
         client.execute(MLPredictionTaskAction.INSTANCE, request, new ActionListener<>() {
 
             @Override
             public void onResponse(MLTaskResponse mlTaskResponse) {
+                logger.info("Received response", mlTaskResponse.getOutput().toString());
                 ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
                 if (processOutputMap == null || processOutputMap.isEmpty()) {
                     appendFieldValue(modelTensorOutput, null, DEFAULT_OUTPUT_FIELD_NAME, ingestDocument);
@@ -404,6 +407,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             Map<String, Object> config
         ) throws Exception {
             String modelId = ConfigurationUtils.readStringProperty(TYPE, processorTag, config, MODEL_ID);
+            String functionName = ConfigurationUtils.readStringProperty(TYPE, processorTag, config, FUNCTION_NAME);
             Map<String, Object> modelConfigInput = ConfigurationUtils.readOptionalMap(TYPE, processorTag, config, MODEL_CONFIG);
             List<Map<String, String>> inputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, INPUT_MAP);
             List<Map<String, String>> outputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, OUTPUT_MAP);
@@ -433,6 +437,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
             return new MLInferenceIngestProcessor(
                 modelId,
+                functionName,
                 inputMaps,
                 outputMaps,
                 modelConfigMaps,
