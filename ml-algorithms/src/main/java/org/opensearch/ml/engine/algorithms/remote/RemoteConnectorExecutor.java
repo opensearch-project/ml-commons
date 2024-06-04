@@ -125,7 +125,7 @@ public interface RemoteConnectorExecutor {
                 // bedrock and user defined preprocess script, the chunk size is always equals to text docs length.
                 return Tuple.tuple(textDocsLength, 1);
             }
-            //Other cases: non-bedrock and user defined preprocess script, consider as batch.
+            // Other cases: non-bedrock and user defined preprocess script, consider as batch.
             return Tuple.tuple(1, textDocsLength);
         }
     }
