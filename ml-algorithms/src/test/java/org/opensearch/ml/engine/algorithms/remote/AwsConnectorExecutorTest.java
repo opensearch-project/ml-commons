@@ -50,6 +50,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
+import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -147,7 +148,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, "constant"))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -222,7 +223,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, "constant"))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -266,7 +267,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, "constant"))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -322,7 +323,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, "constant"))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -375,7 +376,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .actions(Arrays.asList(predictAction))
-            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, "constant"))
+            .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
@@ -578,7 +579,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
         // execute with retry disabled
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, "constant");
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT);
         Connector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -608,7 +609,7 @@ public class AwsConnectorExecutorTest {
         Mockito.verify(executor, times(1)).invokeRemoteModel(any(), any(), any(), any(), any());
 
         // execute with retry enabled
-        ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, "constant");
+        ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT);
         Connector connector2 = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -637,26 +638,20 @@ public class AwsConnectorExecutorTest {
             .retryBackoffMillis(123)
             .retryTimeoutSeconds(456)
             .maxRetryTimes(789)
-            .retryBackoffPolicy("constant");
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT);
 
         assertEquals(
             executor.getRetryBackoffPolicy(configBuilder.build()).getClass(),
             BackoffPolicy.constantBackoff(TimeValue.timeValueMillis(123), Integer.MAX_VALUE).getClass()
         );
 
-        configBuilder.retryBackoffPolicy("test");
-        assertEquals(
-            executor.getRetryBackoffPolicy(configBuilder.build()).getClass(),
-            BackoffPolicy.constantBackoff(TimeValue.timeValueMillis(123), Integer.MAX_VALUE).getClass()
-        );
-
-        configBuilder.retryBackoffPolicy("exponential_equal_jitter");
+        configBuilder.retryBackoffPolicy(RetryBackoffPolicy.EXPONENTIAL_EQUAL_JITTER);
         assertEquals(
             executor.getRetryBackoffPolicy(configBuilder.build()).getClass(),
             BackoffPolicy.exponentialEqualJitterBackoff(123, 456).getClass()
         );
 
-        configBuilder.retryBackoffPolicy("exponential_full_jitter");
+        configBuilder.retryBackoffPolicy(RetryBackoffPolicy.EXPONENTIAL_FULL_JITTER);
         assertEquals(
             executor.getRetryBackoffPolicy(configBuilder.build()).getClass(),
             BackoffPolicy.exponentialFullJitterBackoff(123).getClass()
@@ -668,7 +663,7 @@ public class AwsConnectorExecutorTest {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, "constant");
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -682,7 +677,7 @@ public class AwsConnectorExecutorTest {
                 ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
                 // fail the first 10 invocation, then success
                 if (countOfInvocation++ < 10) {
-                    actionListener.onFailure(new SageMakerThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
+                    actionListener.onFailure(new RemoteConnectorThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
                 } else {
                     actionListener.onResponse(new Tuple<>(123, mock(ModelTensors.class)));
                 }
@@ -715,7 +710,7 @@ public class AwsConnectorExecutorTest {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, 5, "constant");
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, 5, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -729,7 +724,7 @@ public class AwsConnectorExecutorTest {
                 ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
                 // fail the first 10 invocation, then success
                 if (countOfInvocation++ < 10) {
-                    actionListener.onFailure(new SageMakerThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
+                    actionListener.onFailure(new RemoteConnectorThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
                 } else {
                     actionListener.onResponse(new Tuple<>(123, mock(ModelTensors.class)));
                 }
@@ -762,7 +757,7 @@ public class AwsConnectorExecutorTest {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, "constant");
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
@@ -776,7 +771,7 @@ public class AwsConnectorExecutorTest {
                 ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
                 // fail the first 2 invocation with retryable exception, then fail with non-retryable exception
                 if (countOfInvocation++ < 2) {
-                    actionListener.onFailure(new SageMakerThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
+                    actionListener.onFailure(new RemoteConnectorThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
                 } else {
                     actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
                 }

@@ -28,7 +28,19 @@ public class ConnectorClientConfigTest {
                 .retryBackoffMillis(123)
                 .retryTimeoutSeconds(456)
                 .maxRetryTimes(789)
-                .retryBackoffPolicy("constant")
+                .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+                .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        config.writeTo(output);
+        ConnectorClientConfig readConfig = new ConnectorClientConfig(output.bytes().streamInput());
+
+        Assert.assertEquals(config, readConfig);
+    }
+
+    @Test
+    public void writeTo_ReadFromStream_nullValues() throws IOException {
+        ConnectorClientConfig config = ConnectorClientConfig.builder()
                 .build();
 
         BytesStreamOutput output = new BytesStreamOutput();
@@ -47,7 +59,7 @@ public class ConnectorClientConfigTest {
                 .retryBackoffMillis(123)
                 .retryTimeoutSeconds(456)
                 .maxRetryTimes(789)
-                .retryBackoffPolicy("constant")
+                .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
                 .build();
 
         BytesStreamOutput output = new BytesStreamOutput();
@@ -75,7 +87,7 @@ public class ConnectorClientConfigTest {
                 .retryBackoffMillis(123)
                 .retryTimeoutSeconds(456)
                 .maxRetryTimes(789)
-                .retryBackoffPolicy("constant")
+                .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
                 .build();
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -103,7 +115,7 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(123), config.getRetryBackoffMillis());
         Assert.assertEquals(Integer.valueOf(456), config.getRetryTimeoutSeconds());
         Assert.assertEquals(Integer.valueOf(789), config.getMaxRetryTimes());
-        Assert.assertEquals("constant", config.getRetryBackoffPolicy());
+        Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
     }
 
     @Test
@@ -115,7 +127,7 @@ public class ConnectorClientConfigTest {
         parser.nextToken();
 
         Exception exception = Assert.assertThrows(IllegalArgumentException.class, () -> ConnectorClientConfig.parse(parser));
-        Assert.assertEquals("Unsupported retry_backoff_policy. Supported policy: [constant, exponential_equal_jitter, exponential_full_jitter], but get [test].", exception.getMessage());
+        Assert.assertEquals("Unsupported retry backoff policy", exception.getMessage());
     }
 
     @Test
@@ -141,7 +153,7 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(200),config.getRetryBackoffMillis());
         Assert.assertEquals(Integer.valueOf(30),config.getRetryTimeoutSeconds());
         Assert.assertEquals(Integer.valueOf(-1),config.getMaxRetryTimes());
-        Assert.assertEquals("constant", config.getRetryBackoffPolicy());
+        Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
     }
 }
 

@@ -209,15 +209,14 @@ public interface RemoteConnectorExecutor {
     }
 
     default BackoffPolicy getRetryBackoffPolicy(ConnectorClientConfig connectorClientConfig) {
-        // we've validated the value of retryBackOffPolicy at ConnectorClientConfig.parse
         switch (connectorClientConfig.getRetryBackoffPolicy()) {
-            case "exponential_equal_jitter":
+            case EXPONENTIAL_EQUAL_JITTER:
                 return BackoffPolicy
                     .exponentialEqualJitterBackoff(
                         connectorClientConfig.getRetryBackoffMillis(),
                         connectorClientConfig.getRetryTimeoutSeconds()
                     );
-            case "exponential_full_jitter":
+            case EXPONENTIAL_FULL_JITTER:
                 return BackoffPolicy.exponentialFullJitterBackoff(connectorClientConfig.getRetryBackoffMillis());
             default:
                 // The second parameter is the maxNumberOfRetries for ConstantBackoff.
@@ -260,7 +259,7 @@ public interface RemoteConnectorExecutor {
             public boolean shouldRetry(Exception e) {
                 Throwable cause = ExceptionsHelper.unwrapCause(e);
                 Integer maxRetryTimes = getConnectorClientConfig().getMaxRetryTimes();
-                boolean shouldRetry = cause instanceof SageMakerThrottlingException;
+                boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
                 if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
                     shouldRetry = false;
                 }

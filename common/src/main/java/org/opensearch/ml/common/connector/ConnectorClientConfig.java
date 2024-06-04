@@ -19,6 +19,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -40,17 +41,15 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = -1;
-    public static final String RETRY_BACKOFF_POLICY_DEFAULT_VALUE = "constant";
+    public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
-    public static final List<String> ALL_SUPPORTED_BACKOFF_POLICY = List.of("constant", "exponential_equal_jitter", "exponential_full_jitter");
-
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
     private Integer retryBackoffMillis;
     private Integer retryTimeoutSeconds;
     private Integer maxRetryTimes;
-    private String retryBackoffPolicy;
+    private RetryBackoffPolicy retryBackoffPolicy;
 
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
@@ -60,7 +59,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryBackoffMillis,
         Integer retryTimeoutSeconds,
         Integer maxRetryTimes,
-        String retryBackoffPolicy
+        RetryBackoffPolicy retryBackoffPolicy
     ) {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
@@ -80,7 +79,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             this.retryBackoffMillis = input.readOptionalInt();
             this.retryTimeoutSeconds = input.readOptionalInt();
             this.maxRetryTimes = input.readOptionalInt();
-            this.retryBackoffPolicy = input.readOptionalString();
+            if (input.readBoolean()) {
+                this.retryBackoffPolicy = RetryBackoffPolicy.from(input.readString());
+            }
         }
     }
 
@@ -104,7 +105,12 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             out.writeOptionalInt(retryBackoffMillis);
             out.writeOptionalInt(retryTimeoutSeconds);
             out.writeOptionalInt(maxRetryTimes);
-            out.writeOptionalString(retryBackoffPolicy);
+            if (Objects.nonNull(retryBackoffPolicy)) {
+                out.writeBoolean(true);
+                out.writeString(retryBackoffPolicy.name());
+            } else {
+                out.writeBoolean(false);
+            }
         }
     }
 
@@ -130,7 +136,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             builder.field(MAX_RETRY_TIMES_FIELD, maxRetryTimes);
         }
         if (retryBackoffPolicy != null) {
-            builder.field(RETRY_BACKOFF_POLICY_FIELD, retryBackoffPolicy);
+            builder.field(RETRY_BACKOFF_POLICY_FIELD, retryBackoffPolicy.name().toLowerCase(Locale.ROOT));
         }
         return builder.endObject();
     }
@@ -147,7 +153,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryBackoffMillis = RETRY_BACKOFF_MILLIS_DEFAULT_VALUE;
         Integer retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         Integer maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
-        String retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
+        RetryBackoffPolicy retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -174,16 +180,12 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                     maxRetryTimes = parser.intValue();
                     break;
                 case RETRY_BACKOFF_POLICY_FIELD:
-                    retryBackoffPolicy = parser.text();
+                    retryBackoffPolicy = RetryBackoffPolicy.from(parser.text());
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
-        }
-        if(!ALL_SUPPORTED_BACKOFF_POLICY.contains(retryBackoffPolicy)){
-            throw new IllegalArgumentException(String.format(Locale.ROOT,
-                    "Unsupported retry_backoff_policy. Supported policy: %s, but get [%s].", ALL_SUPPORTED_BACKOFF_POLICY.toString(), retryBackoffPolicy));
         }
         return ConnectorClientConfig.builder()
                 .maxConnections(maxConnections)

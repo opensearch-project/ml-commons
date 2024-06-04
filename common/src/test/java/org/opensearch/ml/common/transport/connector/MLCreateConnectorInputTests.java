@@ -25,6 +25,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
+import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
@@ -70,7 +71,7 @@ public class MLCreateConnectorInputTests {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1, "constant");
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
 
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
