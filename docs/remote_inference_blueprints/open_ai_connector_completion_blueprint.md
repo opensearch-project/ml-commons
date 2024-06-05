@@ -45,7 +45,7 @@ POST /_plugins/_ml/connectors/_create
 POST /_plugins/_ml/models/<ENTER MODEL ID HERE>/_predict
 {
   "parameters": {
-    "prompt": ["Say this is a test"]
+    "prompt": "Say this is a test"
   }
 }
 ```
