@@ -40,7 +40,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-image-v1/invoke",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/amazon.titan-embed-image-v1/invoke",
       "headers": {
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
@@ -75,7 +75,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-image-v1/invoke",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/amazon.titan-embed-image-v1/invoke",
       "headers": {
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
