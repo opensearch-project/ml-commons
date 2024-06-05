@@ -15,6 +15,7 @@ import org.junit.Before;
 import org.mockito.Mock;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.Client;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ingest.Processor;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
@@ -26,9 +27,12 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
     @Mock
     private ScriptService scriptService;
 
+    @Mock
+    private NamedXContentRegistry xContentRegistry;
+
     @Before
     public void init() {
-        factory = new MLInferenceIngestProcessor.Factory(scriptService, client);
+        factory = new MLInferenceIngestProcessor.Factory(scriptService, client, xContentRegistry);
     }
 
     public void testCreateRequiredFields() throws Exception {
