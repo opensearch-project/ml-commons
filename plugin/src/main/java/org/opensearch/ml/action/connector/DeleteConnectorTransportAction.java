@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -123,7 +124,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                 sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
             }
             searchRequest.source(sourceBuilder);
-            // TODO: User SDK client not client.
+            // TODO: Use SDK client not client.
             client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                 SearchHit[] searchHits = searchResponse.getHits().getHits();
                 if (searchHits.length == 0) {
@@ -186,8 +187,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
-            log.error("Failed to delete ML connector: {}", connectorId, throwable);
-            actionListener.onFailure(new RuntimeException(throwable));
+            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+            log.error("Failed to delete ML connector: {}", connectorId, cause);
+            if (cause instanceof Exception) {
+                actionListener.onFailure((Exception) cause);
+            } else {
+                actionListener.onFailure(new OpenSearchException(cause));
+            }
         } else {
             log.info("Connector deletion result: {}, connector id: {}", response.deleted(), response.id());
             DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());

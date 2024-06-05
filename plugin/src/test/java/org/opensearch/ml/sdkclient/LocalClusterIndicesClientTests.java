@@ -9,7 +9,6 @@
 package org.opensearch.ml.sdkclient;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -28,7 +27,6 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -45,8 +43,6 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.json.JsonXContent;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
@@ -125,18 +121,17 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     public void testPutDataObject_Exception() throws IOException {
         PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
-        doAnswer(invocation -> {
-            ActionListener<ActionResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IOException("test"));
-            return null;
-        }).when(mockedClient).index(any(IndexRequest.class), any());
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        when(mockedClient.index(indexRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
 
         CompletableFuture<PutDataObjectResponse> future = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        Throwable cause = ce.getCause();
+        assertEquals(UnsupportedOperationException.class, cause.getClass());
+        assertEquals("test", cause.getMessage());
     }
 
     public void testGetDataObject() throws IOException {
@@ -194,18 +189,17 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     public void testGetDataObject_Exception() throws IOException {
         GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
 
-        doAnswer(invocation -> {
-            ActionListener<ActionResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IOException("test"));
-            return null;
-        }).when(mockedClient).get(any(GetRequest.class), any());
+        ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
+        when(mockedClient.get(getRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
 
         CompletableFuture<GetDataObjectResponse> future = sdkClient
             .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        Throwable cause = ce.getCause();
+        assertEquals(UnsupportedOperationException.class, cause.getClass());
+        assertEquals("test", cause.getMessage());
     }
 
     public void testDeleteDataObject() throws IOException {
@@ -236,17 +230,16 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     public void testDeleteDataObject_Exception() throws IOException {
         DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
 
-        doAnswer(invocation -> {
-            ActionListener<ActionResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IOException("test"));
-            return null;
-        }).when(mockedClient).delete(any(DeleteRequest.class), any());
+        ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
+        when(mockedClient.delete(deleteRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
 
         CompletableFuture<DeleteDataObjectResponse> future = sdkClient
             .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        Throwable cause = ce.getCause();
+        assertEquals(UnsupportedOperationException.class, cause.getClass());
+        assertEquals("test", cause.getMessage());
     }
 }

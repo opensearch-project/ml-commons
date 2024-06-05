@@ -42,6 +42,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -186,7 +187,36 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to find connector with the provided connector id: connector_id", argumentCaptor.getValue().getMessage());
     }
 
-    @Test
+    public void testGetConnector_IndexNotFoundException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new IndexNotFoundException("Fail to find model"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testGetConnector_RuntimeException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new RuntimeException("errorMessage"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
+        latch.await();
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+    }
+
     public void testGetConnector_MultiTenancyEnabled_Success() throws IOException, InterruptedException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
         when(connectorAccessControlHelper.hasPermission(any(), any())).thenReturn(true);

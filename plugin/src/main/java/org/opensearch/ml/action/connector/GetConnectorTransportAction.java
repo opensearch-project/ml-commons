@@ -93,7 +93,6 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                             e -> handleConnectorAccessValidationFailure(connectorId, e, actionListener)
                         )
                 );
-
         } catch (Exception e) {
             log.error("Failed to get ML connector {}", connectorId, e);
             actionListener.onFailure(e);
