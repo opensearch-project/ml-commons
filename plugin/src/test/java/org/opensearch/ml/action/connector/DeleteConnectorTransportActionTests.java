@@ -310,9 +310,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        // TODO: fix all this exception nesting
-        // java.util.concurrent.CompletionException: OpenSearchException[ResourceNotFoundException[errorMessage]]; nested: ResourceNotFoundException[errorMessage];
-        assertEquals("errorMessage", argumentCaptor.getValue().getCause().getCause().getCause().getMessage());
+        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
     public void test_ValidationFailedException() throws IOException {

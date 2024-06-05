@@ -226,9 +226,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        // TODO: Fix this nesting
-        // [OpenSearchException[java.lang.RuntimeException: errorMessage]; nested: RuntimeException[errorMessage];
-        assertEquals("errorMessage", argumentCaptor.getValue().getCause().getCause().getMessage());
+        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetConnector_MultiTenancyEnabled_Success() throws IOException, InterruptedException {

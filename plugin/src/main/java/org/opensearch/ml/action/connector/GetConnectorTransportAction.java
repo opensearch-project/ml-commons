@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -95,8 +96,12 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                             log.error("Failed to get connector index", cause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                         } else {
-                            log.error("Failed to get ML connector {}", connectorId, cause);
-                            actionListener.onFailure(new RuntimeException(cause));
+                            log.error("Failed to get ML connector " + connectorId, cause);
+                            if (cause instanceof Exception) {
+                                actionListener.onFailure((Exception) cause);
+                            } else {
+                                actionListener.onFailure(new OpenSearchException(cause));
+                            }
                         }
                     } else {
                         if (r != null && r.parser().isPresent()) {
@@ -140,6 +145,5 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
             log.error("Failed to get ML connector " + connectorId, e);
             actionListener.onFailure(e);
         }
-
     }
 }

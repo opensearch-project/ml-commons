@@ -24,7 +24,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch._types.ShardStatistics;
@@ -148,7 +148,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        assertEquals(OpenSearchStatusException.class, ce.getCause().getClass());
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -212,7 +212,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        assertEquals(OpenSearchStatusException.class, ce.getCause().getClass());
     }
 
     public void testDeleteDataObject() throws IOException {
@@ -284,6 +284,6 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        assertEquals(OpenSearchStatusException.class, ce.getCause().getClass());
     }
 }

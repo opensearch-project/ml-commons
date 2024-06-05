@@ -11,6 +11,7 @@ package org.opensearch.ml.sdkclient;
 import static org.opensearch.client.opensearch._types.Result.Created;
 import static org.opensearch.client.opensearch._types.Result.Deleted;
 
+import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
@@ -19,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
-import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch.core.DeleteRequest;
@@ -30,6 +31,7 @@ import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
@@ -70,8 +72,12 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 IndexResponse indexResponse = openSearchClient.index(indexRequest);
                 log.info("Creation status for id {}: {}", indexResponse.id(), indexResponse.result());
                 return new PutDataObjectResponse.Builder().id(indexResponse.id()).created(indexResponse.result() == Created).build();
-            } catch (Exception e) {
-                throw new OpenSearchException("Error occurred while indexing data object", e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to parse data object to put in index " + request.index(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }), executor);
     }
@@ -92,8 +98,12 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
                 return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).build();
-            } catch (Exception e) {
-                throw new OpenSearchException(e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parser creation error
+                throw new OpenSearchStatusException(
+                    "Failed to create parser for data object retrieved from index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
             }
         }), executor);
     }
@@ -116,8 +126,12 @@ public class RemoteClusterIndicesClient implements SdkClient {
                     .shardInfo(shardInfo)
                     .deleted(deleteResponse.result() == Deleted)
                     .build();
-            } catch (Exception e) {
-                throw new OpenSearchException("Error occurred while deleting data object", e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on deletion IOException
+                throw new OpenSearchStatusException(
+                    "IOException occurred while deleting data object " + request.id() + " from index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
             }
         }), executor);
     }

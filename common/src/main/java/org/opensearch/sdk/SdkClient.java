@@ -46,7 +46,12 @@ public interface SdkClient {
             if (cause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            throw new OpenSearchException(cause);
+            // Rethrow unchecked Exceptions
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            } else {
+                throw new OpenSearchException(cause);                
+            }
         }
     }
 
@@ -80,7 +85,12 @@ public interface SdkClient {
             if (cause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            throw new OpenSearchException(cause);
+            // Rethrow unchecked Exceptions
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            } else {
+                throw new OpenSearchException(cause);                
+            }
         }
     }
 
@@ -114,7 +124,12 @@ public interface SdkClient {
             if (cause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            throw new OpenSearchException(cause);
+            // Rethrow unchecked Exceptions
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            } else {
+                throw new OpenSearchException(cause);                
+            }
         }
     }
 }
