@@ -38,7 +38,7 @@
       "region": "%s",
       "service_name": "bedrock",
       "model_name": "amazon.titan-embed-text-v1",
-      "input_docs_processed_step_size": 1
+      "input_docs_processed_step_size": "1"
     },
     "credential": {
       "access_key": "%s",
