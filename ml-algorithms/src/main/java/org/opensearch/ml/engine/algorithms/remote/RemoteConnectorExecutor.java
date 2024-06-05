@@ -214,7 +214,7 @@ public interface RemoteConnectorExecutor {
                 return BackoffPolicy
                     .exponentialEqualJitterBackoff(
                         connectorClientConfig.getRetryBackoffMillis(),
-                        connectorClientConfig.getRetryTimeoutSeconds()
+                        connectorClientConfig.getRetryTimeoutSeconds() * 1000
                     );
             case EXPONENTIAL_FULL_JITTER:
                 return BackoffPolicy.exponentialFullJitterBackoff(connectorClientConfig.getRetryBackoffMillis());
