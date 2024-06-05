@@ -1001,7 +1001,10 @@ public class MachineLearningPlugin extends Plugin
     public Map<String, org.opensearch.ingest.Processor.Factory> getProcessors(org.opensearch.ingest.Processor.Parameters parameters) {
         Map<String, org.opensearch.ingest.Processor.Factory> processors = new HashMap<>();
         processors
-            .put(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
+            .put(
+                MLInferenceIngestProcessor.TYPE,
+                new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client, xContentRegistry)
+            );
         return Collections.unmodifiableMap(processors);
     }
 }
