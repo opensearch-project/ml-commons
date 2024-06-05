@@ -183,6 +183,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     public enum ActionType {
         PREDICT,
-        EXECUTE
+        EXECUTE,
+        BATCH
     }
 }
