@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import lombok.extern.log4j.Log4j2;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
 import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
@@ -103,6 +104,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 
+@Log4j2
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
     public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
@@ -856,6 +858,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
         String entityString = TestHelper.httpEntityToString(entity);
+        log.info("response: {}", entityString);
         return StringUtils.gson.fromJson(entityString, Map.class);
     }
 
