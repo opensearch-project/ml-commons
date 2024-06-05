@@ -15,6 +15,7 @@ import org.opensearch.script.ScriptType;
 import org.opensearch.script.TemplateScript;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -45,6 +46,10 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
     public void validateTextDocsInput(MLInput mlInput) {
         if (!(mlInput.getInputDataset() instanceof TextDocsInputDataSet)) {
             throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet");
+        }
+        List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
+        if (docs.size() == 1 && docs.get(0) == null) {
+            throw new IllegalArgumentException("No input text or image provided");
         }
     }
 
