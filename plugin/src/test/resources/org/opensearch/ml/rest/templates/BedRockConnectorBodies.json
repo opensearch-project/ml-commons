@@ -1,0 +1,63 @@
+{
+  "without_step_size": {
+    "name": "Amazon Bedrock Connector: embedding",
+    "description": "The connector to bedrock Titan embedding model",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "%s",
+      "service_name": "bedrock",
+      "model_name": "amazon.titan-embed-text-v1"
+    },
+    "credential": {
+      "access_key": "%s",
+      "secret_key": "%s",
+      "session_token": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  },
+  "with_step_size": {
+    "name": "Amazon Bedrock Connector: embedding",
+    "description": "The connector to bedrock Titan embedding model",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "%s",
+      "service_name": "bedrock",
+      "model_name": "amazon.titan-embed-text-v1",
+      "input_docs_processed_step_size": 1
+    },
+    "credential": {
+      "access_key": "%s",
+      "secret_key": "%s",
+      "session_token": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  }
+}

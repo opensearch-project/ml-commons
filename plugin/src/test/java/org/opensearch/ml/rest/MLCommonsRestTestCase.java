@@ -898,10 +898,12 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return result;
     }
 
-    public ModelTensorOutput predictRemoteModel(String modelId, MLInput input) throws IOException {
+    public Map predictRemoteModel(String modelId, MLInput input) throws IOException {
+        String requestBody = TestHelper.toJsonString(input);
+        System.out.println("############################## request body is:" + requestBody);
         Response response = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, TestHelper.toJsonString(input), null);
-        return new ModelTensorOutput(StreamInput.wrap(response.getEntity().getContent().readAllBytes()));
+            .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        return parseResponseToMap(response);
     }
 
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
