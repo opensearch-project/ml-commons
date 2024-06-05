@@ -60,6 +60,7 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaType;
@@ -80,6 +81,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -894,6 +896,12 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             assertEquals(768, data.size());
         }
         return result;
+    }
+
+    public ModelTensorOutput predictRemoteModel(String modelId, MLInput input) throws IOException {
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, TestHelper.toJsonString(input), null);
+        return new ModelTensorOutput(StreamInput.wrap(response.getEntity().getContent().readAllBytes()));
     }
 
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
