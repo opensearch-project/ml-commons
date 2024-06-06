@@ -26,6 +26,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
+import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
@@ -57,7 +58,8 @@ public class MLCreateConnectorInputTests {
             "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
             "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false," +
             "\"access_mode\":\"PUBLIC\",\"client_config\":{\"max_connection\":20," +
-            "\"connection_timeout\":10000,\"read_timeout\":10000}}";
+            "\"connection_timeout\":10000,\"read_timeout\":10000," +
+            "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
     @Before
     public void setUp(){
@@ -70,7 +72,7 @@ public class MLCreateConnectorInputTests {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000);
+        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
 
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")

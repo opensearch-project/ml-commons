@@ -12,9 +12,6 @@ import static org.mockito.Mockito.verify;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -24,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -41,7 +39,7 @@ public class HttpJsonConnectorExecutorTest {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Mock
-    private ActionListener<List<ModelTensors>> actionListener;
+    private ActionListener<Tuple<Integer, ModelTensors>> actionListener;
 
     @Before
     public void setUp() {
@@ -65,7 +63,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(null, null, null, null, null, actionListener);
+        executor.invokeRemoteModel(null, null, null, null, actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assertEquals("unsupported http method", captor.getValue().getMessage());
@@ -89,14 +87,7 @@ public class HttpJsonConnectorExecutorTest {
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         executor
-            .invokeRemoteModel(
-                createMLInput(),
-                new HashMap<>(),
-                "{\"input\": \"hello world\"}",
-                new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
-                actionListener
-            );
+            .invokeRemoteModel(createMLInput(), new HashMap<>(), "{\"input\": \"hello world\"}", new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof IllegalArgumentException;
@@ -120,15 +111,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor
-            .invokeRemoteModel(
-                createMLInput(),
-                new HashMap<>(),
-                null,
-                new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
-                actionListener
-            );
+        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof IllegalArgumentException;
@@ -152,15 +135,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor
-            .invokeRemoteModel(
-                createMLInput(),
-                new HashMap<>(),
-                null,
-                new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
-                actionListener
-            );
+        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
     }
 
     @Test
@@ -180,15 +155,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor
-            .invokeRemoteModel(
-                createMLInput(),
-                new HashMap<>(),
-                "hello world",
-                new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
-                actionListener
-            );
+        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
     }
 
     @Test
@@ -211,15 +178,7 @@ public class HttpJsonConnectorExecutorTest {
         Field httpClientField = HttpJsonConnectorExecutor.class.getDeclaredField("httpClient");
         httpClientField.setAccessible(true);
         httpClientField.set(executor, null);
-        executor
-            .invokeRemoteModel(
-                createMLInput(),
-                new HashMap<>(),
-                "hello world",
-                new HashMap<>(),
-                new ExecutionContext(0, new CountDownLatch(1), new AtomicReference<>()),
-                actionListener
-            );
+        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue() instanceof NullPointerException;
