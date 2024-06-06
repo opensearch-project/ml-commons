@@ -120,9 +120,12 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         // See [https://github.com/opensearch-project/ml-commons/issues/2429] for more details.
         boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
         if (containsThrottlingException) {
+            log.error("Remote server returned error code: {}", statusCode);
             handleException(
                 new RemoteConnectorThrottlingException(
-                    REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
+                    REMOTE_SERVICE_ERROR
+                        + "The request was denied due to remote server throttling. "
+                        + "To change the retry policy and behavior, please update the connector client_config.",
                     RestStatus.fromCode(statusCode)
                 )
             );

@@ -377,7 +377,13 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(RemoteConnectorThrottlingException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("Error from remote service: The request was denied due to remote server throttling.");
+        assert captor
+            .getValue()
+            .getMessage()
+            .equals(
+                "Error from remote service: The request was denied due to remote server throttling. "
+                    + "To change the retry policy and behavior, please update the connector client_config."
+            );
         assert captor.getValue().status().getStatus() == HttpStatusCode.BAD_REQUEST;
     }
 

@@ -152,7 +152,7 @@ public class ConnectorClientConfigTest {
         Assert.assertEquals(Integer.valueOf(30000),config.getReadTimeout());
         Assert.assertEquals(Integer.valueOf(200),config.getRetryBackoffMillis());
         Assert.assertEquals(Integer.valueOf(30),config.getRetryTimeoutSeconds());
-        Assert.assertEquals(Integer.valueOf(-1),config.getMaxRetryTimes());
+        Assert.assertEquals(Integer.valueOf(0),config.getMaxRetryTimes());
         Assert.assertEquals(RetryBackoffPolicy.CONSTANT, config.getRetryBackoffPolicy());
     }
 }
