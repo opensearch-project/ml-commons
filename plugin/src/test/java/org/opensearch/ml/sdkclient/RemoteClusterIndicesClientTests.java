@@ -8,6 +8,7 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
@@ -34,6 +35,8 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
+import org.opensearch.client.opensearch.core.UpdateRequest;
+import org.opensearch.client.opensearch.core.UpdateResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
@@ -45,6 +48,8 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
@@ -210,6 +215,86 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         CompletableFuture<GetDataObjectResponse> future = sdkClient
             .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        assertEquals(OpenSearchStatusException.class, ce.getCause().getClass());
+    }
+
+    public void testUpdateDataObject() throws IOException {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+
+        UpdateResponse<Map<String, Object>> updateResponse = new UpdateResponse.Builder<Map<String, Object>>()
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .primaryTerm(0)
+            .result(Result.Updated)
+            .seqNo(0)
+            .shards(new ShardStatistics.Builder().failed(0).successful(1).total(1).build())
+            .version(0)
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<UpdateRequest<Map<String, Object>, ?>> updateRequestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        when(mockedOpenSearchClient.update(updateRequestCaptor.capture(), any())).thenReturn(updateResponse);
+
+        UpdateDataObjectResponse response = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
+        assertEquals(TEST_ID, response.id());
+        assertTrue(response.updated());
+    }
+
+    public void testUpdateDataObject_NotFound() throws IOException {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+
+        UpdateResponse<Map<String, Object>> updateResponse = new UpdateResponse.Builder<Map<String, Object>>()
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .primaryTerm(0)
+            .result(Result.Created)
+            .seqNo(0)
+            .shards(new ShardStatistics.Builder().failed(0).successful(1).total(1).build())
+            .version(0)
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<UpdateRequest<Map<String, Object>, ?>> updateRequestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        when(mockedOpenSearchClient.update(updateRequestCaptor.capture(), any())).thenReturn(updateResponse);
+
+        UpdateDataObjectResponse response = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
+        assertEquals(TEST_ID, response.id());
+        assertFalse(response.updated());
+    }
+
+    public void testtUpdateDataObject_Exception() throws IOException {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+
+        ArgumentCaptor<UpdateRequest<?, ?>> updateRequestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        when(mockedOpenSearchClient.update(updateRequestCaptor.capture(), any())).thenThrow(new IOException("test"));
+
+        CompletableFuture<UpdateDataObjectResponse> future = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
