@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -260,7 +261,7 @@ public class AwsConnectorExecutorTest {
             );
 
         Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(PREDICT.name(), any(), any(), any());
+        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
     }
 
     @Test
@@ -295,8 +296,8 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         doAnswer(invocation -> {
-            MLInput mlInput = invocation.getArgument(0);
-            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+            MLInput mlInput = invocation.getArgument(1);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
             String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
             Integer idx = Integer.parseInt(doc.substring(doc.length() - 1));
             actionListener.onResponse(new Tuple<>(3 - idx, new ModelTensors(modelTensors.subList(3 - idx, 4 - idx))));
@@ -355,8 +356,8 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         doAnswer(invocation -> {
-            MLInput mlInput = invocation.getArgument(0);
-            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+            MLInput mlInput = invocation.getArgument(1);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
             String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
             if (doc.endsWith("1")) {
                 actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
@@ -412,8 +413,8 @@ public class AwsConnectorExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         doAnswer(invocation -> {
-            MLInput mlInput = invocation.getArgument(0);
-            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+            MLInput mlInput = invocation.getArgument(1);
+            ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
             String doc = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().get(0);
             if (!doc.endsWith("1")) {
                 actionListener.onFailure(new OpenSearchStatusException("test failure", RestStatus.BAD_REQUEST));
@@ -566,7 +567,7 @@ public class AwsConnectorExecutorTest {
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
-        assert "no predict action found".equals(exceptionArgumentCaptor.getValue().getMessage());
+        assert "no PREDICT action found".equals(exceptionArgumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -729,7 +730,7 @@ public class AwsConnectorExecutorTest {
 
             @Override
             public Void answer(InvocationOnMock invocation) {
-                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
                 // fail the first 10 invocation, then success
                 if (countOfInvocation++ < 10) {
                     actionListener.onFailure(new RemoteConnectorThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
@@ -776,7 +777,7 @@ public class AwsConnectorExecutorTest {
 
             @Override
             public Void answer(InvocationOnMock invocation) {
-                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
                 // fail the first 10 invocation, then success
                 if (countOfInvocation++ < 10) {
                     actionListener.onFailure(new RemoteConnectorThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
@@ -823,7 +824,7 @@ public class AwsConnectorExecutorTest {
 
             @Override
             public Void answer(InvocationOnMock invocation) {
-                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(4);
+                ActionListener<Tuple<Integer, ModelTensors>> actionListener = invocation.getArgument(5);
                 // fail the first 2 invocation with retryable exception, then fail with non-retryable exception
                 if (countOfInvocation++ < 2) {
                     actionListener.onFailure(new RemoteConnectorThrottlingException("test failure retryable", RestStatus.BAD_REQUEST));
