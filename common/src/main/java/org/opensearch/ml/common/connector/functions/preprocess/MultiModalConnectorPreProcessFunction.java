@@ -11,6 +11,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
@@ -31,6 +32,10 @@ public class MultiModalConnectorPreProcessFunction extends ConnectorPreProcessFu
     @Override
     public void validate(MLInput mlInput) {
         validateTextDocsInput(mlInput);
+        List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
+        if (docs.size() == 0 || (docs.size() == 1 && docs.get(0) == null)) {
+            throw new IllegalArgumentException("No input text or image provided");
+        }
     }
 
     /**
