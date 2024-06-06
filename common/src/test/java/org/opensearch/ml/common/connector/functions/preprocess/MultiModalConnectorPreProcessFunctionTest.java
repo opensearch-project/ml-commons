@@ -14,9 +14,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-import org.w3c.dom.Text;
 
-import java.rmi.Remote;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,11 +22,11 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public class MultiModalEmbeddingPreProcessFunctionTest {
+public class MultiModalConnectorPreProcessFunctionTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    MultiModalEmbeddingPreProcessFunction function;
+    MultiModalConnectorPreProcessFunction function;
 
     TextSimilarityInputDataSet textSimilarityInputDataSet;
     TextDocsInputDataSet textDocsInputDataSet;
@@ -40,7 +38,7 @@ public class MultiModalEmbeddingPreProcessFunctionTest {
 
     @Before
     public void setUp() {
-        function = new MultiModalEmbeddingPreProcessFunction();
+        function = new MultiModalConnectorPreProcessFunction();
         textSimilarityInputDataSet = TextSimilarityInputDataSet.builder().queryText("test").textDocs(Arrays.asList("hello")).build();
         textDocsInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("hello", "world")).build();
         remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("inputText", "value1", "inputImage", "value2")).build();
@@ -51,21 +49,21 @@ public class MultiModalEmbeddingPreProcessFunctionTest {
     }
 
     @Test
-    public void process_NullInput() {
+    public void testProcess_whenNullInput_expectIllegalArgumentException() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Preprocess function input can't be null");
         function.apply(null);
     }
 
     @Test
-    public void process_WrongInput() {
+    public void testProcess_whenWrongInput_expectIllegalArgumentException() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("This pre_process_function can only support TextDocsInputDataSet");
         function.apply(textSimilarityInput);
     }
 
     @Test
-    public void process_input_text_image() {
+    public void testProcess_whenCorrectInput_expectCorrectOutput() {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(2, dataSet.getParameters().size());
@@ -74,7 +72,7 @@ public class MultiModalEmbeddingPreProcessFunctionTest {
     }
 
     @Test
-    public void process_input_text_only() {
+    public void testProcess_whenInputTextOnly_expectInputTextShowUp() {
         TextDocsInputDataSet textDocsInputDataSet1 = TextDocsInputDataSet.builder().docs(Arrays.asList("hello")).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet1).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
@@ -83,7 +81,7 @@ public class MultiModalEmbeddingPreProcessFunctionTest {
     }
 
     @Test
-    public void process_input_text_null() {
+    public void testProcess_whenInputTextIsnull_expectIllegalArgumentException() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No input text or image provided");
         List<String> docs = new ArrayList<>();
@@ -94,7 +92,7 @@ public class MultiModalEmbeddingPreProcessFunctionTest {
     }
 
     @Test
-    public void process_RemoteInferenceInput() {
+    public void testProcess_whenRemoteInferenceInput_expectRemoteInferenceInputDataSet() {
         RemoteInferenceInputDataSet dataSet = function.apply(remoteInferenceInput);
         assertEquals(remoteInferenceInputDataSet, dataSet);
     }

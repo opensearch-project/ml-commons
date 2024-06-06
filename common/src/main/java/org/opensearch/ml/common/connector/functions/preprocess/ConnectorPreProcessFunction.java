@@ -16,11 +16,18 @@ import org.opensearch.script.TemplateScript;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
 import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
 
+/**
+ * This abstract class represents a pre-processing function for a connector.
+ * It takes an instance of {@link MLInput} as input and returns an instance of {@link RemoteInferenceInputDataSet}.
+ * The input data is expected to be of type {@link MLInput}, and the pre-processing function can be customized by implementing the {@link #validate(MLInput)} and {@link #process(MLInput)} methods.
+ * If the input data is already of type {@link RemoteInferenceInputDataSet}, it can be returned directly by setting the {@link #returnDirectlyForRemoteInferenceInput} flag to true.
+ */
 @Log4j2
 public abstract class ConnectorPreProcessFunction implements Function<MLInput, RemoteInferenceInputDataSet> {
 
@@ -45,10 +52,11 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
 
     public void validateTextDocsInput(MLInput mlInput) {
         if (!(mlInput.getInputDataset() instanceof TextDocsInputDataSet)) {
+            log.error(String.format(Locale.ROOT, "This pre_process_function can only support TextDocsInputDataSet, actual input type is: %s", mlInput.getInputDataset().getClass().getName()));
             throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet");
         }
         List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
-        if (docs.size() == 1 && docs.get(0) == null) {
+        if (docs.size() == 0 || (docs.size() == 1 && docs.get(0) == null)) {
             throw new IllegalArgumentException("No input text or image provided");
         }
     }
