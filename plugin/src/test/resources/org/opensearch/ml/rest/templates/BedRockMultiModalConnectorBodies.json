@@ -7,8 +7,7 @@
     "parameters": {
       "region": "%s",
       "service_name": "bedrock",
-      "model_name": "amazon.titan-embed-image-v1",
-      "input_docs_processed_step_size": "2"
+      "model_name": "amazon.titan-embed-image-v1"
     },
     "credential": {
       "access_key": "%s",
