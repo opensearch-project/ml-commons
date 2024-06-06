@@ -22,10 +22,17 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
     private String bedrockClaudeConnectorId;
+    private String bedrockClaudeConnectorIdForPredict;
 
     @Before
     public void setUp() throws Exception {
         super.setUp();
+        Thread.sleep(20000);
+        this.bedrockClaudeConnectorId = createBedrockClaudeConnector("execute");
+        this.bedrockClaudeConnectorIdForPredict = createBedrockClaudeConnector("predict");
+    }
+
+    private String createBedrockClaudeConnector(String action) throws IOException, InterruptedException {
         String bedrockClaudeConnectorEntity = "{\n"
             + "  \"name\": \"BedRock Claude instant-v1 Connector \",\n"
             + "  \"description\": \"The connector to BedRock service for claude model\",\n"
@@ -54,7 +61,9 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "  },\n"
             + "  \"actions\": [\n"
             + "    {\n"
-            + "      \"action_type\": \"execute\",\n"
+            + "      \"action_type\": \""
+            + action
+            + "\",\n"
             + "      \"method\": \"POST\",\n"
             + "      \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/anthropic.claude-instant-v1/invoke\",\n"
             + "      \"headers\": {\n"
@@ -65,7 +74,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "    }\n"
             + "  ]\n"
             + "}";
-        this.bedrockClaudeConnectorId = registerConnector(bedrockClaudeConnectorEntity);
+        return registerConnector(bedrockClaudeConnectorEntity);
     }
 
     @After
@@ -86,7 +95,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "      \"name\": \"bedrock_model\",\n"
             + "      \"parameters\": {\n"
             + "        \"connector_id\": \""
-            + bedrockClaudeConnectorId
+            + bedrockClaudeConnectorIdForPredict
             + "\",\n"
             + "        \"connector_action\": \"predict\"\n"
             + "      }\n"
@@ -96,7 +105,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n" + "  \"parameters\": {\n" + "    \"question\": \"hello\"\n" + "  }\n" + "}";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("no execute action found"));
+        MatcherAssert.assertThat(exception.getMessage(), containsString("no EXECUTE action found"));
     }
 
     public void testConnectorToolInFlowAgent() throws IOException, ParseException {
