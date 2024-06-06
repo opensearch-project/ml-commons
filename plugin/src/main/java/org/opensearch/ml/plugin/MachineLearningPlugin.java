@@ -44,6 +44,7 @@ import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
 import org.opensearch.ml.action.agents.TransportSearchAgentAction;
 import org.opensearch.ml.action.config.GetConfigTransportAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
+import org.opensearch.ml.action.connector.ExecuteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.action.connector.TransportCreateConnectorAction;
@@ -118,6 +119,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLControllerGetAction;
@@ -168,6 +170,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
+import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
@@ -398,6 +401,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLModelGroupSearchAction.INSTANCE, SearchModelGroupTransportAction.class),
                 new ActionHandler<>(MLModelGroupDeleteAction.INSTANCE, DeleteModelGroupTransportAction.class),
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
+                new ActionHandler<>(MLExecuteConnectorAction.INSTANCE, ExecuteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
@@ -579,6 +583,7 @@ public class MachineLearningPlugin extends Plugin
         IndexMappingTool.Factory.getInstance().init(client);
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         VisualizationsTool.Factory.getInstance().init(client);
+        ConnectorTool.Factory.getInstance().init(client);
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
@@ -586,6 +591,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
+        toolFactories.put(ConnectorTool.TYPE, ConnectorTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
