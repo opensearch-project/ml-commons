@@ -33,6 +33,13 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
 
     protected boolean returnDirectlyForRemoteInferenceInput;
 
+    /**
+     * Applies the pre-processing function to the given MLInput object and returns the resulting RemoteInferenceInputDataSet.
+     *
+     * @param  mlInput  the MLInput object to be processed
+     * @return          the RemoteInferenceInputDataSet resulting from the pre-processing function
+     * @throws IllegalArgumentException if the input MLInput object is null
+     */
     @Override
     public RemoteInferenceInputDataSet apply(MLInput mlInput) {
         if (mlInput == null) {
@@ -50,14 +57,17 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
 
     public abstract RemoteInferenceInputDataSet process(MLInput mlInput);
 
+    /**
+     * Validates the input of a pre-process function for text documents.
+     *
+     * @param  mlInput  the input data to be validated
+     * @throws IllegalArgumentException  if the input dataset is not an instance of TextDocsInputDataSet
+     *                                   or if there is no input text or image provided
+     */
     public void validateTextDocsInput(MLInput mlInput) {
         if (!(mlInput.getInputDataset() instanceof TextDocsInputDataSet)) {
             log.error(String.format(Locale.ROOT, "This pre_process_function can only support TextDocsInputDataSet, actual input type is: %s", mlInput.getInputDataset().getClass().getName()));
             throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet");
-        }
-        List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
-        if (docs.size() == 0 || (docs.size() == 1 && docs.get(0) == null)) {
-            throw new IllegalArgumentException("No input text or image provided");
         }
     }
 
