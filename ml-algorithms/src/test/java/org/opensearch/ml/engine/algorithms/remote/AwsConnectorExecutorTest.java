@@ -15,6 +15,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
@@ -114,7 +115,7 @@ public class AwsConnectorExecutorTest {
         exceptionRule.expectMessage("Missing credential");
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -132,7 +133,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_RemoteInferenceInput_EmptyIpAddress() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http:///mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -150,7 +151,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -159,7 +160,12 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
@@ -170,7 +176,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_TextDocsInferenceInput() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -188,7 +194,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -198,14 +204,18 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
     }
 
     @Test
     public void executePredict_TextDocsInferenceInput_withStepSize() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -225,7 +235,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -235,21 +245,29 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
         MLInputDataset inputDataSet1 = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet1).build(),
+                actionListener
+            );
 
         Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(executor, times(3)).preparePayloadAndInvokeRemoteModel(any(), any(), any());
+        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(PREDICT.name(), any(), any(), any());
     }
 
     @Test
     public void executePredict_TextDocsInferenceInput_withStepSize_returnOrderedResults() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -269,7 +287,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -283,11 +301,15 @@ public class AwsConnectorExecutorTest {
             Integer idx = Integer.parseInt(doc.substring(doc.length() - 1));
             actionListener.onResponse(new Tuple<>(3 - idx, new ModelTensors(modelTensors.subList(3 - idx, 4 - idx))));
             return null;
-        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
         ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
         Mockito.verify(actionListener, times(1)).onResponse(responseCaptor.capture());
@@ -305,7 +327,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_TextDocsInferenceInput_withStepSize_partiallyFailed_thenFail() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -325,7 +347,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -342,11 +364,15 @@ public class AwsConnectorExecutorTest {
                 actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
             }
             return null;
-        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
@@ -358,7 +384,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_TextDocsInferenceInput_withStepSize_failWithMultipleFailures() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -378,7 +404,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -395,11 +421,15 @@ public class AwsConnectorExecutorTest {
                 actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors.subList(0, 1))));
             }
             return null;
-        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
@@ -414,7 +444,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() throws NoSuchFieldException, IllegalAccessException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -431,7 +461,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor0 = new AwsConnectorExecutor(connector);
         Field httpClientField = AwsConnectorExecutor.class.getDeclaredField("httpClient");
         httpClientField.setAccessible(true);
@@ -444,7 +474,12 @@ public class AwsConnectorExecutorTest {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(), actionListener);
+        executor
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
@@ -454,7 +489,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_RemoteInferenceInput_negativeStepSize_throwIllegalArgumentException() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -472,7 +507,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -482,7 +517,11 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
@@ -492,7 +531,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_TextDocsInferenceInput_withoutStepSize_emptyPredictionAction() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -509,7 +548,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -519,7 +558,11 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
@@ -530,7 +573,7 @@ public class AwsConnectorExecutorTest {
     public void executePredict_TextDocsInferenceInput_withoutStepSize_userDefinedPreProcessFunction() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -550,7 +593,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -561,14 +604,18 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
     }
 
     @Test
-    public void executePredict_whenRetryEnabled_thenInvokeRemoteModelWithRetry() {
+    public void executePredict_whenRetryEnabled_thenInvokeRemoteServiceWithRetry() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
@@ -590,7 +637,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(connectorClientConfig)
             .build();
-        connector.decrypt((c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -603,10 +650,14 @@ public class AwsConnectorExecutorTest {
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1", "input2", "input3")).build();
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-        Mockito.verify(executor, times(0)).invokeRemoteModelWithRetry(any(), any(), any(), any(), any());
-        Mockito.verify(executor, times(1)).invokeRemoteModel(any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         // execute with retry enabled
         ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT);
@@ -620,12 +671,16 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(connectorClientConfig2)
             .build();
-        connector2.decrypt((c) -> encryptor.decrypt(c));
+        connector2.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
         executor.initialize(connector2);
         executor
-            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), actionListener);
+            .executeAction(
+                PREDICT.name(),
+                MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(),
+                actionListener
+            );
 
-        Mockito.verify(executor, times(1)).invokeRemoteModelWithRetry(any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
         Mockito.verify(actionListener, times(0)).onFailure(any());
     }
 
@@ -659,7 +714,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void invokeRemoteModelWithRetry_whenRetryableException_thenRetryUntilSuccess() {
+    public void invokeRemoteServiceWithRetry_whenRetryableException_thenRetryUntilSuccess() {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
@@ -683,7 +738,7 @@ public class AwsConnectorExecutorTest {
                 }
                 return null;
             }
-        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
         when(executor.getConnectorClientConfig()).thenReturn(connectorClientConfig);
         when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
@@ -699,14 +754,14 @@ public class AwsConnectorExecutorTest {
             return null;
         }).when(executorService).execute(any());
 
-        executor.invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+        executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
         Mockito.verify(actionListener, times(0)).onFailure(any());
         Mockito.verify(actionListener, times(1)).onResponse(any());
-        Mockito.verify(executor, times(11)).invokeRemoteModel(any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(11)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    public void invokeRemoteModelWithRetry_whenRetryExceedMaxRetryTimes_thenCallOnFailure() {
+    public void invokeRemoteServiceWithRetry_whenRetryExceedMaxRetryTimes_thenCallOnFailure() {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
@@ -730,7 +785,7 @@ public class AwsConnectorExecutorTest {
                 }
                 return null;
             }
-        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
         when(executor.getConnectorClientConfig()).thenReturn(connectorClientConfig);
         when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
@@ -746,14 +801,14 @@ public class AwsConnectorExecutorTest {
             return null;
         }).when(executorService).execute(any());
 
-        executor.invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+        executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
         Mockito.verify(actionListener, times(1)).onFailure(any());
         Mockito.verify(actionListener, times(0)).onResponse(any());
-        Mockito.verify(executor, times(6)).invokeRemoteModel(any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(6)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    public void invokeRemoteModelWithRetry_whenNonRetryableException_thenCallOnFailure() {
+    public void invokeRemoteServiceWithRetry_whenNonRetryableException_thenCallOnFailure() {
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of();
         String payload = "";
@@ -777,7 +832,7 @@ public class AwsConnectorExecutorTest {
                 }
                 return null;
             }
-        }).when(executor).invokeRemoteModel(any(), any(), any(), any(), any());
+        }).when(executor).invokeRemoteService(any(), any(), any(), any(), any(), any());
         when(executor.getConnectorClientConfig()).thenReturn(connectorClientConfig);
         when(executor.getClient()).thenReturn(client);
         when(client.threadPool()).thenReturn(threadPool);
@@ -795,10 +850,10 @@ public class AwsConnectorExecutorTest {
 
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
 
-        executor.invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+        executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         Mockito.verify(actionListener, times(0)).onResponse(any());
-        Mockito.verify(executor, times(3)).invokeRemoteModel(any(), any(), any(), any(), any());
+        Mockito.verify(executor, times(3)).invokeRemoteService(any(), any(), any(), any(), any(), any());
         assert exceptionArgumentCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionArgumentCaptor.getValue().getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[0].getMessage());
