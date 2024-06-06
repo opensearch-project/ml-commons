@@ -29,7 +29,6 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -42,10 +41,10 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
-import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -59,11 +58,8 @@ public class TransportUndeployModelAction extends
     private final MLModelManager mlModelManager;
     private final ClusterService clusterService;
     private final Client client;
-    private DiscoveryNodeHelper nodeFilter;
+    private final DiscoveryNodeHelper nodeFilter;
     private final MLStats mlStats;
-    private NamedXContentRegistry xContentRegistry;
-
-    private ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public TransportUndeployModelAction(
@@ -74,9 +70,7 @@ public class TransportUndeployModelAction extends
         ThreadPool threadPool,
         Client client,
         DiscoveryNodeHelper nodeFilter,
-        MLStats mlStats,
-        NamedXContentRegistry xContentRegistry,
-        ModelAccessControlHelper modelAccessControlHelper
+        MLStats mlStats
     ) {
         super(
             MLUndeployModelAction.NAME,
@@ -94,17 +88,17 @@ public class TransportUndeployModelAction extends
         this.client = client;
         this.nodeFilter = nodeFilter;
         this.mlStats = mlStats;
-        this.xContentRegistry = xContentRegistry;
-        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
-    protected MLUndeployModelNodesResponse newResponse(
-        MLUndeployModelNodesRequest nodesRequest,
-        List<MLUndeployModelNodeResponse> responses,
-        List<FailedNodeException> failures
-    ) {
-        if (responses != null) {
+    protected void doExecute(Task task, MLUndeployModelNodesRequest request, ActionListener<MLUndeployModelNodesResponse> listener) {
+        ActionListener<MLUndeployModelNodesResponse> wrappedListener = ActionListener.wrap(undeployModelNodesResponse -> {
+            List<MLUndeployModelNodeResponse> responses = undeployModelNodesResponse.getNodes();
+            if (responses == null || responses.isEmpty()) {
+                listener.onResponse(undeployModelNodesResponse);
+                return;
+            }
+
             Map<String, List<String>> actualRemovedNodesMap = new HashMap<>();
             Map<String, String[]> modelWorkNodesBeforeRemoval = new HashMap<>();
             responses.forEach(r -> {
@@ -185,12 +179,25 @@ public class TransportUndeployModelAction extends
                                 Arrays.toString(actualRemovedNodesMap.keySet().toArray(new String[0]))
                             );
                     }, e -> { log.error("Failed to update model state as undeployed", e); });
-                    client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> { syncUpUndeployedModels(syncUpRequest); }));
+                    client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> {
+                        syncUpUndeployedModels(syncUpRequest);
+                        listener.onResponse(undeployModelNodesResponse);
+                    }));
                 } else {
                     syncUpUndeployedModels(syncUpRequest);
+                    listener.onResponse(undeployModelNodesResponse);
                 }
             }
-        }
+        }, e -> { listener.onFailure(e); });
+        super.doExecute(task, request, wrappedListener);
+    }
+
+    @Override
+    protected MLUndeployModelNodesResponse newResponse(
+        MLUndeployModelNodesRequest nodesRequest,
+        List<MLUndeployModelNodeResponse> responses,
+        List<FailedNodeException> failures
+    ) {
         return new MLUndeployModelNodesResponse(clusterService.getClusterName(), responses, failures);
     }
 
