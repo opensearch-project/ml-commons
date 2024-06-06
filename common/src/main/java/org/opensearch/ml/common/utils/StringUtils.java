@@ -168,7 +168,7 @@ public class StringUtils {
         Map<String, String> parameterStringMap = new HashMap<>();
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                Map<String, Object> parametersMap = (Map<String, Object>) processedInput.get("parameters");
+                Map<String, Object> parametersMap = (Map<String, Object>) processedInput.getOrDefault("parameters", Map.of());
                 for (String key : parametersMap.keySet()) {
                     if (parametersMap.get(key) instanceof String) {
                         parameterStringMap.put(key, (String) parametersMap.get(key));
