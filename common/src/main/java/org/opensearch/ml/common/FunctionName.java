@@ -30,7 +30,8 @@ public enum FunctionName {
     SPARSE_TOKENIZE,
     TEXT_SIMILARITY,
     QUESTION_ANSWERING,
-    AGENT;
+    AGENT,
+    CONNECTOR;
 
     public static FunctionName from(String value) {
         try {
