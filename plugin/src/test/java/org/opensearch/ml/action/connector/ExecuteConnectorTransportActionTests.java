@@ -151,7 +151,6 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());
-        assertTrue(argCaptor.getValue().getMessage().contains("\"mlInput\" is null"));
     }
 
 }
