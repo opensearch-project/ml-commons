@@ -55,6 +55,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private final Connector connector;
 
+    private final String action;
+
     private final ScriptService scriptService;
 
     private final MLGuard mlGuard;
@@ -68,7 +70,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         Map<String, String> parameters,
         Connector connector,
         ScriptService scriptService,
-        MLGuard mlGuard
+        MLGuard mlGuard,
+        String action
     ) {
         this.executionContext = executionContext;
         this.actionListener = actionListener;
@@ -76,6 +79,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         this.connector = connector;
         this.scriptService = scriptService;
         this.mlGuard = mlGuard;
+        this.action = action;
     }
 
     @Override
@@ -184,12 +188,12 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
 
         try {
-            ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
+            ModelTensors tensors = processOutput(action, body, connector, scriptService, parameters, mlGuard);
             tensors.setStatusCode(statusCode);
             actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
         } catch (Exception e) {
             log.error("Failed to process response body: {}", body, e);
-            actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
+            actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
         }
     }
 }

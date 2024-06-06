@@ -14,6 +14,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
@@ -522,7 +523,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         Connector connector = mock(Connector.class);
         when(input.getConnector()).thenReturn(connector);
-        when(connector.getPredictEndpoint(any(Map.class))).thenReturn("https://api.openai.com");
+        when(connector.getActionEndpoint(PREDICT.name(), any(Map.class))).thenReturn("https://api.openai.com");
         MLCreateConnectorResponse mlCreateConnectorResponse = mock(MLCreateConnectorResponse.class);
         doAnswer(invocation -> {
             ActionListener<MLCreateConnectorResponse> listener = invocation.getArgument(2);
@@ -556,7 +557,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(request.getRegisterModelInput()).thenReturn(input);
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         Connector connector = mock(Connector.class);
-        when(connector.getPredictEndpoint(any(Map.class))).thenReturn(null);
+        when(connector.getActionEndpoint(PREDICT.name(), any(Map.class))).thenReturn(null);
         when(input.getConnector()).thenReturn(connector);
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

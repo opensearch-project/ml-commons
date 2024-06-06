@@ -30,8 +30,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
+
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 public class HttpConnectorTest {
     @Rule
@@ -119,7 +120,7 @@ public class HttpConnectorTest {
     @Test
     public void decrypt() {
         HttpConnector connector = createHttpConnector();
-        connector.decrypt(decryptFunction);
+        connector.decrypt(PREDICT.name(), decryptFunction);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -148,42 +149,42 @@ public class HttpConnectorTest {
     }
 
     @Test
-    public void getPredictEndpoint() {
+    public void getActionEndpoint() {
         HttpConnector connector = createHttpConnector();
-        Assert.assertEquals("https://test.com", connector.getPredictEndpoint(null));
+        Assert.assertEquals("https://test.com", connector.getActionEndpoint(PREDICT.name(), null));
     }
 
     @Test
-    public void getPredictHttpMethod() {
+    public void getActionHttpMethod() {
         HttpConnector connector = createHttpConnector();
-        Assert.assertEquals("POST", connector.getPredictHttpMethod());
+        Assert.assertEquals("POST", connector.getActionHttpMethod(PREDICT.name()));
     }
 
     @Test
-    public void createPredictPayload_Invalid() {
+    public void createPayload_Invalid() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Some parameter placeholder not filled in payload: input");
         HttpConnector connector = createHttpConnector();
-        String predictPayload = connector.createPredictPayload(null);
+        String predictPayload = connector.createPayload(PREDICT.name(), null);
         connector.validatePayload(predictPayload);
     }
 
     @Test
-    public void createPredictPayload_InvalidJson() {
+    public void createPayload_InvalidJson() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Invalid payload: {\"input\": ${parameters.input} }");
         String requestBody = "{\"input\": ${parameters.input} }";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        String predictPayload = connector.createPredictPayload(null);
+        String predictPayload = connector.createPayload(PREDICT.name(), null);
         connector.validatePayload(predictPayload);
     }
 
     @Test
-    public void createPredictPayload() {
+    public void createPayload() {
         HttpConnector connector = createHttpConnector();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
-        String predictPayload = connector.createPredictPayload(parameters);
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
         connector.validatePayload(predictPayload);
         Assert.assertEquals("{\"input\": \"test input value\"}", predictPayload);
     }
