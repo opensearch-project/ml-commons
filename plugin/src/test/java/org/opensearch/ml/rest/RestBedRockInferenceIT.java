@@ -141,7 +141,7 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
             assertEquals(errorMsg, 1, outputList.size());
             assertTrue(errorMsg, outputList.get(0) instanceof Map);
             assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
-            assertEquals(errorMsg, 1536, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+            assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
         }
 
     }
