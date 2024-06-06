@@ -422,6 +422,6 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
         ArgumentCaptor<MLException> captor = ArgumentCaptor.forClass(MLException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("Fail to execute predict in aws connector");
+        assert captor.getValue().getMessage().equals("Fail to execute PREDICT in aws connector");
     }
 }
