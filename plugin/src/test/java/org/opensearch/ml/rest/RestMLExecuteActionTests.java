@@ -30,6 +30,7 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -44,6 +45,7 @@ import org.opensearch.rest.RestResponse;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.RemoteTransportException;
 
 public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
@@ -205,5 +207,78 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
+    }
+
+    public void testPrepareRequestClientException() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new IllegalArgumentException("Illegal Argument Exception"));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, response.status());
+        String content = response.content().utf8ToString();
+        String expectedError =
+            "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
+        assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testPrepareRequestClientWrappedException() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener
+                .onFailure(
+                    new RemoteTransportException("Remote Transport Exception", new IllegalArgumentException("Illegal Argument Exception"))
+                );
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, response.status());
+        String expectedError =
+            "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
+        assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testPrepareRequestSystemException() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("System Exception"));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, response.status());
+        String expectedError =
+            "{\"error\":{\"reason\":\"System Error\",\"details\":\"System Exception\",\"type\":\"RuntimeException\"},\"status\":500}";
+        assertEquals(expectedError, response.content().utf8ToString());
     }
 }

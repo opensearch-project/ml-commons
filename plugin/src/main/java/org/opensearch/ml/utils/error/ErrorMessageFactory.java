@@ -6,6 +6,7 @@
 package org.opensearch.ml.utils.error;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.ml.utils.MLExceptionUtils;
 
 import lombok.experimental.UtilityClass;
 
@@ -23,22 +24,9 @@ public class ErrorMessageFactory {
         int st = status;
         if (t instanceof OpenSearchException) {
             st = ((OpenSearchException) t).status().getStatus();
-        } else {
-            t = unwrapCause(e);
         }
+        t = MLExceptionUtils.getRootCause(t);
 
         return new ErrorMessage(t, st);
-    }
-
-    protected static Throwable unwrapCause(Throwable t) {
-        Throwable result = t;
-        if (result instanceof OpenSearchException) {
-            return result;
-        }
-        if (result.getCause() == null) {
-            return result;
-        }
-        result = unwrapCause(result.getCause());
-        return result;
     }
 }
