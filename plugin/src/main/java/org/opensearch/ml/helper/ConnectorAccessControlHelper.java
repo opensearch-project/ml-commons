@@ -14,6 +14,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.apache.lucene.search.join.ScoreMode;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.client.Client;
@@ -176,8 +177,12 @@ public class ConnectorAccessControlHelper {
                         log.error("Failed to get connector index", cause);
                         listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                     } else {
-                        log.error("Failed to find connector {}", connectorId, cause);
-                        listener.onFailure(new RuntimeException(cause));
+                        log.error("Failed to get ML connector " + connectorId, cause);
+                        if (cause instanceof Exception) {
+                            listener.onFailure((Exception) cause);
+                        } else {
+                            listener.onFailure(new OpenSearchException(cause));
+                        }
                     }
                 } else {
                     if (r != null && r.parser().isPresent()) {
