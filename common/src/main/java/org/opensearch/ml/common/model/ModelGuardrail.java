@@ -135,7 +135,6 @@ public class ModelGuardrail extends Guardrail {
             latch.await(5, SECONDS);
         } catch (InterruptedException e) {
             log.error("[ModelGuardrail] Validation was timeout.", e);
-            throw new IllegalStateException(e);
         }
 
         return isAccepted.get();

@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.model;
 
-import com.google.common.collect.ImmutableSet;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -34,7 +33,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -43,6 +41,7 @@ import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.stopWordsIndices;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
@@ -58,7 +57,6 @@ public class LocalRegexGuardrail extends Guardrail {
     private Map<String, List<String>> stopWordsIndicesInput;
     private NamedXContentRegistry xContentRegistry;
     private Client client;
-    private Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
 
     @Builder(toBuilder = true)
     public LocalRegexGuardrail(List<StopWords> stopWords, String[] regex) {

@@ -26,6 +26,7 @@ public class Guardrails implements ToXContentObject {
     public static final String TYPE_FIELD = "type";
     public static final String INPUT_GUARDRAIL_FIELD = "input_guardrail";
     public static final String OUTPUT_GUARDRAIL_FIELD = "output_guardrail";
+    public static final Set<String> types = Set.of("local_regex", "model");
 
     private String type;
     private Guardrail inputGuardrail;
@@ -133,7 +134,6 @@ public class Guardrails implements ToXContentObject {
     }
 
     private static Boolean validateType(String type) {
-        Set<String> types = Set.of("local_regex", "model");
         if (types.contains(type)) {
             return true;
         }
