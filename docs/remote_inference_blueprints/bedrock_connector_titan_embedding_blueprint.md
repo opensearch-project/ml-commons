@@ -89,6 +89,74 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
+If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
+Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html) 
+
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  "name": "Amazon Bedrock Connector: embedding",
+  "description": "The connector to bedrock Titan embedding model",
+  "version": 1,
+  "protocol": "aws_sigv4",
+  "parameters": {
+    "region": "<PLEASE ADD YOUR AWS REGION HERE>",
+    "service_name": "bedrock",
+    "model": "amazon.titan-embed-text-v1"
+  },
+  "credential": {
+    "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+  },
+  "actions": [
+    {
+      "action_type": "predict",
+      "method": "POST",
+      "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke",
+      "headers": {
+        "content-type": "application/json",
+        "x-amz-content-sha256": "required"
+      },
+      "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+      "pre_process_function": """
+    StringBuilder builder = new StringBuilder();
+    builder.append("\"");
+    String first = params.text_docs[0];
+    if (first.contains("\"")) {
+      first = first.replace("\"", "\\\"");
+    }
+    if (first.contains("\\t")) {
+      first = first.replace("\\t", "\\\\\\t");
+    }
+    if (first.contains('
+')) {
+      first = first.replace('
+', '\\n');
+    }
+    builder.append(first);
+    builder.append("\"");
+    def parameters = "{" +"\"inputText\":" + builder + "}";
+    return "{" +"\"parameters\":" + parameters + "}";
+    """,
+      "post_process_function": """
+    def name = "sentence_embedding";
+    def dataType = "FLOAT32";
+    if (params.embedding == null || params.embedding.length == 0) {
+      return params.message;
+    }
+    def shape = [params.embedding.length];
+    def json = "{" +
+               "\"name\":" + "\"" + name + "\"" + "," +
+               "\"data_type\":" + "\"" + dataType + "\"" + "," +
+               "\"shape\":" + shape + "," +
+               "\"data\":" + params.embedding +
+               "}";
+    return json;
+    """
+    }
+  ]
+}
+```
+
 Sample response:
 ```json
 {
