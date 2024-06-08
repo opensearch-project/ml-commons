@@ -89,7 +89,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-As of version 2.12 of the Open Research Service, we support the connector.pre_process.bedrock.embedding and connector.post_process.bedrock.embedding embedding functions.
+As of version 2.12 of the OpenSearch Service, we support the connector.pre_process.bedrock.embedding and connector.post_process.bedrock.embedding embedding functions.
 However, If you are using AWS OpenSearch Service version 2.11, there are no built-in functions for pre_process_function and post_process_function.
 So, you need to add the script as shown below.
 
