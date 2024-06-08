@@ -89,7 +89,8 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If you are using AWS OpenSearch Service version 2.11, there are no built-in functions for pre_process_function and post_process_function.
+As of version 2.12 of the Open Research Service, we support the connector.pre_process.bedrock.embedding and connector.post_process.bedrock.embedding embedding functions.
+However, If you are using AWS OpenSearch Service version 2.11, there are no built-in functions for pre_process_function and post_process_function.
 So, you need to add the script as shown below.
 
 ```json
@@ -117,39 +118,8 @@ POST /_plugins/_ml/connectors/_create
         "x-amz-content-sha256": "required"
       },
       "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
-      "pre_process_function": """
-        StringBuilder builder = new StringBuilder();
-        builder.append("\"");
-        String first = params.text_docs[0];
-        if (first.contains("\"")) {
-          first = first.replace("\"", "\\\"");
-        }
-        if (first.contains("\\t")) {
-          first = first.replace("\\t", "\\\\\\t");
-        }
-        if (first.contains('')) {
-          first = first.replace('', '\\n');
-        }
-        builder.append(first);
-        builder.append("\"");
-        def parameters = "{" +"\"inputText\":" + builder + "}";
-        return "{" +"\"parameters\":" + parameters + "}";
-      """,
-      "post_process_function": """
-        def name = "sentence_embedding";
-        def dataType = "FLOAT32";
-        if (params.embedding == null || params.embedding.length == 0) {
-          return params.message;
-        }
-        def shape = [params.embedding.length];
-        def json = "{" +
-                  "\"name\":" + "\"" + name + "\"" + "," +
-                  "\"data_type\":" + "\"" + dataType + "\"" + "," +
-                  "\"shape\":" + shape + "," +
-                  "\"data\":" + params.embedding +
-                  "}";
-        return json;
-    """
+      "pre_process_function": "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"inputText\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";",
+      "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
     }
   ]
 }
