@@ -9,7 +9,6 @@ import static org.hamcrest.Matchers.containsString;
 
 import java.io.IOException;
 
-import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
@@ -83,7 +82,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         deleteExternalIndices();
     }
 
-    public void testConnectorToolInFlowAgent_WrongAction() throws IOException, ParseException {
+    public void testConnectorToolInFlowAgent_WrongAction() throws IOException {
         String registerAgentRequestBody = "{\n"
             + "  \"name\": \"Test agent with connector tool\",\n"
             + "  \"type\": \"flow\",\n"
@@ -108,7 +107,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("no EXECUTE action found"));
     }
 
-    public void testConnectorToolInFlowAgent() throws IOException, ParseException {
+    public void testConnectorToolInFlowAgent() throws IOException {
         String registerAgentRequestBody = "{\n"
             + "  \"name\": \"Test agent with connector tool\",\n"
             + "  \"type\": \"flow\",\n"
