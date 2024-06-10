@@ -84,6 +84,7 @@ public class TransportUndeployModelAction extends
             MLUndeployModelNodeResponse.class
         );
         this.mlModelManager = mlModelManager;
+
         this.clusterService = clusterService;
         this.client = client;
         this.nodeFilter = nodeFilter;
@@ -93,103 +94,110 @@ public class TransportUndeployModelAction extends
     @Override
     protected void doExecute(Task task, MLUndeployModelNodesRequest request, ActionListener<MLUndeployModelNodesResponse> listener) {
         ActionListener<MLUndeployModelNodesResponse> wrappedListener = ActionListener.wrap(undeployModelNodesResponse -> {
-            List<MLUndeployModelNodeResponse> responses = undeployModelNodesResponse.getNodes();
-            if (responses == null || responses.isEmpty()) {
-                listener.onResponse(undeployModelNodesResponse);
-                return;
+            processUndeployModelResponseAndUpdate(undeployModelNodesResponse, listener);
+        }, listener::onFailure);
+        super.doExecute(task, request, wrappedListener);
+    }
+
+    void processUndeployModelResponseAndUpdate(
+        MLUndeployModelNodesResponse undeployModelNodesResponse,
+        ActionListener<MLUndeployModelNodesResponse> listener
+    ) {
+        List<MLUndeployModelNodeResponse> responses = undeployModelNodesResponse.getNodes();
+        if (responses == null || responses.isEmpty()) {
+            listener.onResponse(undeployModelNodesResponse);
+            return;
+        }
+
+        Map<String, List<String>> actualRemovedNodesMap = new HashMap<>();
+        Map<String, String[]> modelWorkNodesBeforeRemoval = new HashMap<>();
+        responses.forEach(r -> {
+            Map<String, String[]> nodeCounts = r.getModelWorkerNodeBeforeRemoval();
+
+            if (nodeCounts != null) {
+                for (Map.Entry<String, String[]> entry : nodeCounts.entrySet()) {
+                    // when undeploy an undeployed model, the entry.getvalue() is null
+                    if (entry.getValue() != null
+                        && (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
+                            || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length)) {
+                        modelWorkNodesBeforeRemoval.put(entry.getKey(), entry.getValue());
+                    }
+                }
             }
 
-            Map<String, List<String>> actualRemovedNodesMap = new HashMap<>();
-            Map<String, String[]> modelWorkNodesBeforeRemoval = new HashMap<>();
-            responses.forEach(r -> {
-                Map<String, String[]> nodeCounts = r.getModelWorkerNodeBeforeRemoval();
-
-                if (nodeCounts != null) {
-                    for (Map.Entry<String, String[]> entry : nodeCounts.entrySet()) {
-                        // when undeploy a undeployed model, the entry.getvalue() is null
-                        if (entry.getValue() != null
-                            && (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
-                                || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length)) {
-                            modelWorkNodesBeforeRemoval.put(entry.getKey(), entry.getValue());
-                        }
+            Map<String, String> modelUndeployStatus = r.getModelUndeployStatus();
+            for (Map.Entry<String, String> entry : modelUndeployStatus.entrySet()) {
+                String status = entry.getValue();
+                if (UNDEPLOYED.equals(status)) {
+                    String modelId = entry.getKey();
+                    if (!actualRemovedNodesMap.containsKey(modelId)) {
+                        actualRemovedNodesMap.put(modelId, new ArrayList<>());
                     }
+                    actualRemovedNodesMap.get(modelId).add(r.getNode().getId());
                 }
+            }
+        });
 
-                Map<String, String> modelUndeployStatus = r.getModelUndeployStatus();
-                for (Map.Entry<String, String> entry : modelUndeployStatus.entrySet()) {
-                    String status = entry.getValue();
-                    if (UNDEPLOYED.equals(status)) {
-                        String modelId = entry.getKey();
-                        if (!actualRemovedNodesMap.containsKey(modelId)) {
-                            actualRemovedNodesMap.put(modelId, new ArrayList<>());
-                        }
-                        actualRemovedNodesMap.get(modelId).add(r.getNode().getId());
+        MLSyncUpInput syncUpInput = MLSyncUpInput
+            .builder()
+            .removedWorkerNodes(covertRemoveNodesMapForSyncUp(actualRemovedNodesMap))
+            .build();
+
+        MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (actualRemovedNodesMap.size() > 0) {
+                BulkRequest bulkRequest = new BulkRequest();
+                Map<String, Boolean> deployToAllNodes = new HashMap<>();
+                for (String modelId : actualRemovedNodesMap.keySet()) {
+                    UpdateRequest updateRequest = new UpdateRequest();
+                    List<String> removedNodes = actualRemovedNodesMap.get(modelId);
+                    int removedNodeCount = removedNodes.size();
+                    /**
+                     *  If allow custom deploy is false, user can only undeploy all nodes and status is undeployed.
+                     *  If allow custom deploy is true, user can undeploy all nodes and status is undeployed,
+                     *  or undeploy partial nodes, and status is deployed, this case means user created a new deployment plan, and
+                     *  we need to update both planning worker nodes (count) and current worker nodes (count)
+                     *  and deployToAllNodes value in model index.
+                     */
+                    Map<String, Object> updateDocument = new HashMap<>();
+                    if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) { // undeploy all nodes.
+                        updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
+                        updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
+                        updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
+                        updateDocument.put(MLModel.MODEL_STATE_FIELD, MLModelState.UNDEPLOYED);
+                    } else { // undeploy partial nodes.
+                        // TODO (to fix) when undeploy partial nodes, the original model status could be partially_deployed,
+                        // and the user could be undeploying not running model nodes, and we should update model status to deployed.
+                        updateDocument.put(MLModel.DEPLOY_TO_ALL_NODES_FIELD, false);
+                        List<String> newPlanningWorkerNodes = Arrays
+                            .stream(modelWorkNodesBeforeRemoval.get(modelId))
+                            .filter(x -> !removedNodes.contains(x))
+                            .collect(Collectors.toList());
+                        updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkerNodes);
+                        updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
+                        updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
+                        deployToAllNodes.put(modelId, false);
                     }
+                    updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
+                    bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 }
-            });
-
-            MLSyncUpInput syncUpInput = MLSyncUpInput
-                .builder()
-                .removedWorkerNodes(covertRemoveNodesMapForSyncUp(actualRemovedNodesMap))
-                .build();
-
-            MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                if (actualRemovedNodesMap.size() > 0) {
-                    BulkRequest bulkRequest = new BulkRequest();
-                    Map<String, Boolean> deployToAllNodes = new HashMap<>();
-                    for (String modelId : actualRemovedNodesMap.keySet()) {
-                        UpdateRequest updateRequest = new UpdateRequest();
-                        List<String> removedNodes = actualRemovedNodesMap.get(modelId);
-                        int removedNodeCount = removedNodes.size();
-                        /**
-                         *  If allow custom deploy is false, user can only undeploy all nodes and status is undeployed.
-                         *  If allow custom deploy is true, user can undeploy all nodes and status is undeployed,
-                         *  or undeploy partial nodes, and status is deployed, this case means user created a new deployment plan, and
-                         *  we need to update both planning worker nodes (count) and current worker nodes (count)
-                         *  and deployToAllNodes value in model index.
-                         */
-                        Map<String, Object> updateDocument = new HashMap<>();
-                        if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) { // undeploy all nodes.
-                            updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
-                            updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
-                            updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
-                            updateDocument.put(MLModel.MODEL_STATE_FIELD, MLModelState.UNDEPLOYED);
-                        } else { // undeploy partial nodes.
-                            // TODO (to fix) when undeploy partial nodes, the original model status could be partially_deployed,
-                            // and the user could be undeploying not running model nodes, and we should update model status to deployed.
-                            updateDocument.put(MLModel.DEPLOY_TO_ALL_NODES_FIELD, false);
-                            List<String> newPlanningWorkerNodes = Arrays
-                                .stream(modelWorkNodesBeforeRemoval.get(modelId))
-                                .filter(x -> !removedNodes.contains(x))
-                                .collect(Collectors.toList());
-                            updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkerNodes);
-                            updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
-                            updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
-                            deployToAllNodes.put(modelId, false);
-                        }
-                        updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
-                        bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                    }
-                    syncUpInput.setDeployToAllNodes(deployToAllNodes);
-                    ActionListener<BulkResponse> actionListener = ActionListener.wrap(r -> {
-                        log
-                            .debug(
-                                "updated model state as undeployed for : {}",
-                                Arrays.toString(actualRemovedNodesMap.keySet().toArray(new String[0]))
-                            );
-                    }, e -> { log.error("Failed to update model state as undeployed", e); });
-                    client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> {
-                        syncUpUndeployedModels(syncUpRequest);
-                        listener.onResponse(undeployModelNodesResponse);
-                    }));
-                } else {
+                syncUpInput.setDeployToAllNodes(deployToAllNodes);
+                ActionListener<BulkResponse> actionListener = ActionListener.wrap(r -> {
+                    log
+                        .debug(
+                            "updated model state as undeployed for : {}",
+                            Arrays.toString(actualRemovedNodesMap.keySet().toArray(new String[0]))
+                        );
+                }, e -> { log.error("Failed to update model state as undeployed", e); });
+                client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> {
                     syncUpUndeployedModels(syncUpRequest);
                     listener.onResponse(undeployModelNodesResponse);
-                }
+                }));
+            } else {
+                syncUpUndeployedModels(syncUpRequest);
+                listener.onResponse(undeployModelNodesResponse);
             }
-        }, e -> { listener.onFailure(e); });
-        super.doExecute(task, request, wrappedListener);
+        }
     }
 
     @Override

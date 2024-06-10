@@ -7,18 +7,14 @@ package org.opensearch.ml.action.undeploy;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,9 +27,9 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.client.Client;
@@ -49,21 +45,17 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
-import org.opensearch.ml.memory.index.InteractionsIndex;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.tasks.Task;
-import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.Transport;
 import org.opensearch.transport.TransportService;
 
 public class TransportUndeployModelActionTests extends OpenSearchTestCase {
@@ -92,7 +84,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
     @Mock
     Task task;
 
-    @Mock
+    @Spy
     ActionListener<MLUndeployModelNodesResponse> actionListener;
 
     @Mock
@@ -114,11 +106,13 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     private TransportUndeployModelAction action;
 
-    private DiscoveryNode localNode;
+    DiscoveryNode localNode;
 
     private DiscoveryNode node1;
 
     private DiscoveryNode node2;
+
+    DiscoveryNode[] nodesArray;
 
     @Mock
     private MLUndeployModelNodesResponse undeployModelNodesResponse;
@@ -227,26 +221,26 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         assertNotNull(response);
     }
 
-    public void testUndeployedModelNullResponse() {
-        MLUndeployModelNodesRequest nodesRequest = mock(MLUndeployModelNodesRequest.class);
-        doReturn(new DiscoveryNode[] {}).when(nodesRequest).concreteNodes();
+    public void testDoExecuteTransportUndeployedModelAction() {
+        MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
 
-        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
-        doAnswer(invocation -> {
-            ActionListener<MLUndeployModelNodesResponse> actionListener = invocation.getArgument(2);
-            actionListener.onResponse(undeployModelNodesResponse);
-            return null;
-        }).when(client).execute(any(), any(), any());
         action.doExecute(task, nodesRequest, actionListener);
         ArgumentCaptor<MLUndeployModelNodesResponse> argCaptor = ArgumentCaptor.forClass(MLUndeployModelNodesResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
     }
 
+    public void testProcessUndeployModelResponseAndUpdateNullResponse() {
+        when(undeployModelNodesResponse.getNodes()).thenReturn(null);
+        action.processUndeployModelResponseAndUpdate(undeployModelNodesResponse, actionListener);
+    }
 
-    public void testNewResponseWithUndeployedModelStatus() {
+    public void testProcessUndeployModelResponseAndUpdateResponse() {
         final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
-            new String[] { "nodeId1", "nodeId2" },
-            new String[] { "modelId1", "modelId2" }
+                new String[] { "nodeId1", "nodeId2" },
+                new String[] { "modelId1", "modelId2" }
         );
         final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
         Map<String, String> modelToDeployStatus = new HashMap<>();
@@ -259,7 +253,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         responses.add(response2);
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
-        assertNotNull(response);
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
     }
 
     public void testNewResponseWithNotFoundModelStatus() {
