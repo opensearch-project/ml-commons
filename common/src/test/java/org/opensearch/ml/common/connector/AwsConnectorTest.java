@@ -31,6 +31,7 @@ import java.util.function.Function;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
@@ -110,7 +111,7 @@ public class AwsConnectorTest {
         Assert.assertNotNull(connector);
 
         connector.encrypt(encryptFunction);
-        connector.decrypt(decryptFunction);
+        connector.decrypt(PREDICT.name(), decryptFunction);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals(null, connector.getSessionToken());
@@ -149,13 +150,13 @@ public class AwsConnectorTest {
 
         AwsConnector connector = createAwsConnector(parameters, credential, url);
         connector.encrypt(encryptFunction);
-        connector.decrypt(decryptFunction);
+        connector.decrypt(PREDICT.name(), decryptFunction);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
         Assert.assertEquals("test_service", connector.getServiceName());
         Assert.assertEquals("us-west-2", connector.getRegion());
-        Assert.assertEquals("https://test.com/model1", connector.getPredictEndpoint(parameters));
+        Assert.assertEquals("https://test.com/model1", connector.getActionEndpoint(PREDICT.name(), parameters));
     }
 
     @Test
@@ -170,13 +171,13 @@ public class AwsConnectorTest {
         String url = "https://test.com";
         AwsConnector connector = createAwsConnector(null, credential, url);
         connector.encrypt(encryptFunction);
-        connector.decrypt(decryptFunction);
+        connector.decrypt(PREDICT.name(), decryptFunction);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SERVICE", connector.getServiceName());
         Assert.assertEquals("decrypted: ENCRYPTED: US-WEST-2", connector.getRegion());
-        Assert.assertEquals("https://test.com", connector.getPredictEndpoint(null));
+        Assert.assertEquals("https://test.com", connector.getActionEndpoint(PREDICT.name(), null));
     }
 
     @Test

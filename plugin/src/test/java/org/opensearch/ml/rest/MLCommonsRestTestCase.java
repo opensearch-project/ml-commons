@@ -961,6 +961,13 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         assertTrue(taskDone.get());
     }
 
+    public String registerConnector(String createConnectorInput) throws IOException, InterruptedException {
+        Response response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        return connectorId;
+    }
+
     public String registerRemoteModel(String createConnectorInput, String modelName, boolean deploy) throws IOException,
         InterruptedException {
         Response response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);

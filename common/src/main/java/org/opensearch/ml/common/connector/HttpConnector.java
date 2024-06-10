@@ -30,6 +30,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -307,10 +308,10 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public  <T> T createPredictPayload(Map<String, String> parameters) {
-        Optional<ConnectorAction> predictAction = findPredictAction();
-        if (predictAction.isPresent() && predictAction.get().getRequestBody() != null) {
-            String payload = predictAction.get().getRequestBody();
+    public  <T> T createPayload(String action, Map<String, String> parameters) {
+        Optional<ConnectorAction> connectorAction = findAction(action);
+        if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
+            String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
@@ -348,15 +349,15 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void decrypt(Function<String, String> function) {
+    public void decrypt(String action, Function<String, String> function) {
         Map<String, String> decrypted = new HashMap<>();
         for (String key : credential.keySet()) {
             decrypted.put(key, function.apply(credential.get(key)));
         }
         this.decryptedCredential = decrypted;
-        Optional<ConnectorAction> predictAction = findPredictAction();
-        Map<String, String> headers = predictAction.isPresent() ? predictAction.get().getHeaders() : null;
-        this.decryptedHeaders = createPredictDecryptedHeaders(headers);
+        Optional<ConnectorAction> connectorAction = findAction(action);
+        Map<String, String> headers = connectorAction.isPresent() ? connectorAction.get().getHeaders() : null;
+        this.decryptedHeaders = createDecryptedHeaders(headers);
     }
 
     @Override
@@ -378,8 +379,9 @@ public class HttpConnector extends AbstractConnector {
         }
     }
 
-    public String getPredictHttpMethod() {
-        return findPredictAction().get().getMethod();
+    @Override
+    public String getActionHttpMethod(String action) {
+        return findAction(action).get().getMethod();
     }
 
 }

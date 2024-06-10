@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+
 import java.util.Map;
 
 import org.opensearch.client.Client;
@@ -66,7 +68,7 @@ public class RemoteModel implements Predictable {
             return;
         }
         try {
-            connectorExecutor.executePredict(mlInput, actionListener);
+            connectorExecutor.executeAction(PREDICT.name(), mlInput, actionListener);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
             actionListener.onFailure(e);
@@ -90,7 +92,7 @@ public class RemoteModel implements Predictable {
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
             Connector connector = model.getConnector().cloneConnector();
-            connector.decrypt((credential) -> encryptor.decrypt(credential));
+            connector.decrypt(PREDICT.name(), (credential) -> encryptor.decrypt(credential));
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
