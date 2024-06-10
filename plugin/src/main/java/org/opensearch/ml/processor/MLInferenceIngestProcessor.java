@@ -29,7 +29,6 @@ import org.opensearch.ingest.Processor;
 import org.opensearch.ingest.ValueSource;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -194,36 +193,39 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             modelParameters.putAll(inferenceProcessorAttributes.getModelConfigMaps());
             modelConfigs.putAll(inferenceProcessorAttributes.getModelConfigMaps());
         }
-        Map<String, String> outputMapping = processOutputMap.get(inputMapIndex);
 
         Map<String, Object> ingestDocumentSourceAndMetaData = new HashMap<>();
         ingestDocumentSourceAndMetaData.putAll(ingestDocument.getSourceAndMetadata());
         ingestDocumentSourceAndMetaData.put(IngestDocument.INGEST_KEY, ingestDocument.getIngestMetadata());
 
         Map<String, List<String>> newOutputMapping = new HashMap<>();
-        for (Map.Entry<String, String> entry : outputMapping.entrySet()) {
-            String newDocumentFieldName = entry.getKey();
-            List<String> dotPathsInArray = writeNewDotPathForNestedObject(ingestDocumentSourceAndMetaData, newDocumentFieldName);
-            newOutputMapping.put(newDocumentFieldName, dotPathsInArray);
-        }
+        if (processOutputMap != null) {
 
-        for (Map.Entry<String, String> entry : outputMapping.entrySet()) {
-            String newDocumentFieldName = entry.getKey();
-            List<String> dotPaths = newOutputMapping.get(newDocumentFieldName);
+            Map<String, String> outputMapping = processOutputMap.get(inputMapIndex);
+            for (Map.Entry<String, String> entry : outputMapping.entrySet()) {
+                String newDocumentFieldName = entry.getKey();
+                List<String> dotPathsInArray = writeNewDotPathForNestedObject(ingestDocumentSourceAndMetaData, newDocumentFieldName);
+                newOutputMapping.put(newDocumentFieldName, dotPathsInArray);
+            }
 
-            int existingFields = 0;
-            for (String path : dotPaths) {
-                if (ingestDocument.hasField(path)) {
-                    existingFields++;
+            for (Map.Entry<String, String> entry : outputMapping.entrySet()) {
+                String newDocumentFieldName = entry.getKey();
+                List<String> dotPaths = newOutputMapping.get(newDocumentFieldName);
+
+                int existingFields = 0;
+                for (String path : dotPaths) {
+                    if (ingestDocument.hasField(path)) {
+                        existingFields++;
+                    }
+                }
+                if (!override && existingFields == dotPaths.size()) {
+                    newOutputMapping.remove(newDocumentFieldName);
                 }
             }
-            if (!override && existingFields == dotPaths.size()) {
-                newOutputMapping.remove(newDocumentFieldName);
+            if (newOutputMapping.size() == 0) {
+                batchPredictionListener.onResponse(null);
+                return;
             }
-        }
-        if (newOutputMapping.size() == 0) {
-            batchPredictionListener.onResponse(null);
-            return;
         }
         // when no input mapping is provided, default to read all fields from documents as model input
         if (inputMapSize == 0) {
@@ -374,68 +376,11 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
     /**
      * Appends the model output value to the specified field in the IngestDocument without modifying the source.
      *
-     * @param modelTensorOutput    the ModelTensorOutput containing the model output
+     * @param mlOutput    the MLOutput containing the model output
      * @param modelOutputFieldName the name of the field in the model output
      * @param newDocumentFieldName the name of the field in the IngestDocument to append the value to
      * @param ingestDocument       the IngestDocument to append the value to
      */
-    private void appendFieldValue(
-        ModelTensorOutput modelTensorOutput,
-        String modelOutputFieldName,
-        String newDocumentFieldName,
-        IngestDocument ingestDocument
-    ) {
-        Object modelOutputValue = null;
-
-        if (modelTensorOutput.getMlModelOutputs() != null && modelTensorOutput.getMlModelOutputs().size() > 0) {
-
-            modelOutputValue = getModelOutputValue(modelTensorOutput, modelOutputFieldName, ignoreMissing);
-
-            List<String> dotPathsInArray = writeNewDotPathForNestedObject(ingestDocument.getSourceAndMetadata(), newDocumentFieldName);
-
-            if (dotPathsInArray.size() == 1) {
-                if (!ingestDocument.hasField(dotPathsInArray.get(0)) || override) {
-                    ValueSource ingestValue = ValueSource.wrap(modelOutputValue, scriptService);
-                    TemplateScript.Factory ingestField = ConfigurationUtils
-                        .compileTemplate(TYPE, tag, dotPathsInArray.get(0), dotPathsInArray.get(0), scriptService);
-
-                    ingestDocument.setFieldValue(ingestField, ingestValue, ignoreMissing);
-                }
-            } else {
-                if (!(modelOutputValue instanceof List)) {
-                    throw new IllegalArgumentException("Model output is not an array, cannot assign to array in documents.");
-                }
-                List<?> modelOutputValueArray = (List<?>) modelOutputValue;
-                // check length of the prediction array to be the same of the document array
-                if (dotPathsInArray.size() != modelOutputValueArray.size()) {
-                    throw new RuntimeException(
-                        "the prediction field: "
-                            + modelOutputFieldName
-                            + " is an array in size of "
-                            + modelOutputValueArray.size()
-                            + " but the document field array from field "
-                            + newDocumentFieldName
-                            + " is in size of "
-                            + dotPathsInArray.size()
-                    );
-                }
-                // Iterate over dotPathInArray
-                for (int i = 0; i < dotPathsInArray.size(); i++) {
-                    String dotPathInArray = dotPathsInArray.get(i);
-                    if (!ingestDocument.hasField(dotPathInArray) || override) {
-                        Object modelOutputValueInArray = modelOutputValueArray.get(i);
-                        ValueSource ingestValue = ValueSource.wrap(modelOutputValueInArray, scriptService);
-                        TemplateScript.Factory ingestField = ConfigurationUtils
-                            .compileTemplate(TYPE, tag, dotPathInArray, dotPathInArray, scriptService);
-                        ingestDocument.setFieldValue(ingestField, ingestValue, ignoreMissing);
-                    }
-                }
-            }
-        } else {
-            throw new RuntimeException("model inference output cannot be null");
-        }
-    }
-
     private void appendFieldValue(
         MLOutput mlOutput,
         String modelOutputFieldName,

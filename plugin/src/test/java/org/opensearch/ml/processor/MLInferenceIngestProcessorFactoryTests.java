@@ -5,6 +5,9 @@
 package org.opensearch.ml.processor;
 
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
+import static org.opensearch.ml.processor.MLInferenceIngestProcessor.FULL_RESPONSE_PATH;
+import static org.opensearch.ml.processor.MLInferenceIngestProcessor.FUNCTION_NAME;
+import static org.opensearch.ml.processor.MLInferenceIngestProcessor.MODEL_INPUT;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,7 +29,6 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
     private Client client;
     @Mock
     private ScriptService scriptService;
-
     @Mock
     private NamedXContentRegistry xContentRegistry;
 
@@ -39,6 +41,34 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
         Map<String, Processor.Factory> registry = new HashMap<>();
         Map<String, Object> config = new HashMap<>();
         config.put(MODEL_ID, "model1");
+        String processorTag = randomAlphaOfLength(10);
+        MLInferenceIngestProcessor mLInferenceIngestProcessor = factory.create(registry, processorTag, null, config);
+        assertNotNull(mLInferenceIngestProcessor);
+        assertEquals(mLInferenceIngestProcessor.getTag(), processorTag);
+        assertEquals(mLInferenceIngestProcessor.getType(), MLInferenceIngestProcessor.TYPE);
+    }
+
+    public void testCreateLocalModelProcessor() throws Exception {
+        Map<String, Processor.Factory> registry = new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model1");
+        config.put(FUNCTION_NAME, "text_embedding");
+        config.put(FULL_RESPONSE_PATH, true);
+        config.put(MODEL_INPUT, "{ \"text_docs\": ${ml_inference.text_docs} }");
+        Map<String, Object> model_config = new HashMap<>();
+        model_config.put("return_number", true);
+        config.put(MODEL_CONFIG, model_config);
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put("text_docs", "text");
+        inputMap.add(input);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("text_embedding", "$.inference_results[0].output[0].data");
+        outputMap.add(output);
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(MAX_PREDICTION_TASKS, 5);
         String processorTag = randomAlphaOfLength(10);
         MLInferenceIngestProcessor mLInferenceIngestProcessor = factory.create(registry, processorTag, null, config);
         assertNotNull(mLInferenceIngestProcessor);

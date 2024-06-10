@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.makeRequest;
 
 import java.io.IOException;
@@ -15,8 +17,15 @@ import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
@@ -26,6 +35,8 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
     private String openAIChatModelId;
     private String bedrockEmbeddingModelId;
+
+    private String localModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -350,6 +361,108 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         Assert.assertEquals(1536, embedding2.size());
     }
 
+    @Ignore
+    public void testMLInferenceProcessorWithLocalModel() throws Exception {
+        String taskId = registerModel(TestHelper.toJsonString(registerModelInput()));
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        getTask(client(), taskId, response -> {
+            assertNotNull(response.get(MODEL_ID_FIELD));
+            this.localModelId = (String) response.get(MODEL_ID_FIELD);
+            try {
+                String deployTaskID = deployModel(this.localModelId);
+                waitForTask(deployTaskID, MLTaskState.COMPLETED);
+
+                getModel(client(), this.localModelId, model -> { assertEquals("DEPLOYED", model.get("model_state")); });
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        String indexName = "my_books";
+        String pipelineName = "my_books_text_embedding_pipeline";
+        String createIndexRequestBody = "{\n"
+            + "  \"settings\": {\n"
+            + "    \"index\": {\n"
+            + "      \"default_pipeline\": \""
+            + pipelineName
+            + "\"\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"mappings\": {\n"
+            + "    \"properties\": {\n"
+            + "      \"books\": {\n"
+            + "        \"type\": \"nested\",\n"
+            + "        \"properties\": {\n"
+            + "          \"title_embedding\": {\n"
+            + "            \"type\": \"float\"\n"
+            + "          },\n"
+            + "          \"title\": {\n"
+            + "            \"type\": \"text\"\n"
+            + "          },\n"
+            + "          \"description\": {\n"
+            + "            \"type\": \"text\"\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+        createIndex(indexName, createIndexRequestBody);
+
+        String createPipelineRequestBody = "{\n"
+            + "  \"description\": \"test embeddings\",\n"
+            + "  \"processors\": [\n"
+            + "    {\n"
+            + "      \"foreach\": {\n"
+            + "        \"field\": \"books\",\n"
+            + "        \"processor\": {\n"
+            + "          \"ml_inference\": {\n"
+            + "            \"model_id\": \""
+            + localModelId
+            + "\",\n"
+            + "            \"input_map\": [\n"
+            + "              {\n"
+            + "                \"input\": \"_ingest._value.title\"\n"
+            + "              }\n"
+            + "            ],\n"
+            + "            \"output_map\": [\n"
+            + "              {\n"
+            + "                \"_ingest._value.title_embedding\": \"$.embedding\"\n"
+            + "              }\n"
+            + "            ],\n"
+            + "            \"ignore_missing\": false,\n"
+            + "            \"ignore_failure\": false\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        createPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        String uploadDocumentRequestBody = "{\n"
+            + "    \"books\": [{\n"
+            + "            \"title\": \"first book\",\n"
+            + "            \"description\": \"This is first book\"\n"
+            + "        },\n"
+            + "        {\n"
+            + "            \"title\": \"second book\",\n"
+            + "            \"description\": \"This is second book\"\n"
+            + "        }\n"
+            + "    ]\n"
+            + "}";
+        uploadDocument(indexName, "1", uploadDocumentRequestBody);
+        Map document = getDocument(indexName, "1");
+
+        List embeddingList = JsonPath.parse(document).read("_source.books[*].title_embedding");
+        Assert.assertEquals(2, embeddingList.size());
+
+        List embedding1 = JsonPath.parse(document).read("_source.books[0].title_embedding");
+        Assert.assertEquals(1536, embedding1.size());
+        List embedding2 = JsonPath.parse(document).read("_source.books[1].title_embedding");
+        Assert.assertEquals(1536, embedding2.size());
+    }
+
     protected void createPipelineProcessor(String requestBody, final String pipelineName) throws Exception {
         Response pipelineCreateResponse = TestHelper
             .makeRequest(
@@ -378,7 +491,6 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
     protected void uploadDocument(final String index, final String docId, final String jsonBody) throws IOException {
         Request request = new Request("PUT", "/" + index + "/_doc/" + docId + "?refresh=true");
-
         request.setJsonEntity(jsonBody);
         client().performRequest(request);
     }
@@ -388,6 +500,26 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         assertEquals(200, docResponse.getStatusLine().getStatusCode());
 
         return parseResponseToMap(docResponse);
+    }
+
+    protected MLRegisterModelInput registerModelInput() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(768)
+            .build();
+        return MLRegisterModelInput
+            .builder()
+            .modelName("test_model_name")
+            .version("1.0.0")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .url(SENTENCE_TRANSFORMER_MODEL_URL)
+            .deployModel(false)
+            .hashValue("e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021")
+            .build();
     }
 
 }

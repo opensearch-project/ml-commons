@@ -94,13 +94,6 @@ public interface ModelExecutor {
         if (!isJson(payload)) {
             throw new IllegalArgumentException("Invalid payload: " + payload);
         }
-
-        // String jsonStr;
-        // try {
-        // jsonStr = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(inputParams));
-        // } catch (PrivilegedActionException e) {
-        // throw new IllegalArgumentException("wrong connector");
-        // }
         XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, null, payload);
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -126,7 +119,9 @@ public interface ModelExecutor {
         try {
             // getMlModelOutputs() returns a list or collection.
             // Adding null check for modelTensorOutput
-            if (modelTensorOutput != null && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
+            if (modelTensorOutput != null
+                && modelTensorOutput.getMlModelOutputs() != null
+                && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
                 // getMlModelOutputs() returns a list of ModelTensors
                 // accessing the first element.
                 // TODO currently remote model only return single tensor, might need to processor multiple tensors later
@@ -182,7 +177,7 @@ public interface ModelExecutor {
                 throw new RuntimeException("Model outputs are null or empty.");
             }
         } catch (Exception e) {
-            throw new RuntimeException("An unexpected error occurred: " + e.getMessage());
+            throw new RuntimeException(e.getMessage());
         }
         return modelOutputValue;
     }
@@ -191,17 +186,19 @@ public interface ModelExecutor {
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             String modelOutputJsonStr = mlOutput.toXContent(builder, ToXContent.EMPTY_PARAMS).toString();
             Map<String, Object> modelTensorOutputMap = gson.fromJson(modelOutputJsonStr, Map.class);
-            try {
-                if (!fullResponsePath && mlOutput instanceof ModelTensorOutput) {
-                    return getModelOutputValue((ModelTensorOutput) mlOutput, modelOutputFieldName, ignoreMissing);
-                } else {
+            if (!fullResponsePath && mlOutput instanceof ModelTensorOutput) {
+                return getModelOutputValue((ModelTensorOutput) mlOutput, modelOutputFieldName, ignoreMissing);
+            } else if (modelOutputFieldName == null || modelTensorOutputMap == null) {
+                return modelTensorOutputMap;
+            } else {
+                try {
                     return JsonPath.parse(modelTensorOutputMap).read(modelOutputFieldName);
-                }
-            } catch (Exception e) {
-                if (ignoreMissing) {
-                    return modelTensorOutputMap;
-                } else {
-                    throw new IllegalArgumentException("model inference output cannot find such json path: " + modelOutputFieldName, e);
+                } catch (Exception e) {
+                    if (ignoreMissing) {
+                        return modelTensorOutputMap;
+                    } else {
+                        throw new IllegalArgumentException("model inference output cannot find such json path: " + modelOutputFieldName, e);
+                    }
                 }
             }
         } catch (Exception e) {
