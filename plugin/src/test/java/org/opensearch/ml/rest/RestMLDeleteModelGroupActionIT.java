@@ -37,12 +37,11 @@ public class RestMLDeleteModelGroupActionIT extends MLCommonsRestTestCase {
         assertEquals(RestStatus.OK, TestHelper.restStatus(deleteModelGroupResponse));
     }
 
-    public void testDeleteAndRegisterModelGroup_Success() throws IOException, InterruptedException {
+    public void testDeleteAndRegisterModelGroup_Success() throws IOException {
 
         Response deleteModelGroupResponse = TestHelper
             .makeRequest(client(), "DELETE", "/_plugins/_ml/model_groups/" + modelGroupId, null, "", null);
 
-        Thread.sleep(50);
         if (TestHelper.restStatus(deleteModelGroupResponse).equals(RestStatus.OK)) {
             MLRegisterModelGroupInput newMlRegisterModelGroupInput = MLRegisterModelGroupInput
                 .builder()
