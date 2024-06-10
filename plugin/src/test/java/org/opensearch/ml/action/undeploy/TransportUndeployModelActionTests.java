@@ -239,8 +239,8 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     public void testProcessUndeployModelResponseAndUpdateResponse() {
         final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
-                new String[] { "nodeId1", "nodeId2" },
-                new String[] { "modelId1", "modelId2" }
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
         );
         final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
         Map<String, String> modelToDeployStatus = new HashMap<>();
@@ -253,6 +253,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         responses.add(response2);
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
         action.processUndeployModelResponseAndUpdate(response, actionListener);
     }
 
