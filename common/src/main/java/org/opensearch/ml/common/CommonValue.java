@@ -5,10 +5,13 @@
 
 package org.opensearch.ml.common;
 
+import com.google.common.collect.ImmutableSet;
 import org.opensearch.Version;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.controller.MLController;
+
+import java.util.Set;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -71,6 +74,7 @@ public class CommonValue {
         public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
         public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
+        public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
         public static final Integer ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION = 1;
         public static final String USER_FIELD_MAPPING = "      \""
                         + CommonValue.USER
