@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -47,10 +48,10 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
-    public void invokeRemoteModel_WrongHttpMethod() {
+    public void invokeRemoteService_WrongHttpMethod() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("wrong_method")
             .url("http://openai.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -63,17 +64,17 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(null, null, null, null, actionListener);
+        executor.invokeRemoteService(PREDICT.name(), null, null, null, null, actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assertEquals("unsupported http method", captor.getValue().getMessage());
     }
 
     @Test
-    public void invokeRemoteModel_invalidIpAddress() {
+    public void invokeRemoteService_invalidIpAddress() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://127.0.0.1/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -87,7 +88,14 @@ public class HttpJsonConnectorExecutorTest {
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         executor
-            .invokeRemoteModel(createMLInput(), new HashMap<>(), "{\"input\": \"hello world\"}", new ExecutionContext(0), actionListener);
+            .invokeRemoteService(
+                PREDICT.name(),
+                createMLInput(),
+                new HashMap<>(),
+                "{\"input\": \"hello world\"}",
+                new ExecutionContext(0),
+                actionListener
+            );
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof IllegalArgumentException;
@@ -95,10 +103,10 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
-    public void invokeRemoteModel_Empty_payload() {
+    public void invokeRemoteService_Empty_payload() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("")
@@ -111,7 +119,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
+        executor.invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof IllegalArgumentException;
@@ -119,10 +127,10 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
-    public void invokeRemoteModel_get_request() {
+    public void invokeRemoteService_get_request() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("GET")
             .url("http://openai.com/mock")
             .requestBody("")
@@ -135,14 +143,14 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
+        executor.invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
     }
 
     @Test
-    public void invokeRemoteModel_post_request() {
+    public void invokeRemoteService_post_request() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("hello world")
@@ -155,14 +163,15 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
+        executor
+            .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
     }
 
     @Test
-    public void invokeRemoteModel_nullHttpClient_throwMLException() throws NoSuchFieldException, IllegalAccessException {
+    public void invokeRemoteService_nullHttpClient_throwMLException() throws NoSuchFieldException, IllegalAccessException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://openai.com/mock")
             .requestBody("hello world")
@@ -178,7 +187,8 @@ public class HttpJsonConnectorExecutorTest {
         Field httpClientField = HttpJsonConnectorExecutor.class.getDeclaredField("httpClient");
         httpClientField.setAccessible(true);
         httpClientField.set(executor, null);
-        executor.invokeRemoteModel(createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
+        executor
+            .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue() instanceof NullPointerException;

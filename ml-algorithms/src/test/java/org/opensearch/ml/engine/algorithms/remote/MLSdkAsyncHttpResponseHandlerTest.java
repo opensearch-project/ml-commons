@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.engine.algorithms.remote.MLSdkAsyncHttpResponseHandler.AMZ_ERROR_HEADER;
 
 import java.nio.ByteBuffer;
@@ -59,6 +60,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     private SdkHttpFullResponse sdkHttpResponse;
     @Mock
     private ScriptService scriptService;
+    private String action;
 
     private MLSdkAsyncHttpResponseHandler mlSdkAsyncHttpResponseHandler;
 
@@ -70,7 +72,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         when(sdkHttpResponse.statusCode()).thenReturn(HttpStatusCode.OK);
         ConnectorAction predictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
             .url("http://test.com/mock")
@@ -86,7 +88,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
         ConnectorAction noProcessFunctionPredictAction = ConnectorAction
             .builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
+            .actionType(PREDICT)
             .method("POST")
             .url("http://test.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
@@ -98,13 +100,15 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             .protocol("http")
             .actions(Arrays.asList(noProcessFunctionPredictAction))
             .build();
+        action = PREDICT.name();
         mlSdkAsyncHttpResponseHandler = new MLSdkAsyncHttpResponseHandler(
             executionContext,
             actionListener,
             parameters,
             connector,
             scriptService,
-            null
+            null,
+            action
         );
         responseSubscriber = mlSdkAsyncHttpResponseHandler.new MLResponseSubscriber();
         headersMap = Map.of(AMZ_ERROR_HEADER, Arrays.asList("ThrottlingException:request throttled!"));
@@ -171,7 +175,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             noProcessFunctionConnector,
             scriptService,
-            null
+            null,
+            action
         );
         noProcessFunctionMlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
         noProcessFunctionMlSdkAsyncHttpResponseHandler.onStream(stream);
@@ -261,7 +266,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             connector,
             scriptService,
-            null
+            null,
+            action
         );
 
         SdkHttpFullResponse sdkHttpResponse = mock(SdkHttpFullResponse.class);
@@ -357,7 +363,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             connector,
             scriptService,
-            null
+            null,
+            action
         );
 
         SdkHttpFullResponse sdkHttpResponse = mock(SdkHttpFullResponse.class);
@@ -397,7 +404,8 @@ public class MLSdkAsyncHttpResponseHandlerTest {
             parameters,
             testConnector,
             scriptService,
-            null
+            null,
+            action
         );
 
         mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
@@ -414,6 +422,6 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
         ArgumentCaptor<MLException> captor = ArgumentCaptor.forClass(MLException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("Fail to execute predict in aws connector");
+        assert captor.getValue().getMessage().equals("Fail to execute PREDICT in aws connector");
     }
 }

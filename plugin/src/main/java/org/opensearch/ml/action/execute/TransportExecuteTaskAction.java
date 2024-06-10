@@ -42,8 +42,8 @@ public class TransportExecuteTaskAction extends HandledTransportAction<ActionReq
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLExecuteTaskResponse> listener) {
-        MLExecuteTaskRequest mlPredictionTaskRequest = MLExecuteTaskRequest.fromActionRequest(request);
-        FunctionName functionName = mlPredictionTaskRequest.getFunctionName();
-        mlExecuteTaskRunner.run(functionName, mlPredictionTaskRequest, transportService, listener);
+        MLExecuteTaskRequest mlExecuteTaskRequest = MLExecuteTaskRequest.fromActionRequest(request);
+        FunctionName functionName = mlExecuteTaskRequest.getFunctionName();
+        mlExecuteTaskRunner.run(functionName, mlExecuteTaskRequest, transportService, listener);
     }
 }
