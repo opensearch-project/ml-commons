@@ -59,8 +59,8 @@ public interface SdkClient {
      * @param request A request identifying the data object to retrieve
      * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
      */
-    default CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request){
-        return getDataObjectAsync(request, ForkJoinPool.commonPool());        
+    default CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
+        return getDataObjectAsync(request, ForkJoinPool.commonPool());
     }
 
     /**
@@ -90,7 +90,7 @@ public interface SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     default CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request) {
-        return updateDataObjectAsync(request, ForkJoinPool.commonPool());        
+        return updateDataObjectAsync(request, ForkJoinPool.commonPool());
     }
 
     /**
@@ -120,7 +120,7 @@ public interface SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     default CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request) {
-        return deleteDataObjectAsync(request, ForkJoinPool.commonPool());        
+        return deleteDataObjectAsync(request, ForkJoinPool.commonPool());
     }
 
     /**
@@ -135,7 +135,37 @@ public interface SdkClient {
             throw unwrapAndConvertToRuntime(e);
         }
     }
-    
+
+    /**
+     * Search for a data object/document in a table/index.
+     * @param request A request identifying the data object to retrieve
+     * @param executor the executor to use for asynchronous execution
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
+     */
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor);
+
+    /**
+     * Search for a data object/document in a table/index.
+     * @param request A request identifying the data object to retrieve
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
+     */
+    default CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request) {
+        return searchDataObjectAsync(request, ForkJoinPool.commonPool());
+    }
+
+    /**
+     * Search for a data object/document in a table/index.
+     * @param request A request identifying the data object to retrieve
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
+     */
+    default SearchDataObjectResponse searchDataObject(SearchDataObjectRequest request) {
+        try {
+            return searchDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            throw unwrapAndConvertToRuntime(e);
+        }
+    }
+
     private static RuntimeException unwrapAndConvertToRuntime(CompletionException e) {
         Throwable cause = e.getCause();
         if (cause instanceof InterruptedException) {

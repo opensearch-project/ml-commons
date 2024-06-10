@@ -22,6 +22,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.lucene.search.TotalHits;
+import org.apache.lucene.search.TotalHits.Relation;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -34,6 +36,8 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.action.update.UpdateRequest;
@@ -54,8 +58,13 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SearchDataObjectRequest;
+import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
@@ -313,6 +322,61 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
 
         CompletableFuture<DeleteDataObjectResponse> future = sdkClient
             .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(UnsupportedOperationException.class, cause.getClass());
+        assertEquals("test", cause.getMessage());
+    }
+
+    public void testSearchDataObject() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = new SearchDataObjectRequest.Builder()
+            .indices(TEST_INDEX)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        TotalHits totalHits = new TotalHits(0, Relation.EQUAL_TO);
+        SearchHits hits = new SearchHits(new SearchHit[0], totalHits, 0);
+        when(searchResponse.getHits()).thenReturn(hits);
+        when(searchResponse.toString()).thenReturn("{\"test\":\"json\"}");
+        @SuppressWarnings("unchecked")
+        ActionFuture<SearchResponse> future = mock(ActionFuture.class);
+        when(mockedClient.search(any(SearchRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(searchResponse);
+
+        SearchDataObjectResponse response = sdkClient
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(mockedClient, times(1)).search(requestCaptor.capture());
+        assertEquals(1, requestCaptor.getValue().indices().length);
+        assertEquals(TEST_INDEX, requestCaptor.getValue().indices()[0]);
+        XContentParser parser = response.parser();
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+        parser.nextToken();
+        assertEquals("test", parser.currentName());
+        parser.nextToken();
+        assertEquals("json", parser.text());
+        ensureExpectedToken(XContentParser.Token.END_OBJECT, parser.nextToken(), parser);
+    }
+
+    public void testSearchDataObject_Exception() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = new SearchDataObjectRequest.Builder()
+            .indices(TEST_INDEX)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        ArgumentCaptor<SearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        when(mockedClient.search(searchRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
+
+        CompletableFuture<SearchDataObjectResponse> future = sdkClient
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
