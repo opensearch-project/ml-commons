@@ -75,6 +75,28 @@ public class LocalRegexGuardrailTests {
     }
 
     @Test
+    public void readWriteEmptyContent() throws IOException {
+        LocalRegexGuardrail localRegexGuardrail = new LocalRegexGuardrail(Collections.emptyList(), new String[0]);
+        BytesStreamOutput output = new BytesStreamOutput();
+        localRegexGuardrail.writeTo(output);
+        LocalRegexGuardrail localRegexGuardrail1 = new LocalRegexGuardrail(output.bytes().streamInput());
+
+        Assert.assertNull(localRegexGuardrail1.getStopWords());
+        Assert.assertArrayEquals(Collections.emptyList().toArray(), localRegexGuardrail1.getRegex());
+    }
+
+    @Test
+    public void readWriteNullContent() throws IOException {
+        LocalRegexGuardrail localRegexGuardrail = new LocalRegexGuardrail(null, null);
+        BytesStreamOutput output = new BytesStreamOutput();
+        localRegexGuardrail.writeTo(output);
+        LocalRegexGuardrail localRegexGuardrail1 = new LocalRegexGuardrail(output.bytes().streamInput());
+
+        Assert.assertNull(localRegexGuardrail1.getStopWords());
+        Assert.assertNull(localRegexGuardrail1.getRegex());
+    }
+
+    @Test
     public void writeTo() throws IOException {
         LocalRegexGuardrail localRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
         BytesStreamOutput output = new BytesStreamOutput();

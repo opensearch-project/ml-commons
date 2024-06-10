@@ -64,12 +64,17 @@ public class LocalRegexGuardrail extends Guardrail {
         this.regex = regex;
     }
     public LocalRegexGuardrail(@NonNull Map<String, Object> params) {
-        Object words = params.get(STOP_WORDS_FIELD);
+        List<Map> words = (List<Map>) params.get(STOP_WORDS_FIELD);
         stopWords = new ArrayList<>();
-        for (Map e : (List<Map>)words) {
-            stopWords.add(new StopWords(e));
+        if (words != null && !words.isEmpty()) {
+            for (Map e : words) {
+                stopWords.add(new StopWords(e));
+            }
         }
-        this.regex = ((List<String>) params.get(REGEX_FIELD)).toArray(new String[0]);
+        List<String> regexes = (List<String>) params.get(REGEX_FIELD);
+        if (regexes != null && !regexes.isEmpty()) {
+            this.regex = regexes.toArray(new String[0]);
+        }
     }
 
     public LocalRegexGuardrail(StreamInput input) throws IOException {
@@ -80,7 +85,7 @@ public class LocalRegexGuardrail extends Guardrail {
                 stopWords.add(new StopWords(input));
             }
         }
-        regex = input.readStringArray();
+        regex = input.readOptionalStringArray();
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -93,7 +98,7 @@ public class LocalRegexGuardrail extends Guardrail {
         } else {
             out.writeBoolean(false);
         }
-        out.writeStringArray(regex);
+        out.writeOptionalStringArray(regex);
     }
 
     @Override
@@ -199,6 +204,13 @@ public class LocalRegexGuardrail extends Guardrail {
         return true;
     }
 
+    /**
+     * Validate the input string against stop words
+     * @param input the string to validate against stop words
+     * @param indexName the index containing stop words
+     * @param fieldNames a list of field names containing stop words
+     * @return true if no stop words matching, otherwise false.
+     */
     public Boolean validateStopWordsSingleIndex(String input, String indexName, List<String> fieldNames) {
         SearchRequest searchRequest;
         AtomicBoolean hitStopWords = new AtomicBoolean(false);

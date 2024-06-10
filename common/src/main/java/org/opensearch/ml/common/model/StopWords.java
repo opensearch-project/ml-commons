@@ -37,7 +37,9 @@ public class StopWords implements ToXContentObject {
     }
 
     public StopWords(@NonNull Map<String, Object> params) {
-        this((String) params.get(INDEX_NAME_FIELD), ((List<String>) params.get(SOURCE_FIELDS_FIELD)).toArray(new String[0]));
+        List<String> fields = (List<String>) params.get(SOURCE_FIELDS_FIELD);
+        this.index = (String) params.get(INDEX_NAME_FIELD);
+        this.sourceFields = fields == null ? null : fields.toArray(new String[0]);
     }
 
     public StopWords(StreamInput input) throws IOException {
