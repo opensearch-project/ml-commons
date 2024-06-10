@@ -50,7 +50,7 @@ import org.opensearch.script.ScriptService;
 public interface RemoteConnectorExecutor {
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
 
-    default void executePredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+    default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         ActionListener<Collection<Tuple<Integer, ModelTensors>>> tensorActionListener = ActionListener.wrap(r -> {
             // Only all sub-requests success will call logics here
             ModelTensors[] modelTensors = new ModelTensors[r.size()];
@@ -61,7 +61,7 @@ public interface RemoteConnectorExecutor {
         try {
             if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
                 TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(textDocsInputDataSet);
+                Tuple<Integer, Integer> calculatedChunkSize = calculateChunkSize(action, textDocsInputDataSet);
                 GroupedActionListener<Tuple<Integer, ModelTensors>> groupedActionListener = new GroupedActionListener<>(
                     tensorActionListener,
                     calculatedChunkSize.v1()
@@ -72,7 +72,8 @@ public interface RemoteConnectorExecutor {
                     List<String> textDocs = textDocsInputDataSet
                         .getDocs()
                         .subList(processedDocs, Math.min(processedDocs + calculatedChunkSize.v2(), textDocsInputDataSet.getDocs().size()));
-                    preparePayloadAndInvokeRemoteModel(
+                    preparePayloadAndInvoke(
+                        action,
                         MLInput
                             .builder()
                             .algorithm(FunctionName.TEXT_EMBEDDING)
@@ -83,7 +84,7 @@ public interface RemoteConnectorExecutor {
                     );
                 }
             } else {
-                preparePayloadAndInvokeRemoteModel(mlInput, new ExecutionContext(0), new GroupedActionListener<>(tensorActionListener, 1));
+                preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new GroupedActionListener<>(tensorActionListener, 1));
             }
         } catch (Exception e) {
             actionListener.onFailure(e);
@@ -95,12 +96,12 @@ public interface RemoteConnectorExecutor {
      * @param textDocsInputDataSet
      * @return Tuple of chunk size and step size.
      */
-    private Tuple<Integer, Integer> calculateChunkSize(TextDocsInputDataSet textDocsInputDataSet) {
+    private Tuple<Integer, Integer> calculateChunkSize(String action, TextDocsInputDataSet textDocsInputDataSet) {
         int textDocsLength = textDocsInputDataSet.getDocs().size();
         Map<String, String> parameters = getConnector().getParameters();
         if (parameters != null && parameters.containsKey("input_docs_processed_step_size")) {
             int stepSize = Integer.parseInt(parameters.get("input_docs_processed_step_size"));
-            // We need to check the parameter on runtime as parameter can be passed into predict request
+            // We need to check the parameter on runtime as parameter can be passed into action request
             if (stepSize <= 0) {
                 throw new IllegalArgumentException("Invalid parameter: input_docs_processed_step_size. It must be positive integer.");
             } else {
@@ -111,11 +112,11 @@ public interface RemoteConnectorExecutor {
                 return Tuple.tuple(textDocsLength / stepSize + 1, stepSize);
             }
         } else {
-            Optional<ConnectorAction> predictAction = getConnector().findPredictAction();
-            if (predictAction.isEmpty()) {
-                throw new IllegalArgumentException("no predict action found");
+            Optional<ConnectorAction> connectorAction = getConnector().findAction(action);
+            if (connectorAction.isEmpty()) {
+                throw new IllegalArgumentException("no " + action + " action found");
             }
-            String preProcessFunction = predictAction.get().getPreProcessFunction();
+            String preProcessFunction = connectorAction.get().getPreProcessFunction();
             if (preProcessFunction != null && !MLPreProcessFunction.contains(preProcessFunction)) {
                 // user defined preprocess script, this case, the chunk size is always equals to text docs length.
                 return Tuple.tuple(textDocsLength, 1);
@@ -155,7 +156,8 @@ public interface RemoteConnectorExecutor {
 
     default void setMlGuard(MLGuard mlGuard) {}
 
-    default void preparePayloadAndInvokeRemoteModel(
+    default void preparePayloadAndInvoke(
+        String action,
         MLInput mlInput,
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
@@ -173,13 +175,13 @@ public interface RemoteConnectorExecutor {
             inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
         parameters.putAll(inputParameters);
-        RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, parameters, getScriptService());
+        RemoteInferenceInputDataSet inputData = processInput(action, mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
         }
         // override again to always prioritize the input parameter
         parameters.putAll(inputParameters);
-        String payload = connector.createPredictPayload(parameters);
+        String payload = connector.createPayload(action, parameters);
         connector.validatePayload(payload);
         String userStr = getClient()
             .threadPool()
@@ -201,9 +203,9 @@ public interface RemoteConnectorExecutor {
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
             if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
-                invokeRemoteModelWithRetry(mlInput, parameters, payload, executionContext, actionListener);
+                invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
             } else {
-                invokeRemoteModel(mlInput, parameters, payload, executionContext, actionListener);
+                invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
         }
     }
@@ -230,7 +232,8 @@ public interface RemoteConnectorExecutor {
         }
     }
 
-    default void invokeRemoteModelWithRetry(
+    default void invokeRemoteServiceWithRetry(
+        String action,
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
@@ -252,7 +255,7 @@ public interface RemoteConnectorExecutor {
             public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
                 // the listener here is RetryingListener
                 // If the request success, or can not retry, will call delegate listener
-                invokeRemoteModel(mlInput, parameters, payload, executionContext, listener);
+                invokeRemoteService(action, mlInput, parameters, payload, executionContext, listener);
             }
 
             @Override
@@ -272,7 +275,8 @@ public interface RemoteConnectorExecutor {
         invokeRemoteModelAction.run();
     };
 
-    void invokeRemoteModel(
+    void invokeRemoteService(
+        String action,
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
