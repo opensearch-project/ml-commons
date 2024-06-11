@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -122,6 +124,9 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private TransportNodesAction<MLUndeployModelNodesRequest, MLUndeployModelNodesResponse, MLUndeployModelNodeRequest, MLUndeployModelNodeResponse> transportNodesAction;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setup() throws IOException {
@@ -341,6 +346,155 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
         action.processUndeployModelResponseAndUpdate(response, actionListener);
         verify(actionListener).onResponse(response);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateResponseDeployStatusWrong() {
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus = new HashMap<>();
+        modelToDeployStatus.put("modelId1", "wrong_status");
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        MLSyncUpNodesResponse syncUpNodesResponse = mock(MLSyncUpNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(syncUpNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        verify(actionListener).onResponse(response);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateResponseUndeployPartialNodes() {
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus1 = new HashMap<>();
+        modelToDeployStatus1.put("modelId1", "undeployed");
+        Map<String, String> modelToDeployStatus2 = new HashMap<>();
+        modelToDeployStatus2.put("modelId1", "deployed");
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus1, modelWorkerNodeCounts);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus2, modelWorkerNodeCounts);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        MLSyncUpNodesResponse syncUpNodesResponse = mock(MLSyncUpNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(syncUpNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        verify(actionListener).onResponse(response);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateResponseUndeployEmptyNodes() {
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus = new HashMap<>();
+        modelToDeployStatus.put("modelId1", "undeployed");
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] {});
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        MLSyncUpNodesResponse syncUpNodesResponse = mock(MLSyncUpNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(syncUpNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        verify(actionListener).onResponse(response);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateResponseUndeployNodeEntrySetNull() {
+        exceptionRule.expect(NullPointerException.class);
+
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus = new HashMap<>();
+        modelToDeployStatus.put("modelId1", "undeployed");
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", null);
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateResponseUndeployModelWorkerNodeBeforeRemovalNull() {
+        exceptionRule.expect(NullPointerException.class);
+
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus = new HashMap<>();
+        modelToDeployStatus.put("modelId1", "undeployed");
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, null);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, null);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
     }
 
     public void testNewResponseWithNotFoundModelStatus() {
