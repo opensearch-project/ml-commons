@@ -105,7 +105,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
+        MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 
     public void testSearchIndexToolInFlowAgent_withEmptyQueryField_thenThrowException() throws IOException, ParseException {
@@ -118,7 +118,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
+        MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 
     public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() throws IOException, ParseException {
@@ -132,6 +132,6 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
+        MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
     }
 }
