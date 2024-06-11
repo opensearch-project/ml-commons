@@ -93,7 +93,7 @@ public interface RemoteConnectorExecutor {
 
     /**
      * Calculate the chunk size.
-     * @param textDocsInputDataSet
+     * @param textDocsInputDataSet Input dataset in textDocsInputDataSet format.
      * @return Tuple of chunk size and step size.
      */
     private Tuple<Integer, Integer> calculateChunkSize(String action, TextDocsInputDataSet textDocsInputDataSet) {
@@ -117,11 +117,15 @@ public interface RemoteConnectorExecutor {
                 throw new IllegalArgumentException("no " + action + " action found");
             }
             String preProcessFunction = connectorAction.get().getPreProcessFunction();
-            if (preProcessFunction != null && !MLPreProcessFunction.contains(preProcessFunction)) {
-                // user defined preprocess script, this case, the chunk size is always equals to text docs length.
+            if (preProcessFunction == null) {
+                // default preprocess case, consider this a batch.
+                return Tuple.tuple(1, textDocsLength);
+            } else if (MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT.equals(preProcessFunction)
+                || !MLPreProcessFunction.contains(preProcessFunction)) {
+                // bedrock and user defined preprocess script, the chunk size is always equals to text docs length.
                 return Tuple.tuple(textDocsLength, 1);
             }
-            // consider as batch.
+            // Other cases: non-bedrock and user defined preprocess script, consider as batch.
             return Tuple.tuple(1, textDocsLength);
         }
     }
