@@ -491,7 +491,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
                 .readStringProperty(TYPE, processorTag, config, FUNCTION_NAME, FunctionName.REMOTE.name());
             String modelInput = ConfigurationUtils
                 .readStringProperty(TYPE, processorTag, config, MODEL_INPUT, "{ \"parameters\": ${ml_inference.parameters} }");
-            boolean defaultValue = !functionName.equals("remote");
+            boolean defaultValue = !functionName.equalsIgnoreCase("remote");
             boolean fullResponsePath = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, FULL_RESPONSE_PATH, defaultValue);
 
             boolean ignoreFailure = ConfigurationUtils
