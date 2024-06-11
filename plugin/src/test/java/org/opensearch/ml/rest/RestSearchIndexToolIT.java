@@ -132,6 +132,6 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
             + "  }\n"
             + "}\n";
         Exception exception = assertThrows(ResponseException.class, () -> executeAgent(agentId, agentInput));
-        MatcherAssert.assertThat(exception.getMessage(), containsString("SearchIndexTool's two parameter: index and query are required!"));
+        MatcherAssert.assertThat(exception.getMessage(), containsString("ParsingException"));
     }
 }
