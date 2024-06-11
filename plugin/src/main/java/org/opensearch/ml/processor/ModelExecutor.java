@@ -183,7 +183,6 @@ public interface ModelExecutor {
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             String modelOutputJsonStr = mlOutput.toXContent(builder, ToXContent.EMPTY_PARAMS).toString();
             Map<String, Object> modelTensorOutputMap = gson.fromJson(modelOutputJsonStr, Map.class);
-            System.out.println("output value" + modelOutputJsonStr);
             if (!fullResponsePath && mlOutput instanceof ModelTensorOutput) {
                 return getModelOutputValue((ModelTensorOutput) mlOutput, modelOutputFieldName, ignoreMissing);
             } else if (modelOutputFieldName == null || modelTensorOutputMap == null) {

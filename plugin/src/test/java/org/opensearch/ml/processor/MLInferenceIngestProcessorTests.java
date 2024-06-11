@@ -1367,9 +1367,15 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
     }
 
     public void testExecute_localMLModelTensorsIsNull() {
-        List<Map<String, String>> inputMap = getInputMapsForNestedObjectChunks("chunks.*.chunk.text.*.context");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put("text_docs", "chunks.*.chunk.text.*.context");
+        inputMap.add(input);
 
-        List<Map<String, String>> outputMap = getOutputMapsForNestedObjectChunks();
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("chunks.*.chunk.text.*.context_embedding", "$.inference_results[0].output[0].data");
+        outputMap.add(output);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor(
             "model1",
@@ -1381,7 +1387,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
             true,
             false,
             false,
-            null
+            "{ \"text_docs\": ${ml_inference.text_docs} }"
         );
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(null).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
@@ -1399,7 +1405,14 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         verify(handler)
             .accept(
                 eq(null),
-                argThat(exception -> exception.getMessage().equals("An unexpected error occurred: Output tensors are null or empty."))
+                argThat(
+                    exception -> exception
+                        .getMessage()
+                        .equals(
+                            "An unexpected error occurred: model inference output "
+                                + "cannot find such json path: $.inference_results[0].output[0].data"
+                        )
+                )
             );
 
     }
