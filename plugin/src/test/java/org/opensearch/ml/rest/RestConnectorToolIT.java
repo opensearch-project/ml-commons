@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.opensearch.ml.rest.RestMLRemoteInferenceIT.disableClusterConnectorAccessControl;
 
 import java.io.IOException;
 
@@ -27,6 +28,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     @Before
     public void setUp() throws Exception {
         super.setUp();
+        disableClusterConnectorAccessControl();
         Thread.sleep(20000);
         this.bedrockClaudeConnectorId = createBedrockClaudeConnector("execute");
         this.bedrockClaudeConnectorIdForPredict = createBedrockClaudeConnector("predict");
