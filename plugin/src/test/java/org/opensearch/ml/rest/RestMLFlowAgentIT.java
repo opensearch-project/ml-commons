@@ -6,10 +6,10 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.List;
 import java.util.Map;
 
-import java.text.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
