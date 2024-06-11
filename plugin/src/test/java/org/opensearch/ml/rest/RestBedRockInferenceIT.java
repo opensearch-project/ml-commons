@@ -68,18 +68,24 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
 
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", "world")).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
-            Map inferenceResult = predictRemoteModel(modelId, mlInput);
+            Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
             assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 2, output.size());
             assertTrue(errorMsg, output.get(0) instanceof Map);
-            assertTrue(errorMsg, ((Map<?, ?>) output.get(0)).get("output") instanceof List);
-            List outputList = (List) ((Map<?, ?>) output.get(0)).get("output");
-            assertEquals(errorMsg, 1, outputList.size());
-            assertTrue(errorMsg, outputList.get(0) instanceof Map);
-            assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
-            assertEquals(errorMsg, 1536, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+            assertTrue(errorMsg, output.get(1) instanceof Map);
+            validateOutput(errorMsg, (Map) output.get(0));
+            validateOutput(errorMsg, (Map) output.get(1));
         }
+    }
 
+    private void validateOutput(String errorMsg, Map<String, Object> output) {
+        assertTrue(errorMsg, output.containsKey("output"));
+        assertTrue(errorMsg, output.get("output") instanceof List);
+        List outputList = (List) output.get("output");
+        assertEquals(errorMsg, 1, outputList.size());
+        assertTrue(errorMsg, outputList.get(0) instanceof Map);
+        assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
+        assertEquals(errorMsg, 1536, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
     }
 }
