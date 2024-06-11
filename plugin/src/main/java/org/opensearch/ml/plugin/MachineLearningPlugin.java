@@ -501,6 +501,11 @@ public class MachineLearningPlugin extends Plugin
 
         mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
+
+        mlInputDatasetHandler = new MLInputDatasetHandler(client);
+        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
+        connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
+        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
         mlModelManager = new MLModelManager(
             clusterService,
             scriptService,
@@ -516,12 +521,9 @@ public class MachineLearningPlugin extends Plugin
             mlTaskManager,
             modelCacheHelper,
             mlEngine,
-            nodeHelper
+            nodeHelper,
+            mlFeatureEnabledSetting
         );
-        mlInputDatasetHandler = new MLInputDatasetHandler(client);
-        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
-        connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
-        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
 
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
@@ -954,6 +956,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
                 // Settings for SdkClient
                 SdkClientSettings.REMOTE_METADATA_TYPE,
                 SdkClientSettings.REMOTE_METADATA_ENDPOINT,

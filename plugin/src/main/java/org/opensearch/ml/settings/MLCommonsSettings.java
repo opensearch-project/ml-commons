@@ -190,4 +190,6 @@ public final class MLCommonsSettings {
 
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
+            .boolSetting("plugins.ml_commons.connector.private_ip_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

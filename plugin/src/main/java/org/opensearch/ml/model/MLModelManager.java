@@ -29,6 +29,7 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
@@ -131,6 +132,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -178,6 +180,7 @@ public class MLModelManager {
     private final MLTaskManager mlTaskManager;
     private final MLEngine mlEngine;
     private final DiscoveryNodeHelper nodeHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private volatile Integer maxModelPerNode;
     private volatile Integer maxRegisterTasksPerNode;
@@ -208,7 +211,8 @@ public class MLModelManager {
         MLTaskManager mlTaskManager,
         MLModelCacheHelper modelCacheHelper,
         MLEngine mlEngine,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -224,6 +228,7 @@ public class MLModelManager {
         this.mlTaskManager = mlTaskManager;
         this.mlEngine = mlEngine;
         this.nodeHelper = nodeHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
@@ -1271,6 +1276,7 @@ public class MLModelManager {
             params.put(GUARDRAILS, mlGuard);
             log.info("Setting up ML guard parameter for ML predictor.");
         }
+        params.put(CONNECTOR_PRIVATE_IP_ENABLED, mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
         return Collections.unmodifiableMap(params);
     }
 

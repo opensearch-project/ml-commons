@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
@@ -13,6 +15,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -87,6 +90,52 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor
+            .invokeRemoteService(
+                PREDICT.name(),
+                createMLInput(),
+                new HashMap<>(),
+                "{\"input\": \"hello world\"}",
+                new ExecutionContext(0),
+                actionListener
+            );
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
+        assert captor.getValue() instanceof IllegalArgumentException;
+        assertEquals("Remote inference host name has private ip address: 127.0.0.1", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void invokeRemoteService_EnabledPrivateIpAddress() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://127.0.0.1/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        AtomicBoolean privateIpEnabled = new AtomicBoolean(true);
+        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
+        executor
+            .invokeRemoteService(
+                PREDICT.name(),
+                createMLInput(),
+                new HashMap<>(),
+                "{\"input\": \"hello world\"}",
+                new ExecutionContext(0),
+                actionListener
+            );
+        Mockito.verify(actionListener, never()).onFailure(any());
+
+        privateIpEnabled.set(false);
         executor
             .invokeRemoteService(
                 PREDICT.name(),

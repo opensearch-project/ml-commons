@@ -9,12 +9,14 @@ package org.opensearch.ml.settings;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -28,6 +30,7 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isAgentFrameworkEnabled;
 
     private volatile Boolean isLocalModelEnabled;
+    private volatile AtomicBoolean isConnectorPrivateIpEnabled;
 
     // This is to identify if this node is in multi-tenancy or not.
     private volatile Boolean isMultiTenancyEnabled;
@@ -42,6 +45,7 @@ public class MLFeatureEnabledSetting {
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isMultiTenancyEnabled = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
+        isConnectorPrivateIpEnabled = new AtomicBoolean(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings));
 
         clusterService
             .getClusterSettings()
@@ -55,6 +59,9 @@ public class MLFeatureEnabledSetting {
             notifyMultiTenancyListeners(it);
         });
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
+        clusterService
+                .getClusterSettings()
+                .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled.set(it));
     }
 
     /**
@@ -106,6 +113,10 @@ public class MLFeatureEnabledSetting {
      */
     public Boolean isControllerEnabled() {
         return isControllerEnabled;
+    }
+
+    public AtomicBoolean isConnectorPrivateIpEnabled() {
+        return isConnectorPrivateIpEnabled;
     }
 
 }

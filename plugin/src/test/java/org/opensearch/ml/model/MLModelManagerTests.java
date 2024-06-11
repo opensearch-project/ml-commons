@@ -64,6 +64,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import org.junit.AfterClass;
@@ -82,6 +83,7 @@ import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -122,6 +124,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.sdkclient.SdkClientFactory;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -209,6 +212,11 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     @Mock
     private MLTask pretrainedMLTask;
 
+    @Mock
+    ClusterApplierService clusterApplierService;
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws URISyntaxException, IOException {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
@@ -285,6 +293,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(any())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
 
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(new AtomicBoolean(false));
+
         modelManager = spy(
             new MLModelManager(
                 clusterService,
@@ -301,7 +311,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 mlTaskManager,
                 modelCacheHelper,
                 mlEngine,
-                nodeHelper
+                nodeHelper,
+                mlFeatureEnabledSetting
             )
         );
 

@@ -14,6 +14,7 @@ import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -43,9 +44,11 @@ public class MLHttpClientFactory {
      * @param protocol The protocol supported in remote inference, currently only http and https are supported.
      * @param host The host name of the remote inference server, host must be a valid ip address or domain name and must not be localhost.
      * @param port The port number of the remote inference server, port number must be in range [0, 65536].
-     * @throws UnknownHostException
+     * @param connectorPrivateIpEnabled The port number of the remote inference server, port number must be in range [0, 65536].
+     * @throws UnknownHostException Allow to use private IP or not.
      */
-    public static void validate(String protocol, String host, int port) throws UnknownHostException {
+    public static void validate(String protocol, String host, int port, AtomicBoolean connectorPrivateIpEnabled)
+        throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
             log.error("Remote inference protocol is not http or https: " + protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
@@ -62,12 +65,12 @@ public class MLHttpClientFactory {
             log.error("Remote inference port out of range: " + port);
             throw new IllegalArgumentException("Port out of range: " + port);
         }
-        validateIp(host);
+        validateIp(host, connectorPrivateIpEnabled);
     }
 
-    private static void validateIp(String hostName) throws UnknownHostException {
+    private static void validateIp(String hostName, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
-        if (hasPrivateIpAddress(addresses)) {
+        if ((connectorPrivateIpEnabled == null || !connectorPrivateIpEnabled.get()) && hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: " + hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
