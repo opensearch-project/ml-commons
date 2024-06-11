@@ -70,7 +70,7 @@ public class MLHttpClientFactory {
 
     private static void validateIp(String hostName, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
-        if (!connectorPrivateIpEnabled.get() && hasPrivateIpAddress(addresses)) {
+        if ((connectorPrivateIpEnabled == null || !connectorPrivateIpEnabled.get()) && hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: " + hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
