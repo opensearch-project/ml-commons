@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hc.core5.http.ParseException;
+import java.text.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
