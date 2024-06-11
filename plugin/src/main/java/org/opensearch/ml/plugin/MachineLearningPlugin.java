@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1032,6 +1033,12 @@ public class MachineLearningPlugin extends Plugin
      */
     @Override
     public Map<String, org.opensearch.ingest.Processor.Factory> getProcessors(org.opensearch.ingest.Processor.Parameters parameters) {
-        return Map.of(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
+        Map<String, org.opensearch.ingest.Processor.Factory> processors = new HashMap<>();
+        processors
+            .put(
+                MLInferenceIngestProcessor.TYPE,
+                new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client, xContentRegistry)
+            );
+        return Collections.unmodifiableMap(processors);
     }
 }
