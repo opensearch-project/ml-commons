@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.GroupedActionListener;
 import org.opensearch.client.Client;
@@ -45,6 +47,8 @@ import com.jayway.jsonpath.Option;
  * this processor also handles dot path notation for nested object( map of array) by rewriting json path accordingly
  */
 public class MLInferenceIngestProcessor extends AbstractProcessor implements ModelExecutor {
+
+    private static final Logger logger = LogManager.getLogger(MLInferenceIngestProcessor.class);
 
     public static final String DOT_SYMBOL = ".";
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
@@ -219,6 +223,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
                     }
                 }
                 if (!override && existingFields == dotPaths.size()) {
+                    logger.debug("{} already exists in the ingest document. Removing it from output mapping", newDocumentFieldName);
                     newOutputMapping.remove(newDocumentFieldName);
                 }
             }
@@ -251,7 +256,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
         for (String k : inputMapKeys) {
             inputMappings.put(k, modelParameters.get(k));
         }
-        ActionRequest request = getRemoteModelInferenceRequest(
+        ActionRequest request = getMLModelInferenceRequest(
             xContentRegistry,
             modelParameters,
             modelConfigs,

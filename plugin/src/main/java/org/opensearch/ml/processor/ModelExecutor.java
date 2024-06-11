@@ -57,7 +57,7 @@ public interface ModelExecutor {
      * @return an ActionRequest instance for remote model inference
      * @throws IllegalArgumentException if the input parameters are null
      */
-    default <T> ActionRequest getRemoteModelInferenceRequest(
+    default <T> ActionRequest getMLModelInferenceRequest(
         NamedXContentRegistry xContentRegistry,
         Map<String, String> parameters,
         Map<String, String> modelConfigs,
@@ -73,7 +73,6 @@ public interface ModelExecutor {
         if (functionNameStr != null) {
             functionName = FunctionName.from(functionNameStr);
         }
-        // RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
 
         Map<String, Object> inputParams = new HashMap<>();
         if (FunctionName.REMOTE == functionName) {
@@ -83,7 +82,6 @@ public interface ModelExecutor {
         }
 
         String payload = modelInput;
-        // payload = fillNullParameters(parameters, payload);
         StringSubstitutor modelConfigSubstitutor = new StringSubstitutor(modelConfigs, "${model_config.", "}");
         payload = modelConfigSubstitutor.replace(payload);
         StringSubstitutor inputMapSubstitutor = new StringSubstitutor(inputMappings, "${input_map.", "}");
@@ -98,7 +96,6 @@ public interface ModelExecutor {
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, functionName.name());
-        // MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
 
         return new MLPredictionTaskRequest(modelId, mlInput);
 
@@ -186,6 +183,7 @@ public interface ModelExecutor {
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             String modelOutputJsonStr = mlOutput.toXContent(builder, ToXContent.EMPTY_PARAMS).toString();
             Map<String, Object> modelTensorOutputMap = gson.fromJson(modelOutputJsonStr, Map.class);
+            System.out.println("output value" + modelOutputJsonStr);
             if (!fullResponsePath && mlOutput instanceof ModelTensorOutput) {
                 return getModelOutputValue((ModelTensorOutput) mlOutput, modelOutputFieldName, ignoreMissing);
             } else if (modelOutputFieldName == null || modelTensorOutputMap == null) {
