@@ -30,6 +30,7 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.client.Client;
@@ -46,6 +47,8 @@ import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
@@ -254,7 +257,90 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        MLSyncUpNodesResponse syncUpNodesResponse = mock(MLSyncUpNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(syncUpNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
         action.processUndeployModelResponseAndUpdate(response, actionListener);
+        verify(actionListener).onResponse(response);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateBulkException() {
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus = new HashMap<>();
+        modelToDeployStatus.put("modelId1", "undeployed");
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Bulk request failed"));
+            return null;
+        }).when(client).bulk(any(), any());
+
+        MLSyncUpNodesResponse syncUpNodesResponse = mock(MLSyncUpNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(syncUpNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        verify(actionListener).onResponse(response);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateSyncUpException() {
+        final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+        final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
+        Map<String, String> modelToDeployStatus = new HashMap<>();
+        modelToDeployStatus.put("modelId1", "undeployed");
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
+        MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
+        responses.add(response1);
+        responses.add(response2);
+        final List<FailedNodeException> failures = new ArrayList<>();
+        final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("SyncUp request failed"));
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        verify(actionListener).onResponse(response);
     }
 
     public void testNewResponseWithNotFoundModelStatus() {
