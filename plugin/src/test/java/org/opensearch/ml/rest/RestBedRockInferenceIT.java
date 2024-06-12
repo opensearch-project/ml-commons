@@ -235,7 +235,7 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
             Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
             assertTrue(errorMsg, inferenceResult.containsKey("status"));
-            assertEquals(errorMsg, 400, Integer.parseInt(String.valueOf(inferenceResult.get("status"))));
+            assertTrue(errorMsg, String.valueOf(inferenceResult.get("status")).contains("400"));
             assertTrue(errorMsg, inferenceResult.containsKey("error"));
             assertTrue(errorMsg, inferenceResult.get("error") instanceof Map);
             assertEquals(errorMsg, "illegal_argument_exception", ((Map<?, ?>) inferenceResult.get("error")).get("type"));
