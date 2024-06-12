@@ -896,6 +896,13 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return result;
     }
 
+    public Map predictTextEmbeddingModel(String modelId, MLInput input) throws IOException {
+        String requestBody = TestHelper.toJsonString(input);
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        return parseResponseToMap(response);
+    }
+
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
         return (modelProfile) -> {
             if (modelProfile.containsKey("model_state")) {
