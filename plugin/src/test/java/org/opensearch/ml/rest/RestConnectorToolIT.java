@@ -84,7 +84,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         deleteExternalIndices();
     }
 
-    public void testConnectorToolInFlowAgent_WrongAction() throws IOException, ParseException {
+    public void testConnectorToolInFlowAgent_WrongAction() throws IOException {
         if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
             return;
         }
@@ -112,7 +112,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("no EXECUTE action found"));
     }
 
-    public void testConnectorToolInFlowAgent() throws IOException, ParseException {
+    public void testConnectorToolInFlowAgent() throws IOException {
         if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
             return;
         }
