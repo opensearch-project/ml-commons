@@ -48,7 +48,7 @@ public class MultiModalConnectorPreProcessFunction extends ConnectorPreProcessFu
     @Override
     public RemoteInferenceInputDataSet process(MLInput mlInput) {
         TextDocsInputDataSet inputData = (TextDocsInputDataSet) mlInput.getInputDataset();
-        Map parametersMap = new HashMap<>();
+        Map<String, String> parametersMap = new HashMap<>();
         parametersMap.put("inputText", inputData.getDocs().get(0));
         if (inputData.getDocs().size() > 1) {
             parametersMap.put("inputImage", inputData.getDocs().get(1));

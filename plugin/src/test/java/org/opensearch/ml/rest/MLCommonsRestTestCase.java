@@ -59,6 +59,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
 import org.opensearch.common.io.PathUtils;
@@ -915,8 +916,13 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public Map predictTextEmbeddingModel(String modelId, MLInput input) throws IOException {
         String requestBody = TestHelper.toJsonString(input);
-        Response response = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        Response response = null;
+        try {
+            response = TestHelper
+                .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        } catch (ResponseException e) {
+            response = e.getResponse();
+        }
         return parseResponseToMap(response);
     }
 

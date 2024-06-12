@@ -23,7 +23,7 @@
           "content-type": "application/json",
           "x-amz-content-sha256": "required"
         },
-        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage}\" }",
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage:-null}\" }",
         "pre_process_function": "connector.pre_process.multimodal.embedding",
         "post_process_function": "connector.post_process.bedrock.embedding"
       }
@@ -54,7 +54,7 @@
           "content-type": "application/json",
           "x-amz-content-sha256": "required"
         },
-        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"inputImages\": \"${parameters.inputImages}\" }",
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage:-null}\" }",
         "pre_process_function": "connector.pre_process.multimodal.embedding",
         "post_process_function": "connector.post_process.bedrock.embedding"
       }
