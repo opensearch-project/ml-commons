@@ -84,7 +84,10 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         deleteExternalIndices();
     }
 
-    public void testConnectorToolInFlowAgent_WrongAction() throws IOException {
+    public void testConnectorToolInFlowAgent_WrongAction() throws IOException, ParseException {
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
         String registerAgentRequestBody = "{\n"
             + "  \"name\": \"Test agent with connector tool\",\n"
             + "  \"type\": \"flow\",\n"
@@ -109,7 +112,10 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         MatcherAssert.assertThat(exception.getMessage(), containsString("no EXECUTE action found"));
     }
 
-    public void testConnectorToolInFlowAgent() throws IOException {
+    public void testConnectorToolInFlowAgent() throws IOException, ParseException {
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
         String registerAgentRequestBody = "{\n"
             + "  \"name\": \"Test agent with connector tool\",\n"
             + "  \"type\": \"flow\",\n"
