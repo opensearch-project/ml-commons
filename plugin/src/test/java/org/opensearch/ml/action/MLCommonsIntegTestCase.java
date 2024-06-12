@@ -137,7 +137,6 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
         for (int i = 1; i < rows.length; i += 2) {
             IndexRequest indexRequest = new IndexRequest(indexName).id(i + "");
             indexRequest.source(rows[i], XContentType.JSON);
-            indexRequest.setRefreshPolicy(IMMEDIATE);
             bulkRequest.add(indexRequest);
         }
         bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
