@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 
@@ -16,6 +17,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.action.ActionFuture;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -48,6 +50,14 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     private String linearRegressionModelId;
     private String logisticRegressionModelId;
     private int batchRcfDataSize = 100;
+
+    /**
+     * set ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS to 0 to disable ML_COMMONS_SYNC_UP_JOB
+     * the cluster will be pre-created with the settings at startup
+     */
+    public PredictionITTests() {
+        super(Settings.builder().put(ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS.getKey(), 0).build());
+    }
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
