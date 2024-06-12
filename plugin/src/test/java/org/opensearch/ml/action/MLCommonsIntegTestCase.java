@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
@@ -136,6 +137,7 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
         for (int i = 1; i < rows.length; i += 2) {
             IndexRequest indexRequest = new IndexRequest(indexName).id(i + "");
             indexRequest.source(rows[i], XContentType.JSON);
+            indexRequest.setRefreshPolicy(IMMEDIATE);
             bulkRequest.add(indexRequest);
         }
         bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);

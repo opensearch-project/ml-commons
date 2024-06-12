@@ -410,6 +410,7 @@ public class MLSyncUpCron implements Runnable {
             BulkRequest bulkUpdateRequest = new BulkRequest();
             for (String modelId : updatedModelIds) {
                 UpdateRequest updateRequest = new UpdateRequest();
+                updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 Instant now = Instant.now();
                 ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
                 if (newModelStates.containsKey(modelId)) {
