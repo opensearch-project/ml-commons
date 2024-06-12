@@ -1,8 +1,6 @@
 /*
- *
- *  * Copyright OpenSearch Contributors
- *  * SPDX-License-Identifier: Apache-2.0
- *
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.opensearch.ml.rest;
@@ -10,6 +8,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -131,7 +130,7 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
 
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", imageBase64)).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
-            Map inferenceResult = predictRemoteModel(modelId, mlInput);
+            Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
             assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 1, output.size());
@@ -144,5 +143,103 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
             assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
         }
 
+    }
+
+    public void test_bedrock_multimodal_model_empty_imageInput() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            log.info("#### The AWS credentials are not set. Skipping test. ####");
+            return;
+        }
+        String templates = Files
+            .readString(
+                Path
+                    .of(
+                        RestMLPredictionAction.class
+                            .getClassLoader()
+                            .getResource("org/opensearch/ml/rest/templates/BedRockMultiModalConnectorBodies.json")
+                            .toURI()
+                    )
+            );
+        Map<String, Object> templateMap = StringUtils.gson.fromJson(templates, Map.class);
+        for (Map.Entry<String, Object> templateEntry : templateMap.entrySet()) {
+            String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
+            String testCaseName = templateEntry.getKey();
+            String errorMsg = String.format(Locale.ROOT, "Failing test case name: %s", testCaseName);
+            String modelId = registerRemoteModel(
+                String
+                    .format(
+                        StringUtils.gson.toJson(templateEntry.getValue()),
+                        GITHUB_CI_AWS_REGION,
+                        AWS_ACCESS_KEY_ID,
+                        AWS_SECRET_ACCESS_KEY,
+                        AWS_SESSION_TOKEN
+                    ),
+                bedrockEmbeddingModelName,
+                true
+            );
+
+            TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello")).build();
+            MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
+            Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
+            assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
+            List output = (List) inferenceResult.get("inference_results");
+            assertEquals(errorMsg, 1, output.size());
+            assertTrue(errorMsg, output.get(0) instanceof Map);
+            assertTrue(errorMsg, ((Map<?, ?>) output.get(0)).get("output") instanceof List);
+            List outputList = (List) ((Map<?, ?>) output.get(0)).get("output");
+            assertEquals(errorMsg, 1, outputList.size());
+            assertTrue(errorMsg, outputList.get(0) instanceof Map);
+            assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
+            assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+        }
+    }
+
+    public void test_bedrock_multimodal_model_empty_imageInput_null_textInput() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            log.info("#### The AWS credentials are not set. Skipping test. ####");
+            return;
+        }
+        String templates = Files
+            .readString(
+                Path
+                    .of(
+                        RestMLPredictionAction.class
+                            .getClassLoader()
+                            .getResource("org/opensearch/ml/rest/templates/BedRockMultiModalConnectorBodies.json")
+                            .toURI()
+                    )
+            );
+        Map<String, Object> templateMap = StringUtils.gson.fromJson(templates, Map.class);
+        for (Map.Entry<String, Object> templateEntry : templateMap.entrySet()) {
+            String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
+            String testCaseName = templateEntry.getKey();
+            String errorMsg = String.format(Locale.ROOT, "Failing test case name: %s", testCaseName);
+            String modelId = registerRemoteModel(
+                String
+                    .format(
+                        StringUtils.gson.toJson(templateEntry.getValue()),
+                        GITHUB_CI_AWS_REGION,
+                        AWS_ACCESS_KEY_ID,
+                        AWS_SECRET_ACCESS_KEY,
+                        AWS_SESSION_TOKEN
+                    ),
+                bedrockEmbeddingModelName,
+                true
+            );
+
+            List<String> input = new ArrayList<>();
+            input.add(null);
+            TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(input).build();
+            MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
+            Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
+            assertTrue(errorMsg, inferenceResult.containsKey("status"));
+            assertEquals(errorMsg, 400, inferenceResult.get("status"));
+            assertTrue(errorMsg, inferenceResult.containsKey("error"));
+            assertTrue(errorMsg, inferenceResult.get("error") instanceof Map);
+            assertEquals(errorMsg, "illegal_argument_exception", ((Map<?, ?>) inferenceResult.get("error")).get("type"));
+            assertEquals(errorMsg, "No input text or image provided", ((Map<?, ?>) inferenceResult.get("error")).get("reason"));
+        }
     }
 }
