@@ -102,7 +102,6 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         }
         fail("The response failed to meet condition after " + MAX_TASK_RESULT_QUERY_TIME_IN_SECOND + " seconds.");
         return null;
->>>>>>> d8818d44 (Fix flaky test of visualization tool (#2416))
     }
 
     private String setUpConnectorWithRetry(int maxRetryTimes) throws InterruptedException {
