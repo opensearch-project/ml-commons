@@ -177,6 +177,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
         String jsonEntity = "{\n"
             + "  \"persistent\" : {\n"
+            + "    \"plugins.ml_commons.jvm_heap_memory_threshold\" : 100, \n"
             + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
             + "  }\n"
             + "}";
