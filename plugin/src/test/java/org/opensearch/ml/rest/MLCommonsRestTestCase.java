@@ -954,10 +954,18 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     public String registerConnector(String createConnectorInput) throws IOException, InterruptedException {
-        Response response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        Response response;
+        try {
+            response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        } catch (Throwable throwable) {
+            // Add retry for `The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.`
+            TimeUnit.SECONDS.sleep(10);
+            response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        }
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
         return connectorId;
+
     }
 
     public String registerRemoteModel(String createConnectorInput, String modelName, boolean deploy) throws IOException,
