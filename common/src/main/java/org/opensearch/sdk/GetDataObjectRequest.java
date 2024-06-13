@@ -14,6 +14,7 @@ public class GetDataObjectRequest {
 
     private final String index;
     private final String id;
+    private final String tenantId;
     private final FetchSourceContext fetchSourceContext;
 
     /**
@@ -24,9 +25,10 @@ public class GetDataObjectRequest {
      * @param id the document id
      * @param fetchSourceContext the context to use when fetching _source
      */
-    public GetDataObjectRequest(String index, String id, FetchSourceContext fetchSourceContext) {
+    public GetDataObjectRequest(String index, String id, String tenantId, FetchSourceContext fetchSourceContext) {
         this.index = index;
         this.id = id;
+        this.tenantId = tenantId;
         this.fetchSourceContext = fetchSourceContext;
     }
 
@@ -46,6 +48,10 @@ public class GetDataObjectRequest {
         return this.id;
     }
 
+    public String tenantId() {
+        return this.tenantId;
+    }
+
     /**
      * Returns the context for fetching _source
      * @return the fetchSourceContext
@@ -60,6 +66,7 @@ public class GetDataObjectRequest {
     public static class Builder {
         private String index = null;
         private String id = null;
+        private String tenantId = null;
         private FetchSourceContext fetchSourceContext;
 
         /**
@@ -87,6 +94,11 @@ public class GetDataObjectRequest {
             return this;
         }
 
+        public Builder tenantId(String tenantId) {
+            this.tenantId = tenantId;
+            return this;
+        }
+
         /**
          * Add a fetchSourceContext to this builder
          * @param fetchSourceContext the fetchSourceContext
@@ -102,7 +114,7 @@ public class GetDataObjectRequest {
          * @return A {@link GetDataObjectRequest}
          */
         public GetDataObjectRequest build() {
-            return new GetDataObjectRequest(this.index, this.id, this.fetchSourceContext);
+            return new GetDataObjectRequest(this.index, this.id, this.tenantId, this.fetchSourceContext);
         }
     }
 }
