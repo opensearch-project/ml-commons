@@ -426,6 +426,7 @@ public class MLSyncUpCron implements Runnable {
                 updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
                 bulkUpdateRequest.add(updateRequest);
             }
+            bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             log.info("Refresh model state: {}", newModelStates);
             client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
                 updateModelStateSemaphore.release();
