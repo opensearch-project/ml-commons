@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.memory;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 
@@ -84,7 +85,7 @@ public class ConversationIndexMemory implements Memory {
     public void save(String id, Message message, ActionListener listener) {
         mlIndicesHandler.initMemoryMessageIndex(ActionListener.wrap(created -> {
             if (created) {
-                IndexRequest indexRequest = new IndexRequest(memoryMessageIndexName);
+                IndexRequest indexRequest = new IndexRequest(memoryMessageIndexName).setRefreshPolicy(IMMEDIATE);
                 ConversationIndexMessage conversationIndexMessage = (ConversationIndexMessage) message;
                 XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
                 conversationIndexMessage.toXContent(builder, ToXContent.EMPTY_PARAMS);
