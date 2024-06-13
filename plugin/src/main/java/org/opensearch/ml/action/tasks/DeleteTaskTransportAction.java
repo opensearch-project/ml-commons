@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.tasks;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
@@ -68,7 +69,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
                         if (mlTaskState.equals(MLTaskState.RUNNING)) {
                             actionListener.onFailure(new Exception("Task cannot be deleted in running state. Try after sometime"));
                         } else {
-                            DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
+                            DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId).setRefreshPolicy(IMMEDIATE);
                             client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
                                 @Override
                                 public void onResponse(DeleteResponse deleteResponse) {

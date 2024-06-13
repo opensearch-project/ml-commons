@@ -19,6 +19,7 @@ import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -93,6 +94,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
                     connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                     UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
+                    updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     updateRequest.doc(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                     updateUndeployedConnector(connectorId, updateRequest, listener, context);
                 } else {

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
@@ -66,7 +67,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
-        DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
+        DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId).setRefreshPolicy(IMMEDIATE);
         connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
             if (Boolean.TRUE.equals(x)) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.agents;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
@@ -80,7 +81,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                 );
                         } else {
                             // If the agent is not hidden or if the user is a super admin, proceed with deletion
-                            DeleteRequest deleteRequest = new DeleteRequest(ML_AGENT_INDEX, agentId);
+                            DeleteRequest deleteRequest = new DeleteRequest(ML_AGENT_INDEX, agentId).setRefreshPolicy(IMMEDIATE);
                             client.delete(deleteRequest, ActionListener.wrap(deleteResponse -> {
                                 log.debug("Completed Delete Agent Request, agent id:{} deleted", agentId);
                                 actionListener.onResponse(deleteResponse);
