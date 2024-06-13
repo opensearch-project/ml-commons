@@ -10,7 +10,6 @@ package org.opensearch.ml.sdkclient;
 
 import static org.mockito.Mockito.mock;
 
-import org.junit.Before;
 import org.opensearch.common.inject.AbstractModule;
 import org.opensearch.common.inject.Guice;
 import org.opensearch.common.inject.Injector;
@@ -22,11 +21,6 @@ import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE) // remote http client is never closed
 public class SdkClientModuleTests extends OpenSearchTestCase {
-
-    @Before
-    public void setup() {
-        System.setProperty("opensearch.path.conf", "/tmp");
-    }
 
     private Module localClientModule = new AbstractModule() {
         @Override

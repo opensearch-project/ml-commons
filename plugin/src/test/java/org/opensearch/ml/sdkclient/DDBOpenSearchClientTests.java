@@ -1,4 +1,22 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
 package org.opensearch.ml.sdkclient;
+
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -10,14 +28,12 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
-import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -29,6 +45,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
@@ -37,16 +54,6 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutItemResponse;
-
-import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.TimeUnit;
-
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
-
 
 public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
@@ -65,16 +72,15 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     private ArgumentCaptor<DeleteItemRequest> deleteItemRequestArgumentCaptor;
     private TestDataObject testDataObject;
 
-
     private static TestThreadPool testThreadPool = new TestThreadPool(
-            LocalClusterIndicesClientTests.class.getName(),
-            new ScalingExecutorBuilder(
-                    GENERAL_THREAD_POOL,
-                    1,
-                    Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
-                    TimeValue.timeValueMinutes(1),
-                    ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
-            )
+        LocalClusterIndicesClientTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
     );
 
     @AfterClass
@@ -93,16 +99,16 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     @Test
     public void testPutDataObject_HappyCase() throws IOException {
         PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID)
-                .tenantId(TENANT_ID)
-                .dataObject(testDataObject).build();
-        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class)))
-                .thenReturn(PutItemResponse.builder().build());
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         PutDataObjectResponse response = sdkClient
-                .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture()
-                .join();
+            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
         Assert.assertEquals(TEST_ID, response.id());
         Assert.assertEquals(true, response.created());
@@ -119,14 +125,12 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     @Test
     public void testPutDataObject_NullTenantId_SetsDefaultTenantId() throws IOException {
         PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID)
-                .dataObject(testDataObject).build();
-        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class)))
-                .thenReturn(PutItemResponse.builder().build());
-        sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture()
-                .join();
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
+        sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
@@ -135,14 +139,12 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testPutDataObject_NullId_SetsDefaultTenantId() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .dataObject(testDataObject).build();
-        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class)))
-                .thenReturn(PutItemResponse.builder().build());
-        PutDataObjectResponse response = sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture()
-                .join();
+        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
+        PutDataObjectResponse response = sdkClient
+            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
@@ -153,14 +155,14 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     @Test
     public void testPutDataObject_DDBException_ThrowsException() {
         PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID)
-                .dataObject(testDataObject).build();
-        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class)))
-                .thenThrow(new RuntimeException("Test exception"));
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
         CompletableFuture<PutDataObjectResponse> future = sdkClient
-                .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture();
+            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
         assertEquals(OpenSearchException.class, ce.getCause().getClass());
@@ -168,21 +170,18 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_HappyCase() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID)
-                .tenantId(TENANT_ID).build();
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         XContentBuilder sourceBuilder = XContentFactory.jsonBuilder();
         XContentBuilder builder = testDataObject.toXContent(sourceBuilder, ToXContent.EMPTY_PARAMS);
-        GetItemResponse getItemResponse = GetItemResponse.builder().item(Map.ofEntries(
-                Map.entry("source", AttributeValue.builder().s(builder.toString()).build())
-        )).build();
-        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class)))
-                .thenReturn(getItemResponse);
+        GetItemResponse getItemResponse = GetItemResponse
+            .builder()
+            .item(Map.ofEntries(Map.entry("source", AttributeValue.builder().s(builder.toString()).build())))
+            .build();
+        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
         GetDataObjectResponse response = sdkClient
-                .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture()
-                .join();
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
         GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, getItemRequest.tableName());
@@ -195,33 +194,26 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_NoExistingDoc() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID)
-                .tenantId(TENANT_ID).build();
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         GetItemResponse getItemResponse = GetItemResponse.builder().build();
-        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class)))
-                .thenReturn(getItemResponse);
+        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
         GetDataObjectResponse response = sdkClient
-                .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture()
-                .join();
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         Assert.assertEquals(TEST_ID, response.id());
         Assert.assertFalse(response.parser().isPresent());
     }
 
     @Test
     public void testGetDataObject_UseDefaultTenantIdIfNull() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID).build();
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
         GetItemResponse getItemResponse = GetItemResponse.builder().build();
-        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class)))
-                .thenReturn(getItemResponse);
+        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
         GetDataObjectResponse response = sdkClient
-                .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture()
-                .join();
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
         GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
         Assert.assertEquals("DEFAULT_TENANT", getItemRequest.key().get("tenant_id").s());
@@ -229,15 +221,11 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_DDBException_ThrowsOSException() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-                .index(TEST_INDEX)
-                .id(TEST_ID)
-                .tenantId(TENANT_ID).build();
-        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class)))
-                .thenThrow(new RuntimeException("Test exception"));
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
+        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
         CompletableFuture<GetDataObjectResponse> future = sdkClient
-                .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture();
+            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
         assertEquals(OpenSearchException.class, ce.getCause().getClass());
     }
@@ -245,12 +233,15 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     @Test
     public void testDeleteDataObject_HappyCase() {
         DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder()
-                .id(TEST_ID).index(TEST_INDEX).tenantId(TENANT_ID).build();
-        Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture()))
-                .thenReturn(DeleteItemResponse.builder().build());
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .tenantId(TENANT_ID)
+            .build();
+        Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
         DeleteDataObjectResponse deleteResponse = sdkClient
-                .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture().join();
+            .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, deleteItemRequest.tableName());
         Assert.assertEquals(TENANT_ID, deleteItemRequest.key().get("tenant_id").s());
@@ -261,13 +252,12 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testDeleteDataObject_NullTenantId_UsesDefaultTenantId() {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder()
-                .id(TEST_ID).index(TEST_INDEX).build();
-        Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture()))
-                .thenReturn(DeleteItemResponse.builder().build());
+        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().id(TEST_ID).index(TEST_INDEX).build();
+        Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
         DeleteDataObjectResponse deleteResponse = sdkClient
-                .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-                .toCompletableFuture().join();
+            .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
         DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
         Assert.assertEquals("DEFAULT_TENANT", deleteItemRequest.key().get("tenant_id").s());
     }
