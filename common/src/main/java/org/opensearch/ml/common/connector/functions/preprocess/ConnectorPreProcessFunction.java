@@ -31,6 +31,10 @@ import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
 @Log4j2
 public abstract class ConnectorPreProcessFunction implements Function<MLInput, RemoteInferenceInputDataSet> {
 
+    /**
+     * This is a flag that can be used to determine if the pre-process function should return the input directly for RemoteInferenceInputDataSet.
+     * If this is true and the input is already of type RemoteInferenceInputDataSet, it will be returned directly, otherwise it will be processed.
+     */
     protected boolean returnDirectlyForRemoteInferenceInput;
 
     /**
@@ -67,7 +71,7 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
     public void validateTextDocsInput(MLInput mlInput) {
         if (!(mlInput.getInputDataset() instanceof TextDocsInputDataSet)) {
             log.error(String.format(Locale.ROOT, "This pre_process_function can only support TextDocsInputDataSet, actual input type is: %s", mlInput.getInputDataset().getClass().getName()));
-            throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet");
+            throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet which including a list of string with key 'text_docs'");
         }
     }
 
