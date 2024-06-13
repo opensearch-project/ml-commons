@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.agents;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.time.Instant;
@@ -70,7 +71,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    IndexRequest indexRequest = new IndexRequest(ML_AGENT_INDEX);
+                    IndexRequest indexRequest = new IndexRequest(ML_AGENT_INDEX).setRefreshPolicy(IMMEDIATE);
                     XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
                     mlAgent.toXContent(builder, ToXContent.EMPTY_PARAMS);
                     indexRequest.source(builder);
