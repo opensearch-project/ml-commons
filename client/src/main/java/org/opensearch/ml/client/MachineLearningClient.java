@@ -136,12 +136,32 @@ public interface MachineLearningClient {
     }
 
     /**
+     * Get MLModel and return ActionFuture.
+     * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
+     * @param modelId id of the model
+     * @return ActionFuture of ml model
+     */
+    default ActionFuture<MLModel> getModel(String modelId, String tenantId) {
+        PlainActionFuture<MLModel> actionFuture = PlainActionFuture.newFuture();
+        getModel(modelId, tenantId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
      * Get MLModel and return model in listener
      * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
      * @param modelId id of the model
      * @param listener action listener
      */
     void getModel(String modelId, ActionListener<MLModel> listener);
+
+    /**
+     * Get MLModel and return model in listener
+     * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
+     * @param modelId id of the model
+     * @param listener action listener
+     */
+    void getModel(String modelId, String tenantId, ActionListener<MLModel> listener);
 
     /**
      * Get MLTask and return ActionFuture.

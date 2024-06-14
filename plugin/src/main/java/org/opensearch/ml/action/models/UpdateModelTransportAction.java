@@ -59,7 +59,10 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -73,11 +76,12 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
-
+    private final SdkClient sdkClient;
     Settings settings;
     ClusterService clusterService;
     ModelAccessControlHelper modelAccessControlHelper;
     ConnectorAccessControlHelper connectorAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     MLModelManager mlModelManager;
     MLModelGroupManager mlModelGroupManager;
     MLEngine mlEngine;
@@ -88,16 +92,19 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelManager mlModelManager,
         MLModelGroupManager mlModelGroupManager,
         Settings settings,
         ClusterService clusterService,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
@@ -105,6 +112,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
         this.settings = settings;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -116,6 +124,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelRequest updateModelRequest = MLUpdateModelRequest.fromActionRequest(request);
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
+        String tenantId = updateModelInput.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
@@ -124,60 +136,79 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                if (!isModelDeploying(mlModel.getModelState())) {
-                    FunctionName functionName = mlModel.getAlgorithm();
-                    // TODO: Support update as well as model/user level throttling in all other DLModel categories
-                    if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
-                        if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
-                            if (isSuperAdmin) {
-                                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, wrappedListener);
+                if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
+                    if (!isModelDeploying(mlModel.getModelState())) {
+                        FunctionName functionName = mlModel.getAlgorithm();
+                        // TODO: Support update as well as model/user level throttling in all other DLModel categories
+                        if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
+                            if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
+                                if (isSuperAdmin) {
+                                    updateRemoteOrTextEmbeddingModel(modelId, tenantId, updateModelInput, mlModel, user, wrappedListener);
+                                } else {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
                             } else {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model",
-                                            RestStatus.FORBIDDEN
-                                        )
+                                modelAccessControlHelper
+                                    .validateModelGroupAccess(
+                                        user,
+                                        mlModel.getModelGroupId(),
+                                        client,
+                                        ActionListener.wrap(hasPermission -> {
+                                            if (hasPermission) {
+                                                updateRemoteOrTextEmbeddingModel(
+                                                    modelId,
+                                                    tenantId,
+                                                    updateModelInput,
+                                                    mlModel,
+                                                    user,
+                                                    wrappedListener
+                                                );
+                                            } else {
+                                                wrappedListener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "User doesn't have privilege to perform this operation on this model, model ID "
+                                                                + modelId,
+                                                            RestStatus.FORBIDDEN
+                                                        )
+                                                    );
+                                            }
+                                        }, exception -> {
+                                            log
+                                                .error(
+                                                    "Permission denied: Unable to update the model with ID {}. Details: {}",
+                                                    modelId,
+                                                    exception
+                                                );
+                                            wrappedListener.onFailure(exception);
+                                        })
                                     );
                             }
-                        } else {
-                            modelAccessControlHelper
-                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                                    if (hasPermission) {
-                                        updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, wrappedListener);
-                                    } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "User doesn't have privilege to perform this operation on this model, model ID "
-                                                        + modelId,
-                                                    RestStatus.FORBIDDEN
-                                                )
-                                            );
-                                    }
-                                }, exception -> {
-                                    log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                                    wrappedListener.onFailure(exception);
-                                }));
-                        }
 
+                        } else {
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "The function category " + functionName.toString() + " is not supported at this time.",
+                                        RestStatus.FORBIDDEN
+                                    )
+                                );
+                        }
                     } else {
                         wrappedListener
                             .onFailure(
                                 new OpenSearchStatusException(
-                                    "The function category " + functionName.toString() + " is not supported at this time.",
-                                    RestStatus.FORBIDDEN
+                                    "Model is deploying. Please wait for the model to complete deployment. model ID " + modelId,
+                                    RestStatus.CONFLICT
                                 )
                             );
                     }
-                } else {
-                    wrappedListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "Model is deploying. Please wait for the model to complete deployment. model ID " + modelId,
-                                RestStatus.CONFLICT
-                            )
-                        );
                 }
             },
                 e -> wrappedListener
@@ -196,6 +227,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
 
     private void updateRemoteOrTextEmbeddingModel(
         String modelId,
+        String tenantId,
         MLUpdateModelInput updateModelInput,
         MLModel mlModel,
         User user,
@@ -263,6 +295,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     modelId,
                     newModelGroupId,
                     newConnectorId,
+                    tenantId,
                     mlModel,
                     user,
                     updateModelInput,
@@ -277,6 +310,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String modelId,
         String newModelGroupId,
         String newConnectorId,
+        String tenantId,
         MLModel mlModel,
         User user,
         MLUpdateModelInput updateModelInput,
@@ -284,29 +318,37 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         boolean isUpdateModelCache
     ) {
         if (Strings.hasLength(mlModel.getConnectorId())) {
-            connectorAccessControlHelper.validateConnectorAccess(client, newConnectorId, ActionListener.wrap(hasNewConnectorPermission -> {
-                if (hasNewConnectorPermission) {
-                    updateModelWithRegisteringToAnotherModelGroup(
-                        modelId,
-                        newModelGroupId,
-                        user,
-                        updateModelInput,
-                        wrappedListener,
-                        isUpdateModelCache
-                    );
-                } else {
-                    wrappedListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "You don't have permission to update the connector, connector id: " + newConnectorId,
-                                RestStatus.FORBIDDEN
-                            )
-                        );
-                }
-            }, exception -> {
-                log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", newConnectorId, exception);
-                wrappedListener.onFailure(exception);
-            }));
+            connectorAccessControlHelper
+                .validateConnectorAccess(
+                    sdkClient,
+                    client,
+                    newConnectorId,
+                    tenantId,
+                    mlFeatureEnabledSetting,
+                    ActionListener.wrap(hasNewConnectorPermission -> {
+                        if (hasNewConnectorPermission) {
+                            updateModelWithRegisteringToAnotherModelGroup(
+                                modelId,
+                                newModelGroupId,
+                                user,
+                                updateModelInput,
+                                wrappedListener,
+                                isUpdateModelCache
+                            );
+                        } else {
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "You don't have permission to update the connector, connector id: " + newConnectorId,
+                                        RestStatus.FORBIDDEN
+                                    )
+                                );
+                        }
+                    }, exception -> {
+                        log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", newConnectorId, exception);
+                        wrappedListener.onFailure(exception);
+                    })
+                );
         } else {
             wrappedListener
                 .onFailure(

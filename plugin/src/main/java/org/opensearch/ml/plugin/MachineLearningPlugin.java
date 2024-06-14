@@ -702,8 +702,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
-        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
-        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
+        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
+        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
         RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
@@ -723,7 +723,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
         RestMLGetModelGroupAction restMLGetModelGroupAction = new RestMLGetModelGroupAction();
         RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
-        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
+        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);

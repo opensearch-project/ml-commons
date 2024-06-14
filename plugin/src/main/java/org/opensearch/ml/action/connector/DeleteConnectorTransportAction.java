@@ -13,7 +13,6 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -34,8 +33,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -46,8 +43,6 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -88,8 +83,11 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
         connectorAccessControlHelper
             .validateConnectorAccess(
+                sdkClient,
                 client,
                 connectorId,
+                tenantId,
+                mlFeatureEnabledSetting,
                 ActionListener
                     .wrap(
                         isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, actionListener),
@@ -129,22 +127,14 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                 SearchHit[] searchHits = searchResponse.getHits().getHits();
                 if (searchHits.length == 0) {
-                    handleNoModelsUsingConnector(connectorId, tenantId, actionListener);
+                    deleteConnector(connectorId, actionListener);
                 } else {
                     handleModelsUsingConnector(searchHits, connectorId, actionListener);
                 }
-            }, e -> handleSearchFailure(connectorId, tenantId, e, actionListener)), context::restore));
+            }, e -> handleSearchFailure(connectorId, e, actionListener)), context::restore));
         } catch (Exception e) {
             log.error("Failed to check for models using connector: " + connectorId, e);
             actionListener.onFailure(e);
-        }
-    }
-
-    private void handleNoModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && Objects.nonNull(tenantId)) {
-            checkConnectorPermission(connectorId, tenantId, actionListener, () -> deleteConnector(connectorId, actionListener));
-        } else {
-            deleteConnector(connectorId, actionListener);
         }
     }
 
@@ -165,30 +155,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             );
     }
 
-    private void handleSearchFailure(String connectorId, String tenantId, Exception e, ActionListener<DeleteResponse> actionListener) {
+    private void handleSearchFailure(String connectorId, Exception e, ActionListener<DeleteResponse> actionListener) {
         if (e instanceof IndexNotFoundException) {
-            handleNoModelsUsingConnector(connectorId, tenantId, actionListener);
+            deleteConnector(connectorId, actionListener);
             return;
         }
         log.error("Failed to search for models using connector: {}", connectorId, e);
         actionListener.onFailure(e);
-    }
-
-    // TODO: merge this method with validateConnectorAccess and use sdkClient not client.
-    @VisibleForTesting
-    void checkConnectorPermission(
-        String connectorId,
-        String tenantId,
-        ActionListener<DeleteResponse> actionListener,
-        Runnable deleteAction
-    ) {
-        MLConnectorGetRequest mlConnectorGetRequest = new MLConnectorGetRequest(connectorId, tenantId, true);
-        client.execute(MLConnectorGetAction.INSTANCE, mlConnectorGetRequest, ActionListener.wrap(getResponse -> {
-            if (TenantAwareHelper
-                .validateTenantResource(mlFeatureEnabledSetting, tenantId, getResponse.getMlConnector().getTenantId(), actionListener)) {
-                deleteAction.run();
-            }
-        }, actionListener::onFailure));
     }
 
     private void deleteConnector(String connectorId, ActionListener<DeleteResponse> actionListener) {

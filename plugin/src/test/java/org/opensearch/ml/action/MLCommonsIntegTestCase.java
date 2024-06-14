@@ -385,7 +385,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLModel getModel(String modelId) {
-        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true);
+        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true, null);
         MLModelGetResponse response = client().execute(MLModelGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModel();
     }

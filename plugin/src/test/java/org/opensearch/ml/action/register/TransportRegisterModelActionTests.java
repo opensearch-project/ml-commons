@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.register;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
@@ -43,6 +42,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
@@ -61,6 +61,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -68,6 +69,7 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
@@ -137,6 +139,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private IndexResponse indexResponse;
 
+    private SdkClient sdkClient;
+
     ThreadContext threadContext;
 
     private TransportRegisterModelAction transportRegisterModelAction;
@@ -155,6 +159,9 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    NamedXContentRegistry xContentRegistry;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -165,6 +172,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
             .build();
         threadContext = new ThreadContext(settings);
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_URL_REGEX,
@@ -184,6 +192,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             settings,
             threadPool,
             client,
+            sdkClient,
             nodeFilter,
             mlTaskDispatcher,
             mlStats,
@@ -367,6 +376,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             settings,
             threadPool,
             client,
+            sdkClient,
             nodeFilter,
             mlTaskDispatcher,
             mlStats,
@@ -459,10 +469,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
@@ -476,10 +486,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         doAnswer(invocation -> {
             ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
@@ -502,10 +512,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

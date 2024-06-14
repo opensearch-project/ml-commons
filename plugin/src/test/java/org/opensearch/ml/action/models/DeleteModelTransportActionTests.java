@@ -57,6 +57,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -95,6 +96,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ClusterService clusterService;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     DeleteModelTransportAction deleteModelTransportAction;
     MLModelDeleteRequest mlModelDeleteRequest;
     ThreadContext threadContext;
@@ -118,7 +122,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
 

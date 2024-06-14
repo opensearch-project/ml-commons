@@ -25,20 +25,27 @@ public class MLModelDeleteRequest extends ActionRequest {
     @Getter
     String modelId;
 
+    @Getter
+    String tenantId;
+
     @Builder
-    public MLModelDeleteRequest(String modelId) {
+    public MLModelDeleteRequest(String modelId, String tenantId) {
+
         this.modelId = modelId;
+        this.tenantId = tenantId;
     }
 
     public MLModelDeleteRequest(StreamInput input) throws IOException {
         super(input);
         this.modelId = input.readString();
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(modelId);
+        output.writeOptionalString(tenantId);
     }
 
     @Override
