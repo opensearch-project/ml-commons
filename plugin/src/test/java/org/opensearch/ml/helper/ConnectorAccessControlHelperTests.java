@@ -52,6 +52,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
@@ -443,11 +444,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
             .id("connectorId")
             .build();
         GetResponse getResponse = prepareConnector();
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(future);
@@ -468,6 +465,65 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         verify(client, times(1)).get(requestCaptor.capture());
         assertEquals(CommonValue.ML_CONNECTOR_INDEX, requestCaptor.getValue().index());
+    }
+
+    @Test
+    public void testGetConnectorException() throws IOException, InterruptedException {
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
+            .index(CommonValue.ML_CONNECTOR_INDEX)
+            .id("connectorId")
+            .build();
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new RuntimeException("Failed to get connector"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Connector> latchedActionListener = new LatchedActionListener<>(getConnectorActionListener, latch);
+        connectorAccessControlHelper
+            .getConnector(
+                sdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                getRequest,
+                "connectorId",
+                latchedActionListener
+            );
+        latch.await();
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConnectorActionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to get connector", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testGetConnectorIndexNotFound() throws IOException, InterruptedException {
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
+            .index(CommonValue.ML_CONNECTOR_INDEX)
+            .id("connectorId")
+            .build();
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new IndexNotFoundException("Index not found"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Connector> latchedActionListener = new LatchedActionListener<>(getConnectorActionListener, latch);
+        connectorAccessControlHelper
+            .getConnector(
+                sdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                getRequest,
+                "connectorId",
+                latchedActionListener
+            );
+        latch.await();
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(getConnectorActionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.NOT_FOUND, argumentCaptor.getValue().status());
     }
 
     private GetResponse createGetResponse(List<String> backendRoles) {
