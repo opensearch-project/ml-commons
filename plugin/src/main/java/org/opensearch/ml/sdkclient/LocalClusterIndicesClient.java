@@ -10,10 +10,12 @@ package org.opensearch.ml.sdkclient;
 
 import static org.opensearch.action.DocWriteResponse.Result.CREATED;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.action.DocWriteResponse.Result.UPDATED;
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
+import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Optional;
@@ -21,7 +23,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -29,13 +30,15 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -43,6 +46,8 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -79,8 +84,12 @@ public class LocalClusterIndicesClient implements SdkClient {
                     .actionGet();
                 log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
                 return new PutDataObjectResponse.Builder().id(indexResponse.getId()).created(indexResponse.getResult() == CREATED).build();
-            } catch (Exception e) {
-                throw new OpenSearchException(e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to parse data object to put in index " + request.index(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }), executor);
     }
@@ -90,7 +99,9 @@ public class LocalClusterIndicesClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 log.info("Getting {} from {}", request.id(), request.index());
-                GetResponse getResponse = client.get(new GetRequest(request.index(), request.id())).actionGet();
+                GetResponse getResponse = client
+                    .get(new GetRequest(request.index(), request.id()).fetchSourceContext(request.fetchSourceContext()))
+                    .actionGet();
                 if (getResponse == null || !getResponse.isExists()) {
                     return new GetDataObjectResponse.Builder().id(request.id()).build();
                 }
@@ -102,10 +113,39 @@ public class LocalClusterIndicesClient implements SdkClient {
                     .parser(Optional.of(parser))
                     .source(getResponse.getSource())
                     .build();
-            } catch (OpenSearchStatusException | IndexNotFoundException notFound) {
-                throw notFound;
-            } catch (Exception e) {
-                throw new OpenSearchException(e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parser creation error
+                throw new OpenSearchStatusException(
+                    "Failed to create parser for data object retrieved from index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+            }
+        }), executor);
+    }
+
+    @Override
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+            try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+                log.info("Updating {} from {}", request.id(), request.index());
+                UpdateResponse updateResponse = client
+                    .update(
+                        new UpdateRequest(request.index(), request.id()).doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS))
+                    )
+                    .actionGet();
+                log.info("Update status for id {}: {}", updateResponse.getId(), updateResponse.getResult());
+                return new UpdateDataObjectResponse.Builder()
+                    .id(updateResponse.getId())
+                    .shardId(updateResponse.getShardId())
+                    .shardInfo(updateResponse.getShardInfo())
+                    .updated(updateResponse.getResult() == UPDATED)
+                    .build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to parse data object to update in index " + request.index(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }), executor);
     }
@@ -113,19 +153,15 @@ public class LocalClusterIndicesClient implements SdkClient {
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
-            try {
-                log.info("Deleting {} from {}", request.id(), request.index());
-                DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
-                log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
-                return new DeleteDataObjectResponse.Builder()
-                    .id(deleteResponse.getId())
-                    .shardId(deleteResponse.getShardId())
-                    .shardInfo(deleteResponse.getShardInfo())
-                    .deleted(deleteResponse.getResult() == DELETED)
-                    .build();
-            } catch (Exception e) {
-                throw new OpenSearchException(e);
-            }
+            log.info("Deleting {} from {}", request.id(), request.index());
+            DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
+            log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
+            return new DeleteDataObjectResponse.Builder()
+                .id(deleteResponse.getId())
+                .shardId(deleteResponse.getShardId())
+                .shardInfo(deleteResponse.getShardInfo())
+                .deleted(deleteResponse.getResult() == DELETED)
+                .build();
         }), executor);
     }
 }

@@ -42,11 +42,7 @@ public interface SdkClient {
         try {
             return putDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new OpenSearchException(cause);
+            throw unwrapAndConvertToRuntime(e);
         }
     }
 
@@ -76,11 +72,37 @@ public interface SdkClient {
         try {
             return getDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new OpenSearchException(cause);
+            throw unwrapAndConvertToRuntime(e);
+        }
+    }
+
+    /**
+     * Update a data object/document in a table/index.
+     * @param request A request identifying the data object to update
+     * @param executor the executor to use for asynchronous execution
+     * @return A completion stage encapsulating the response or exception
+     */
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor);
+
+    /**
+     * Update a data object/document in a table/index.
+     * @param request A request identifying the data object to update
+     * @return A completion stage encapsulating the response or exception
+     */
+    default CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request) {
+        return updateDataObjectAsync(request, ForkJoinPool.commonPool());        
+    }
+
+    /**
+     * Update a data object/document in a table/index.
+     * @param request A request identifying the data object to update
+     * @return A response on success. Throws {@link OpenSearchException} wrapping the cause on exception.
+     */
+    default UpdateDataObjectResponse updateDataObject(UpdateDataObjectRequest request) {
+        try {
+            return updateDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            throw unwrapAndConvertToRuntime(e);
         }
     }
 
@@ -110,11 +132,18 @@ public interface SdkClient {
         try {
             return deleteDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new OpenSearchException(cause);
+            throw unwrapAndConvertToRuntime(e);
         }
+    }
+    
+    private static RuntimeException unwrapAndConvertToRuntime(CompletionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        if (cause instanceof RuntimeException) {
+            return (RuntimeException) cause;
+        }
+        return new OpenSearchException(cause);
     }
 }
