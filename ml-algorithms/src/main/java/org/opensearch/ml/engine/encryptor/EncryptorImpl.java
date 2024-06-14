@@ -132,22 +132,25 @@ public class EncryptorImpl implements Encryptor {
                             if (ExceptionUtils.getRootCause(e) instanceof VersionConflictEngineException) {
                                 GetRequest getMasterKeyRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
                                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                    client.get(getMasterKeyRequest, ActionListener.wrap(getMasterKey -> {
-                                        if (getMasterKey.isExists()) {
-                                            final String masterKey = (String) getMasterKey.getSourceAsMap().get(MASTER_KEY);
+                                    client.get(getMasterKeyRequest, ActionListener.wrap(getMasterKeyResponse -> {
+                                        if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
+                                            final String masterKey = (String) getMasterKeyResponse.getSourceAsMap().get(MASTER_KEY);
                                             this.masterKey = masterKey;
                                             log.info("ML encryption master key already initialized, no action needed");
+                                            latch.countDown();
+                                        } else {
+                                            exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
                                             latch.countDown();
                                         }
                                     }, error -> {
                                         log.debug("Failed to get ML encryption master key", e);
-                                        exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                                        exceptionRef.set(error);
                                         latch.countDown();
                                     }));
                                 }
                             } else {
                                 log.debug("Failed to index ML encryption master key", e);
-                                exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                                exceptionRef.set(e);
                                 latch.countDown();
                             }
                         }));
@@ -159,12 +162,13 @@ public class EncryptorImpl implements Encryptor {
                     }
                 }, e -> {
                     log.debug("Failed to get ML encryption master key from config index", e);
-                    exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                    exceptionRef.set(e);
                     latch.countDown();
                 }));
             }
         }, e -> {
             log.debug("Failed to init ML config index", e);
+            exceptionRef.set(e);
             latch.countDown();
         }));
 
