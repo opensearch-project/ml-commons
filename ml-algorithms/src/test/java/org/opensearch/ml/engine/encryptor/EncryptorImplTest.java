@@ -273,7 +273,7 @@ public class EncryptorImplTest {
         doAnswer(invocation -> {
             ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
             actionListener
-                    .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
+                .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
             return null;
         }).when(client).index(any(), any());
 
@@ -306,7 +306,7 @@ public class EncryptorImplTest {
         doAnswer(invocation -> {
             ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
             actionListener
-                    .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
+                .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
             return null;
         }).when(client).index(any(), any());
 

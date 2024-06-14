@@ -129,6 +129,7 @@ public class EncryptorImpl implements Encryptor {
                             log.info("ML encryption master key initialized successfully");
                             latch.countDown();
                         }, e -> {
+
                             if (ExceptionUtils.getRootCause(e) instanceof VersionConflictEngineException) {
                                 GetRequest getMasterKeyRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
                                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
