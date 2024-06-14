@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 
@@ -35,6 +36,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.index.engine.VersionConflictEngineException;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -187,6 +189,33 @@ public class EncryptorImplTest {
     }
 
     @Test
+    public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_NonRuntimeException() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("random IO exception");
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            GetResponse response = mock(GetResponse.class);
+            when(response.isExists()).thenReturn(false);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            actionListener.onFailure(new IOException("random IO exception"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey());
+        encryptor.encrypt("test");
+    }
+
+    @Test
     public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict() {
         exceptionRule.expect(ResourceNotFoundException.class);
         exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
@@ -212,6 +241,72 @@ public class EncryptorImplTest {
             ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
             actionListener
                 .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey());
+        encryptor.encrypt("test");
+    }
+
+    @Test
+    public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict_NullGetResponse() {
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            GetResponse response = mock(GetResponse.class);
+            when(response.isExists()).thenReturn(false);
+            actionListener.onResponse(response);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            GetResponse response = null;
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            actionListener
+                    .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey());
+        encryptor.encrypt("test");
+    }
+
+    @Test
+    public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict_NullResponse() {
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            GetResponse response = null;
+            actionListener.onResponse(response);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            GetResponse response = mock(GetResponse.class);
+            when(response.isExists()).thenReturn(false);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            actionListener
+                    .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
             return null;
         }).when(client).index(any(), any());
 
