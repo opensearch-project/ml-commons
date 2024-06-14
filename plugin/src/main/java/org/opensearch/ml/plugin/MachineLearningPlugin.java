@@ -458,7 +458,8 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
 
-        encryptor = new EncryptorImpl(clusterService, client);
+        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -492,7 +493,6 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
-        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
 
