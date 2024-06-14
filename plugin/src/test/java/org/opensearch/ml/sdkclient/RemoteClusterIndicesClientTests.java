@@ -173,6 +173,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, getRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
+        assertEquals("foo", response.source().get("data"));
         assertTrue(response.parser().isPresent());
         XContentParser parser = response.parser().get();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
