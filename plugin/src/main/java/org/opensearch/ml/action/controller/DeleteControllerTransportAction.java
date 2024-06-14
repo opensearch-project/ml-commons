@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.controller;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 
@@ -216,7 +217,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
     }
 
     private void deleteController(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
-        DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
+        DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId).setRefreshPolicy(IMMEDIATE);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
