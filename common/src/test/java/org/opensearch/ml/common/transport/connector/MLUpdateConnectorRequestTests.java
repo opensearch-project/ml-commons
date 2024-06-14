@@ -72,7 +72,7 @@ public class MLUpdateConnectorRequestTests {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
-        MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.parse(parser, connectorId);
+        MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.parse(parser, connectorId, null);
         assertEquals(updateConnectorRequest.getConnectorId(), connectorId);
         assertTrue(updateConnectorRequest.getUpdateContent().isUpdateConnector());
         assertEquals("new version", updateConnectorRequest.getUpdateContent().getVersion());

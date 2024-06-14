@@ -28,6 +28,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -35,13 +36,19 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -53,8 +60,9 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateConnectorTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
-
+    private final SdkClient sdkClient;
     ConnectorAccessControlHelper connectorAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     MLModelManager mlModelManager;
     MLEngine mlEngine;
     volatile List<String> trustedConnectorEndpointsRegex;
@@ -64,17 +72,21 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLModelManager mlModelManager,
         Settings settings,
         ClusterService clusterService,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUpdateConnectorAction.NAME, transportService, actionFilters, MLUpdateConnectorRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
         this.mlEngine = mlEngine;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -84,27 +96,49 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> listener) {
         MLUpdateConnectorRequest mlUpdateConnectorAction = MLUpdateConnectorRequest.fromActionRequest(request);
+        MLCreateConnectorInput mlCreateConnectorInput = mlUpdateConnectorAction.getUpdateContent();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
+            return;
+        }
         String connectorId = mlUpdateConnectorAction.getConnectorId();
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+            .index(ML_CONNECTOR_INDEX)
+            .id(connectorId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            connectorAccessControlHelper.getConnector(client, connectorId, ActionListener.wrap(connector -> {
-                boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
-                if (Boolean.TRUE.equals(hasPermission)) {
-                    connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
-                    connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                    UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
-                    updateRequest.doc(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
-                    updateUndeployedConnector(connectorId, updateRequest, listener, context);
-                } else {
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException("You don't have permission to update the connector, connector id: " + connectorId)
-                        );
-                }
-            }, exception -> {
-                log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
-                listener.onFailure(exception);
-            }));
+            connectorAccessControlHelper
+                .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
+                    if (TenantAwareHelper
+                        .validateTenantResource(
+                            mlFeatureEnabledSetting,
+                            mlCreateConnectorInput.getTenantId(),
+                            connector.getTenantId(),
+                            listener
+                        )) {
+                        boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
+                        if (Boolean.TRUE.equals(hasPermission)) {
+                            connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
+                            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                            UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
+                            updateRequest
+                                .doc(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+                            updateUndeployedConnector(connectorId, updateRequest, listener, context);
+                        } else {
+                            listener
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "You don't have permission to update the connector, connector id: " + connectorId
+                                    )
+                                );
+                        }
+                    }
+                }, exception -> {
+                    log.error("Unable to find the connector with ID {}. Details: {}", connectorId, exception);
+                    listener.onFailure(exception);
+                }));
         } catch (Exception e) {
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);

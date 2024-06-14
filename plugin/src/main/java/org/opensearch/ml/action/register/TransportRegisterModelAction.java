@@ -63,6 +63,8 @@ import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -82,6 +84,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+    private final SdkClient sdkClient;
 
     Settings settings;
     DiscoveryNodeHelper nodeFilter;
@@ -110,6 +113,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         Settings settings,
         ThreadPool threadPool,
         Client client,
+        SdkClient sdkClient,
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
         MLStats mlStats,
@@ -127,6 +131,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.nodeFilter = nodeFilter;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlStats = mlStats;
@@ -152,6 +157,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, registerModelInput.getTenantId(), listener)) {
+            return;
+        }
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
@@ -236,26 +244,35 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
-                connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
-                    if (Boolean.TRUE.equals(r)) {
-                        createModelGroup(registerModelInput, listener);
-                    } else {
-                        listener
-                            .onFailure(
-                                new IllegalArgumentException(
-                                    "You don't have permission to use the connector provided, connector id: "
-                                        + registerModelInput.getConnectorId()
-                                )
-                            );
-                    }
-                }, e -> {
-                    log
-                        .error(
-                            "You don't have permission to use the connector provided, connector id: " + registerModelInput.getConnectorId(),
-                            e
-                        );
-                    listener.onFailure(e);
-                }));
+                connectorAccessControlHelper
+                    .validateConnectorAccess(
+                        sdkClient,
+                        client,
+                        registerModelInput.getConnectorId(),
+                        registerModelInput.getTenantId(),
+                        mlFeatureEnabledSetting,
+                        ActionListener.wrap(r -> {
+                            if (Boolean.TRUE.equals(r)) {
+                                createModelGroup(registerModelInput, listener);
+                            } else {
+                                listener
+                                    .onFailure(
+                                        new IllegalArgumentException(
+                                            "You don't have permission to use the connector provided, connector id: "
+                                                + registerModelInput.getConnectorId()
+                                        )
+                                    );
+                            }
+                        }, e -> {
+                            log
+                                .error(
+                                    "You don't have permission to use the connector provided, connector id: {}",
+                                    registerModelInput.getConnectorId(),
+                                    e
+                                );
+                            listener.onFailure(e);
+                        })
+                    );
             } else {
                 validateInternalConnector(registerModelInput);
                 ActionListener<MLCreateConnectorResponse> dryRunResultListener = ActionListener.wrap(res -> {
@@ -350,7 +367,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
 
                 ActionListener<MLForwardResponse> forwardActionListener = ActionListener.wrap(res -> {
-                    log.debug("Register model response: " + res);
+                    log.debug("Register model response: {}", res);
                     if (!clusterService.localNode().getId().equals(nodeId)) {
                         mlTaskManager.remove(taskId);
                     }

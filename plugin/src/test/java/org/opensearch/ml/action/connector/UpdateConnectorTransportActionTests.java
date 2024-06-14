@@ -8,6 +8,8 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -37,10 +39,13 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -52,12 +57,17 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -67,6 +77,17 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     private UpdateConnectorTransportAction updateConnectorTransportAction;
 
+    private static TestThreadPool testThreadPool = new TestThreadPool(
+        UpdateConnectorTransportActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
+
     @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
@@ -75,6 +96,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+    private SdkClient sdkClient;
 
     @Mock
     private ThreadPool threadPool;
@@ -86,7 +108,13 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     private TransportService transportService;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     private ActionFilters actionFilters;
+
+    @Mock
+    NamedXContentRegistry xContentRegistry;
 
     @Mock
     private MLUpdateConnectorRequest updateRequest;
@@ -116,6 +144,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
@@ -126,11 +155,14 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
         );
 
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build();
         threadContext = new ThreadContext(settings);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
         String connector_id = "test_connector_id";
         MLCreateConnectorInput updateContent = MLCreateConnectorInput
             .builder()
@@ -161,11 +193,13 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             transportService,
             actionFilters,
             client,
+            sdkClient,
             connectorAccessControlHelper,
             mlModelManager,
             settings,
             clusterService,
-            mlEngine
+            mlEngine,
+            mlFeatureEnabledSetting
         );
 
         when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});
@@ -173,7 +207,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
         doAnswer(invocation -> {
-            ActionListener<Connector> listener = invocation.getArgument(2);
+            ActionListener<Connector> listener = invocation.getArgument(5);
             Connector connector = HttpConnector
                 .builder()
                 .name("test")
@@ -199,7 +233,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             // doNothing().when(connector).update(any(), any());
             listener.onResponse(connector);
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(Client.class), any(String.class), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
     }
 
     @Test
