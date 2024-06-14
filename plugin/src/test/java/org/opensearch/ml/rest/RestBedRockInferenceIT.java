@@ -130,7 +130,8 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", imageBase64)).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
             Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
-            String errorMsg = String.format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
+            String errorMsg = String
+                .format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
             assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 1, output.size());
@@ -181,7 +182,8 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello")).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
             Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
-            String errorMsg = String.format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
+            String errorMsg = String
+                .format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
             assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 1, output.size());
@@ -233,7 +235,8 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(input).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
             Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
-            String errorMsg = String.format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
+            String errorMsg = String
+                .format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
             assertTrue(errorMsg, inferenceResult.containsKey("status"));
             assertTrue(errorMsg, String.valueOf(inferenceResult.get("status")).contains("400"));
             assertTrue(errorMsg, inferenceResult.containsKey("error"));
