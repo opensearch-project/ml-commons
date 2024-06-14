@@ -384,6 +384,15 @@ public class AgentUtils {
         return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
     }
 
+    public static void fillSelectTool(Map<String, String> params) {
+        if (params.containsKey(SELECTED_TOOLS)) {
+            String selectedTools = params.get(SELECTED_TOOLS);
+            StringSubstitutor substitutor = new StringSubstitutor(params, "${parameters.", "}");
+            selectedTools = substitutor.replace(selectedTools);
+            params.put(SELECTED_TOOLS, selectedTools);
+        }
+    }
+
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
