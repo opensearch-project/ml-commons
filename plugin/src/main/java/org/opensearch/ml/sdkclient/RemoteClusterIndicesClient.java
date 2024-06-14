@@ -10,7 +10,9 @@ package org.opensearch.ml.sdkclient;
 
 import static org.opensearch.client.opensearch._types.Result.Created;
 import static org.opensearch.client.opensearch._types.Result.Deleted;
+import static org.opensearch.client.opensearch._types.Result.Updated;
 
+import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
@@ -19,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
-import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch.core.DeleteRequest;
@@ -28,9 +30,15 @@ import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.GetResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.core.IndexResponse;
+import org.opensearch.client.opensearch.core.UpdateRequest;
+import org.opensearch.client.opensearch.core.UpdateResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -39,6 +47,8 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,8 +80,12 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 IndexResponse indexResponse = openSearchClient.index(indexRequest);
                 log.info("Creation status for id {}: {}", indexResponse.id(), indexResponse.result());
                 return new PutDataObjectResponse.Builder().id(indexResponse.id()).created(indexResponse.result() == Created).build();
-            } catch (Exception e) {
-                throw new OpenSearchException("Error occurred while indexing data object", e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to parse data object to put in index " + request.index(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }), executor);
     }
@@ -94,8 +108,50 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
                 return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).source(source).build();
-            } catch (Exception e) {
-                throw new OpenSearchException(e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parser creation error
+                throw new OpenSearchStatusException(
+                    "Failed to create parser for data object retrieved from index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+            }
+        }), executor);
+    }
+
+    @Override
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+            try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+                @SuppressWarnings("unchecked")
+                Class<Map<String, Object>> documentType = (Class<Map<String, Object>>) (Class<?>) Map.class;
+                request.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
+                Map<String, Object> docMap = JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString())
+                    .map();
+                UpdateRequest<Map<String, Object>, ?> updateRequest = new UpdateRequest.Builder<Map<String, Object>, Map<String, Object>>()
+                    .index(request.index())
+                    .id(request.id())
+                    .doc(docMap)
+                    .build();
+                log.info("Updating {} in {}", request.id(), request.index());
+                UpdateResponse<Map<String, Object>> updateResponse = openSearchClient.update(updateRequest, documentType);
+                log.info("Update status for id {}: {}", updateResponse.id(), updateResponse.result());
+                ShardInfo shardInfo = new ShardInfo(
+                    updateResponse.shards().total().intValue(),
+                    updateResponse.shards().successful().intValue()
+                );
+                return new UpdateDataObjectResponse.Builder()
+                    .id(updateResponse.id())
+                    .shardId(updateResponse.index())
+                    .shardInfo(shardInfo)
+                    .updated(updateResponse.result() == Updated)
+                    .build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on update IOException
+                throw new OpenSearchStatusException(
+                    "Parsing error updating data object " + request.id() + " in index " + request.index(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }), executor);
     }
@@ -118,8 +174,12 @@ public class RemoteClusterIndicesClient implements SdkClient {
                     .shardInfo(shardInfo)
                     .deleted(deleteResponse.result() == Deleted)
                     .build();
-            } catch (Exception e) {
-                throw new OpenSearchException("Error occurred while deleting data object", e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on deletion IOException
+                throw new OpenSearchStatusException(
+                    "IOException occurred while deleting data object " + request.id() + " from index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
             }
         }), executor);
     }

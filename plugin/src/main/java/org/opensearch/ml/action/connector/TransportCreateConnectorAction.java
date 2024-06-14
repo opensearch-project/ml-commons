@@ -12,6 +12,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CO
 import java.util.HashSet;
 import java.util.List;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -147,7 +148,13 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     .whenComplete((r, throwable) -> {
                         context.restore();
                         if (throwable != null) {
-                            listener.onFailure(new RuntimeException(throwable));
+                            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                            log.error("Failed to create ML connector", cause);
+                            if (cause instanceof Exception) {
+                                listener.onFailure((Exception) cause);
+                            } else {
+                                listener.onFailure(new OpenSearchException(cause));
+                            }
                         } else {
                             log.info("Connector creation result: {}, connector id: {}", r.created(), r.id());
                             MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.id());

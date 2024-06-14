@@ -186,7 +186,6 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to find connector with the provided connector id: connector_id", argumentCaptor.getValue().getMessage());
     }
 
-    @Test
     public void testGetConnector_MultiTenancyEnabled_Success() throws IOException, InterruptedException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
         when(connectorAccessControlHelper.hasPermission(any(), any())).thenReturn(true);

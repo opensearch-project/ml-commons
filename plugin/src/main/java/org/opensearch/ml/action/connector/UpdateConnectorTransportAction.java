@@ -7,31 +7,30 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.DocWriteResponse.Result;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
@@ -46,6 +45,8 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -60,7 +61,8 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateConnectorTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
-    private final SdkClient sdkClient;
+    SdkClient sdkClient;
+
     ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     MLModelManager mlModelManager;
@@ -122,10 +124,12 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         if (Boolean.TRUE.equals(hasPermission)) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
                             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                            UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
-                            updateRequest
-                                .doc(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
-                            updateUndeployedConnector(connectorId, updateRequest, listener, context);
+                            UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+                                .index(ML_CONNECTOR_INDEX)
+                                .id(connectorId)
+                                .dataObject(connector)
+                                .build();
+                            updateUndeployedConnector(connectorId, updateDataObjectRequest, listener, context);
                         } else {
                             listener
                                 .onFailure(
@@ -136,7 +140,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         }
                     }
                 }, exception -> {
-                    log.error("Unable to find the connector with ID {}. Details: {}", connectorId, exception);
+                    log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
                     listener.onFailure(exception);
                 }));
         } catch (Exception e) {
@@ -147,7 +151,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
 
     private void updateUndeployedConnector(
         String connectorId,
-        UpdateRequest updateRequest,
+        UpdateDataObjectRequest updateDataObjectRequest,
         ActionListener<UpdateResponse> listener,
         ThreadContext.StoredContext context
     ) {
@@ -159,10 +163,15 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         sourceBuilder.query(boolQueryBuilder);
         searchRequest.source(sourceBuilder);
 
+        // TODO: Use SDK client not client.
         client.search(searchRequest, ActionListener.wrap(searchResponse -> {
             SearchHit[] searchHits = searchResponse.getHits().getHits();
             if (searchHits.length == 0) {
-                client.update(updateRequest, getUpdateResponseListener(connectorId, listener, context));
+                sdkClient
+                    .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                    .whenComplete((r, throwable) -> {
+                        handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(connectorId, listener, context));
+                    });
             } else {
                 log.error(searchHits.length + " models are still using this connector, please undeploy the models first!");
                 List<String> modelIds = new ArrayList<>();
@@ -181,13 +190,34 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {
-                client.update(updateRequest, getUpdateResponseListener(connectorId, listener, context));
+                sdkClient
+                    .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                    .whenComplete((r, throwable) -> {
+                        handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(connectorId, listener, context));
+                    });
                 return;
             }
             log.error("Failed to update ML connector: " + connectorId, e);
             listener.onFailure(e);
-
         }));
+    }
+
+    private void handleUpdateDataObjectCompletionStage(
+        UpdateDataObjectResponse r,
+        Throwable throwable,
+        ActionListener<UpdateResponse> updateListener
+    ) {
+        if (throwable != null) {
+            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+            if (cause instanceof Exception) {
+                updateListener.onFailure((Exception) cause);
+            } else {
+                updateListener.onFailure(new OpenSearchException(cause));
+            }
+        } else {
+            log.info("Connector update result: {}, connector id: {}", r.updated(), r.id());
+            updateListener.onResponse(new UpdateResponse(r.shardId(), r.id(), 0, 0, 0, r.updated() ? Result.UPDATED : Result.CREATED));
+        }
     }
 
     private ActionListener<UpdateResponse> getUpdateResponseListener(

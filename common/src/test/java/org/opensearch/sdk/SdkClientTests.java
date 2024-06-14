@@ -13,6 +13,8 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -40,11 +42,15 @@ public class SdkClientTests {
     @Mock
     private GetDataObjectResponse getResponse;
     @Mock
+    private UpdateDataObjectRequest updateRequest;
+    @Mock
+    private UpdateDataObjectResponse updateResponse;
+    @Mock
     private DeleteDataObjectRequest deleteRequest;
     @Mock
     private DeleteDataObjectResponse deleteResponse;
 
-    private RuntimeException testException;
+    private OpenSearchStatusException testException;
     private InterruptedException interruptedException;
 
     @Before
@@ -62,11 +68,16 @@ public class SdkClientTests {
             }
 
             @Override
+            public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+                return CompletableFuture.completedFuture(updateResponse);
+            }
+
+            @Override
             public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
                 return CompletableFuture.completedFuture(deleteResponse);
             }
         });
-        testException = new RuntimeException();
+        testException = new OpenSearchStatusException("Test", RestStatus.BAD_REQUEST);
         interruptedException = new InterruptedException();
     }
 
@@ -81,10 +92,10 @@ public class SdkClientTests {
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class), any(Executor.class)))
                 .thenReturn(CompletableFuture.failedFuture(testException));
 
-        OpenSearchException exception = assertThrows(OpenSearchException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             sdkClient.putDataObject(putRequest);
         });
-        assertEquals(testException, exception.getCause());
+        assertEquals(testException, exception);
         assertFalse(Thread.interrupted());        
         verify(sdkClient).putDataObjectAsync(any(PutDataObjectRequest.class), any(Executor.class));
     }
@@ -113,10 +124,10 @@ public class SdkClientTests {
         when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class), any(Executor.class)))
                 .thenReturn(CompletableFuture.failedFuture(testException));
 
-        OpenSearchException exception = assertThrows(OpenSearchException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             sdkClient.getDataObject(getRequest);
         });
-        assertEquals(testException, exception.getCause());
+        assertEquals(testException, exception);
         assertFalse(Thread.interrupted());        
         verify(sdkClient).getDataObjectAsync(any(GetDataObjectRequest.class), any(Executor.class));
     }
@@ -134,6 +145,37 @@ public class SdkClientTests {
         verify(sdkClient).getDataObjectAsync(any(GetDataObjectRequest.class), any(Executor.class));
     }
 
+
+    @Test
+    public void testUpdateDataObjectSuccess() {
+        assertEquals(updateResponse, sdkClient.updateDataObject(updateRequest));
+        verify(sdkClient).updateDataObjectAsync(any(UpdateDataObjectRequest.class), any(Executor.class));
+    }
+
+    @Test
+    public void testUpdateDataObjectException() {
+        when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class), any(Executor.class)))
+                .thenReturn(CompletableFuture.failedFuture(testException));
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
+            sdkClient.updateDataObject(updateRequest);
+        });
+        assertEquals(testException, exception);
+        assertFalse(Thread.interrupted());        
+        verify(sdkClient).updateDataObjectAsync(any(UpdateDataObjectRequest.class), any(Executor.class));
+    }
+
+    @Test
+    public void testUpdateDataObjectInterrupted() {
+        when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class), any(Executor.class)))
+        .thenReturn(CompletableFuture.failedFuture(interruptedException));
+        OpenSearchException exception = assertThrows(OpenSearchException.class, () -> {
+            sdkClient.updateDataObject(updateRequest);
+        });
+        assertEquals(interruptedException, exception.getCause());
+        assertTrue(Thread.interrupted());        
+        verify(sdkClient).updateDataObjectAsync(any(UpdateDataObjectRequest.class), any(Executor.class));
+    }
+    
     @Test
     public void testDeleteDataObjectSuccess() {
         assertEquals(deleteResponse, sdkClient.deleteDataObject(deleteRequest));
@@ -144,10 +186,10 @@ public class SdkClientTests {
     public void testDeleteDataObjectException() {
         when(sdkClient.deleteDataObjectAsync(any(DeleteDataObjectRequest.class), any(Executor.class)))
                 .thenReturn(CompletableFuture.failedFuture(testException));
-        OpenSearchException exception = assertThrows(OpenSearchException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             sdkClient.deleteDataObject(deleteRequest);
         });
-        assertEquals(testException, exception.getCause());
+        assertEquals(testException, exception);
         assertFalse(Thread.interrupted());        
         verify(sdkClient).deleteDataObjectAsync(any(DeleteDataObjectRequest.class), any(Executor.class));
     }
