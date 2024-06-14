@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -142,10 +143,10 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any());
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);

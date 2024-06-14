@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
@@ -15,6 +16,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -50,6 +53,8 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -58,6 +63,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
@@ -80,8 +86,13 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -93,6 +104,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+    private SdkClient sdkClient;
 
     @Mock
     Task task;
@@ -120,6 +132,9 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     MLModelGroupManager mlModelGroupManager;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
@@ -162,11 +177,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLEngine mlEngine;
 
+    @Mock
+    NamedXContentRegistry xContentRegistry;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
+
+    private static TestThreadPool testThreadPool = new TestThreadPool(
+        UpdateModelTransportActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         updateLocalModelInput = MLUpdateModelInput
             .builder()
             .modelId("test_model_id")
@@ -225,6 +255,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterState.nodes()).thenReturn(nodes);
         when(mlModelManager.getWorkerNodes("test_model_id", FunctionName.REMOTE)).thenReturn(targetNodeIds);
+        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
 
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
@@ -234,13 +265,15 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 connectorAccessControlHelper,
                 modelAccessControlHelper,
                 mlModelManager,
                 mlModelGroupManager,
                 settings,
                 clusterService,
-                mlEngine
+                mlEngine,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -281,12 +314,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
             return null;
-        })
-            .when(connectorAccessControlHelper)
-            .validateConnectorAccess(any(Client.class), eq("updated_test_connector_id"), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -435,10 +466,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -459,13 +490,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener
                 .onFailure(
                     new RuntimeException("Any other connector access control Exception occurred. Please check log for more details.")
                 );
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

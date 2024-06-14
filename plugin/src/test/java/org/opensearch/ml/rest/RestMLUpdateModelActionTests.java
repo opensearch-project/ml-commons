@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.toJsonString;
 
 import java.util.HashMap;
@@ -38,6 +39,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -57,6 +59,9 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     @Before
@@ -64,7 +69,8 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restMLUpdateModelAction = new RestMLUpdateModelAction();
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        restMLUpdateModelAction = new RestMLUpdateModelAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> actionListener = invocation.getArgument(2);
             return null;
@@ -80,7 +86,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLUpdateModelAction UpdateModelAction = new RestMLUpdateModelAction();
+        RestMLUpdateModelAction UpdateModelAction = new RestMLUpdateModelAction(mlFeatureEnabledSetting);
         assertNotNull(UpdateModelAction);
     }
 

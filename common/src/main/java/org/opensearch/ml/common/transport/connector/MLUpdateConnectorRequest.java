@@ -61,9 +61,9 @@ public class MLUpdateConnectorRequest extends ActionRequest {
         return exception;
     }
 
-    public static MLUpdateConnectorRequest parse(XContentParser parser, String connectorId) throws IOException {
+    public static MLUpdateConnectorRequest parse(XContentParser parser, String connectorId, String tenantId) throws IOException {
         MLCreateConnectorInput updateContent = MLCreateConnectorInput.parse(parser, true);
-
+        updateContent.setTenantId(tenantId);
         return MLUpdateConnectorRequest.builder().connectorId(connectorId).updateContent(updateContent).build();
     }
 

@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -70,6 +71,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private MLCreateConnectorInput connector;
     private Instant lastUpdateTime;
     private Guardrails guardrails;
+    private String tenantId;
 
     private Map<String, String> modelInterface;
 
@@ -77,7 +79,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
             Boolean isEnabled, MLRateLimiter rateLimiter, MLModelConfig modelConfig, MLDeploySetting deploySetting,
             Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime,
-            Guardrails guardrails, Map<String, String> modelInterface) {
+            Guardrails guardrails, Map<String, String> modelInterface, String tenantId) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
@@ -93,6 +95,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.lastUpdateTime = lastUpdateTime;
         this.guardrails = guardrails;
         this.modelInterface = modelInterface;
+        this.tenantId = tenantId;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
@@ -130,6 +133,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
+        //TODO: I will add BWC check later here.
+        tenantId = in.readOptionalString();
     }
 
     @Override
@@ -175,6 +180,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         if (modelInterface != null) {
             builder.field(MLModel.INTERFACE_FIELD, modelInterface);
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
         }
         builder.endObject();
         return builder;
@@ -237,6 +245,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
+        //TODO: I will add BWC check here later.
+        out.writeOptionalString(tenantId);
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -255,6 +265,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Instant lastUpdateTime = null;
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -294,6 +305,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MLModel.INTERFACE_FIELD:
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
+                case TENANT_ID:
+                    tenantId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -303,6 +317,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         // automatically.
         return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, rateLimiter,
                 modelConfig, deploySetting, updatedConnector, connectorId, connector, lastUpdateTime, guardrails,
-                modelInterface);
+                modelInterface, tenantId);
     }
 }
