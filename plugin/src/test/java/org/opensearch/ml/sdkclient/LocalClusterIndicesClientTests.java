@@ -43,6 +43,8 @@ import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -143,7 +145,9 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
         when(getResponse.getId()).thenReturn(TEST_ID);
-        when(getResponse.getSourceAsString()).thenReturn(testDataObject.toJson());
+        String json = testDataObject.toJson();
+        when(getResponse.getSourceAsString()).thenReturn(json);
+        when(getResponse.getSource()).thenReturn(XContentHelper.convertToMap(JsonXContent.jsonXContent, json, false));
         @SuppressWarnings("unchecked")
         ActionFuture<GetResponse> future = mock(ActionFuture.class);
         when(mockedClient.get(any(GetRequest.class))).thenReturn(future);
@@ -158,6 +162,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         verify(mockedClient, times(1)).get(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
+        assertEquals("foo", response.source().get("data"));
         assertTrue(response.parser().isPresent());
         XContentParser parser = response.parser().get();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
