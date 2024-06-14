@@ -42,16 +42,7 @@ public interface SdkClient {
         try {
             return putDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            // Rethrow unchecked Exceptions
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            } else {
-                throw new OpenSearchException(cause);                
-            }
+            throw unwrapAndConvertToRuntime(e);
         }
     }
 
@@ -81,16 +72,7 @@ public interface SdkClient {
         try {
             return getDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            // Rethrow unchecked Exceptions
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            } else {
-                throw new OpenSearchException(cause);                
-            }
+            throw unwrapAndConvertToRuntime(e);
         }
     }
 
@@ -120,16 +102,7 @@ public interface SdkClient {
         try {
             return updateDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            // Rethrow unchecked Exceptions
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            } else {
-                throw new OpenSearchException(cause);                
-            }
+            throw unwrapAndConvertToRuntime(e);
         }
     }
 
@@ -159,16 +132,18 @@ public interface SdkClient {
         try {
             return deleteDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            // Rethrow unchecked Exceptions
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            } else {
-                throw new OpenSearchException(cause);                
-            }
+            throw unwrapAndConvertToRuntime(e);
         }
+    }
+    
+    private static RuntimeException unwrapAndConvertToRuntime(CompletionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        if (cause instanceof RuntimeException) {
+            return (RuntimeException) cause;
+        }
+        return new OpenSearchException(cause);
     }
 }
