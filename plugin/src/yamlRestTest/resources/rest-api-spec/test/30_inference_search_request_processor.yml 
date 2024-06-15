@@ -1,0 +1,38 @@
+---
+teardown:
+  - do:
+      search.delete_pipeline:
+        id: "my_pipeline"
+        ignore: 404
+
+---
+"Test ML Inference Processor":
+  - do:
+      search.put_pipeline:
+        id: "my_pipeline"
+        body:  >
+         {
+           "request_processors": [
+             {
+               "ml_inference": {
+                 "tag": "ml_inference",
+                 "description": "This processor is going to run ml inference during search request",
+                 "model_id": "KaJtepABtwewtgmtfKhq",
+                 "input_map": [
+                   {
+                     "texts": "query.term.text.value"
+                   }
+                 ],
+                 "output_map": [
+                   {
+                     "query.term.text.value": "response_type"
+                   }
+                 ],
+                 "ignore_missing":false,
+                 "ignore_failure": false
+
+               }
+             }
+           ]
+         }
+  - match: { acknowledged: true }
