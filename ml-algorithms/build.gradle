@@ -43,10 +43,10 @@ dependencies {
     implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation platform("ai.djl:bom:0.28.0")
-    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo', version: '0.28.0'
+    implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
     implementation group: 'ai.djl', name: 'api'
     implementation group: 'ai.djl.huggingface', name: 'tokenizers'
-    implementation("ai.djl.onnxruntime:onnxruntime-engine:0.28.0") {
+    implementation("ai.djl.onnxruntime:onnxruntime-engine") {
         exclude group: "com.microsoft.onnxruntime", module: "onnxruntime"
     }
     def os = DefaultNativePlatform.currentOperatingSystem
