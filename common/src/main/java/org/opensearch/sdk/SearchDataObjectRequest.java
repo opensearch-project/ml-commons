@@ -16,11 +16,12 @@ public class SearchDataObjectRequest {
     private final SearchSourceBuilder searchSourceBuilder;
 
     /**
-     * Instantiate this request with an index and id
+     * Instantiate this request with an optional list of indices and search source
      * <p>
-     * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
-     * @param indices the indices to search for the object
-     * @param searchSourceBuilder the context to use when fetching _source
+     * For data storage implementations other than OpenSearch, an index may be referred to as a table
+     *
+     * @param indices             the indices to search for the object
+     * @param searchSourceBuilder the search body containing the query
      */
     public SearchDataObjectRequest(String[] indices, SearchSourceBuilder searchSourceBuilder) {
         this.indices = indices;
@@ -72,7 +73,7 @@ public class SearchDataObjectRequest {
          */
         public Builder searchSourceBuilder(SearchSourceBuilder searchSourceBuilder) {
             this.searchSourceBuilder = searchSourceBuilder;
-            
+
             return this;
         }
 

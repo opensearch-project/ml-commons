@@ -10,7 +10,6 @@ package org.opensearch.sdk;
 
 import org.opensearch.core.xcontent.XContentParser;
 
-
 public class SearchDataObjectResponse {
     private final XContentParser parser;
 
@@ -21,7 +20,7 @@ public class SearchDataObjectResponse {
     public SearchDataObjectResponse(XContentParser parser) {
         this.parser = parser;
     }
-    
+
     /**
      * Returns the parser
      * @return the parser
