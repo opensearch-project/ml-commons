@@ -41,7 +41,7 @@ public class SdkClientModule extends AbstractModule {
     public static final String REMOTE_OPENSEARCH = "RemoteOpenSearch";
     public static final String AWS_DYNAMO_DB = "AWSDynamoDB";
 
-    private final String remoteStoreType;
+    private final String remoteMetadataType;
     private final String remoteMetadataEndpoint;
     private final String region; // not using with RestClient
 
@@ -57,21 +57,21 @@ public class SdkClientModule extends AbstractModule {
      * @param remoteMetadataEndpoint The remote endpoint
      * @param region The region
      */
-    SdkClientModule(String remoteStoreType, String remoteMetadataEndpoint, String region) {
-        this.remoteStoreType = remoteStoreType;
+    SdkClientModule(String remoteMetadataType, String remoteMetadataEndpoint, String region) {
+        this.remoteMetadataType = remoteMetadataType;
         this.remoteMetadataEndpoint = remoteMetadataEndpoint;
         this.region = region;
     }
 
     @Override
     protected void configure() {
-        if (this.remoteStoreType == null) {
+        if (this.remoteMetadataType == null) {
             log.info("Using local opensearch cluster as metadata store");
             bind(SdkClient.class).to(LocalClusterIndicesClient.class);
             return;
         }
 
-        switch (this.remoteStoreType) {
+        switch (this.remoteMetadataType) {
             case REMOTE_OPENSEARCH:
                 log.info("Using remote opensearch cluster as metadata store");
                 bind(SdkClient.class).toInstance(new RemoteClusterIndicesClient(createOpenSearchClient()));

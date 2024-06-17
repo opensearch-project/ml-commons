@@ -39,10 +39,18 @@ public class PutDataObjectRequest {
         return this.index;
     }
 
+    /**
+     * Returns the document id
+     * @return the id
+     */
     public String id() {
         return this.id;
     }
 
+    /**
+     * Returns the tenant id
+     * @return the tenantId
+     */
     public String tenantId() {
         return this.tenantId;
     }
@@ -79,11 +87,21 @@ public class PutDataObjectRequest {
             return this;
         }
 
+        /**
+         * Add an id to this builder
+         * @param id the documet id
+         * @return the updated builder
+         */
         public Builder id(String id) {
             this.id = id;
             return this;
         }
 
+        /**
+         * Add a tenant id to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
         public Builder tenantId(String tenantId) {
             this.tenantId = tenantId;
             return this;

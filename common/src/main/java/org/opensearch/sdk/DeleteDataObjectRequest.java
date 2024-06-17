@@ -12,7 +12,6 @@ public class DeleteDataObjectRequest {
 
     private final String index;
     private final String id;
-
     private final String tenantId;
 
     /**
@@ -44,6 +43,10 @@ public class DeleteDataObjectRequest {
         return this.id;
     }
 
+    /**
+     * Returns the tenant id
+     * @return the tenantId
+     */
     public String tenantId() {
         return this.tenantId;
     }
@@ -81,6 +84,11 @@ public class DeleteDataObjectRequest {
             return this;
         }
 
+        /**
+         * Add a tenant id to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
         public Builder tenantId(String tenantId) {
             this.tenantId = tenantId;
             return this;

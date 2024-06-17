@@ -8,6 +8,7 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
@@ -17,13 +18,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
-import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -32,6 +33,8 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -70,24 +73,17 @@ public class DDBOpenSearchClient implements SdkClient {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final String tableName = getTableName(request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
-            try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
-                XContentBuilder builder = request.dataObject().toXContent(sourceBuilder, ToXContent.EMPTY_PARAMS);
-                String source = builder.toString();
+            String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
+            final Map<String, AttributeValue> item = Map
+                .ofEntries(
+                    Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
+                    Map.entry(RANGE_KEY, AttributeValue.builder().s(id).build()),
+                    Map.entry(SOURCE, AttributeValue.builder().s(source).build())
+                );
+            final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
 
-                final Map<String, AttributeValue> item = Map
-                    .ofEntries(
-                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
-                        Map.entry(RANGE_KEY, AttributeValue.builder().s(id).build()),
-                        Map.entry(SOURCE, AttributeValue.builder().s(source).build())
-                    );
-                final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
-
-                dynamoDbClient.putItem(putItemRequest);
-                return new PutDataObjectResponse.Builder().id(id).created(true).build();
-            } catch (Exception e) {
-                log.error("Exception while inserting data into DDB: " + e.getMessage(), e);
-                throw new OpenSearchException(e);
-            }
+            dynamoDbClient.putItem(putItemRequest);
+            return new PutDataObjectResponse.Builder().id(id).created(true).build();
         }), executor);
     }
 
@@ -120,11 +116,17 @@ public class DDBOpenSearchClient implements SdkClient {
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, source);
                 return new GetDataObjectResponse.Builder().id(request.id()).parser(Optional.of(parser)).build();
-            } catch (Exception e) {
-                log.error("Exception while fetching data from DDB: " + e.getMessage(), e);
-                throw new OpenSearchException(e);
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
             }
         }), executor);
+    }
+
+    @Override
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+        // TODO: Implement update
+        return null;
     }
 
     /**
@@ -153,7 +155,7 @@ public class DDBOpenSearchClient implements SdkClient {
 
     private String getTableName(String index) {
         // Table name will be same as index name. As DDB table name does not support dot(.)
-        // it will be removed form name.
+        // it will be removed from name.
         return index.replaceAll("\\.", "");
     }
 }

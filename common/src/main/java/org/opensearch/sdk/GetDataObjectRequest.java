@@ -48,6 +48,10 @@ public class GetDataObjectRequest {
         return this.id;
     }
 
+    /**
+     * Returns the tenant id
+     * @return the tenantId
+     */
     public String tenantId() {
         return this.tenantId;
     }
@@ -94,6 +98,11 @@ public class GetDataObjectRequest {
             return this;
         }
 
+        /**
+         * Add a tenant id to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
         public Builder tenantId(String tenantId) {
             this.tenantId = tenantId;
             return this;
