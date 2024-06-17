@@ -23,6 +23,7 @@ public class UpdateDataObjectRequest {
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the data object may be referred to as an item.
      * @param index the index location to update the object
      * @param id the document id
+     * @param tenantId the tenant id
      * @param dataObject the data object
      */
     public UpdateDataObjectRequest(String index, String id, String tenantId, ToXContentObject dataObject) {
@@ -100,7 +101,7 @@ public class UpdateDataObjectRequest {
 
          /**
          * Add a tenant ID to this builder
-         * @param id the tenant id
+         * @param tenantId the tenant id
          * @return the updated builder
          */
         public Builder tenantId(String tenantId) {

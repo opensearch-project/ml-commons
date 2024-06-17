@@ -23,6 +23,7 @@ public class GetDataObjectRequest {
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param index the index location to get the object
      * @param id the document id
+     * @param tenantId the tenant id
      * @param fetchSourceContext the context to use when fetching _source
      */
     public GetDataObjectRequest(String index, String id, String tenantId, FetchSourceContext fetchSourceContext) {

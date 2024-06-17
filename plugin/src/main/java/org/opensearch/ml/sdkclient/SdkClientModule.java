@@ -54,6 +54,7 @@ public class SdkClientModule extends AbstractModule {
 
     /**
      * Instantiate this module specifying the endpoint and region. Package private for testing.
+     * @param remoteMetadataType Type of remote metadata store
      * @param remoteMetadataEndpoint The remote endpoint
      * @param region The region
      */

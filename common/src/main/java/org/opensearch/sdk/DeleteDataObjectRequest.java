@@ -20,6 +20,7 @@ public class DeleteDataObjectRequest {
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param index the index location to delete the object
      * @param id the document id
+     * @param tenantId the tenant id
      */
     public DeleteDataObjectRequest(String index, String id, String tenantId) {
         this.index = index;

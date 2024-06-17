@@ -27,7 +27,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.OpenSearchException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
@@ -165,7 +164,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .toCompletableFuture();
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        assertEquals(RuntimeException.class, ce.getCause().getClass());
     }
 
     @Test
@@ -227,7 +226,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        assertEquals(OpenSearchException.class, ce.getCause().getClass());
+        assertEquals(RuntimeException.class, ce.getCause().getClass());
     }
 
     @Test
