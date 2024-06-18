@@ -150,7 +150,7 @@ public class MLTaskManager {
                     runningTaskCount.decrementAndGet();
                 }
             }
-            log.debug("remove ML task from cache " + taskId);
+            log.debug("remove ML task from cache {}", taskId);
         }
     }
 
@@ -236,9 +236,9 @@ public class MLTaskManager {
                 ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()
             ) {
                 request.source(mlTask.toXContent(builder, ToXContent.EMPTY_PARAMS)).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(request, ActionListener.runBefore(listener, () -> context.restore()));
+                client.index(request, ActionListener.runBefore(listener, context::restore));
             } catch (Exception e) {
-                log.error("Failed to create AD task for " + mlTask.getFunctionName() + ", " + mlTask.getTaskType(), e);
+                log.error("Failed to create AD task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
                 listener.onFailure(e);
             }
         }, e -> {
@@ -272,7 +272,7 @@ public class MLTaskManager {
             } else {
                 log.error("Failed to update ML task {}, status: {}, updatedFields: {}", taskId, response.status(), updatedFields);
             }
-        }, e -> { logException("Failed to update ML task: " + taskId, e, log); });
+        }, e -> logException("Failed to update ML task: " + taskId, e, log));
         updateMLTask(taskId, updatedFields, internalListener, timeoutInMillis, removeFromCache);
     }
 
@@ -307,12 +307,12 @@ public class MLTaskManager {
                     return;
                 }
             } catch (InterruptedException e) {
-                log.error("Failed to acquire semaphore for ML task " + taskId, e);
+                log.error("Failed to acquire semaphore for ML task {}", taskId, e);
                 listener.onFailure(e);
                 return; // return directly if can't get semaphore
             }
             try {
-                if (updatedFields == null || updatedFields.size() == 0) {
+                if (updatedFields == null || updatedFields.isEmpty()) {
                     listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
                     return;
                 }
@@ -327,15 +327,15 @@ public class MLTaskManager {
                 }
                 ActionListener<UpdateResponse> actionListener = semaphore == null
                     ? listener
-                    : ActionListener.runAfter(listener, () -> semaphore.release());
+                    : ActionListener.runAfter(listener, semaphore::release);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    client.update(updateRequest, ActionListener.runBefore(actionListener, () -> context.restore()));
+                    client.update(updateRequest, ActionListener.runBefore(actionListener, context::restore));
                 } catch (Exception e) {
                     actionListener.onFailure(e);
                 }
             } catch (Exception e) {
                 semaphore.release();
-                log.error("Failed to update ML task " + taskId, e);
+                log.error("Failed to update ML task {}", taskId, e);
                 listener.onFailure(e);
             }
         });
@@ -343,13 +343,13 @@ public class MLTaskManager {
 
     public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields) {
         updateMLTaskDirectly(taskId, updatedFields, ActionListener.wrap(r -> { log.debug("updated ML task directly: {}", taskId); }, e -> {
-            log.error("Failed to update ML task " + taskId, e);
+            log.error("Failed to update ML task {}", taskId, e);
         }));
     }
 
     public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
         try {
-            if (updatedFields == null || updatedFields.size() == 0) {
+            if (updatedFields == null || updatedFields.isEmpty()) {
                 listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
                 return;
             }
@@ -363,12 +363,12 @@ public class MLTaskManager {
                 updateRequest.retryOnConflict(3);
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
+                client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
             } catch (Exception e) {
                 listener.onFailure(e);
             }
         } catch (Exception e) {
-            log.error("Failed to update ML task " + taskId, e);
+            log.error("Failed to update ML task {}", taskId, e);
             listener.onFailure(e);
         }
     }

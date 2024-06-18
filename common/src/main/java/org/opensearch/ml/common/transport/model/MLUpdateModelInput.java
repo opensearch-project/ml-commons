@@ -306,7 +306,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 case TENANT_ID:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

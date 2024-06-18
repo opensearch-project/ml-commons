@@ -355,7 +355,7 @@ public class MetricsCorrelation extends DLModelExecute {
     }
 
     public MLTask getTask(String taskId) {
-        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId, null);
         MLTaskGetResponse response = client.execute(MLTaskGetAction.INSTANCE, getRequest).actionGet(10000);
         return response.getMlTask();
     }

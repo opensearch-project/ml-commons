@@ -61,13 +61,13 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateConnectorTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
-    Client client;
-    SdkClient sdkClient;
+    final Client client;
+    final SdkClient sdkClient;
 
-    ConnectorAccessControlHelper connectorAccessControlHelper;
+    final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    MLModelManager mlModelManager;
-    MLEngine mlEngine;
+    final MLModelManager mlModelManager;
+    final MLEngine mlEngine;
     volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject

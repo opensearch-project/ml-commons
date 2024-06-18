@@ -24,21 +24,26 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLTaskDeleteRequest extends ActionRequest {
     @Getter
     String taskId;
+    @Getter
+    String tenantId;
 
     @Builder
-    public MLTaskDeleteRequest(String taskId) {
+    public MLTaskDeleteRequest(String taskId, String tenantId) {
         this.taskId = taskId;
+        this.tenantId = tenantId;
     }
 
     public MLTaskDeleteRequest(StreamInput input) throws IOException {
         super(input);
         this.taskId = input.readString();
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(taskId);
+        output.writeOptionalString(tenantId);
     }
 
     @Override

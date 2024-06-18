@@ -7,25 +7,35 @@ package org.opensearch.ml.action.tasks;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
+import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.DeleteDataObjectRequest;
+import org.opensearch.sdk.DeleteDataObjectResponse;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -35,65 +45,141 @@ import lombok.extern.log4j.Log4j2;
 public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
     Client client;
+    SdkClient sdkClient;
 
     NamedXContentRegistry xContentRegistry;
+
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public DeleteTaskTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        SdkClient sdkClient,
+        NamedXContentRegistry xContentRegistry,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLTaskDeleteAction.NAME, transportService, actionFilters, MLTaskDeleteRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.fromActionRequest(request);
         String taskId = mlTaskDeleteRequest.getTaskId();
-        GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
-
+        String tenantId = mlTaskDeleteRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+            .index(ML_TASK_INDEX)
+            .id(taskId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            client.get(getRequest, ActionListener.wrap(r -> {
-
-                if (r != null && r.isExists()) {
-                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLTask mlTask = MLTask.parse(parser);
-                        MLTaskState mlTaskState = mlTask.getState();
-                        if (mlTaskState.equals(MLTaskState.RUNNING)) {
-                            actionListener.onFailure(new Exception("Task cannot be deleted in running state. Try after sometime"));
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
+            sdkClient
+                .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    log.debug("Completed Get task Request, id:{}", taskId);
+                    if (throwable != null) {
+                        Throwable rootCause = getRootCause(throwable);
+                        if (rootCause instanceof IndexNotFoundException) {
+                            log.error("Failed to get task index", rootCause);
+                            actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND, rootCause));
                         } else {
-                            DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
-                            client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-                                @Override
-                                public void onResponse(DeleteResponse deleteResponse) {
-                                    log.debug("Completed Delete Task Request, task id:{} deleted", taskId);
-                                    wrappedListener.onResponse(deleteResponse);
-                                }
-
-                                @Override
-                                public void onFailure(Exception e) {
-                                    log.error("Failed to delete ML Task " + taskId, e);
-                                    wrappedListener.onFailure(e);
-                                }
-                            });
+                            log.error("Failed to get ML task {}", taskId, rootCause);
+                            if (rootCause instanceof Exception) {
+                                actionListener.onFailure((Exception) rootCause);
+                            } else {
+                                actionListener.onFailure(new OpenSearchException(rootCause));
+                            }
                         }
-                    } catch (Exception e) {
-                        log.error("Failed to parse ML task " + taskId, e);
-                        wrappedListener.onFailure(e);
+                    } else {
+                        if (r != null && r.parser().isPresent()) {
+                            try {
+                                XContentParser parser = r.parser().get();
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                MLTask mlTask = MLTask.parse(parser);
+                                if (!TenantAwareHelper
+                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlTask.getTenantId(), actionListener)) {
+                                    return;
+                                }
+                                MLTaskState mlTaskState = mlTask.getState();
+                                if (mlTaskState.equals(MLTaskState.RUNNING)) {
+                                    actionListener.onFailure(new Exception("Task cannot be deleted in running state. Try after sometime"));
+                                } else {
+                                    DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
+                                    try {
+                                        sdkClient
+                                            .deleteDataObjectAsync(
+                                                new DeleteDataObjectRequest.Builder()
+                                                    .index(deleteRequest.index())
+                                                    .id(deleteRequest.id())
+                                                    .build(),
+                                                client.threadPool().executor(GENERAL_THREAD_POOL)
+                                            )
+                                            .whenComplete(
+                                                (response, delThrowable) -> handleDeleteResponse(
+                                                    response,
+                                                    delThrowable,
+                                                    tenantId,
+                                                    actionListener
+                                                )
+                                            );
+                                    } catch (Exception e) {
+                                        log.error("Failed to delete ML task: {}", taskId, e);
+                                        actionListener.onFailure(e);
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.error("Failed to parse ml task {}", r.id(), e);
+                                wrappedListener.onFailure(e);
+                            }
+                        } else {
+                            wrappedListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
+                        }
                     }
-                } else {
-                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
-                }
-            }, e -> { wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find task")); }));
+                });
+
         } catch (Exception e) {
-            log.error("Failed to delete ml task " + taskId, e);
+            log.error("Failed to delete ml task {}", taskId, e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private Throwable getRootCause(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause.getCause() != null && cause != cause.getCause()) {
+            cause = cause.getCause();
+        }
+        return cause;
+    }
+
+    private void handleDeleteResponse(
+        DeleteDataObjectResponse response,
+        Throwable throwable,
+        String taskId,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        if (throwable != null) {
+            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+            log.error("Failed to delete ML task: {}", taskId, cause);
+            if (cause instanceof Exception) {
+                actionListener.onFailure((Exception) cause);
+            } else {
+                actionListener.onFailure(new OpenSearchException(cause));
+            }
+        } else {
+            log.info("Task deletion result: {}, task id: {}", response.deleted(), response.id());
+            DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
+            deleteResponse.setShardInfo(response.shardInfo());
+            actionListener.onResponse(deleteResponse);
         }
     }
 }

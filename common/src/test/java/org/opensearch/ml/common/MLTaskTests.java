@@ -39,6 +39,7 @@ public class MLTaskTests {
             .error("test_error")
             .createTime(time.minus(1, ChronoUnit.MINUTES))
             .lastUpdateTime(time)
+            .tenantId(null)
             .build();
     }
 

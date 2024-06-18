@@ -41,6 +41,7 @@ public class MLIndicesHandler {
 
     ClusterService clusterService;
     Client client;
+
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
 
     static {
@@ -171,7 +172,7 @@ public class MLIndicesHandler {
 
     /**
      * Check if we should update index based on schema version.
-     * 
+     *
      * @param indexName  index name
      * @param newVersion new index mapping version
      * @param listener   action listener, if should update index, will pass true to

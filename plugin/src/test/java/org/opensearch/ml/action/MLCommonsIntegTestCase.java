@@ -379,7 +379,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLTask getTask(String taskId) {
-        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId, null);
         MLTaskGetResponse response = client().execute(MLTaskGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlTask();
     }
