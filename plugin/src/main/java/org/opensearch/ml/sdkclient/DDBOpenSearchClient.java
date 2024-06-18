@@ -157,7 +157,7 @@ public class DDBOpenSearchClient implements SdkClient {
 
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        //TODO will implement this later.
+        // TODO will implement this later.
 
         return null;
     }
