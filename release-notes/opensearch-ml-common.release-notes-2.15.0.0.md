@@ -12,6 +12,7 @@ Compatible with OpenSearch 2.15.0.0
 * Implementing retry for remote connector to mitigate throttling issue ([#2462](https://github.com/opensearch-project/ml-commons/pull/2462))
 * ml inference ingest processor support for local models ([#2508](https://github.com/opensearch-project/ml-commons/pull/2508))
 * add setting to allow private IP ([#2534](https://github.com/opensearch-project/ml-commons/pull/2534))
+* add IMMEDIATE refresh policy ([#2541](https://github.com/opensearch-project/ml-commons/pull/2541))
 
 
 ### Bug Fixes
@@ -21,6 +22,7 @@ Compatible with OpenSearch 2.15.0.0
 * adding immediate refresh to delete model group request ([#2514](https://github.com/opensearch-project/ml-commons/pull/2514))
 * Fix model still deployed after calling undeploy API ([#2510](https://github.com/opensearch-project/ml-commons/pull/2510))
 * Fix bedrock embedding generation issue ([#2495](https://github.com/opensearch-project/ml-commons/pull/2495))
+* Fix init encryption master key ([#2554](https://github.com/opensearch-project/ml-commons/pull/2554))
 
 
 ### Documentation
@@ -36,6 +38,8 @@ Compatible with OpenSearch 2.15.0.0
 * Remove strict version dependency to compile minimum compatible version ([#2486](https://github.com/opensearch-project/ml-commons/pull/2486))
 * add IT flow agent with search index tool ([#2460](https://github.com/opensearch-project/ml-commons/pull/2460))
 * fix flaky IT ([#2530](https://github.com/opensearch-project/ml-commons/pull/2530))
+* disable jvm memory circuit breaker for IT ([#2540](https://github.com/opensearch-project/ml-commons/pull/2540))
+* fix flaky test of PredictionITTests and RestConnectorToolIT ([#2437](https://github.com/opensearch-project/ml-commons/pull/2437))
 
 ### Maintenance
 * Updating security reachout email ([#2445](https://github.com/opensearch-project/ml-commons/pull/2445))
