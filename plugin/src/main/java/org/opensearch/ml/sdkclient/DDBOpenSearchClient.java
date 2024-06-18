@@ -33,6 +33,8 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SearchDataObjectRequest;
+import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 
@@ -151,6 +153,13 @@ public class DDBOpenSearchClient implements SdkClient {
             dynamoDbClient.deleteItem(deleteItemRequest);
             return new DeleteDataObjectResponse.Builder().id(request.id()).deleted(true).build();
         }), executor);
+    }
+
+    @Override
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+        // TODO will implement this later.
+
+        return null;
     }
 
     private String getTableName(String index) {

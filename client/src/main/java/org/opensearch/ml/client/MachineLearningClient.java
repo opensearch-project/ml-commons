@@ -215,6 +215,8 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
+    void getTask(String taskId, String tenantId, ActionListener<MLTask> listener);
+
     /**
      * Delete MLTask
      * For more info on delete task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-task
@@ -234,6 +236,8 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
+    void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener);
+
     /**
      * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
      * @param searchRequest searchRequest to search the ML Model
@@ -251,6 +255,8 @@ public interface MachineLearningClient {
         searchTask(searchRequest, actionFuture);
         return actionFuture;
     }
+
+    void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * For more info on search task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-task

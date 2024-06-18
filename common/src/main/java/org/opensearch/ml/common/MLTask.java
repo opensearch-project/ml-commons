@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.CommonValue.USER;
 
 @Getter
@@ -65,6 +66,7 @@ public class MLTask implements ToXContentObject, Writeable {
     private String error;
     private User user; // TODO: support document level access control later
     private boolean async;
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLTask(
@@ -81,7 +83,8 @@ public class MLTask implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String error,
         User user,
-        boolean async
+        boolean async,
+        String tenantId
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -97,6 +100,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.error = error;
         this.user = user;
         this.async = async;
+        this.tenantId = tenantId;
     }
 
     public MLTask(StreamInput input) throws IOException {
@@ -122,6 +126,8 @@ public class MLTask implements ToXContentObject, Writeable {
             this.user = null;
         }
         this.async = input.readBoolean();
+        //TODO will add version checking for BWC later.
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
@@ -149,6 +155,8 @@ public class MLTask implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeBoolean(async);
+        //TODO will add version checking for BWC later.
+        out.writeOptionalString(tenantId);
     }
 
     @Override
@@ -194,6 +202,9 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(USER, user);
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
+        }
         return builder.endObject();
     }
 
@@ -217,6 +228,7 @@ public class MLTask implements ToXContentObject, Writeable {
         String error = null;
         User user = null;
         boolean async = false;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -274,6 +286,8 @@ public class MLTask implements ToXContentObject, Writeable {
                 case IS_ASYNC_TASK_FIELD:
                     async = parser.booleanValue();
                     break;
+                case TENANT_ID:
+                    tenantId = parser.textOrNull();
                 default:
                     parser.skipChildren();
                     break;
@@ -294,6 +308,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 .error(error)
                 .user(user)
                 .async(async)
+                .tenantId(tenantId)
                 .build();
     }
 }

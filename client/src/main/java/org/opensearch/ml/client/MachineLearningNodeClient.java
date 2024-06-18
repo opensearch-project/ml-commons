@@ -185,6 +185,15 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener) {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).tenantId(tenantId).build();
+
+        client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
     public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
 
@@ -238,8 +247,24 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
+        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).tenantId(tenantId).build();
+
+        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, getMLTaskResponseActionListener(listener));
+    }
+
+    @Override
     public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
         MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId(taskId).build();
+
+        client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener) {
+        MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId(taskId).tenantId(tenantId).build();
 
         client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(deleteResponse -> {
             listener.onResponse(deleteResponse);

@@ -25,21 +25,26 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLTaskGetRequest extends ActionRequest {
     @Getter
     String taskId;
+    @Getter
+    String tenantId;
 
     @Builder
-    public MLTaskGetRequest(String taskId) {
+    public MLTaskGetRequest(String taskId, String tenantId) {
         this.taskId = taskId;
+        this.tenantId = tenantId;
     }
 
     public MLTaskGetRequest(StreamInput in) throws IOException {
         super(in);
         this.taskId = in.readString();
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.taskId);
+        out.writeOptionalString(this.tenantId);
     }
 
     @Override
