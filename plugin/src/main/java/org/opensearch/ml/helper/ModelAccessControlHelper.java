@@ -80,11 +80,10 @@ public class ModelAccessControlHelper {
             return;
         }
 
-        List<String> userBackendRoles = user.getBackendRoles();
         GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, context::restore);
             client.get(getModelGroupRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (
@@ -93,31 +92,7 @@ public class ModelAccessControlHelper {
                     ) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
-                        if (mlModelGroup.getOwner() == null) {
-                            // previous security plugin not enabled, model defaults to public.
-                            wrappedListener.onResponse(true);
-                        } else if (AccessMode.RESTRICTED == modelAccessMode) {
-                            if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
-                                throw new IllegalStateException("Backend roles shouldn't be null");
-                            } else {
-                                wrappedListener
-                                    .onResponse(
-                                        Optional
-                                            .ofNullable(userBackendRoles)
-                                            .orElse(ImmutableList.of())
-                                            .stream()
-                                            .anyMatch(mlModelGroup.getBackendRoles()::contains)
-                                    );
-                            }
-                        } else if (AccessMode.PUBLIC == modelAccessMode) {
-                            wrappedListener.onResponse(true);
-                        } else if (AccessMode.PRIVATE == modelAccessMode) {
-                            if (isOwner(mlModelGroup.getOwner(), user))
-                                wrappedListener.onResponse(true);
-                            else
-                                wrappedListener.onResponse(false);
-                        }
+                        checkModelGroupPermission(mlModelGroup, user, wrappedListener);
                     } catch (Exception e) {
                         log.error("Failed to parse ml model group");
                         wrappedListener.onFailure(e);
@@ -136,6 +111,35 @@ public class ModelAccessControlHelper {
         } catch (Exception e) {
             log.error("Failed to validate Access", e);
             listener.onFailure(e);
+        }
+    }
+
+    public void checkModelGroupPermission(MLModelGroup mlModelGroup, User user, ActionListener<Boolean> wrappedListener) {
+        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
+        List<String> userBackendRoles = user.getBackendRoles();
+        if (mlModelGroup.getOwner() == null) {
+            // previous security plugin not enabled, model defaults to public.
+            wrappedListener.onResponse(true);
+        } else if (AccessMode.RESTRICTED == modelAccessMode) {
+            if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().isEmpty()) {
+                throw new IllegalStateException("Backend roles shouldn't be null");
+            } else {
+                wrappedListener
+                    .onResponse(
+                        Optional
+                            .ofNullable(userBackendRoles)
+                            .orElse(ImmutableList.of())
+                            .stream()
+                            .anyMatch(mlModelGroup.getBackendRoles()::contains)
+                    );
+            }
+        } else if (AccessMode.PUBLIC == modelAccessMode) {
+            wrappedListener.onResponse(true);
+        } else if (AccessMode.PRIVATE == modelAccessMode) {
+            if (isOwner(mlModelGroup.getOwner(), user))
+                wrappedListener.onResponse(true);
+            else
+                wrappedListener.onResponse(false);
         }
     }
 

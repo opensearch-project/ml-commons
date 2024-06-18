@@ -59,4 +59,12 @@ public class MLExceptionUtils {
             log.error(errorMessage, e);
         }
     }
+
+    public static Throwable getRootCause(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause.getCause() != null && cause != cause.getCause()) {
+            cause = cause.getCause();
+        }
+        return cause;
+    }
 }

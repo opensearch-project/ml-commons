@@ -112,7 +112,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     }
 
     private void handleConnectorAccessValidationFailure(String connectorId, Exception e, ActionListener<DeleteResponse> actionListener) {
-        log.error("Failed to delete ML connector: " + connectorId, e);
+        log.error("Failed to delete ML connector: {}", connectorId, e);
         actionListener.onFailure(e);
     }
 
@@ -154,13 +154,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     }
                 });
         } catch (Exception e) {
-            log.error("Failed to check for models using connector: " + connectorId, e);
+            log.error("Failed to check for models using connector: {}", connectorId, e);
             actionListener.onFailure(e);
         }
     }
 
     private void handleModelsUsingConnector(SearchHit[] searchHits, String connectorId, ActionListener<DeleteResponse> actionListener) {
-        log.error(searchHits.length + " models are still using this connector, please delete or update the models first!");
+        log.error("{} models are still using this connector, please delete or update the models first!", searchHits.length);
         List<String> modelIds = new ArrayList<>();
         for (SearchHit hit : searchHits) {
             modelIds.add(hit.getId());

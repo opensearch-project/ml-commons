@@ -6,27 +6,25 @@
 package org.opensearch.ml.model;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Iterator;
 
+import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
@@ -36,7 +34,12 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.sdk.PutDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -46,21 +49,27 @@ import lombok.extern.log4j.Log4j2;
 public class MLModelGroupManager {
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final SdkClient sdkClient;
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public MLModelGroupManager(
         MLIndicesHandler mlIndicesHandler,
         Client client,
+        SdkClient sdkClient,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     public void createModelGroup(MLRegisterModelGroupInput input, ActionListener<String> listener) {
@@ -68,14 +77,13 @@ public class MLModelGroupManager {
             String modelName = input.getName();
             User user = RestActionUtils.getUserContext(client);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+                ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
                 validateUniqueModelGroupName(input.getName(), ActionListener.wrap(modelGroups -> {
                     if (modelGroups != null
                         && modelGroups.getHits().getTotalHits() != null
                         && modelGroups.getHits().getTotalHits().value != 0) {
-                        Iterator<SearchHit> iterator = modelGroups.getHits().iterator();
-                        while (iterator.hasNext()) {
-                            String id = iterator.next().getId();
+                        for (SearchHit documentFields : modelGroups.getHits()) {
+                            String id = documentFields.getId();
                             wrappedListener
                                 .onFailure(
                                     new IllegalArgumentException(
@@ -99,6 +107,7 @@ public class MLModelGroupManager {
                                 .owner(user)
                                 .createdTime(Instant.now())
                                 .lastUpdatedTime(Instant.now())
+                                .tenantId(input.getTenantId())
                                 .build();
                         } else {
                             validateSecurityDisabledOrModelAccessControlDisabled(input);
@@ -108,24 +117,31 @@ public class MLModelGroupManager {
                                 .access(AccessMode.PUBLIC.getValue())
                                 .createdTime(Instant.now())
                                 .lastUpdatedTime(Instant.now())
+                                .tenantId(input.getTenantId())
                                 .build();
                         }
 
                         mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
-                            IndexRequest indexRequest = new IndexRequest(ML_MODEL_GROUP_INDEX);
-                            indexRequest
-                                .source(
-                                    mlModelGroup.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS)
-                                );
-                            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                            sdkClient
+                                .putDataObjectAsync(
+                                    new PutDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).dataObject(mlModelGroup).build(),
+                                    client.threadPool().executor(GENERAL_THREAD_POOL)
+                                )
+                                .whenComplete((r, throwable) -> {
+                                    if (throwable != null) {
+                                        Throwable cause = MLExceptionUtils.getRootCause(throwable);
+                                        log.error("Failed to index model group", cause);
+                                        if (cause instanceof Exception) {
+                                            wrappedListener.onFailure((Exception) cause);
+                                        } else {
+                                            wrappedListener.onFailure(new OpenSearchException(cause));
+                                        }
+                                    } else {
+                                        log.info("Model group creation result: {}, model group id: {}", r.created(), r.id());
+                                        wrappedListener.onResponse(r.id());
+                                    }
+                                });
 
-                            client.index(indexRequest, ActionListener.wrap(r -> {
-                                log.debug("Indexed model group doc successfully {}", modelName);
-                                wrappedListener.onResponse(r.getId());
-                            }, e -> {
-                                log.error("Failed to index model group doc", e);
-                                wrappedListener.onFailure(e);
-                            }));
                         }, ex -> {
                             log.error("Failed to init model group index", ex);
                             wrappedListener.onFailure(ex);
@@ -192,18 +208,38 @@ public class MLModelGroupManager {
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
 
-            client
-                .search(
-                    searchRequest,
-                    ActionListener.runBefore(ActionListener.wrap(modelGroups -> { listener.onResponse(modelGroups); }, e -> {
-                        if (e instanceof IndexNotFoundException) {
+            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                .indices(searchRequest.indices())
+                .searchSourceBuilder(searchRequest.source())
+                .build();
+
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    if (throwable != null) {
+                        Throwable cause = MLExceptionUtils.getRootCause(throwable);
+                        log.error("Failed to search model group index", cause);
+                        if (cause instanceof IndexNotFoundException) {
                             listener.onResponse(null);
+                        } else if (cause instanceof Exception) {
+                            listener.onFailure((Exception) cause);
                         } else {
-                            log.error("Failed to search model group index", e);
-                            listener.onFailure(e);
+                            listener.onFailure(new OpenSearchException(cause));
                         }
-                    }), () -> context.restore())
-                );
+                    } else {
+                        try {
+                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                            log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
+                            listener.onResponse(searchResponse);
+                        } catch (Exception e) {
+                            log.error("Failed to parse search response", e);
+                            listener
+                                .onFailure(
+                                    new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR)
+                                );
+                        }
+                    }
+                });
         } catch (Exception e) {
             log.error("Failed to search model group index", e);
             listener.onFailure(e);
@@ -225,7 +261,7 @@ public class MLModelGroupManager {
             } else {
                 listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
             }
-        }, e -> { listener.onFailure(e); }));
+        }, listener::onFailure));
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {
