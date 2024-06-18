@@ -14,6 +14,7 @@ public class GetDataObjectRequest {
 
     private final String index;
     private final String id;
+    private final String tenantId;
     private final FetchSourceContext fetchSourceContext;
 
     /**
@@ -22,11 +23,13 @@ public class GetDataObjectRequest {
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param index the index location to get the object
      * @param id the document id
+     * @param tenantId the tenant id
      * @param fetchSourceContext the context to use when fetching _source
      */
-    public GetDataObjectRequest(String index, String id, FetchSourceContext fetchSourceContext) {
+    public GetDataObjectRequest(String index, String id, String tenantId, FetchSourceContext fetchSourceContext) {
         this.index = index;
         this.id = id;
+        this.tenantId = tenantId;
         this.fetchSourceContext = fetchSourceContext;
     }
 
@@ -47,6 +50,14 @@ public class GetDataObjectRequest {
     }
 
     /**
+     * Returns the tenant id
+     * @return the tenantId
+     */
+    public String tenantId() {
+        return this.tenantId;
+    }
+
+    /**
      * Returns the context for fetching _source
      * @return the fetchSourceContext
      */
@@ -60,6 +71,7 @@ public class GetDataObjectRequest {
     public static class Builder {
         private String index = null;
         private String id = null;
+        private String tenantId = null;
         private FetchSourceContext fetchSourceContext;
 
         /**
@@ -88,6 +100,16 @@ public class GetDataObjectRequest {
         }
 
         /**
+         * Add a tenant id to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
+        public Builder tenantId(String tenantId) {
+            this.tenantId = tenantId;
+            return this;
+        }
+
+        /**
          * Add a fetchSourceContext to this builder
          * @param fetchSourceContext the fetchSourceContext
          * @return the updated builder
@@ -102,7 +124,7 @@ public class GetDataObjectRequest {
          * @return A {@link GetDataObjectRequest}
          */
         public GetDataObjectRequest build() {
-            return new GetDataObjectRequest(this.index, this.id, this.fetchSourceContext);
+            return new GetDataObjectRequest(this.index, this.id, this.tenantId, this.fetchSourceContext);
         }
     }
 }

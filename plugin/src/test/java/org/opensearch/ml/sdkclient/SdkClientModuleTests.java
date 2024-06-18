@@ -30,16 +30,23 @@ public class SdkClientModuleTests extends OpenSearchTestCase {
     };
 
     public void testLocalBinding() {
-        Injector injector = Guice.createInjector(new SdkClientModule(null, null), localClientModule);
+        Injector injector = Guice.createInjector(new SdkClientModule(null, null, null), localClientModule);
 
         SdkClient sdkClient = injector.getInstance(SdkClient.class);
         assertTrue(sdkClient instanceof LocalClusterIndicesClient);
     }
 
-    public void testRemoteBinding() {
-        Injector injector = Guice.createInjector(new SdkClientModule("http://example.org", "eu-west-3"));
+    public void testRemoteOpenSearchBinding() {
+        Injector injector = Guice.createInjector(new SdkClientModule(SdkClientModule.REMOTE_OPENSEARCH, "http://example.org", "eu-west-3"));
 
         SdkClient sdkClient = injector.getInstance(SdkClient.class);
         assertTrue(sdkClient instanceof RemoteClusterIndicesClient);
+    }
+
+    public void testDDBBinding() {
+        Injector injector = Guice.createInjector(new SdkClientModule(SdkClientModule.AWS_DYNAMO_DB, null, "eu-west-3"));
+
+        SdkClient sdkClient = injector.getInstance(SdkClient.class);
+        assertTrue(sdkClient instanceof DDBOpenSearchClient);
     }
 }

@@ -16,20 +16,32 @@ import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.rest_client.RestClientTransport;
 import org.opensearch.common.inject.AbstractModule;
-import org.opensearch.core.common.Strings;
 import org.opensearch.sdk.SdkClient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
+import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+
 /**
  * A module for binding this plugin's desired implementation of {@link SdkClient}.
  */
+@Log4j2
 public class SdkClientModule extends AbstractModule {
 
+    public static final String REMOTE_METADATA_TYPE = "REMOTE_METADATA_TYPE";
     public static final String REMOTE_METADATA_ENDPOINT = "REMOTE_METADATA_ENDPOINT";
     public static final String REGION = "REGION";
+    public static final String REMOTE_OPENSEARCH = "RemoteOpenSearch";
+    public static final String AWS_DYNAMO_DB = "AWSDynamoDB";
 
+    private final String remoteMetadataType;
     private final String remoteMetadataEndpoint;
     private final String region; // not using with RestClient
 
@@ -37,27 +49,57 @@ public class SdkClientModule extends AbstractModule {
      * Instantiate this module using environment variables
      */
     public SdkClientModule() {
-        this(System.getenv(REMOTE_METADATA_ENDPOINT), System.getenv(REGION));
+        this(System.getenv(REMOTE_METADATA_TYPE), System.getenv(REMOTE_METADATA_ENDPOINT), System.getenv(REGION));
     }
 
     /**
      * Instantiate this module specifying the endpoint and region. Package private for testing.
+     * @param remoteMetadataType Type of remote metadata store
      * @param remoteMetadataEndpoint The remote endpoint
      * @param region The region
      */
-    SdkClientModule(String remoteMetadataEndpoint, String region) {
+    SdkClientModule(String remoteMetadataType, String remoteMetadataEndpoint, String region) {
+        this.remoteMetadataType = remoteMetadataType;
         this.remoteMetadataEndpoint = remoteMetadataEndpoint;
         this.region = region;
     }
 
     @Override
     protected void configure() {
-        boolean local = Strings.isNullOrEmpty(remoteMetadataEndpoint);
-        if (local) {
+        if (this.remoteMetadataType == null) {
+            log.info("Using local opensearch cluster as metadata store");
             bind(SdkClient.class).to(LocalClusterIndicesClient.class);
-        } else {
-            bind(SdkClient.class).toInstance(new RemoteClusterIndicesClient(createOpenSearchClient()));
+            return;
         }
+
+        switch (this.remoteMetadataType) {
+            case REMOTE_OPENSEARCH:
+                log.info("Using remote opensearch cluster as metadata store");
+                bind(SdkClient.class).toInstance(new RemoteClusterIndicesClient(createOpenSearchClient()));
+                return;
+            case AWS_DYNAMO_DB:
+                log.info("Using dynamo DB as metadata store");
+                bind(SdkClient.class).toInstance(new DDBOpenSearchClient(createDynamoDbClient()));
+                return;
+            default:
+                log.info("Using local opensearch cluster as metadata store");
+                bind(SdkClient.class).to(LocalClusterIndicesClient.class);
+        }
+    }
+
+    private DynamoDbClient createDynamoDbClient() {
+        if (this.region == null) {
+            throw new IllegalStateException("REGION environment variable needs to be set!");
+        }
+
+        AwsCredentialsProviderChain credentialsProviderChain = AwsCredentialsProviderChain
+            .builder()
+            .addCredentialsProvider(EnvironmentVariableCredentialsProvider.create())
+            .addCredentialsProvider(ContainerCredentialsProvider.builder().build())
+            .addCredentialsProvider(InstanceProfileCredentialsProvider.create())
+            .build();
+
+        return DynamoDbClient.builder().region(Region.of(this.region)).credentialsProvider(credentialsProviderChain).build();
     }
 
     private OpenSearchClient createOpenSearchClient() {

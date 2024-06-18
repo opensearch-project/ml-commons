@@ -13,6 +13,8 @@ import org.opensearch.core.xcontent.ToXContentObject;
 public class PutDataObjectRequest {
 
     private final String index;
+    private final String id;
+    private final String tenantId;
     private final ToXContentObject dataObject;
 
     /**
@@ -22,8 +24,10 @@ public class PutDataObjectRequest {
      * @param index the index location to put the object
      * @param dataObject the data object
      */
-    public PutDataObjectRequest(String index, ToXContentObject dataObject) {
+    public PutDataObjectRequest(String index, String id, String tenantId, ToXContentObject dataObject) {
         this.index = index;
+        this.id = id;
+        this.tenantId = tenantId;
         this.dataObject = dataObject;
     }
 
@@ -33,6 +37,22 @@ public class PutDataObjectRequest {
      */
     public String index() {
         return this.index;
+    }
+
+    /**
+     * Returns the document id
+     * @return the id
+     */
+    public String id() {
+        return this.id;
+    }
+
+    /**
+     * Returns the tenant id
+     * @return the tenantId
+     */
+    public String tenantId() {
+        return this.tenantId;
     }
 
     /**
@@ -48,6 +68,8 @@ public class PutDataObjectRequest {
      */
     public static class Builder {
         private String index = null;
+        private String id = null;
+        private String tenantId = null;
         private ToXContentObject dataObject = null;
 
         /**
@@ -66,6 +88,26 @@ public class PutDataObjectRequest {
         }
 
         /**
+         * Add an id to this builder
+         * @param id the documet id
+         * @return the updated builder
+         */
+        public Builder id(String id) {
+            this.id = id;
+            return this;
+        }
+
+        /**
+         * Add a tenant id to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
+        public Builder tenantId(String tenantId) {
+            this.tenantId = tenantId;
+            return this;
+        }
+
+        /**
          * Add a data object to this builder
          * @param dataObject the data object
          * @return the updated builder
@@ -80,7 +122,7 @@ public class PutDataObjectRequest {
          * @return A {@link PutDataObjectRequest}
          */
         public PutDataObjectRequest build() {
-            return new PutDataObjectRequest(this.index, this.dataObject);
+            return new PutDataObjectRequest(this.index, this.id, this.tenantId, this.dataObject);
         }
     }
 }
