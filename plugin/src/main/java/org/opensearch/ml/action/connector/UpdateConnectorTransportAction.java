@@ -19,7 +19,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.DocWriteResponse.Result;
-import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
@@ -45,6 +45,7 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.search.SearchHit;
@@ -155,51 +156,75 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         ActionListener<UpdateResponse> listener,
         ThreadContext.StoredContext context
     ) {
-        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
         boolQueryBuilder.must(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
         boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
         sourceBuilder.query(boolQueryBuilder);
-        searchRequest.source(sourceBuilder);
 
-        // TODO: Use SDK client not client.
-        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-            SearchHit[] searchHits = searchResponse.getHits().getHits();
-            if (searchHits.length == 0) {
-                sdkClient
-                    .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                    .whenComplete((r, throwable) -> {
-                        handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(connectorId, listener, context));
-                    });
-            } else {
-                log.error(searchHits.length + " models are still using this connector, please undeploy the models first!");
-                List<String> modelIds = new ArrayList<>();
-                for (SearchHit hit : searchHits) {
-                    modelIds.add(hit.getId());
+        SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            .indices(ML_MODEL_INDEX)
+            .searchSourceBuilder(sourceBuilder)
+            .build();
+        sdkClient
+            .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+            .whenComplete((sr, st) -> {
+                if (sr != null) {
+                    try {
+                        SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
+                        SearchHit[] searchHits = searchResponse.getHits().getHits();
+                        if (searchHits.length == 0) {
+                            sdkClient
+                                .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                                .whenComplete((r, throwable) -> {
+                                    handleUpdateDataObjectCompletionStage(
+                                        r,
+                                        throwable,
+                                        getUpdateResponseListener(connectorId, listener, context)
+                                    );
+                                });
+                        } else {
+                            log.error(searchHits.length + " models are still using this connector, please undeploy the models first!");
+                            List<String> modelIds = new ArrayList<>();
+                            for (SearchHit hit : searchHits) {
+                                modelIds.add(hit.getId());
+                            }
+                            listener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        searchHits.length
+                                            + " models are still using this connector, please undeploy the models first: "
+                                            + Arrays.toString(modelIds.toArray(new String[0])),
+                                        RestStatus.BAD_REQUEST
+                                    )
+                                );
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to parse search response", e);
+                        listener
+                            .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
+                    }
+                } else {
+                    Throwable cause = st.getCause() == null ? st : st.getCause();
+                    log.error("Failed to update ML connector: " + connectorId, cause);
+                    if (cause instanceof IndexNotFoundException) {
+                        sdkClient
+                            .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                            .whenComplete((r, throwable) -> {
+                                handleUpdateDataObjectCompletionStage(
+                                    r,
+                                    throwable,
+                                    getUpdateResponseListener(connectorId, listener, context)
+                                );
+                            });
+                        return;
+                    } else if (cause instanceof Exception) {
+                        listener.onFailure((Exception) cause);
+                    } else {
+                        listener.onFailure(new OpenSearchException(cause));
+                    }
                 }
-                listener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            searchHits.length
-                                + " models are still using this connector, please undeploy the models first: "
-                                + Arrays.toString(modelIds.toArray(new String[0])),
-                            RestStatus.BAD_REQUEST
-                        )
-                    );
-            }
-        }, e -> {
-            if (e instanceof IndexNotFoundException) {
-                sdkClient
-                    .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                    .whenComplete((r, throwable) -> {
-                        handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(connectorId, listener, context));
-                    });
-                return;
-            }
-            log.error("Failed to update ML connector: " + connectorId, e);
-            listener.onFailure(e);
-        }));
+            });
     }
 
     private void handleUpdateDataObjectCompletionStage(

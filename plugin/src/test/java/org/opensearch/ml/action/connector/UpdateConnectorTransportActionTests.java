@@ -7,7 +7,6 @@ package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
@@ -253,11 +252,9 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecuteConnectorAccessControlSuccess() throws InterruptedException {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
         future.onResponse(updateResponse);
@@ -312,11 +309,9 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecuteUpdateWrongStatus() throws InterruptedException {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
         UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, Result.CREATED);
@@ -337,11 +332,9 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecuteUpdateException() throws InterruptedException {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         when(client.update(any(UpdateRequest.class))).thenThrow(new RuntimeException("update document failure"));
 
@@ -356,16 +349,18 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testExecuteSearchResponseNotEmpty() {
+    public void testExecuteSearchResponseNotEmpty() throws IOException, InterruptedException {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(noneEmptySearchResponse());
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(nonEmptySearchResponse());
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
-        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(
@@ -374,16 +369,18 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testExecuteSearchResponseError() {
+    public void testExecuteSearchResponseError() throws InterruptedException {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new RuntimeException("Error in Search Request"));
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onFailure(new RuntimeException("Error in Search Request"));
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
-        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Error in Search Request", argumentCaptor.getValue().getMessage());
@@ -422,11 +419,9 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(Client.class), any(String.class), isA(ActionListener.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new IndexNotFoundException("Index not found!"));
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onFailure(new IndexNotFoundException("Index not found!"));
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
         future.onResponse(updateResponse);
@@ -442,7 +437,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals(Result.UPDATED, argumentCaptor.getValue().getResult());
     }
 
-    private SearchResponse noneEmptySearchResponse() throws IOException {
+    private SearchResponse nonEmptySearchResponse() throws IOException {
         String modelContent = "{\"name\":\"Remote_Model\",\"algorithm\":\"Remote\",\"version\":1,\"connector_id\":\"test_id\"}";
         SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
         SearchHits hits = new SearchHits(new SearchHit[] { model }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);

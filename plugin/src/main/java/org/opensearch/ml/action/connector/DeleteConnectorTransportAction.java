@@ -19,7 +19,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -40,6 +40,7 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
@@ -117,22 +118,41 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     private void checkForModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
             SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
             sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
             if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
                 sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
             }
-            searchRequest.source(sourceBuilder);
-            // TODO: Use SDK client not client.
-            client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
-                SearchHit[] searchHits = searchResponse.getHits().getHits();
-                if (searchHits.length == 0) {
-                    deleteConnector(connectorId, actionListener);
-                } else {
-                    handleModelsUsingConnector(searchHits, connectorId, actionListener);
-                }
-            }, e -> handleSearchFailure(connectorId, e, actionListener)), context::restore));
+
+            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                .indices(ML_MODEL_INDEX)
+                .searchSourceBuilder(sourceBuilder)
+                .build();
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((sr, st) -> {
+                    context.restore();
+                    if (sr != null) {
+                        try {
+                            SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
+                            SearchHit[] searchHits = searchResponse.getHits().getHits();
+                            if (searchHits.length == 0) {
+                                deleteConnector(connectorId, actionListener);
+                            } else {
+                                handleModelsUsingConnector(searchHits, connectorId, actionListener);
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to parse search response", e);
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR)
+                                );
+                        }
+                    } else {
+                        Throwable cause = st.getCause() == null ? st : st.getCause();
+                        handleSearchFailure(connectorId, cause, actionListener);
+                    }
+                });
         } catch (Exception e) {
             log.error("Failed to check for models using connector: " + connectorId, e);
             actionListener.onFailure(e);
@@ -156,13 +176,17 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             );
     }
 
-    private void handleSearchFailure(String connectorId, Exception e, ActionListener<DeleteResponse> actionListener) {
-        if (e instanceof IndexNotFoundException) {
+    private void handleSearchFailure(String connectorId, Throwable cause, ActionListener<DeleteResponse> actionListener) {
+        if (cause instanceof IndexNotFoundException) {
             deleteConnector(connectorId, actionListener);
             return;
         }
-        log.error("Failed to search for models using connector: {}", connectorId, e);
-        actionListener.onFailure(e);
+        log.error("Failed to search for models using connector: {}", connectorId, cause);
+        if (cause instanceof Exception) {
+            actionListener.onFailure((Exception) cause);
+        } else {
+            actionListener.onFailure(new OpenSearchException(cause));
+        }
     }
 
     private void deleteConnector(String connectorId, ActionListener<DeleteResponse> actionListener) {

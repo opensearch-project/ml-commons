@@ -18,6 +18,7 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -30,6 +31,8 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -46,6 +49,8 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SearchDataObjectRequest;
+import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 
@@ -162,6 +167,26 @@ public class LocalClusterIndicesClient implements SdkClient {
                 .shardInfo(deleteResponse.getShardInfo())
                 .deleted(deleteResponse.getResult() == DELETED)
                 .build();
+        }), executor);
+    }
+
+    @Override
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
+            log.info("Searching {}", Arrays.toString(request.indices()), null);
+            SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
+            log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
+            try {
+                return new SearchDataObjectResponse.Builder()
+                    .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchResponse.toString()))
+                    .build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to search indices " + Arrays.toString(request.indices()),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+            }
         }), executor);
     }
 }

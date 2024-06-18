@@ -18,6 +18,7 @@ import org.opensearch.client.transport.rest_client.RestClientTransport;
 import org.opensearch.common.inject.AbstractModule;
 import org.opensearch.sdk.SdkClient;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
@@ -117,7 +118,9 @@ public class SdkClientModule extends AbstractModule {
                     }
                 })
                 .build();
-            ObjectMapper objectMapper = new ObjectMapper().setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+            ObjectMapper objectMapper = new ObjectMapper()
+                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL);
             return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
         } catch (Exception e) {
             throw new OpenSearchException(e);
