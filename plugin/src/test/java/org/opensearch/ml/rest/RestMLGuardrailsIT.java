@@ -467,13 +467,13 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             + "      \"model_id\": \""
             + guardrailModelId
             + "\",\n"
-            + "      \"response_accept\": \"^\\\"\\\\s*[Aa]ccept\\\\s*\\\"$\""
+            + "      \"response_validation_regex\": \"^\\\"\\\\s*[Aa]ccept\\\\s*\\\"$\""
             + "    },\n"
             + "    \"output_guardrail\": {\n"
             + "      \"model_id\": \""
             + guardrailModelId
             + "\",\n"
-            + "      \"response_accept\": \"^\\\"\\\\s*[Aa]ccept\\\\s*\\\"$\""
+            + "      \"response_validation_regex\": \"^\\\"\\\\s*[Aa]ccept\\\\s*\\\"$\""
             + "    }\n"
             + "  }\n"
             + "}";
