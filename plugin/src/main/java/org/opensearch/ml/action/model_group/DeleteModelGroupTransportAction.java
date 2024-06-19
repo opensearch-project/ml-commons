@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -35,12 +34,12 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -139,7 +138,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                                         );
                                 }
                             } else {
-                                Throwable cause = MLExceptionUtils.getRootCause(st);
+                                Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
                                 handleModelSearchFailure(modelGroupId, tenantId, cause, actionListener);
                             }
                         });
@@ -173,13 +172,9 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
-            Throwable cause = MLExceptionUtils.getRootCause(throwable);
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             log.error("Failed to delete ML Model Group {}", modelGroupId, cause);
-            if (cause instanceof Exception) {
-                actionListener.onFailure((Exception) cause);
-            } else {
-                actionListener.onFailure(new OpenSearchException(cause));
-            }
+            actionListener.onFailure(cause);
         } else {
             log.debug("Completed Delete Model Group Request, model group id:{} deleted", response.id());
             DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
@@ -191,7 +186,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     private void handleModelSearchFailure(
         String modelGroupId,
         String tenantId,
-        Throwable cause,
+        Exception cause,
         ActionListener<DeleteResponse> actionListener
     ) {
         if (cause instanceof IndexNotFoundException) {
@@ -201,10 +196,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         }
 
         log.error("Failed to search for models using model group id: {}", modelGroupId, cause);
-        if (cause instanceof Exception) {
-            actionListener.onFailure((Exception) cause);
-        } else {
-            actionListener.onFailure(new OpenSearchException(cause));
-        }
+        actionListener.onFailure(cause);
     }
 }

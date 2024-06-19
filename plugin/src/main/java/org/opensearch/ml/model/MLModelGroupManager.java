@@ -11,7 +11,6 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL
 import java.time.Instant;
 import java.util.HashSet;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -35,10 +34,10 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -129,13 +128,9 @@ public class MLModelGroupManager {
                                 )
                                 .whenComplete((r, throwable) -> {
                                     if (throwable != null) {
-                                        Throwable cause = MLExceptionUtils.getRootCause(throwable);
+                                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                                         log.error("Failed to index model group", cause);
-                                        if (cause instanceof Exception) {
-                                            wrappedListener.onFailure((Exception) cause);
-                                        } else {
-                                            wrappedListener.onFailure(new OpenSearchException(cause));
-                                        }
+                                        wrappedListener.onFailure(cause);
                                     } else {
                                         log.info("Model group creation result: {}, model group id: {}", r.created(), r.id());
                                         wrappedListener.onResponse(r.id());
@@ -217,14 +212,12 @@ public class MLModelGroupManager {
                 .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
                     if (throwable != null) {
-                        Throwable cause = MLExceptionUtils.getRootCause(throwable);
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         log.error("Failed to search model group index", cause);
                         if (cause instanceof IndexNotFoundException) {
                             listener.onResponse(null);
-                        } else if (cause instanceof Exception) {
-                            listener.onFailure((Exception) cause);
                         } else {
-                            listener.onFailure(new OpenSearchException(cause));
+                            listener.onFailure(cause);
                         }
                     } else {
                         try {

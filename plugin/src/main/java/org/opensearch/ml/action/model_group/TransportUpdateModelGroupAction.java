@@ -14,7 +14,6 @@ import java.util.HashSet;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -43,11 +42,11 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
@@ -120,17 +119,13 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 .whenComplete((r, throwable) -> {
                     log.debug("Completed Get Model group Request, id:{}", modelGroupId);
                     if (throwable != null) {
-                        Throwable cause = MLExceptionUtils.getRootCause(throwable);
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (cause instanceof IndexNotFoundException) {
                             log.error("Failed to get model group index", cause);
                             wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
                         } else {
                             log.error("Failed to get ML group {}", modelGroupId, cause);
-                            if (cause instanceof Exception) {
-                                wrappedListener.onFailure((Exception) cause);
-                            } else {
-                                wrappedListener.onFailure(new OpenSearchException(cause));
-                            }
+                            wrappedListener.onFailure(cause);
                         }
                     } else {
                         if (r != null && r.parser().isPresent()) {

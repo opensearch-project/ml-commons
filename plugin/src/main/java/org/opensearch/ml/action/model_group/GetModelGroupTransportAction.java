@@ -9,7 +9,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -34,7 +33,9 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -51,7 +52,6 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
-
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -80,6 +80,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroupGetRequest mlModelGroupGetRequest = MLModelGroupGetRequest.fromActionRequest(request);
         String modelGroupId = mlModelGroupGetRequest.getModelGroupId();
         String tenantId = mlModelGroupGetRequest.getTenantId();
+
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
@@ -99,74 +100,93 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
 
             sdkClient
                 .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                .whenComplete((r, throwable) -> {
-                    log.debug("Completed Get Model group Request, id:{}", modelGroupId);
-                    if (throwable != null) {
-                        Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
-                        if (cause instanceof IndexNotFoundException) {
-                            log.error("Failed to find model group index", cause);
-                            wrappedListener
-                                .onFailure(new OpenSearchStatusException("Failed to find model group index", RestStatus.NOT_FOUND));
-                        } else {
-                            log.error("Failed to get ML group {}", modelGroupId, cause);
-                            if (cause instanceof Exception) {
-                                wrappedListener.onFailure((Exception) cause);
-                            } else {
-                                wrappedListener.onFailure(new OpenSearchException(cause));
-                            }
-                        }
-                    } else {
-                        if (r != null && r.parser().isPresent()) {
-                            try {
-                                XContentParser parser = r.parser().get();
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                                if (TenantAwareHelper
-                                    .validateTenantResource(
-                                        mlFeatureEnabledSetting,
-                                        tenantId,
-                                        mlModelGroup.getTenantId(),
-                                        wrappedListener
-                                    )) {
-                                    modelAccessControlHelper
-                                        .validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
-                                            if (!access) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User doesn't have privilege to perform this operation on this model group",
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                            } else {
-                                                wrappedListener
-                                                    .onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
-                                            }
-                                        }, e -> {
-                                            log.error("Failed to validate access for Model Group {}", modelGroupId, e);
-                                            wrappedListener.onFailure(e);
-                                        }));
-                                }
-                            } catch (Exception e) {
-                                log.error("Failed to parse ml connector {}", r.id(), e);
-                                wrappedListener.onFailure(e);
-                            }
-                        } else {
-                            wrappedListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        "Failed to find model group with the provided model group id: " + modelGroupId,
-                                        RestStatus.NOT_FOUND
-                                    )
-                                );
-                        }
-                    }
-                });
-
+                .whenComplete((r, throwable) -> handleResponse(r, throwable, modelGroupId, tenantId, user, wrappedListener));
         } catch (Exception e) {
             log.error("Failed to get ML model group {}", modelGroupId, e);
             actionListener.onFailure(e);
         }
+    }
 
+    private void handleResponse(
+        GetDataObjectResponse getDataObjectResponse,
+        Throwable throwable,
+        String modelGroupId,
+        String tenantId,
+        User user,
+        ActionListener<MLModelGroupGetResponse> wrappedListener
+    ) {
+        log.debug("Completed Get Model group Request, id:{}", modelGroupId);
+        if (throwable != null) {
+            handleThrowable(throwable, modelGroupId, wrappedListener);
+        } else {
+            processResponse(getDataObjectResponse, modelGroupId, tenantId, user, wrappedListener);
+        }
+    }
+
+    private void handleThrowable(Throwable throwable, String modelGroupId, ActionListener<MLModelGroupGetResponse> wrappedListener) {
+        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+        if (cause instanceof IndexNotFoundException) {
+            log.error("Failed to find model group index", cause);
+            wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group index", RestStatus.NOT_FOUND));
+        } else {
+            log.error("Failed to get ML group {}", modelGroupId, cause);
+            wrappedListener.onFailure(cause);
+        }
+    }
+
+    private void processResponse(
+        GetDataObjectResponse getDataObjectResponse,
+        String modelGroupId,
+        String tenantId,
+        User user,
+        ActionListener<MLModelGroupGetResponse> wrappedListener
+    ) {
+        if (getDataObjectResponse != null && getDataObjectResponse.parser().isPresent()) {
+            try {
+                XContentParser parser = getDataObjectResponse.parser().get();
+                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+
+                if (TenantAwareHelper
+                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
+                    validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse ml connector {}", getDataObjectResponse.id(), e);
+                wrappedListener.onFailure(e);
+            }
+        } else {
+            wrappedListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Failed to find model group with the provided model group id: " + modelGroupId,
+                        RestStatus.NOT_FOUND
+                    )
+                );
+        }
+    }
+
+    private void validateModelGroupAccess(
+        User user,
+        String modelGroupId,
+        MLModelGroup mlModelGroup,
+        ActionListener<MLModelGroupGetResponse> wrappedListener
+    ) {
+        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
+            if (!access) {
+                wrappedListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "User doesn't have privilege to perform this operation on this model group",
+                            RestStatus.FORBIDDEN
+                        )
+                    );
+            } else {
+                wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+            }
+        }, e -> {
+            log.error("Failed to validate access for Model Group {}", modelGroupId, e);
+            wrappedListener.onFailure(e);
+        }));
     }
 }
