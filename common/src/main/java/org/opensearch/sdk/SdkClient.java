@@ -13,8 +13,9 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
-import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToRuntime;
+import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
 public interface SdkClient {
 
@@ -44,7 +45,7 @@ public interface SdkClient {
         try {
             return putDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            throw unwrapAndConvertToRuntime(e);
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
         }
     }
 
@@ -76,7 +77,7 @@ public interface SdkClient {
         try {
             return getDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            throw unwrapAndConvertToRuntime(e);
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
         }
     }
 
@@ -108,7 +109,7 @@ public interface SdkClient {
         try {
             return updateDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            throw unwrapAndConvertToRuntime(e);
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
         }
     }
 
@@ -140,7 +141,7 @@ public interface SdkClient {
         try {
             return deleteDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            throw unwrapAndConvertToRuntime(e);
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
         }
     }
 
@@ -172,7 +173,7 @@ public interface SdkClient {
         try {
             return searchDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
-            throw unwrapAndConvertToRuntime(e);
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
         }
     }
 }

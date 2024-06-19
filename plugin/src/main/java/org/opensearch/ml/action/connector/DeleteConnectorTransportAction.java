@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -40,6 +39,7 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -149,7 +149,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                                 );
                         }
                     } else {
-                        Throwable cause = st.getCause() == null ? st : st.getCause();
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
                         handleSearchFailure(connectorId, cause, actionListener);
                     }
                 });
@@ -176,17 +176,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             );
     }
 
-    private void handleSearchFailure(String connectorId, Throwable cause, ActionListener<DeleteResponse> actionListener) {
+    private void handleSearchFailure(String connectorId, Exception cause, ActionListener<DeleteResponse> actionListener) {
         if (cause instanceof IndexNotFoundException) {
             deleteConnector(connectorId, actionListener);
             return;
         }
         log.error("Failed to search for models using connector: {}", connectorId, cause);
-        if (cause instanceof Exception) {
-            actionListener.onFailure((Exception) cause);
-        } else {
-            actionListener.onFailure(new OpenSearchException(cause));
-        }
+        actionListener.onFailure(cause);
     }
 
     private void deleteConnector(String connectorId, ActionListener<DeleteResponse> actionListener) {
@@ -211,13 +207,9 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
-            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             log.error("Failed to delete ML connector: {}", connectorId, cause);
-            if (cause instanceof Exception) {
-                actionListener.onFailure((Exception) cause);
-            } else {
-                actionListener.onFailure(new OpenSearchException(cause));
-            }
+            actionListener.onFailure(cause);
         } else {
             log.info("Connector deletion result: {}, connector id: {}", response.deleted(), response.id());
             DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
