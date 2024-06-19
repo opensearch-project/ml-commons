@@ -10,29 +10,30 @@ package org.opensearch.sdk;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.core.rest.RestStatus;
+
 import java.io.IOException;
 import java.util.concurrent.CompletionException;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class SdkClientUtilsTests {
 
-    @Mock
     private OpenSearchStatusException testException;
-    @Mock
     private InterruptedException interruptedException;
-    @Mock
     private IOException ioException;
 
     @Before
     public void setUp() {
-        MockitoAnnotations.openMocks(this);
+        testException = new OpenSearchStatusException("Test", RestStatus.BAD_REQUEST);
+        interruptedException = new InterruptedException();
+        ioException = new IOException();
     }
 
     @Test
@@ -52,5 +53,23 @@ public class SdkClientUtilsTests {
         assertFalse(Thread.currentThread().isInterrupted());
         assertTrue(rte instanceof OpenSearchException);
         assertSame(ioException, rte.getCause());
+    }
+    
+    @Test
+    public void testGetRethrownExecutionException_Unwrapped() {
+        PlainActionFuture<Object> future = new PlainActionFuture<>();
+        future.onFailure(testException);
+        RuntimeException e = assertThrows(RuntimeException.class, () -> future.actionGet());
+        Throwable notWrapped = SdkClientUtils.getRethrownExecutionExceptionRootCause(e);
+        assertSame(testException, notWrapped);
+    }
+
+    @Test
+    public void testGetRethrownExecutionException_Wrapped() {
+        PlainActionFuture<Object> future = new PlainActionFuture<>();
+        future.onFailure(ioException);
+        RuntimeException e = assertThrows(RuntimeException.class, () -> future.actionGet());
+        Throwable wrapped = SdkClientUtils.getRethrownExecutionExceptionRootCause(e);
+        assertSame(ioException, wrapped);        
     }
 }
