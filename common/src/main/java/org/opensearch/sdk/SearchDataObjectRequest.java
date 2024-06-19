@@ -13,6 +13,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 public class SearchDataObjectRequest {
 
     private final String[] indices;
+    private final String tenantId;
     private final SearchSourceBuilder searchSourceBuilder;
 
     /**
@@ -20,11 +21,13 @@ public class SearchDataObjectRequest {
      * <p>
      * For data storage implementations other than OpenSearch, an index may be referred to as a table
      *
-     * @param indices             the indices to search for the object
+     * @param indices the indices to search for the object
+     * @param tenantId the tenant id
      * @param searchSourceBuilder the search body containing the query
      */
-    public SearchDataObjectRequest(String[] indices, SearchSourceBuilder searchSourceBuilder) {
+    public SearchDataObjectRequest(String[] indices, String tenantId, SearchSourceBuilder searchSourceBuilder) {
         this.indices = indices;
+        this.tenantId = tenantId;
         this.searchSourceBuilder = searchSourceBuilder;
     }
 
@@ -34,6 +37,14 @@ public class SearchDataObjectRequest {
      */
     public String[] indices() {
         return this.indices;
+    }
+
+    /**
+     * Returns the tenant id
+     * @return the tenantId
+     */
+    public String tenantId() {
+        return this.tenantId;
     }
 
     /**
@@ -49,6 +60,7 @@ public class SearchDataObjectRequest {
      */
     public static class Builder {
         private String[] indices = null;
+        private String tenantId = null;
         private SearchSourceBuilder searchSourceBuilder;
 
         /**
@@ -67,13 +79,22 @@ public class SearchDataObjectRequest {
         }
 
         /**
+         * Add a tenant ID to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
+        public Builder tenantId(String tenantId) {
+            this.tenantId = tenantId;
+            return this;
+        }
+
+        /**
          * Add a SearchSourceBuilder to this builder
          * @param searchSourceBuilder the searchSourceBuilder
          * @return the updated builder
          */
         public Builder searchSourceBuilder(SearchSourceBuilder searchSourceBuilder) {
             this.searchSourceBuilder = searchSourceBuilder;
-
             return this;
         }
 
@@ -82,7 +103,7 @@ public class SearchDataObjectRequest {
          * @return A {@link SearchDataObjectRequest}
          */
         public SearchDataObjectRequest build() {
-            return new SearchDataObjectRequest(this.indices, this.searchSourceBuilder);
+            return new SearchDataObjectRequest(this.indices, this.tenantId, this.searchSourceBuilder);
         }
     }
 }
