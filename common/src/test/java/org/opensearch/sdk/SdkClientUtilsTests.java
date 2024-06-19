@@ -16,6 +16,7 @@ import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.core.rest.RestStatus;
 
 import java.io.IOException;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 
 import static org.junit.Assert.assertFalse;
@@ -37,7 +38,7 @@ public class SdkClientUtilsTests {
     }
 
     @Test
-    public void testUnwrapAndConvertToRuntime() {
+    public void testUnwrapAndConvertToRuntime_CompletionException() {
         CompletionException ce = new CompletionException(testException);
         RuntimeException rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
         assertSame(testException, rte);
@@ -53,11 +54,34 @@ public class SdkClientUtilsTests {
         assertFalse(Thread.currentThread().isInterrupted());
         assertTrue(rte instanceof OpenSearchException);
         assertSame(ioException, rte.getCause());
+
+        ce = new CompletionException(ioException);
+        rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
+        assertFalse(Thread.currentThread().isInterrupted());
+        assertTrue(rte instanceof OpenSearchException);
+        assertSame(ioException, rte.getCause());
+        
+        PlainActionFuture<Object> future = PlainActionFuture.newFuture();
+        future.onFailure(ioException);
+        rte = assertThrows(RuntimeException.class, () -> future.actionGet());
+        rte = SdkClientUtils.unwrapAndConvertToRuntime(rte);
+        assertSame(ioException, rte.getCause());
     }
-    
+
+    @Test
+    public void testUnwrapAndConvertToRuntime_CancellationException() {
+        CancellationException ce = new CancellationException();
+        RuntimeException rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
+        assertSame(ce, rte);
+
+        rte = SdkClientUtils.unwrapAndConvertToRuntime(ioException);
+        assertTrue(rte instanceof OpenSearchException);
+        assertSame(ioException, rte.getCause());
+    }
+
     @Test
     public void testGetRethrownExecutionException_Unwrapped() {
-        PlainActionFuture<Object> future = new PlainActionFuture<>();
+        PlainActionFuture<Object> future = PlainActionFuture.newFuture();
         future.onFailure(testException);
         RuntimeException e = assertThrows(RuntimeException.class, () -> future.actionGet());
         Throwable notWrapped = SdkClientUtils.getRethrownExecutionExceptionRootCause(e);
@@ -66,7 +90,7 @@ public class SdkClientUtilsTests {
 
     @Test
     public void testGetRethrownExecutionException_Wrapped() {
-        PlainActionFuture<Object> future = new PlainActionFuture<>();
+        PlainActionFuture<Object> future = PlainActionFuture.newFuture();
         future.onFailure(ioException);
         RuntimeException e = assertThrows(RuntimeException.class, () -> future.actionGet());
         Throwable wrapped = SdkClientUtils.getRethrownExecutionExceptionRootCause(e);

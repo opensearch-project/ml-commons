@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
@@ -45,6 +44,7 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
@@ -205,7 +205,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
                     }
                 } else {
-                    Throwable cause = st.getCause() == null ? st : st.getCause();
+                    RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(st);
                     log.error("Failed to update ML connector: " + connectorId, cause);
                     if (cause instanceof IndexNotFoundException) {
                         sdkClient
@@ -218,10 +218,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 );
                             });
                         return;
-                    } else if (cause instanceof Exception) {
-                        listener.onFailure((Exception) cause);
                     } else {
-                        listener.onFailure(new OpenSearchException(cause));
+                        listener.onFailure(cause);
                     }
                 }
             });
@@ -233,12 +231,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         ActionListener<UpdateResponse> updateListener
     ) {
         if (throwable != null) {
-            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
-            if (cause instanceof Exception) {
-                updateListener.onFailure((Exception) cause);
-            } else {
-                updateListener.onFailure(new OpenSearchException(cause));
-            }
+            RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+            updateListener.onFailure(cause);
         } else {
             log.info("Connector update result: {}, connector id: {}", r.updated(), r.id());
             updateListener.onResponse(new UpdateResponse(r.shardId(), r.id(), 0, 0, 0, r.updated() ? Result.UPDATED : Result.CREATED));

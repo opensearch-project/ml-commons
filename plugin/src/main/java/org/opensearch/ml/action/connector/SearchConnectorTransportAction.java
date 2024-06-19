@@ -15,7 +15,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.opensearch.ExceptionsHelper;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -35,6 +34,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -111,13 +111,9 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
                     if (throwable != null) {
-                        Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                        RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
                         log.error("Failed to search connector", cause);
-                        if (cause instanceof Exception) {
-                            doubleWrappedListener.onFailure((Exception) cause);
-                        } else {
-                            doubleWrappedListener.onFailure(new OpenSearchException(cause));
-                        }
+                        doubleWrappedListener.onFailure(cause);
                     } else {
                         try {
                             SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());

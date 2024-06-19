@@ -9,7 +9,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -35,6 +34,7 @@ import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -88,17 +88,13 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
                 .whenComplete((r, throwable) -> {
                     log.debug("Completed Get task Request, id:{}", taskId);
                     if (throwable != null) {
-                        Throwable rootCause = getRootCause(throwable);
+                        RuntimeException rootCause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
                         if (rootCause instanceof IndexNotFoundException) {
                             log.error("Failed to get task index", rootCause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND, rootCause));
                         } else {
                             log.error("Failed to get ML task {}", taskId, rootCause);
-                            if (rootCause instanceof Exception) {
-                                actionListener.onFailure((Exception) rootCause);
-                            } else {
-                                actionListener.onFailure(new OpenSearchException(rootCause));
-                            }
+                            actionListener.onFailure(rootCause);
                         }
                     } else {
                         if (r != null && r.parser().isPresent()) {
@@ -153,14 +149,6 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         }
     }
 
-    private Throwable getRootCause(Throwable throwable) {
-        Throwable cause = throwable;
-        while (cause.getCause() != null && cause != cause.getCause()) {
-            cause = cause.getCause();
-        }
-        return cause;
-    }
-
     private void handleDeleteResponse(
         DeleteDataObjectResponse response,
         Throwable throwable,
@@ -168,13 +156,9 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
-            Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+            RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
             log.error("Failed to delete ML task: {}", taskId, cause);
-            if (cause instanceof Exception) {
-                actionListener.onFailure((Exception) cause);
-            } else {
-                actionListener.onFailure(new OpenSearchException(cause));
-            }
+            actionListener.onFailure(cause);
         } else {
             log.info("Task deletion result: {}, task id: {}", response.deleted(), response.id());
             DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());

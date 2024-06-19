@@ -8,6 +8,7 @@
  */
 package org.opensearch.sdk;
 
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 
@@ -21,11 +22,14 @@ public class SdkClientUtils {
     /**
      * Unwraps the cause of a {@link CompletionException}. If the cause is a subclass of {@link RuntimeException}, rethrows the exception.
      * Otherwise wraps it in an {@link OpenSearchException}. Properly re-interrupts the thread on {@link InterruptedException}.
-     * @param e the CompletionException
-     * @return The wrapped cause of the completion exception if unchecked, otherwise an OpenSearchException wrapping it.
+     * @param throwable a throwable, expected to be a {@link CompletionException} or {@link CancellationException}.
+     * @return the cause of the completion exception or the throwable, directly if a {@link RuntimeException} or wrapped in an OpenSearchException otherwise.
      */
-    public static RuntimeException unwrapAndConvertToRuntime(CompletionException e) {
-        Throwable cause = e.getCause();
+    public static RuntimeException unwrapAndConvertToRuntime(Throwable throwable) {
+        // Unwrap completion exception or pass through other exceptions
+        Throwable cause = throwable instanceof CompletionException ? throwable.getCause() : throwable;
+        // Double-unwrap checked exceptions wrapped in ExecutionException
+        cause = getRethrownExecutionExceptionRootCause(cause);
         if (cause instanceof InterruptedException) {
             Thread.currentThread().interrupt();
         }

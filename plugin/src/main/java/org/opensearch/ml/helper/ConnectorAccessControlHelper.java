@@ -14,7 +14,6 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.apache.lucene.search.join.ScoreMode;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.client.Client;
@@ -43,6 +42,7 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
@@ -172,17 +172,13 @@ public class ConnectorAccessControlHelper {
                 context.restore();
                 log.debug("Completed Get Connector Request, id:{}", connectorId);
                 if (throwable != null) {
-                    Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                    RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
                     if (cause instanceof IndexNotFoundException) {
                         log.error("Failed to get connector index", cause);
                         listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get ML connector " + connectorId, cause);
-                        if (cause instanceof Exception) {
-                            listener.onFailure((Exception) cause);
-                        } else {
-                            listener.onFailure(new OpenSearchException(cause));
-                        }
+                        listener.onFailure(cause);
                     }
                 } else {
                     if (r != null && r.parser().isPresent()) {

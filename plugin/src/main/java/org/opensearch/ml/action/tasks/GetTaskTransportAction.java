@@ -9,7 +9,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -31,6 +30,7 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -86,17 +86,13 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     context.restore();
                     log.debug("Completed Get task Request, id:{}", taskId);
                     if (throwable != null) {
-                        Throwable cause = throwable.getCause() == null ? throwable : throwable.getCause();
+                        RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
                         if (cause instanceof IndexNotFoundException) {
                             log.error("Failed to get task index", cause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND));
                         } else {
                             log.error("Failed to get ML task {}", taskId, cause);
-                            if (cause instanceof Exception) {
-                                actionListener.onFailure((Exception) cause);
-                            } else {
-                                actionListener.onFailure(new OpenSearchException(cause));
-                            }
+                            actionListener.onFailure(cause);
                         }
                     } else {
                         if (r != null && r.parser().isPresent()) {
