@@ -149,7 +149,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                                 );
                         }
                     } else {
-                        RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(st);
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
                         handleSearchFailure(connectorId, cause, actionListener);
                     }
                 });
@@ -176,7 +176,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             );
     }
 
-    private void handleSearchFailure(String connectorId, RuntimeException cause, ActionListener<DeleteResponse> actionListener) {
+    private void handleSearchFailure(String connectorId, Exception cause, ActionListener<DeleteResponse> actionListener) {
         if (cause instanceof IndexNotFoundException) {
             deleteConnector(connectorId, actionListener);
             return;
@@ -207,7 +207,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
-            RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             log.error("Failed to delete ML connector: {}", connectorId, cause);
             actionListener.onFailure(cause);
         } else {

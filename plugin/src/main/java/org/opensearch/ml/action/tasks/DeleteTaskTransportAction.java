@@ -88,7 +88,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
                 .whenComplete((r, throwable) -> {
                     log.debug("Completed Get task Request, id:{}", taskId);
                     if (throwable != null) {
-                        RuntimeException rootCause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+                        Exception rootCause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (rootCause instanceof IndexNotFoundException) {
                             log.error("Failed to get task index", rootCause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND, rootCause));
@@ -156,7 +156,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
-            RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             log.error("Failed to delete ML task: {}", taskId, cause);
             actionListener.onFailure(cause);
         } else {

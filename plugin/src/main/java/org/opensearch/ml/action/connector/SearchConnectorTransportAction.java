@@ -111,7 +111,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
                     if (throwable != null) {
-                        RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         log.error("Failed to search connector", cause);
                         doubleWrappedListener.onFailure(cause);
                     } else {

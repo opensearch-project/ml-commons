@@ -86,7 +86,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     context.restore();
                     log.debug("Completed Get task Request, id:{}", taskId);
                     if (throwable != null) {
-                        RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (cause instanceof IndexNotFoundException) {
                             log.error("Failed to get task index", cause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND));

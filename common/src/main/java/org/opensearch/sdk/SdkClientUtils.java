@@ -20,12 +20,12 @@ import org.opensearch.common.util.concurrent.UncategorizedExecutionException;
 public class SdkClientUtils {
 
     /**
-     * Unwraps the cause of a {@link CompletionException}. If the cause is a subclass of {@link RuntimeException}, rethrows the exception.
+     * Unwraps the cause of a {@link CompletionException}. If the cause is an {@link Exception}, rethrows the exception.
      * Otherwise wraps it in an {@link OpenSearchException}. Properly re-interrupts the thread on {@link InterruptedException}.
      * @param throwable a throwable, expected to be a {@link CompletionException} or {@link CancellationException}.
-     * @return the cause of the completion exception or the throwable, directly if a {@link RuntimeException} or wrapped in an OpenSearchException otherwise.
+     * @return the cause of the completion exception or the throwable, directly if an {@link Exception} or wrapped in an OpenSearchException otherwise.
      */
-    public static RuntimeException unwrapAndConvertToRuntime(Throwable throwable) {
+    public static Exception unwrapAndConvertToException(Throwable throwable) {
         // Unwrap completion exception or pass through other exceptions
         Throwable cause = throwable instanceof CompletionException ? throwable.getCause() : throwable;
         // Double-unwrap checked exceptions wrapped in ExecutionException
@@ -33,9 +33,8 @@ public class SdkClientUtils {
         if (cause instanceof InterruptedException) {
             Thread.currentThread().interrupt();
         }
-        // Below is the same as o.o.ExceptionsHelper.convertToRuntime but cause is a throwable
-        if (cause instanceof RuntimeException) {
-            return (RuntimeException) cause;
+        if (cause instanceof Exception) {
+            return (Exception) cause;
         }
         return new OpenSearchException(cause);
     }

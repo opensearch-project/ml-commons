@@ -38,45 +38,36 @@ public class SdkClientUtilsTests {
     }
 
     @Test
-    public void testUnwrapAndConvertToRuntime_CompletionException() {
+    public void testUnwrapAndConvertToException_CompletionException() {
         CompletionException ce = new CompletionException(testException);
-        RuntimeException rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
-        assertSame(testException, rte);
+        Exception e = SdkClientUtils.unwrapAndConvertToException(ce);
+        assertSame(testException, e);
 
         ce = new CompletionException(interruptedException);
-        rte = SdkClientUtils.unwrapAndConvertToRuntime(ce); // sets interrupted
+        e = SdkClientUtils.unwrapAndConvertToException(ce); // sets interrupted
         assertTrue(Thread.interrupted()); // tests and resets interrupted
-        assertTrue(rte instanceof OpenSearchException);
-        assertSame(interruptedException, rte.getCause());
+        assertSame(interruptedException, e);
 
         ce = new CompletionException(ioException);
-        rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
+        e = SdkClientUtils.unwrapAndConvertToException(ce);
         assertFalse(Thread.currentThread().isInterrupted());
-        assertTrue(rte instanceof OpenSearchException);
-        assertSame(ioException, rte.getCause());
+        assertSame(ioException, e);
 
-        ce = new CompletionException(ioException);
-        rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
-        assertFalse(Thread.currentThread().isInterrupted());
-        assertTrue(rte instanceof OpenSearchException);
-        assertSame(ioException, rte.getCause());
-        
         PlainActionFuture<Object> future = PlainActionFuture.newFuture();
         future.onFailure(ioException);
-        rte = assertThrows(RuntimeException.class, () -> future.actionGet());
-        rte = SdkClientUtils.unwrapAndConvertToRuntime(rte);
-        assertSame(ioException, rte.getCause());
+        e = assertThrows(RuntimeException.class, () -> future.actionGet());
+        e = SdkClientUtils.unwrapAndConvertToException(e);
+        assertSame(ioException, e);
     }
 
     @Test
-    public void testUnwrapAndConvertToRuntime_CancellationException() {
+    public void testUnwrapAndConvertToException_Unwrapped() {
         CancellationException ce = new CancellationException();
-        RuntimeException rte = SdkClientUtils.unwrapAndConvertToRuntime(ce);
-        assertSame(ce, rte);
+        Exception e = SdkClientUtils.unwrapAndConvertToException(ce);
+        assertSame(ce, e);
 
-        rte = SdkClientUtils.unwrapAndConvertToRuntime(ioException);
-        assertTrue(rte instanceof OpenSearchException);
-        assertSame(ioException, rte.getCause());
+        e = SdkClientUtils.unwrapAndConvertToException(ioException);
+        assertSame(ioException, e);
     }
 
     @Test

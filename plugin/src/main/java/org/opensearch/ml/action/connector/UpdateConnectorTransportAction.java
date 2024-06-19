@@ -205,7 +205,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
                     }
                 } else {
-                    RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(st);
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
                     log.error("Failed to update ML connector: " + connectorId, cause);
                     if (cause instanceof IndexNotFoundException) {
                         sdkClient
@@ -231,7 +231,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         ActionListener<UpdateResponse> updateListener
     ) {
         if (throwable != null) {
-            RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             updateListener.onFailure(cause);
         } else {
             log.info("Connector update result: {}, connector id: {}", r.updated(), r.id());

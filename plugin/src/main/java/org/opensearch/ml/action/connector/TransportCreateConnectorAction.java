@@ -148,7 +148,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     .whenComplete((r, throwable) -> {
                         context.restore();
                         if (throwable != null) {
-                            RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             log.error("Failed to create ML connector", cause);
                             listener.onFailure(cause);
                         } else {

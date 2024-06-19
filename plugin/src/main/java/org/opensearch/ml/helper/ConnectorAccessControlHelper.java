@@ -172,7 +172,7 @@ public class ConnectorAccessControlHelper {
                 context.restore();
                 log.debug("Completed Get Connector Request, id:{}", connectorId);
                 if (throwable != null) {
-                    RuntimeException cause = SdkClientUtils.unwrapAndConvertToRuntime(throwable);
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (cause instanceof IndexNotFoundException) {
                         log.error("Failed to get connector index", cause);
                         listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));

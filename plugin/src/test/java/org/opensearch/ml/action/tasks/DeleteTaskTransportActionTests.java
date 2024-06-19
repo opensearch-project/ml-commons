@@ -27,7 +27,6 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.delete.DeleteRequest;
@@ -206,9 +205,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        // since thrown exception is not RTE it is wrapped
-        assertEquals(OpenSearchException.class, argumentCaptor.getValue().getClass());
-        assertEquals("errorMessage", argumentCaptor.getValue().getCause().getMessage());
+        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
     @Test
