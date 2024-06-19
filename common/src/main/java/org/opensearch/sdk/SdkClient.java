@@ -14,6 +14,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
 import org.opensearch.OpenSearchException;
+import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToRuntime;
 
 public interface SdkClient {
 
@@ -173,16 +174,5 @@ public interface SdkClient {
         } catch (CompletionException e) {
             throw unwrapAndConvertToRuntime(e);
         }
-    }
-
-    private static RuntimeException unwrapAndConvertToRuntime(CompletionException e) {
-        Throwable cause = e.getCause();
-        if (cause instanceof InterruptedException) {
-            Thread.currentThread().interrupt();
-        }
-        if (cause instanceof RuntimeException) {
-            return (RuntimeException) cause;
-        }
-        return new OpenSearchException(cause);
     }
 }
