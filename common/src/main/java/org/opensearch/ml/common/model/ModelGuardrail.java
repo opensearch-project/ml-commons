@@ -28,7 +28,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -51,7 +50,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 public class ModelGuardrail extends Guardrail {
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String RESPONSE_FILTER_FIELD = "response_filter";
-    public static final String RESPONSE_ACCEPT_FIELD = "response_accept";
+    public static final String RESPONSE_VALIDATION_REGEX_FIELD = "response_validation_regex";
 
     private String modelId;
     private String responseFilter;
@@ -67,7 +66,7 @@ public class ModelGuardrail extends Guardrail {
         this.responseAccept = responseAccept;
     }
     public ModelGuardrail(@NonNull Map<String, Object> params) {
-        this((String) params.get(MODEL_ID_FIELD), (String) params.get(RESPONSE_FILTER_FIELD), (String) params.get(RESPONSE_ACCEPT_FIELD));
+        this((String) params.get(MODEL_ID_FIELD), (String) params.get(RESPONSE_FILTER_FIELD), (String) params.get(RESPONSE_VALIDATION_REGEX_FIELD));
     }
 
     public ModelGuardrail(StreamInput input) throws IOException {
@@ -157,7 +156,7 @@ public class ModelGuardrail extends Guardrail {
             builder.field(RESPONSE_FILTER_FIELD, responseFilter);
         }
         if (responseAccept != null) {
-            builder.field(RESPONSE_ACCEPT_FIELD, responseAccept);
+            builder.field(RESPONSE_VALIDATION_REGEX_FIELD, responseAccept);
         }
         builder.endObject();
         return builder;
@@ -180,7 +179,7 @@ public class ModelGuardrail extends Guardrail {
                 case RESPONSE_FILTER_FIELD:
                     responseFilter = parser.text();
                     break;
-                case RESPONSE_ACCEPT_FIELD:
+                case RESPONSE_VALIDATION_REGEX_FIELD:
                     responseAccept = parser.text();
                     break;
                 default:
