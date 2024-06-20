@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
@@ -42,6 +43,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
@@ -352,8 +354,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateLocalModelSuccess() {
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+    public void testUpdateLocalModelSuccess() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         verify(actionListener).onResponse(updateResponse);
     }
 

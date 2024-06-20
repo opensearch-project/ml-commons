@@ -38,6 +38,7 @@ import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDe
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
@@ -135,6 +136,9 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.script.ScriptService;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -1551,6 +1555,7 @@ public class MLModelManager {
         getModel(modelId, null, null, listener);
     }
 
+    // TODO remove when all usages are migrated to SDK version
     /**
      * Get model from model index with includes/excludes filter.
      *
@@ -1580,6 +1585,45 @@ public class MLModelManager {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
             }
         }, listener::onFailure));
+    }
+
+    /**
+     * Get model from model index with includes/excludes filter.
+     *
+     * @param sdkClient the SdkClient instance
+     * @param modelId  model id
+     * @param includes fields included
+     * @param excludes fields excluded
+     * @param listener action listener
+     */
+    public void getModel(SdkClient sdkClient, String modelId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
+        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
+            .index(ML_MODEL_INDEX)
+            .id(modelId)
+            .fetchSourceContext(new FetchSourceContext(true, includes, excludes))
+            .build();
+        sdkClient.getDataObjectAsync(getRequest, client.threadPool().executor(GENERAL_THREAD_POOL)).whenComplete((r, throwable) -> {
+            if (throwable == null) {
+                if (r != null && r.parser().isPresent()) {
+                    try (XContentParser parser = r.parser().get()) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
+
+                        MLModel mlModel = MLModel.parse(parser, algorithmName);
+                        mlModel.setModelId(modelId);
+                        listener.onResponse(mlModel);
+                    } catch (Exception e) {
+                        log.error("Failed to parse ml task" + r.id(), e);
+                        listener.onFailure(e);
+                    }
+                } else {
+                    listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                }
+            } else {
+                Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                listener.onFailure(e);
+            }
+        });
     }
 
     /**

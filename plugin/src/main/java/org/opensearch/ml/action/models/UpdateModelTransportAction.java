@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ import java.util.Objects;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.DocWriteResponse.Result;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -63,6 +65,8 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
+import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -159,6 +163,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         user,
                                         mlModel.getModelGroupId(),
                                         client,
+                                        sdkClient,
                                         ActionListener.wrap(hasPermission -> {
                                             if (hasPermission) {
                                                 updateRemoteOrTextEmbeddingModel(
@@ -454,53 +459,102 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String updatedVersion = incrementLatestVersion(newModelGroupSourceMap);
         updateModelInput.setVersion(updatedVersion);
         updateModelInput.setLastUpdateTime(Instant.now());
-        UpdateRequest updateModelGroupRequest = createUpdateModelGroupRequest(
+        UpdateDataObjectRequest updateModelGroupRequest = createUpdateModelGroupRequest(
             newModelGroupSourceMap,
             newModelGroupId,
             newModelGroupResponse.getSeqNo(),
             newModelGroupResponse.getPrimaryTerm(),
             Integer.parseInt(updatedVersion)
         );
-        try {
-            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
-            updateRequest.docAsUpsert(true);
-            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (isUpdateModelCache) {
-                String[] targetNodeIds = getAllNodes();
-                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
-                client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
-                    client
-                        .update(
-                            updateRequest,
-                            getUpdateResponseListenerWithUpdateModelCache(modelId, wrappedListener, mlUpdateModelCacheNodesRequest)
-                        );
-                }, e -> {
-                    log
-                        .error(
-                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+        UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+            .index(updateRequest.index())
+            .id(updateRequest.id())
+            .dataObject(updateModelInput)
+            .build();
+        // TODO: This should probably be default on update data object:
+        // updateRequest.docAsUpsert(true);
+        if (isUpdateModelCache) {
+            String[] targetNodeIds = getAllNodes();
+            MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
+            sdkClient
+                .updateDataObjectAsync(updateModelGroupRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    if (throwable == null) {
+                        ActionListener<UpdateResponse> updateListener = getUpdateResponseListenerWithUpdateModelCache(
                             modelId,
-                            newModelGroupId,
-                            e
+                            wrappedListener,
+                            mlUpdateModelCacheNodesRequest
                         );
-                    wrappedListener.onFailure(e);
-                }));
-            } else {
-                client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
-                    client.update(updateRequest, getUpdateResponseListener(modelId, wrappedListener));
-                }, e -> {
-                    log
-                        .error(
-                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
-                            modelId,
-                            newModelGroupId,
-                            e
-                        );
-                    wrappedListener.onFailure(e);
-                }));
-            }
-        } catch (IOException e) {
-            log.error("Failed to build update request.");
-            wrappedListener.onFailure(e);
+                        sdkClient
+                            .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                            .whenComplete((ur, ut) -> {
+                                if (ut == null) {
+                                    updateListener
+                                        .onResponse(
+                                            new UpdateResponse(
+                                                ur.shardId(),
+                                                ur.id(),
+                                                0,
+                                                0,
+                                                0,
+                                                ur.updated() ? Result.UPDATED : Result.CREATED
+                                            )
+                                        );
+                                } else {
+                                    Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
+                                    updateListener.onFailure(e);
+                                }
+                            });
+                    } else {
+                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log
+                            .error(
+                                "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+                                modelId,
+                                newModelGroupId,
+                                e
+                            );
+                        wrappedListener.onFailure(e);
+                    }
+                });
+        } else {
+            sdkClient
+                .updateDataObjectAsync(updateModelGroupRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    if (throwable == null) {
+                        ActionListener<UpdateResponse> updateListener = getUpdateResponseListener(modelId, wrappedListener);
+                        sdkClient
+                            .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                            .whenComplete((ur, ut) -> {
+                                if (ut == null) {
+                                    updateListener
+                                        .onResponse(
+                                            new UpdateResponse(
+                                                ur.shardId(),
+                                                ur.id(),
+                                                0,
+                                                0,
+                                                0,
+                                                ur.updated() ? Result.UPDATED : Result.CREATED
+                                            )
+                                        );
+                                } else {
+                                    Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
+                                    updateListener.onFailure(e);
+                                }
+                            });
+                    } else {
+                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log
+                            .error(
+                                "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+                                modelId,
+                                newModelGroupId,
+                                e
+                            );
+                        wrappedListener.onFailure(e);
+                    }
+                });
         }
     }
 
@@ -584,7 +638,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         return Integer.toString((int) modelGroupSourceMap.get(MLModelGroup.LATEST_VERSION_FIELD) + 1);
     }
 
-    private UpdateRequest createUpdateModelGroupRequest(
+    private UpdateDataObjectRequest createUpdateModelGroupRequest(
         Map<String, Object> modelGroupSourceMap,
         String modelGroupId,
         long seqNo,
@@ -593,17 +647,17 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
         modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-        UpdateRequest updateModelGroupRequest = new UpdateRequest();
-
-        updateModelGroupRequest
+        /* Old code here. TODO investigate if we need to add seqNo and primaryTerm to data object request
+        UpdateRequest updateModelGroupRequest = new UpdateRequest();        
+        updateModelGroupRequestx
             .index(ML_MODEL_GROUP_INDEX)
             .id(modelGroupId)
             .setIfSeqNo(seqNo)
             .setIfPrimaryTerm(primaryTerm)
             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
             .doc(modelGroupSourceMap);
-
-        return updateModelGroupRequest;
+        */
+        return new UpdateDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
     }
 
     private Boolean isModelDeployed(MLModelState mlModelState) {
