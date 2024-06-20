@@ -7,16 +7,15 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
@@ -26,6 +25,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -41,9 +41,14 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
-import org.opensearch.ml.utils.MLNodeUtils;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -57,30 +62,36 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final TransportService transportService;
     private final ActionFilters actionFilters;
     private Client client;
+    final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportUpdateModelGroupAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLModelGroupManager mlModelGroupManager
+        MLModelGroupManager mlModelGroupManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUpdateModelGroupAction.NAME, transportService, actionFilters, MLUpdateModelGroupRequest::new);
         this.actionFilters = actionFilters;
         this.transportService = transportService;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -88,39 +99,69 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         MLUpdateModelGroupRequest updateModelGroupRequest = MLUpdateModelGroupRequest.fromActionRequest(request);
         MLUpdateModelGroupInput updateModelGroupInput = updateModelGroupRequest.getUpdateModelGroupInput();
         String modelGroupId = updateModelGroupInput.getModelGroupID();
+        String tenantId = updateModelGroupInput.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
         User user = RestActionUtils.getUserContext(client);
-        GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+            .index(ML_MODEL_GROUP_INDEX)
+            .id(modelGroupId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
-            client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
-                if (modelGroup.isExists()) {
-                    try (
-                        XContentParser parser = MLNodeUtils
-                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, modelGroup.getSourceAsBytesRef())
-                    ) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                            validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+            ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+
+            sdkClient
+                .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    log.debug("Completed Get Model group Request, id:{}", modelGroupId);
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        if (cause instanceof IndexNotFoundException) {
+                            log.error("Failed to get model group index", cause);
+                            wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
                         } else {
-                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                            log.error("Failed to get ML group {}", modelGroupId, cause);
+                            wrappedListener.onFailure(cause);
                         }
-                        updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, wrappedListener, user);
-                    } catch (Exception e) {
-                        log.error("Failed to parse ml model group" + modelGroup.getId(), e);
-                        wrappedListener.onFailure(e);
+                    } else {
+                        if (r != null && r.parser().isPresent()) {
+                            try {
+                                XContentParser parser = r.parser().get();
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+                                if (TenantAwareHelper
+                                    .validateTenantResource(
+                                        mlFeatureEnabledSetting,
+                                        tenantId,
+                                        mlModelGroup.getTenantId(),
+                                        wrappedListener
+                                    )) {
+                                    if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                        validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                    } else {
+                                        validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                    }
+                                    updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+                                }
+                            } catch (Exception e) {
+                                log.error("Failed to parse ml connector {}", r.id(), e);
+                                wrappedListener.onFailure(e);
+                            }
+                        } else {
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "Failed to find model group with the provided model group id: " + modelGroupId,
+                                        RestStatus.NOT_FOUND
+                                    )
+                                );
+                        }
                     }
-                } else {
-                    wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
-                }
-            }, e -> {
-                if (e instanceof IndexNotFoundException) {
-                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
-                } else {
-                    logException("Failed to get model group", e, log);
-                    wrappedListener.onFailure(e);
-                }
-            }));
+                });
         } catch (Exception e) {
             logException("Failed to Update model group", e, log);
             listener.onFailure(e);
@@ -158,9 +199,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 if (modelGroups != null
                     && modelGroups.getHits().getTotalHits() != null
                     && modelGroups.getHits().getTotalHits().value != 0) {
-                    Iterator<SearchHit> iterator = modelGroups.getHits().iterator();
-                    while (iterator.hasNext()) {
-                        String id = iterator.next().getId();
+                    for (SearchHit documentFields : modelGroups.getHits()) {
+                        String id = documentFields.getId();
                         listener
                             .onFailure(
                                 new IllegalArgumentException(
@@ -188,7 +228,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         UpdateRequest updateModelGroupRequest = new UpdateRequest();
         updateModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId).doc(source);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             client
                 .update(
                     updateModelGroupRequest,
@@ -196,7 +236,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                         if (e instanceof IndexNotFoundException) {
                             wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                         } else {
-                            log.error("Failed to update model group", e, log);
+                            log.error("Failed to update model group {}", modelGroupId, e);
                             wrappedListener.onFailure(new MLValidationException("Failed to update Model Group"));
                         }
                     })

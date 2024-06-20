@@ -24,21 +24,26 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLModelGroupDeleteRequest extends ActionRequest {
     @Getter
     String modelGroupId;
+    @Getter
+    String tenantId;
 
     @Builder
-    public MLModelGroupDeleteRequest(String modelGroupId) {
+    public MLModelGroupDeleteRequest(String modelGroupId, String tenantId) {
         this.modelGroupId = modelGroupId;
+        this.tenantId = tenantId;
     }
 
     public MLModelGroupDeleteRequest(StreamInput input) throws IOException {
         super(input);
         this.modelGroupId = input.readString();
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(modelGroupId);
+        output.writeOptionalString(tenantId);
     }
 
     @Override

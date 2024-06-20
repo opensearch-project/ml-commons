@@ -24,6 +24,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 @Getter
 public class MLModelGroup implements ToXContentObject {
@@ -52,6 +53,7 @@ public class MLModelGroup implements ToXContentObject {
 
     private Instant createdTime;
     private Instant lastUpdatedTime;
+    private String tenantId;
 
 
     @Builder(toBuilder = true)
@@ -59,7 +61,7 @@ public class MLModelGroup implements ToXContentObject {
                         List<String> backendRoles, User owner, String access,
                         String modelGroupId,
                         Instant createdTime,
-                        Instant lastUpdatedTime) {
+                        Instant lastUpdatedTime, String tenantId) {
         this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
         this.latestVersion = latestVersion;
@@ -69,6 +71,7 @@ public class MLModelGroup implements ToXContentObject {
         this.modelGroupId = modelGroupId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
+        this.tenantId = tenantId;
     }
 
 
@@ -88,6 +91,8 @@ public class MLModelGroup implements ToXContentObject {
         modelGroupId = input.readOptionalString();
         createdTime = input.readOptionalInstant();
         lastUpdatedTime = input.readOptionalInstant();
+        // TODO Add BWC check
+        tenantId = input.readOptionalString();
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -110,6 +115,8 @@ public class MLModelGroup implements ToXContentObject {
         out.writeOptionalString(modelGroupId);
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdatedTime);
+        // TODO check BWC
+        out.writeOptionalString(tenantId);
     }
 
     @Override
@@ -138,6 +145,9 @@ public class MLModelGroup implements ToXContentObject {
         if (lastUpdatedTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -152,6 +162,7 @@ public class MLModelGroup implements ToXContentObject {
         String modelGroupId = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -190,6 +201,8 @@ public class MLModelGroup implements ToXContentObject {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case TENANT_ID:
+                    tenantId = parser.textOrNull();
                 default:
                     parser.skipChildren();
                     break;
@@ -205,6 +218,7 @@ public class MLModelGroup implements ToXContentObject {
                 .modelGroupId(modelGroupId)
                 .createdTime(createdTime)
                 .lastUpdatedTime(lastUpdateTime)
+                .tenantId(tenantId)
                 .build();
     }
 

@@ -220,7 +220,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     )
             ));
         } catch (Exception e) {
-            log.error("Failed to update ML model for " + modelId, e);
+            log.error("Failed to update ML model for {}", modelId, e);
             actionListener.onFailure(e);
         }
     }
