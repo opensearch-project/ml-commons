@@ -5,10 +5,17 @@
 
 package org.opensearch.ml.plugin;
 
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONVERSATION_INTERACTIONS_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONVERSATION_META_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.nio.file.Path;
@@ -38,6 +45,7 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.indices.SystemIndexDescriptor;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
@@ -284,6 +292,7 @@ import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
+import org.opensearch.plugins.SystemIndexPlugin;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
@@ -310,7 +319,8 @@ public class MachineLearningPlugin extends Plugin
         SearchPlugin,
         SearchPipelinePlugin,
         ExtensiblePlugin,
-        IngestPlugin {
+        IngestPlugin,
+        SystemIndexPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -1014,5 +1024,24 @@ public class MachineLearningPlugin extends Plugin
                 new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client, xContentRegistry)
             );
         return Collections.unmodifiableMap(processors);
+    }
+
+    @Override
+    public Collection<SystemIndexDescriptor> getSystemIndexDescriptors(Settings settings) {
+        List<SystemIndexDescriptor> systemIndexDescriptors = new ArrayList<>();
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_AGENT_INDEX, "ML Commons Agent Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONFIG_INDEX, "ML Commons Configuration Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONNECTOR_INDEX, "ML Commons Connector Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONTROLLER_INDEX, "ML Commons Controller Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MODEL_GROUP_INDEX, "ML Commons Model Group Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MODEL_INDEX, "ML Commons Model Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_TASK_INDEX, "ML Commons Task Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONVERSATION_META_INDEX, "ML Commons Conversation Meta Index"));
+        systemIndexDescriptors
+            .add(new SystemIndexDescriptor(ML_CONVERSATION_INTERACTIONS_INDEX, "ML Commons Conversation Interactions Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MEMORY_META_INDEX, "ML Commons Memory Meta Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MEMORY_MESSAGE_INDEX, "ML Commons Memory Message Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_STOP_WORDS_INDEX, "ML Commons Stop Words Index"));
+        return systemIndexDescriptors;
     }
 }
