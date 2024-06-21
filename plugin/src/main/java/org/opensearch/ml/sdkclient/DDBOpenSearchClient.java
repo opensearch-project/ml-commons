@@ -12,13 +12,13 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.Strings;
@@ -110,14 +110,34 @@ public class DDBOpenSearchClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 final GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
+                String source;
+                boolean found;
                 if (getItemResponse == null || getItemResponse.item() == null || getItemResponse.item().isEmpty()) {
-                    return new GetDataObjectResponse.Builder().id(request.id()).parser(Optional.empty()).build();
+                    found = false;
+                    source = null;
+                } else {
+                    found = true;
+                    source = getItemResponse.item().get(SOURCE).s();
                 }
-
-                String source = getItemResponse.item().get(SOURCE).s();
+                String simulatedGetResponse = "{\"_index\":\""
+                    + request.index()
+                    + "\",\"_id\":\""
+                    + request.id()
+                    + "\",\"_version\":1,\"_seq_no\":-2,\"_primary_term\":0,\"found\":"
+                    + found
+                    + ",\"_source\":"
+                    + source
+                    + "}";
                 XContentParser parser = JsonXContent.jsonXContent
-                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, source);
-                return new GetDataObjectResponse.Builder().id(request.id()).parser(Optional.of(parser)).build();
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, simulatedGetResponse);
+                // This would consume parser content so we need to create a new parser for the map
+                Map<String, Object> sourceAsMap = GetResponse
+                    .fromXContent(
+                        JsonXContent.jsonXContent
+                            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, simulatedGetResponse)
+                    )
+                    .getSourceAsMap();
+                return new GetDataObjectResponse.Builder().id(request.id()).parser(parser).source(sourceAsMap).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);

@@ -20,7 +20,6 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -47,7 +46,6 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -60,9 +58,6 @@ import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import jakarta.json.stream.JsonGenerator;
 import jakarta.json.stream.JsonParser;
 import lombok.extern.log4j.Log4j2;
@@ -73,10 +68,11 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RemoteClusterIndicesClient implements SdkClient {
 
-    private OpenSearchClient openSearchClient;
-
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
+
+    private OpenSearchClient openSearchClient;
+    private JsonpMapper mapper;
 
     /**
      * Instantiate this object with an OpenSearch Java client.
@@ -84,6 +80,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
      */
     public RemoteClusterIndicesClient(OpenSearchClient openSearchClient) {
         this.openSearchClient = openSearchClient;
+        this.mapper = openSearchClient._transport().jsonpMapper();
     }
 
     @Override
@@ -112,18 +109,13 @@ public class RemoteClusterIndicesClient implements SdkClient {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
                 log.info("Getting {} from {}", request.id(), request.index());
-                @SuppressWarnings("rawtypes")
-                GetResponse<Map> getResponse = openSearchClient.get(getRequest, Map.class);
-                if (!getResponse.found()) {
-                    return new GetDataObjectResponse.Builder().id(getResponse.id()).build();
-                }
-                // Since we use the JacksonJsonBMapper we know this is String-Object map
-                @SuppressWarnings("unchecked")
+                GetResponse<Map<String, Object>> getResponse = openSearchClient.get(getRequest, MAP_DOCTYPE);
                 Map<String, Object> source = getResponse.source();
-                String json = new ObjectMapper().setSerializationInclusion(Include.NON_NULL).writeValueAsString(source);
-                XContentParser parser = JsonXContent.jsonXContent
-                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
-                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).source(source).build();
+                return new GetDataObjectResponse.Builder()
+                    .id(getResponse.id())
+                    .parser(jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, toJson(getResponse)))
+                    .source(source)
+                    .build();
             } catch (IOException e) {
                 log.error("Error getting data object {} from {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on XContent parser creation error
@@ -206,7 +198,6 @@ public class RemoteClusterIndicesClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
-                JsonpMapper mapper = openSearchClient._transport().jsonpMapper();
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
                 searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).build();
@@ -215,8 +206,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Search returned {} hits", searchResponse.hits().total().value());
                 return new SearchDataObjectResponse.Builder()
                     .parser(
-                        jsonXContent
-                            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, toJson(searchResponse, mapper))
+                        jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, toJson(searchResponse))
                     )
                     .build();
             } catch (IOException e) {
@@ -230,7 +220,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
         }), executor);
     }
 
-    private String toJson(JsonpSerializable obj, JsonpMapper mapper) {
+    private String toJson(JsonpSerializable obj) {
         StringWriter stringWriter = new StringWriter();
         try (JsonGenerator generator = mapper.jsonProvider().createGenerator(stringWriter)) {
             mapper.serialize(obj, generator);
