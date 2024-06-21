@@ -50,6 +50,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -305,6 +306,29 @@ public class DeleteAgentTransportActionTests {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to fetch agent", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_GetIndexNotFoundFails() throws InterruptedException {
+        String agentId = "test-agent-id";
+        ActionListener<DeleteResponse> actionListener = mock(ActionListener.class);
+        MLAgentDeleteRequest deleteRequest = new MLAgentDeleteRequest(agentId, null);
+
+        Task task = mock(Task.class);
+        Exception expectedException = new IndexNotFoundException("no agent index");
+
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onFailure(expectedException);
+        when(client.get(any(GetRequest.class))).thenReturn(getFuture);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to get agent index", argumentCaptor.getValue().getMessage());
     }
 
     @Test

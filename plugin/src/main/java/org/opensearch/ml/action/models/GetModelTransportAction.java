@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
@@ -14,6 +15,7 @@ import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -21,6 +23,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -110,64 +113,81 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                 .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
                     if (throwable == null) {
-                        if (r != null && r.parser().isPresent()) {
-                            try (XContentParser parser = r.parser().get()) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
-                                Boolean isHidden = (Boolean) r.source().get(IS_HIDDEN_FIELD);
-                                MLModel mlModel = MLModel.parse(parser, algorithmName);
-                                if (!TenantAwareHelper
-                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
-                                    return;
-                                }
-                                if (isHidden != null && isHidden) {
-                                    if (isSuperAdmin || !mlModelGetRequest.isUserInitiatedGetRequest()) {
-                                        wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
+                        try {
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                            if (gr != null && gr.isExists()) {
+                                try (
+                                    XContentParser parser = jsonXContent
+                                        .createParser(
+                                            NamedXContentRegistry.EMPTY,
+                                            LoggingDeprecationHandler.INSTANCE,
+                                            gr.getSourceAsString()
+                                        )
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
+                                    Boolean isHidden = (Boolean) r.source().get(IS_HIDDEN_FIELD);
+                                    MLModel mlModel = MLModel.parse(parser, algorithmName);
+                                    if (!TenantAwareHelper
+                                        .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
+                                        return;
+                                    }
+                                    if (isHidden != null && isHidden) {
+                                        if (isSuperAdmin || !mlModelGetRequest.isUserInitiatedGetRequest()) {
+                                            wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "User doesn't have privilege to perform this operation on this model",
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+                                        }
                                     } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "User doesn't have privilege to perform this operation on this model",
-                                                    RestStatus.FORBIDDEN
-                                                )
+                                        modelAccessControlHelper
+                                            .validateModelGroupAccess(
+                                                user,
+                                                mlModel.getModelGroupId(),
+                                                client,
+                                                ActionListener.wrap(access -> {
+                                                    if (!access) {
+                                                        wrappedListener
+                                                            .onFailure(
+                                                                new OpenSearchStatusException(
+                                                                    "User doesn't have privilege to perform this operation on this model",
+                                                                    RestStatus.FORBIDDEN
+                                                                )
+                                                            );
+                                                    } else {
+                                                        log.debug("Completed Get Model Request, id:{}", modelId);
+                                                        Connector connector = mlModel.getConnector();
+                                                        if (connector != null) {
+                                                            connector.removeCredential();
+                                                        }
+                                                        wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
+                                                    }
+                                                }, e -> {
+                                                    log.error("Failed to validate Access for Model Id {}", modelId, e);
+                                                    wrappedListener.onFailure(e);
+                                                })
                                             );
                                     }
-                                } else {
-                                    modelAccessControlHelper
-                                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                            if (!access) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User doesn't have privilege to perform this operation on this model",
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                            } else {
-                                                log.debug("Completed Get Model Request, id:{}", modelId);
-                                                Connector connector = mlModel.getConnector();
-                                                if (connector != null) {
-                                                    connector.removeCredential();
-                                                }
-                                                wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
-                                            }
-                                        }, e -> {
-                                            log.error("Failed to validate Access for Model Id {}", modelId, e);
-                                            wrappedListener.onFailure(e);
-                                        }));
+                                } catch (Exception e) {
+                                    log.error("Failed to parse ml model {}", r.id(), e);
+                                    wrappedListener.onFailure(e);
                                 }
-                            } catch (Exception e) {
-                                log.error("Failed to parse ml model {}", r.id(), e);
-                                wrappedListener.onFailure(e);
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Failed to find model with the provided model id: " + modelId,
+                                            RestStatus.NOT_FOUND
+                                        )
+                                    );
                             }
-                        } else {
-                            wrappedListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        "Failed to find model with the provided model id: " + modelId,
-                                        RestStatus.NOT_FOUND
-                                    )
-                                );
+                        } catch (Exception e) {
+                            wrappedListener.onFailure(e);
                         }
                     } else {
                         Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);

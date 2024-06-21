@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -46,6 +48,7 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -101,6 +104,7 @@ import org.opensearch.transport.TransportService;
 import com.google.common.collect.ImmutableList;
 
 public class UpdateModelTransportActionTests extends OpenSearchTestCase {
+
     @Mock
     ThreadPool threadPool;
 
@@ -138,7 +142,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
     @Mock
@@ -220,9 +223,14 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .put(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.getKey(), true)
             .build();
 
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX);
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+            ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED
+        );
 
         InetAddress inetAddress1 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 1 });
         InetAddress inetAddress2 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 2 });
@@ -261,6 +269,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+
+        modelAccessControlHelper = spy(new ModelAccessControlHelper(clusterService, settings));
 
         transportUpdateModelAction = spy(
             new UpdateModelTransportAction(
@@ -301,6 +311,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             )
             .build();
 
+        // TODO eventually remove
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
@@ -308,12 +319,29 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("test_model_group_id"), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(4);
+            listener.onResponse(true);
+            return null;
+        })
+            .when(modelAccessControlHelper)
+            .validateModelGroupAccess(any(), eq("test_model_group_id"), any(), any(SdkClient.class), isA(ActionListener.class));
+
+        // TODO eventually remove
+        doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
         })
             .when(modelAccessControlHelper)
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(4);
+            listener.onResponse(true);
+            return null;
+        })
+            .when(modelAccessControlHelper)
+            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(SdkClient.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
@@ -327,11 +355,22 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(updateResponse);
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
+
+        // TODO eventually remove
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(localModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(localModel);
+            return null;
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         MLModelGroup modelGroup = MLModelGroup
             .builder()
@@ -353,6 +392,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelGroupManager).getModelGroupResponse(eq("updated_test_model_group_id"), isA(ActionListener.class));
     }
 
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
+    }
+
     @Test
     public void testUpdateLocalModelSuccess() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
@@ -360,83 +404,129 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
-        verify(actionListener).onResponse(updateResponse);
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelWithoutRegisterToNewModelGroupSuccess() {
+    public void testUpdateModelWithoutRegisterToNewModelGroupSuccess() throws InterruptedException {
         updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelWithRegisterToSameModelGroupSuccess() {
+    public void testUpdateModelWithRegisterToSameModelGroupSuccess() throws InterruptedException {
         updateLocalModelRequest.getUpdateModelInput().setModelGroupId("test_model_group_id");
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateRemoteModelWithLocalInformationSuccess() {
+    public void testUpdateRemoteModelWithLocalInformationSuccess() throws InterruptedException {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateExternalRemoteModelWithExternalRemoteInformationSuccess() {
+    public void testUpdateExternalRemoteModelWithExternalRemoteInformationSuccess() throws InterruptedException {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
-        verify(actionListener).onResponse(updateResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateInternalRemoteModelWithInternalRemoteInformationSuccess() {
+    public void testUpdateInternalRemoteModelWithInternalRemoteInformationSuccess() throws InterruptedException {
         MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL");
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
-        verify(actionListener).onResponse(updateResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateHiddenRemoteModelWithRemoteInformationSuccess() {
+    public void testUpdateHiddenRemoteModelWithRemoteInformationSuccess() throws InterruptedException {
         MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
         doReturn(true).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
-        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
     public void testUpdateHiddenRemoteModelPermissionError() {
         MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
         doReturn(false).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -448,10 +538,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateRemoteModelWithNoExternalConnectorFound() {
         MLModel remoteModelWithInternalConnector = prepareUnsupportedMLModel(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModelWithInternalConnector);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -466,10 +556,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlNoPermission() {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
@@ -490,10 +580,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlOtherException() {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL");
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
@@ -514,14 +604,18 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithModelAccessControlNoPermission() {
+    public void testUpdateModelWithModelAccessControlNoPermission() throws InterruptedException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(SdkClient.class), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -615,10 +709,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithModelNotFound() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(null);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -629,10 +723,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithFunctionNameFieldNotFound() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModelWithNullFunctionName);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -659,10 +753,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateLocalModelWithUnsupportedFunction() {
         MLModel localModelWithUnsupportedFunction = prepareUnsupportedMLModel(FunctionName.KMEANS);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(localModelWithUnsupportedFunction);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -671,37 +765,42 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateRequestDocIOException() throws IOException {
+    public void testUpdateRequestDocIOException() throws IOException, InterruptedException {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
         doReturn(MLModelState.REGISTERED).when(mockModel).getModelState();
 
         doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to parse data object to update in index .plugins-ml-model", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void testUpdateRequestDocInRegisterToNewModelGroupIOException() throws IOException {
+    public void testUpdateRequestDocInRegisterToNewModelGroupIOException() throws IOException, InterruptedException {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
@@ -735,39 +834,51 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelGroupManager).getModelGroupResponse(eq("mockUpdateModelGroupId"), isA(ActionListener.class));
 
         doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
-        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to parse data object to update in index .plugins-ml-model", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void testGetUpdateResponseListenerWithVersionBumpWrongStatus() {
+    public void testGetUpdateResponseListenerWithVersionBumpWrongStatus() throws InterruptedException {
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateWrongResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(updateWrongResponse);
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateWrongResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateWrongResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateWrongResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testGetUpdateResponseListenerWithVersionBumpOtherException() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException(
-                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
-                    )
-                );
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+    public void testGetUpdateResponseListenerWithVersionBumpOtherException() throws InterruptedException {
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future
+            .onFailure(
+                new RuntimeException(
+                    "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                )
+            );
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -777,46 +888,58 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetUpdateResponseListenerWithNullUpdateResponse() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+    public void testGetUpdateResponseListenerWithNullUpdateResponse() throws InterruptedException {
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(null);
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to update ML model: test_model_id", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void testGetUpdateResponseListenerWrongStatus() {
+    public void testGetUpdateResponseListenerWrongStatus() throws InterruptedException {
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateWrongResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
         updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateWrongResponse);
+
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(updateWrongResponse);
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateWrongResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateWrongResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testGetUpdateResponseListenerOtherException() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException(
-                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
-                    )
-                );
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+    public void testGetUpdateResponseListenerOtherException() throws InterruptedException {
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future
+            .onFailure(
+                new RuntimeException(
+                    "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                )
+            );
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
+
         updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -829,10 +952,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateModelStateDeployingException() {
         MLModel testDeployingModel = prepareMLModel("TEXT_EMBEDDING", MLModelState.DEPLOYING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testDeployingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -847,10 +970,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateModelStateLoadingException() {
         MLModel testDeployingModel = prepareMLModel("TEXT_EMBEDDING", MLModelState.LOADING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testDeployingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -862,13 +985,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelStateDeployedSuccess() {
+    public void testUpdateModelCacheModelStateDeployedSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -878,18 +1001,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelWithIsModelEnabledSuccess() {
+    public void testUpdateModelCacheModelWithIsModelEnabledSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -901,18 +1032,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
         testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
         testUpdateModelCacheRequest.getUpdateModelInput().setIsEnabled(true);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelWithoutUpdateConnectorWithRateLimiterSuccess() {
+    public void testUpdateModelCacheModelWithoutUpdateConnectorWithRateLimiterSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -925,18 +1064,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
         testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
         testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelWithRateLimiterSuccess() {
+    public void testUpdateModelCacheModelWithRateLimiterSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -948,36 +1095,52 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
         testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelWithPartialRateLimiterSuccess() {
+    public void testUpdateModelWithPartialRateLimiterSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").build();
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
         testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
         testUpdateModelCacheRequest.getUpdateModelInput().setConnector(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelWithPartialRateLimiterSuccess() {
+    public void testUpdateModelCacheModelWithPartialRateLimiterSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -989,24 +1152,30 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
         testUpdateModelCacheRequest.getUpdateModelInput().setRateLimiter(rateLimiter);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheUpdateResponseListenerWithNullUpdateResponse() {
+    public void testUpdateModelCacheUpdateResponseListenerWithNullUpdateResponse() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(null);
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1017,7 +1186,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -1025,13 +1198,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelWithUndeploySuccessEmptyFailures() {
+    public void testUpdateModelCacheModelWithUndeploySuccessEmptyFailures() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1042,21 +1215,29 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateControllerWithUndeploySuccessPartiallyFailures() {
+    public void testUpdateControllerWithUndeploySuccessPartiallyFailures() throws InterruptedException {
         List<FailedNodeException> failures = List
             .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
 
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1067,7 +1248,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -1078,13 +1263,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateControllerWithUndeployNullResponse() {
+    public void testUpdateControllerWithUndeployNullResponse() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1094,7 +1279,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -1104,13 +1294,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateControllerWithUndeployOtherException() {
+    public void testUpdateControllerWithUndeployOtherException() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> actionListener = invocation.getArgument(2);
@@ -1120,7 +1310,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -1128,7 +1322,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelStateDeployedWrongStatus() {
+    public void testUpdateModelCacheModelStateDeployedWrongStatus() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
         doAnswer(invocation -> {
@@ -1138,10 +1332,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1151,18 +1345,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateWrongResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelStateDeployedUpdateModelCacheException() {
+    public void testUpdateModelCacheModelStateDeployedUpdateModelCacheException() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1177,7 +1379,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -1187,24 +1394,22 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelStateDeployedUpdateException() {
+    public void testUpdateModelCacheModelStateDeployedUpdateException() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException(
-                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
-                    )
-                );
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future
+            .onFailure(
+                new RuntimeException(
+                    "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                )
+            );
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1214,7 +1419,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -1224,13 +1434,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelRegisterToNewModelGroupSuccess() {
+    public void testUpdateModelCacheModelRegisterToNewModelGroupSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1239,25 +1449,31 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelRegisterToNewModelGroupWrongStatus() {
+    public void testUpdateModelCacheModelRegisterToNewModelGroupWrongStatus() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateWrongResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(updateWrongResponse);
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1266,18 +1482,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateWrongResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateWrongResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateWrongResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelRegisterToNewModelGroupUpdateModelCacheException() {
+    public void testUpdateModelCacheModelRegisterToNewModelGroupUpdateModelCacheException() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1291,7 +1515,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -1301,24 +1530,22 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelRegisterToNewModelGroupUpdateException() {
+    public void testUpdateModelCacheModelRegisterToNewModelGroupUpdateException() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException(
-                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
-                    )
-                );
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
+        future
+            .onFailure(
+                new RuntimeException(
+                    "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                )
+            );
+        when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1327,7 +1554,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -1337,13 +1569,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelCacheModelStateLoadedSuccess() {
+    public void testUpdateModelCacheModelStateLoadedSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.LOADED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1353,18 +1585,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelStatePartiallyDeployedSuccess() {
+    public void testUpdateModelCacheModelStatePartiallyDeployedSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.PARTIALLY_DEPLOYED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1374,18 +1614,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     @Test
-    public void testUpdateModelCacheModelStatePartiallyLoadedSuccess() {
+    public void testUpdateModelCacheModelStatePartiallyLoadedSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.PARTIALLY_LOADED);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1395,8 +1643,16 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
         testUpdateModelCacheRequest.getUpdateModelInput().setModelGroupId(null);
-        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, testUpdateModelCacheRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
+        assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
     }
 
     // TODO: Add UT to make sure that version incremented successfully.
@@ -1536,10 +1792,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
@@ -1561,10 +1817,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();

@@ -7,6 +7,7 @@
 
 package org.opensearch.ml.helper;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
@@ -18,10 +19,12 @@ import java.util.Optional;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
@@ -168,41 +171,53 @@ public class ModelAccessControlHelper {
                 .getDataObjectAsync(getModelGroupRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
                     if (throwable == null) {
-                        if (r != null && r.parser().isPresent()) {
-                            try (XContentParser parser = r.parser().get()) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                                AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
-                                if (mlModelGroup.getOwner() == null) {
-                                    // previous security plugin not enabled, model defaults to public.
-                                    wrappedListener.onResponse(true);
-                                } else if (AccessMode.RESTRICTED == modelAccessMode) {
-                                    if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
-                                        throw new IllegalStateException("Backend roles shouldn't be null");
-                                    } else {
-                                        wrappedListener
-                                            .onResponse(
-                                                Optional
-                                                    .ofNullable(userBackendRoles)
-                                                    .orElse(ImmutableList.of())
-                                                    .stream()
-                                                    .anyMatch(mlModelGroup.getBackendRoles()::contains)
-                                            );
-                                    }
-                                } else if (AccessMode.PUBLIC == modelAccessMode) {
-                                    wrappedListener.onResponse(true);
-                                } else if (AccessMode.PRIVATE == modelAccessMode) {
-                                    if (isOwner(mlModelGroup.getOwner(), user))
+                        try {
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                            if (gr != null && gr.isExists()) {
+                                try (
+                                    XContentParser parser = jsonXContent
+                                        .createParser(
+                                            NamedXContentRegistry.EMPTY,
+                                            LoggingDeprecationHandler.INSTANCE,
+                                            gr.getSourceAsString()
+                                        )
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+                                    AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
+                                    if (mlModelGroup.getOwner() == null) {
+                                        // previous security plugin not enabled, model defaults to public.
                                         wrappedListener.onResponse(true);
-                                    else
-                                        wrappedListener.onResponse(false);
+                                    } else if (AccessMode.RESTRICTED == modelAccessMode) {
+                                        if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
+                                            throw new IllegalStateException("Backend roles shouldn't be null");
+                                        } else {
+                                            wrappedListener
+                                                .onResponse(
+                                                    Optional
+                                                        .ofNullable(userBackendRoles)
+                                                        .orElse(ImmutableList.of())
+                                                        .stream()
+                                                        .anyMatch(mlModelGroup.getBackendRoles()::contains)
+                                                );
+                                        }
+                                    } else if (AccessMode.PUBLIC == modelAccessMode) {
+                                        wrappedListener.onResponse(true);
+                                    } else if (AccessMode.PRIVATE == modelAccessMode) {
+                                        if (isOwner(mlModelGroup.getOwner(), user))
+                                            wrappedListener.onResponse(true);
+                                        else
+                                            wrappedListener.onResponse(false);
+                                    }
+                                } catch (Exception e) {
+                                    log.error("Failed to parse ml model group");
+                                    wrappedListener.onFailure(e);
                                 }
-                            } catch (Exception e) {
-                                log.error("Failed to parse ml model group");
-                                wrappedListener.onFailure(e);
+                            } else {
+                                wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                             }
-                        } else {
-                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        } catch (Exception e) {
+                            listener.onFailure(e);
                         }
                     } else {
                         Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);

@@ -469,8 +469,9 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
     }
 
+    // Remove when all calls to the non-sdkclient method are migrated
     @Test
-    public void test_SuccessGetModelGroup() throws IOException {
+    public void test_SuccessGetModelGroup_NoSdkClient() throws IOException {
         MLModelGroup modelGroup = MLModelGroup
             .builder()
             .modelGroupId("testModelGroupID")
@@ -491,6 +492,34 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
 
         mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
         verify(modelGroupListener).onResponse(getResponse);
+    }
+
+    @Test
+    public void test_SuccessGetModelGroup() throws IOException, InterruptedException {
+        MLModelGroup modelGroup = MLModelGroup
+            .builder()
+            .modelGroupId("testModelGroupID")
+            .name("test")
+            .description("this is test group")
+            .latestVersion(1)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .owner(new User())
+            .access(AccessMode.PUBLIC.name())
+            .build();
+
+        GetResponse getResponse = prepareGetResponse(modelGroup);
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<GetResponse> latchedActionListener = new LatchedActionListener<>(modelGroupListener, latch);
+        mlModelGroupManager.getModelGroupResponse(sdkClient, "testModelGroupID", latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<GetResponse> argumentCaptor = ArgumentCaptor.forClass(GetResponse.class);
+        verify(modelGroupListener).onResponse(argumentCaptor.capture());
+        assertEquals(getResponse.getSourceAsString(), argumentCaptor.getValue().getSourceAsString());
     }
 
     @Test

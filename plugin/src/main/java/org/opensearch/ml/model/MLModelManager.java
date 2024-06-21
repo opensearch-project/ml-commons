@@ -6,6 +6,7 @@
 package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.XContentType.JSON;
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
@@ -75,6 +76,7 @@ import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -88,6 +90,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -1604,20 +1607,28 @@ public class MLModelManager {
             .build();
         sdkClient.getDataObjectAsync(getRequest, client.threadPool().executor(GENERAL_THREAD_POOL)).whenComplete((r, throwable) -> {
             if (throwable == null) {
-                if (r != null && r.parser().isPresent()) {
-                    try (XContentParser parser = r.parser().get()) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
+                try {
+                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    if (gr != null && gr.isExists()) {
+                        try (
+                            XContentParser parser = jsonXContent
+                                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
+                        ) {
+                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
 
-                        MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        mlModel.setModelId(modelId);
-                        listener.onResponse(mlModel);
-                    } catch (Exception e) {
-                        log.error("Failed to parse ml task" + r.id(), e);
-                        listener.onFailure(e);
+                            MLModel mlModel = MLModel.parse(parser, algorithmName);
+                            mlModel.setModelId(modelId);
+                            listener.onResponse(mlModel);
+                        } catch (Exception e) {
+                            log.error("Failed to parse ml task" + r.id(), e);
+                            listener.onFailure(e);
+                        }
+                    } else {
+                        listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                     }
-                } else {
-                    listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                } catch (Exception e) {
+                    listener.onFailure(e);
                 }
             } else {
                 Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);

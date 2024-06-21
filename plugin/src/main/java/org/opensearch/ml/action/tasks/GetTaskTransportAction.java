@@ -99,7 +99,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         }
                     } else {
                         try {
-                            GetResponse gr = GetResponse.fromXContent(r.parser());
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
                             if (gr != null && gr.isExists()) {
                                 try (
                                     XContentParser parser = jsonXContent

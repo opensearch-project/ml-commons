@@ -107,8 +107,8 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                         }
                     } else {
                         try {
-                            GetResponse gr = GetResponse.fromXContent(r.parser());
-                            if (gr.isExists()) {
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                            if (gr != null && gr.isExists()) {
                                 try (
                                     XContentParser parser = jsonXContent
                                         .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())

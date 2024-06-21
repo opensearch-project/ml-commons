@@ -108,7 +108,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                         }
                     } else {
                         try {
-                            GetResponse gr = GetResponse.fromXContent(r.parser());
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
                             if (gr.isExists()) {
                                 try (
                                     XContentParser parser = jsonXContent
