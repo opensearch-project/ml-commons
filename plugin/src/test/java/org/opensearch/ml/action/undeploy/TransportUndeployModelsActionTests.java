@@ -8,6 +8,7 @@
 package org.opensearch.ml.action.undeploy;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -16,12 +17,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -34,6 +39,8 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
@@ -49,10 +56,14 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -79,6 +90,8 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     @Mock
     Client client;
 
+    SdkClient sdkClient;
+
     @Mock
     NamedXContentRegistry xContentRegistry;
 
@@ -103,15 +116,29 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     @Mock
     Task task;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     TransportUndeployModelsAction transportUndeployModelsAction;
 
-    private String[] modelIds = { "modelId1" };
+    private final String[] modelIds = { "modelId1" };
 
-    private String[] nodeIds = { "nodeId1", "nodeId2" };
+    private final String[] nodeIds = { "nodeId1", "nodeId2" };
 
-    private ActionListener<MLUndeployModelsResponse> actionListener = mock(ActionListener.class);
+    private final ActionListener<MLUndeployModelsResponse> actionListener = mock(ActionListener.class);
 
     ThreadContext threadContext;
+
+    private static final TestThreadPool testThreadPool = new TestThreadPool(
+        TransportUndeployModelsActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
@@ -129,12 +156,14 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
+                sdkClient,
                 settings,
                 xContentRegistry,
                 nodeFilter,
                 mlTaskDispatcher,
                 mlModelManager,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(true);
@@ -145,6 +174,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
+        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
         MLModel mlModel = MLModel
             .builder()
             .user(User.parse(USER_STRING))
@@ -162,6 +192,11 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             listener.onResponse(mlModel);
             return null;
         }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+    }
+
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
     public void testHiddenModelSuccess() {
@@ -193,7 +228,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
         doReturn(true).when(transportUndeployModelsAction).isSuperAdminUserWrapper(clusterService, client);
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLUndeployModelsResponse.class));
     }
@@ -227,7 +262,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
         doReturn(false).when(transportUndeployModelsAction).isSuperAdminUserWrapper(clusterService, client);
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -249,7 +284,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             listener.onResponse(response);
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLUndeployModelsResponse.class));
     }
@@ -268,7 +303,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             listener.onResponse(mlUndeployModelsResponse);
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(Exception.class));
     }
@@ -285,7 +320,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             listener.onFailure(new IllegalArgumentException());
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(IllegalArgumentException.class));
     }
@@ -296,21 +331,21 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(RuntimeException.class));
     }
 
     public void testDoExecute_validateAccess_exception() {
         doThrow(new RuntimeException("runtime exception")).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(RuntimeException.class));
     }
 
     public void testDoExecute_modelIds_moreThan1() {
         expectedException.expect(IllegalArgumentException.class);
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(new String[] { "modelId1", "modelId2" }, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(new String[] { "modelId1", "modelId2" }, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
     }
 }

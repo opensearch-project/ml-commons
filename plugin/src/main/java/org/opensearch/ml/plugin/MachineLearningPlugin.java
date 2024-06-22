@@ -715,8 +715,12 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
         RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction(mlFeatureEnabledSetting);
-        RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
-        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
+        RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction(mlFeatureEnabledSetting);
+        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(
+            clusterService,
+            settings,
+            mlFeatureEnabledSetting
+        );
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction(mlFeatureEnabledSetting);

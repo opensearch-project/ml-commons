@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.util.*;
 
@@ -15,7 +16,10 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -25,6 +29,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -41,12 +46,25 @@ public class RestMLDeployModelActionTests extends OpenSearchTestCase {
     private NodeClient client;
     private ThreadPool threadPool;
 
+    Settings settings;
+
+    @Mock
+    private ClusterService clusterService;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Mock
     RestChannel channel;
 
     @Before
     public void setup() {
-        restMLDeployModelAction = new RestMLDeployModelAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        restMLDeployModelAction = new RestMLDeployModelAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -63,7 +81,7 @@ public class RestMLDeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLDeployModelAction mlDeployModel = new RestMLDeployModelAction();
+        RestMLDeployModelAction mlDeployModel = new RestMLDeployModelAction(mlFeatureEnabledSetting);
         assertNotNull(mlDeployModel);
     }
 

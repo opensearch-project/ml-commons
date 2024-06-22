@@ -193,6 +193,8 @@ public class MLSyncUpCron implements Runnable {
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
 
+    // TODO I need to come back to sync up cron job later to set the right tenant id. For now I'm just assigning null in the tenant id
+    // to unblock myself.
     private void undeployExpiredModels(
         Set<String> expiredModels,
         Map<String, Set<String>> modelWorkerNodes,
@@ -201,13 +203,14 @@ public class MLSyncUpCron implements Runnable {
         String[] targetNodeIds = getAllNodes(clusterService);
         MLUndeployModelsRequest mlUndeployModelsRequest = new MLUndeployModelsRequest(
             expiredModels.toArray(new String[expiredModels.size()]),
-            targetNodeIds
+            targetNodeIds,
+            null
         );
 
         client.execute(MLUndeployModelsAction.INSTANCE, mlUndeployModelsRequest, ActionListener.wrap(r -> {
             MLUndeployModelNodesResponse mlUndeployModelNodesResponse = r.getResponse();
-            if (mlUndeployModelNodesResponse.failures() != null && mlUndeployModelNodesResponse.failures().size() != 0) {
-                log.debug("Received failures in undeploying expired models", mlUndeployModelNodesResponse.failures());
+            if (mlUndeployModelNodesResponse.failures() != null && !mlUndeployModelNodesResponse.failures().isEmpty()) {
+                log.debug("Received failures in undeploying expired models {}", mlUndeployModelNodesResponse.failures());
             }
 
             mlIndicesHandler

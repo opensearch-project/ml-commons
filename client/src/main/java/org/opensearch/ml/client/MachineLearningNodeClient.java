@@ -142,7 +142,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         mlInput.setParameters(mlAlgoParams);
         switch (action) {
             case TRAIN:
-                boolean asyncTask = args.containsKey(ASYNC) ? (boolean) args.get(ASYNC) : false;
+                boolean asyncTask = args.containsKey(ASYNC) && (boolean) args.get(ASYNC);
                 train(mlInput, asyncTask, listener);
                 break;
             case PREDICT:
@@ -161,9 +161,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     @Override
     public void getModel(String modelId, ActionListener<MLModel> listener) {
-        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
-
-        client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, getMlGetModelResponseActionListener(listener));
+        getModel(modelId, null, listener);
     }
 
     @Override
@@ -177,39 +175,24 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLModelGetResponse> internalListener = ActionListener.wrap(predictionResponse -> {
             listener.onResponse(predictionResponse.getMlModel());
         }, listener::onFailure);
-        ActionListener<MLModelGetResponse> actionListener = wrapActionListener(internalListener, res -> {
-            MLModelGetResponse getResponse = MLModelGetResponse.fromActionResponse(res);
-            return getResponse;
-        });
-        return actionListener;
+        return wrapActionListener(internalListener, MLModelGetResponse::fromActionResponse);
     }
 
     @Override
     public void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener) {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).tenantId(tenantId).build();
 
-        client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 
     @Override
     public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
-        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
-
-        client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        deleteModel(modelId, null, listener);
     }
 
     @Override
     public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
-        client
-            .execute(
-                MLModelSearchAction.INSTANCE,
-                searchRequest,
-                ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
-            );
+        client.execute(MLModelSearchAction.INSTANCE, searchRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 
     @Override
@@ -241,9 +224,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     @Override
     public void getTask(String taskId, ActionListener<MLTask> listener) {
-        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
-
-        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, getMLTaskResponseActionListener(listener));
+        getTask(taskId, null, listener);
     }
 
     @Override
@@ -255,30 +236,19 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     @Override
     public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
-        MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId(taskId).build();
-
-        client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        deleteTask(taskId, null, listener);
     }
 
     @Override
     public void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener) {
         MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId(taskId).tenantId(tenantId).build();
 
-        client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 
     @Override
     public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
-        client
-            .execute(
-                MLTaskSearchAction.INSTANCE,
-                searchRequest,
-                ActionListener.wrap(searchResponse -> { listener.onResponse(searchResponse); }, listener::onFailure)
-            );
+        client.execute(MLTaskSearchAction.INSTANCE, searchRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 
     @Override
@@ -289,13 +259,23 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     @Override
     public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
-        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, false);
+        deploy(modelId, null, listener);
+    }
+
+    @Override
+    public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
+        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, tenantId, false);
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, getMlDeployModelResponseActionListener(listener));
     }
 
     @Override
     public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
-        MLUndeployModelsRequest undeployModelRequest = new MLUndeployModelsRequest(modelIds, nodeIds);
+        undeploy(modelIds, nodeIds, null, listener);
+    }
+
+    @Override
+    public void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener) {
+        MLUndeployModelsRequest undeployModelRequest = new MLUndeployModelsRequest(modelIds, nodeIds, tenantId);
         client.execute(MLUndeployModelsAction.INSTANCE, undeployModelRequest, getMlUndeployModelsResponseActionListener(listener));
     }
 
@@ -307,18 +287,18 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     @Override
     public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
-        MLConnectorDeleteRequest connectorDeleteRequest = new MLConnectorDeleteRequest(connectorId);
-        client.execute(MLConnectorDeleteAction.INSTANCE, connectorDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        deleteConnector(connectorId, null, listener);
     }
 
     @Override
     public void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener) {
         MLConnectorDeleteRequest connectorDeleteRequest = new MLConnectorDeleteRequest(connectorId, tenantId);
-        client.execute(MLConnectorDeleteAction.INSTANCE, connectorDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        client
+            .execute(
+                MLConnectorDeleteAction.INSTANCE,
+                connectorDeleteRequest,
+                ActionListener.wrap(listener::onResponse, listener::onFailure)
+            );
     }
 
     @Override
@@ -330,9 +310,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
         MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId);
-        client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(deleteResponse -> {
-            listener.onResponse(deleteResponse);
-        }, listener::onFailure));
+        client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 
     @Override
@@ -353,112 +331,71 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLToolsListResponse> internalListener = ActionListener.wrap(mlModelListResponse -> {
             listener.onResponse(mlModelListResponse.getToolMetadataList());
         }, listener::onFailure);
-        ActionListener<MLToolsListResponse> actionListener = wrapActionListener(internalListener, res -> {
-            MLToolsListResponse getResponse = MLToolsListResponse.fromActionResponse(res);
-            return getResponse;
-        });
-        return actionListener;
+        return wrapActionListener(internalListener, MLToolsListResponse::fromActionResponse);
     }
 
     private ActionListener<MLToolGetResponse> getMlGetToolResponseActionListener(ActionListener<ToolMetadata> listener) {
         ActionListener<MLToolGetResponse> internalListener = ActionListener.wrap(mlModelGetResponse -> {
             listener.onResponse(mlModelGetResponse.getToolMetadata());
         }, listener::onFailure);
-        ActionListener<MLToolGetResponse> actionListener = wrapActionListener(internalListener, res -> {
-            MLToolGetResponse getResponse = MLToolGetResponse.fromActionResponse(res);
-            return getResponse;
-        });
-        return actionListener;
+        return wrapActionListener(internalListener, MLToolGetResponse::fromActionResponse);
     }
 
     private ActionListener<MLRegisterAgentResponse> getMLRegisterAgentResponseActionListener(
         ActionListener<MLRegisterAgentResponse> listener
     ) {
-        ActionListener<MLRegisterAgentResponse> actionListener = wrapActionListener(listener, res -> {
-            MLRegisterAgentResponse mlRegisterAgentResponse = MLRegisterAgentResponse.fromActionResponse(res);
-            return mlRegisterAgentResponse;
-        });
-        return actionListener;
+        return wrapActionListener(listener, MLRegisterAgentResponse::fromActionResponse);
     }
 
     private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {
         ActionListener<MLTaskGetResponse> internalListener = ActionListener
             .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
-        ActionListener<MLTaskGetResponse> actionListener = wrapActionListener(internalListener, response -> {
-            MLTaskGetResponse getResponse = MLTaskGetResponse.fromActionResponse(response);
-            return getResponse;
-        });
-        return actionListener;
+        return wrapActionListener(internalListener, MLTaskGetResponse::fromActionResponse);
     }
 
     private ActionListener<MLDeployModelResponse> getMlDeployModelResponseActionListener(ActionListener<MLDeployModelResponse> listener) {
-        ActionListener<MLDeployModelResponse> actionListener = wrapActionListener(listener, response -> {
-            MLDeployModelResponse deployModelResponse = MLDeployModelResponse.fromActionResponse(response);
-            return deployModelResponse;
-        });
-        return actionListener;
+        return wrapActionListener(listener, MLDeployModelResponse::fromActionResponse);
     }
 
     private ActionListener<MLUndeployModelsResponse> getMlUndeployModelsResponseActionListener(
         ActionListener<MLUndeployModelsResponse> listener
     ) {
-        ActionListener<MLUndeployModelsResponse> actionListener = wrapActionListener(listener, response -> {
-            MLUndeployModelsResponse deployModelResponse = MLUndeployModelsResponse.fromActionResponse(response);
-            return deployModelResponse;
-        });
-        return actionListener;
+        return wrapActionListener(listener, MLUndeployModelsResponse::fromActionResponse);
     }
 
     private ActionListener<MLCreateConnectorResponse> getMlCreateConnectorResponseActionListener(
         ActionListener<MLCreateConnectorResponse> listener
     ) {
-        ActionListener<MLCreateConnectorResponse> actionListener = wrapActionListener(listener, response -> {
-            MLCreateConnectorResponse createConnectorResponse = MLCreateConnectorResponse.fromActionResponse(response);
-            return createConnectorResponse;
-        });
-        return actionListener;
+        return wrapActionListener(listener, MLCreateConnectorResponse::fromActionResponse);
     }
 
     private ActionListener<MLRegisterModelGroupResponse> getMlRegisterModelGroupResponseActionListener(
         ActionListener<MLRegisterModelGroupResponse> listener
     ) {
-        ActionListener<MLRegisterModelGroupResponse> actionListener = wrapActionListener(listener, response -> {
-            MLRegisterModelGroupResponse registerModelGroupResponse = MLRegisterModelGroupResponse.fromActionResponse(response);
-            return registerModelGroupResponse;
-        });
-        return actionListener;
+        return wrapActionListener(listener, MLRegisterModelGroupResponse::fromActionResponse);
     }
 
     private ActionListener<MLTaskResponse> getMlPredictionTaskResponseActionListener(ActionListener<MLOutput> listener) {
         ActionListener<MLTaskResponse> internalListener = ActionListener.wrap(predictionResponse -> {
             listener.onResponse(predictionResponse.getOutput());
         }, listener::onFailure);
-        ActionListener<MLTaskResponse> actionListener = wrapActionListener(internalListener, res -> {
-            MLTaskResponse predictionResponse = MLTaskResponse.fromActionResponse(res);
-            return predictionResponse;
-        });
-        return actionListener;
+        return wrapActionListener(internalListener, MLTaskResponse::fromActionResponse);
     }
 
     private ActionListener<MLRegisterModelResponse> getMLRegisterModelResponseActionListener(
         ActionListener<MLRegisterModelResponse> listener
     ) {
-        ActionListener<MLRegisterModelResponse> actionListener = wrapActionListener(listener, res -> {
-            MLRegisterModelResponse registerModelResponse = MLRegisterModelResponse.fromActionResponse(res);
-            return registerModelResponse;
-        });
-        return actionListener;
+        return wrapActionListener(listener, MLRegisterModelResponse::fromActionResponse);
     }
 
     private <T extends ActionResponse> ActionListener<T> wrapActionListener(
         final ActionListener<T> listener,
         final Function<ActionResponse, T> recreate
     ) {
-        ActionListener<T> actionListener = ActionListener.wrap(r -> {
+        return ActionListener.wrap(r -> {
             listener.onResponse(recreate.apply(r));
             ;
-        }, e -> { listener.onFailure(e); });
-        return actionListener;
+        }, listener::onFailure);
     }
 
     private void validateMLInput(MLInput mlInput, boolean requireInput) {

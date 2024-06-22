@@ -309,7 +309,7 @@ public class MLModelAutoReDeployer {
                 ImmutableMap.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
             );
 
-        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, nodeIds, false, true, false);
+        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, null, nodeIds, false, true, false);
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, listener);
     }
 

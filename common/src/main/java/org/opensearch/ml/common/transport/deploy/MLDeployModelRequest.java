@@ -41,11 +41,13 @@ public class MLDeployModelRequest extends MLTaskRequest {
     // This is to identify if the deploy request is initiated by user or not. During auto redeploy also, we perform deploy operation.
     // This field is mainly to distinguish between these two situations.
     private final boolean isUserInitiatedDeployRequest;
+    private String tenantId;
 
     @Builder
-    public MLDeployModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask, boolean isUserInitiatedDeployRequest) {
+    public MLDeployModelRequest(String modelId, String tenantId, String[] modelNodeIds, boolean async, boolean dispatchTask, boolean isUserInitiatedDeployRequest) {
         super(dispatchTask);
         this.modelId = modelId;
+        this.tenantId = tenantId;
         this.modelNodeIds = modelNodeIds;
         this.async = async;
         this.isUserInitiatedDeployRequest = isUserInitiatedDeployRequest;
@@ -53,9 +55,9 @@ public class MLDeployModelRequest extends MLTaskRequest {
 
     // In this constructor, isUserInitiatedDeployRequest to always set to true. So, it can be used only when
     // deploy request is coming directly from the user. DO NOT use this when the
-    // deploy call is from the code or system initiated.
-    public MLDeployModelRequest(String modelId, boolean async) {
-        this(modelId, null, async, true, true);
+    // deployment call is from the code or system initiated.
+    public MLDeployModelRequest(String modelId, String tenantId, boolean async) {
+        this(modelId, tenantId, null, async, true, true);
     }
 
     public MLDeployModelRequest(StreamInput in) throws IOException {
@@ -64,6 +66,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         this.modelNodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
         this.isUserInitiatedDeployRequest = in.readBoolean();
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -83,9 +86,10 @@ public class MLDeployModelRequest extends MLTaskRequest {
         out.writeOptionalStringArray(modelNodeIds);
         out.writeBoolean(async);
         out.writeBoolean(isUserInitiatedDeployRequest);
+        out.writeOptionalString(tenantId);
     }
 
-    public static MLDeployModelRequest parse(XContentParser parser, String modelId) throws IOException {
+    public static MLDeployModelRequest parse(XContentParser parser, String modelId, String tenantId) throws IOException {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         List<String> nodeIdList = new ArrayList<>();
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -104,8 +108,8 @@ public class MLDeployModelRequest extends MLTaskRequest {
                     break;
             }
         }
-        String[] nodeIds = nodeIdList == null ? null : nodeIdList.toArray(new String[0]);
-        return new MLDeployModelRequest(modelId, nodeIds, false, true, true);
+        String[] nodeIds = nodeIdList.toArray(new String[0]);
+        return new MLDeployModelRequest(modelId, tenantId, nodeIds, false, true, true);
     }
 
     public static MLDeployModelRequest fromActionRequest(ActionRequest actionRequest) {
