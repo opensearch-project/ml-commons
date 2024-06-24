@@ -4,9 +4,9 @@ import java.util.Locale;
 
 public enum PredictMode {
     PREDICT,
-    BATCH,
-    ASYNC,
-    STREAMING;
+    BATCH;
+    // ASYNC,
+    // STREAMING;
 
     public static PredictMode from(String value) {
         try {
