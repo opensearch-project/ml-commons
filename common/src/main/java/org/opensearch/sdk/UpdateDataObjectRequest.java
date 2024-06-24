@@ -110,6 +110,16 @@ public class UpdateDataObjectRequest {
         }
       
         /**
+         * Add a tenant ID to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
+        public Builder tenantId(String tenantId) {
+            this.tenantId = tenantId;
+            return this;
+        }
+      
+        /**
          * Add a data object to this builder
          * @param dataObject the data object
          * @return the updated builder

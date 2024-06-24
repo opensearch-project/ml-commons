@@ -36,6 +36,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -57,10 +58,13 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        restMLSearchModelGroupAction = new RestMLSearchModelGroupAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
@@ -106,7 +110,7 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchModelGroupAction mlSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLSearchModelGroupAction mlSearchModelGroupAction = new RestMLSearchModelGroupAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchModelGroupAction);
     }
 

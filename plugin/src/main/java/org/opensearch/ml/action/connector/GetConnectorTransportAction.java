@@ -55,7 +55,6 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         SdkClient sdkClient,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
-
     ) {
         super(MLConnectorGetAction.NAME, transportService, actionFilters, MLConnectorGetRequest::new);
         this.client = client;

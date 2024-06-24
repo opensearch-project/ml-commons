@@ -71,7 +71,7 @@ public class RestMLGetModelGroupActionTests extends OpenSearchTestCase {
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        restMLGetModelGroupAction = new RestMLGetModelGroupAction();
+        restMLGetModelGroupAction = new RestMLGetModelGroupAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));

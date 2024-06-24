@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -24,12 +26,16 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
+import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
@@ -44,6 +50,7 @@ import lombok.extern.log4j.Log4j2;
 public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
 
     private final Client client;
+    private final SdkClient sdkClient;
 
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
@@ -52,10 +59,12 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         ConnectorAccessControlHelper connectorAccessControlHelper
     ) {
         super(MLConnectorSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
     }
 
@@ -90,13 +99,35 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
-            if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
-                client.search(request, doubleWrappedListener);
-            } else {
+            if (!connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 request.source(sourceBuilder);
-                client.search(request, doubleWrappedListener);
             }
+            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                .indices(request.indices())
+                .searchSourceBuilder(request.source())
+                .build();
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to search connector", cause);
+                        doubleWrappedListener.onFailure(cause);
+                    } else {
+                        try {
+                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                            log.info("Connector search complete: {}", searchResponse.getHits().getTotalHits());
+                            doubleWrappedListener.onResponse(searchResponse);
+                        } catch (Exception e) {
+                            log.error("Failed to parse search response", e);
+                            doubleWrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR)
+                                );
+                        }
+                    }
+                });
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);

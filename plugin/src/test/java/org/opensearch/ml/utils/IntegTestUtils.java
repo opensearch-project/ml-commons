@@ -164,7 +164,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     }
 
     public static MLTask waitModelAvailable(String taskId) throws InterruptedException {
-        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId, null);
         MLTask mlTask = null;
         int i = 0;
         while ((mlTask == null || mlTask.getModelId() == null) && i < 500) {

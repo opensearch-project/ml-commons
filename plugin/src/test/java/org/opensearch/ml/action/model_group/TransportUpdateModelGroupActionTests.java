@@ -6,29 +6,41 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.lucene.search.TotalHits;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
@@ -49,11 +61,16 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -76,6 +93,9 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+
+    SdkClient sdkClient;
+
     @Mock
     private ActionFilters actionFilters;
 
@@ -97,22 +117,39 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     @Mock
     private MLModelGroupManager mlModelGroupManager;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private String ownerString = "bob|IT,HR|myTenant";
     private List<String> backendRoles = Arrays.asList("IT");
+
+    private static TestThreadPool testThreadPool = new TestThreadPool(
+        TransportUpdateModelGroupActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         transportUpdateModelGroupAction = new TransportUpdateModelGroupAction(
             transportService,
             actionFilters,
             client,
+            sdkClient,
             xContentRegistry,
             clusterService,
             modelAccessControlHelper,
-            mlModelGroupManager
+            mlModelGroupManager,
+            mlFeatureEnabledSetting
         );
         assertNotNull(transportUpdateModelGroupAction);
 
@@ -135,11 +172,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult(indexName, "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
@@ -151,25 +187,42 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
     }
 
-    public void test_NonOwnerChangingAccessContentException() {
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void test_NonOwnerChangingAccessContentException() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Only owner or admin can update access control data.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_OwnerNoMoreHasPermissionException() {
+    @Test
+    public void test_OwnerNoMoreHasPermissionException() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -178,89 +231,118 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         );
     }
 
-    public void test_NoAccessUserUpdatingModelGroupException() {
+    @Test
+    public void test_NoAccessUserUpdatingModelGroupException() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
         when(modelAccessControlHelper.isUserHasBackendRole(any(), any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permission to update this model group.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_BackendRolesProvidedWithPrivate() {
+    @Test
+    public void test_BackendRolesProvidedWithPrivate() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isUserHasBackendRole(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PRIVATE, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_BackendRolesProvidedWithPublic() {
+    @Test
+    public void test_BackendRolesProvidedWithPublic() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isUserHasBackendRole(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_AdminSpecifiedAddAllBackendRolesForRestricted() {
+    @Test
+    public void test_AdminSpecifiedAddAllBackendRolesForRestricted() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_UserWithNoBackendRolesSpecifiedRestricted() {
+    @Test
+    public void test_UserWithNoBackendRolesSpecifiedRestricted() throws InterruptedException {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "bob||engineering,operations");
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have any backend roles.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_UserSpecifiedRestrictedButNoBackendRolesField() {
+    @Test
+    public void test_UserSpecifiedRestrictedButNoBackendRolesField() throws InterruptedException {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, false);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You have to specify backend roles when add all backend roles is set to false.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_RestrictedAndUserSpecifiedBothBackendRolesFields() {
+    @Test
+    public void test_RestrictedAndUserSpecifiedBothBackendRolesFields() throws InterruptedException {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(backendRoles, AccessMode.RESTRICTED, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -269,7 +351,8 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         );
     }
 
-    public void test_RestrictedAndUserSpecifiedIncorrectBackendRoles() {
+    @Test
+    public void test_RestrictedAndUserSpecifiedIncorrectBackendRoles() throws InterruptedException {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
@@ -278,111 +361,144 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         List<String> incorrectBackendRole = Arrays.asList("Finance");
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(incorrectBackendRole, AccessMode.RESTRICTED, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_SuccessPrivateWithOwnerAsUser() {
+    @Test
+    public void test_SuccessPrivateWithOwnerAsUser() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PRIVATE, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_SuccessRestricedWithOwnerAsUser() {
+    @Test
+    public void test_SuccessRestricedWithOwnerAsUser() throws InterruptedException {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "bob|IT,HR|myTenant");
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_SuccessPublicWithAdminAsUser() {
+    @Test
+    public void test_SuccessPublicWithAdminAsUser() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_SuccessRestrictedWithAdminAsUser() {
+    @Test
+    public void test_SuccessRestrictedWithAdminAsUser() throws InterruptedException {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(backendRoles, AccessMode.RESTRICTED, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_SuccessNonOwnerUpdatingWithNoAccessContent() {
+    @Test
+    public void test_SuccessNonOwnerUpdatingWithNoAccessContent() throws InterruptedException {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
         when(modelAccessControlHelper.isUserHasBackendRole(any(), any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_FailedToFindModelGroupException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new MLResourceNotFoundException("Failed to find model group"));
-            return null;
-        }).when(client).get(any(), any());
+    @Test
+    public void test_FailedToFindModelGroupException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new MLResourceNotFoundException("Failed to find model group"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_FailedToGetModelGroupException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new Exception("Failed to get model group"));
-            return null;
-        }).when(client).get(any(), any());
+    @Test
+    public void test_FailedToGetModelGroupException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new Exception("Failed to get model group"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get model group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_ModelGroupIndexNotFoundException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new IndexNotFoundException("Fail to find model group"));
-            return null;
-        }).when(client).get(any(), any());
+    @Test
+    public void test_ModelGroupIndexNotFoundException() throws InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new IndexNotFoundException("Failed to find model group"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find model group", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_FailedToUpdatetModelGroupException() {
+    @Test
+    public void test_FailedToUpdatetModelGroupException() throws InterruptedException {
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onFailure(new MLException("Failed to update Model Group"));
@@ -392,23 +508,30 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to update Model Group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_SuccessSecurityDisabledCluster() {
+    @Test
+    public void test_SuccessSecurityDisabledCluster() throws InterruptedException {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ModelGroupNameNotUnique() throws IOException {
-
+    @Test
+    public void test_ModelGroupNameNotUnique() throws IOException, InterruptedException {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
@@ -419,7 +542,11 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -428,11 +555,16 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         );
     }
 
-    public void test_ExceptionSecurityDisabledCluster() {
+    @Test
+    public void test_ExceptionSecurityDisabledCluster() throws InterruptedException {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, true);
-        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(

@@ -161,8 +161,18 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
+                listener.onResponse(mlTask);
+            }
+
+            @Override
             public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
                 listener.onResponse(searchResponse);
+            }
+
+            @Override
+            public void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
             }
 
             @Override
@@ -172,6 +182,11 @@ public class MachineLearningClientTest {
 
             @Override
             public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 

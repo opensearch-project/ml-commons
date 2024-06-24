@@ -60,7 +60,7 @@ import org.opensearch.transport.TransportService;
 public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     private static final String CONNECTOR_ID = "connector_id";
 
-    private static TestThreadPool testThreadPool = new TestThreadPool(
+    private static final TestThreadPool testThreadPool = new TestThreadPool(
         GetConnectorTransportActionTests.class.getName(),
         new ScalingExecutorBuilder(
             GENERAL_THREAD_POOL,

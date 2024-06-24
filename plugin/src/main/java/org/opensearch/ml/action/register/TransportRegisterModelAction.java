@@ -344,6 +344,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
             .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .tenantId(registerModelInput.getTenantId())
             .build();
 
         if (!isAsync) {

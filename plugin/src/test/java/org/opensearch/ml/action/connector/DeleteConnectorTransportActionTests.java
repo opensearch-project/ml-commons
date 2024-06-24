@@ -33,6 +33,7 @@ import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -172,11 +173,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         SearchResponse searchResponse = getEmptySearchResponse();
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -201,11 +200,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<Exception> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new IndexNotFoundException("ml_model index not found!"));
-            return null;
-        }).when(client).search(any(), any());
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onFailure(new IndexNotFoundException("ml_model index not found!"));
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -232,11 +229,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         SearchResponse searchResponse = getEmptySearchResponse();
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -261,11 +256,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
         SearchResponse searchResponse = getNonEmptySearchResponse();
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -293,7 +286,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("You are not allowed to delete this connector", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteConnector_SearchFailure() throws IOException {
+    public void testDeleteConnector_SearchFailure() throws IOException, InterruptedException {
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
@@ -301,13 +294,15 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new RuntimeException("Search Failed!"));
-            return null;
-        }).when(client).search(any(), any());
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onFailure(new RuntimeException("Search Failed!"));
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
-        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
+        latch.await();
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Search Failed!", argumentCaptor.getValue().getMessage());
@@ -322,7 +317,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
-
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
@@ -339,13 +333,10 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
 
-
         SearchResponse searchResponse = getEmptySearchResponse();
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+        PlainActionFuture<SearchResponse> searchFuture = PlainActionFuture.newFuture();
+        searchFuture.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(searchFuture);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);

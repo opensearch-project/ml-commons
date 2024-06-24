@@ -5,36 +5,73 @@
 package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.lucene.search.TotalHits;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchResponse.Clusters;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
 
+    private static TestThreadPool testThreadPool = new TestThreadPool(
+        SearchConnectorTransportActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
+
     @Mock
     Client client;
+
+    SdkClient sdkClient;
+
+    @Mock
+    NamedXContentRegistry xContentRegistry;
 
     @Mock
     TransportService transportService;
@@ -42,8 +79,9 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
     @Mock
     ActionFilters actionFilters;
 
-    @Mock
     SearchRequest searchRequest;
+
+    SearchResponse searchResponse;
 
     SearchSourceBuilder searchSourceBuilder;
 
@@ -66,10 +104,13 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         searchConnectorTransportAction = new SearchConnectorTransportAction(
             transportService,
             actionFilters,
             client,
+            sdkClient,
             connectorAccessControlHelper
         );
 
@@ -77,44 +118,86 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
 
         searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(fetchSourceContext);
-        when(searchRequest.source()).thenReturn(searchSourceBuilder);
+        searchRequest = new SearchRequest(new String[0], searchSourceBuilder);
         when(fetchSourceContext.includes()).thenReturn(new String[] {});
         when(fetchSourceContext.excludes()).thenReturn(new String[] {});
+
+        when(connectorAccessControlHelper.addUserBackendRolesFilter(any(), any(SearchSourceBuilder.class))).thenReturn(searchSourceBuilder);
+
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0L, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        InternalSearchResponse internalSearchResponse = new InternalSearchResponse(
+            searchHits,
+            InternalAggregations.EMPTY,
+            null,
+            null,
+            false,
+            null,
+            0
+        );
+        searchResponse = new SearchResponse(
+            internalSearchResponse,
+            null,
+            0,
+            0,
+            0,
+            1,
+            ShardSearchFailure.EMPTY_ARRAY,
+            mock(Clusters.class),
+            null
+        );
     }
 
-    public void test_doExecute_connectorAccessControlNotEnabled_searchSuccess() {
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
+    }
+
+    public void test_doExecute_connectorAccessControlNotEnabled_searchSuccess() throws InterruptedException {
         String userString = "admin|role-1|all_access";
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userString);
         when(connectorAccessControlHelper.skipConnectorAccessControl(any(User.class))).thenReturn(true);
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-        searchConnectorTransportAction.doExecute(task, searchRequest, actionListener);
+
+        PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        searchConnectorTransportAction.doExecute(task, searchRequest, latchedActionListener);
+        latch.await();
+
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
 
-    public void test_doExecute_connectorAccessControlEnabled_searchSuccess() {
+    public void test_doExecute_connectorAccessControlEnabled_searchSuccess() throws InterruptedException {
         when(connectorAccessControlHelper.skipConnectorAccessControl(any(User.class))).thenReturn(false);
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-        searchConnectorTransportAction.doExecute(task, searchRequest, actionListener);
+
+        PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
+        searchConnectorTransportAction.doExecute(task, searchRequest, latchedActionListener);
+        latch.await();
+
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
 
-    public void test_doExecute_exception() {
-        when(searchRequest.source()).thenThrow(new RuntimeException("runtime exception"));
-        searchConnectorTransportAction.doExecute(task, searchRequest, actionListener);
+    public void test_doExecute_exception() throws InterruptedException {
+        PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new RuntimeException("runtime exception"));
+        when(client.search(any(SearchRequest.class))).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        searchConnectorTransportAction.doExecute(task, searchRequest, latchedActionListener);
+        latch.await();
+
         verify(actionListener).onFailure(any(RuntimeException.class));
     }
-
 }
