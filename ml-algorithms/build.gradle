@@ -4,12 +4,17 @@
  */
 
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.opensearch.gradle.VersionProperties;
 
 plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
     id 'com.diffplug.spotless' version '6.23.0'
+}
+
+ext {
+    versions = VersionProperties.getVersions()
 }
 
 repositories {
@@ -68,6 +73,28 @@ dependencies {
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.25.40'
+
+    implementation("com.oracle.oci.sdk:oci-java-sdk-common:2.38.0") {
+        // Exclude org.bouncycastle:bcprov-jdk15on to avoid conflict with bcprov-ext-jdk18on
+        // that is provided from com.amazonaws:aws-encryption-sdk-java
+        exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+        // Exclude jackson and javax.annotation library since they are already provided by
+        // opensearch
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-core'
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-annotations'
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-databind'
+        exclude group: 'com.fasterxml.jackson.module', module: 'jackson-module-jaxb-annotations'
+        exclude group: 'com.fasterxml.jackson.datatype', module: 'jackson-datatype-jdk8'
+        exclude group: 'javax.annotation', module: 'javax.annotation-api'
+        // Exclude org.javassist:javassist and com.google.guava:guava since they are already
+        // provided in ml common plugin
+        exclude group: 'org.javassist', module: 'javassist'
+        exclude group: 'com.google.guava', module: 'guava'
+    }
+
+    implementation("com.fasterxml.jackson.module:jackson-module-jaxb-annotations:${versions.jackson}")
+    implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
 }
 
 lombok {

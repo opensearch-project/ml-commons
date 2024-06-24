@@ -602,6 +602,170 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         connector.buildChatCompletionOutput(null, Collections.emptyMap(), null);
     }
 
+    public void testGetInputParametersForOciGenai() {
+        final DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+
+        final ChatCompletionInput input = new ChatCompletionInput(
+            "oci_genai/model",
+            "question",
+            List.of(Interaction.builder().input("message1").response("answer1").build()),
+            List.of("context1"),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.OCI_GENAI
+        );
+
+        connector.getInputParameters(input);
+        assertEquals(Map.of("prompt", "context1\nmessage1\nanswer1\nquestion"), connector.getInputParameters(input));
+    }
+
+    public void testChatCompletionApiForOciGenai() {
+        final MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        final ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        final DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        final Map<String, ?> dataAsMap = Map.of("inferenceResponse", Map.of("generatedTexts", List.of(Map.of("text", "answer"))));
+        final ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        final ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        final ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        final ChatCompletionInput input = new ChatCompletionInput(
+            "oci_genai/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.OCI_GENAI
+        );
+        final ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        final MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertEquals("answer", output.getAnswers().get(0));
+    }
+
+    public void testChatCompletionApiForOciGenai_whenGeneratedTextsIsEmpty() {
+        final MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        final ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        final DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        final Map<String, ?> dataAsMap = Map.of("inferenceResponse", Map.of("generatedTexts", List.of()));
+        final ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        final ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        final ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        final ChatCompletionInput input = new ChatCompletionInput(
+            "oci_genai/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.OCI_GENAI
+        );
+        final ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        assertTrue(output.isErrorOccurred());
+        assertEquals("Missing answer", output.getErrors().get(0));
+    }
+
+    public void testChatCompletionApiForOciGenai_whenGeneratedTextsIsNull() {
+        final MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        final ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        final DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        final Map<String, ?> dataAsMap = Map.of("inferenceResponse", Map.of());
+        final ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        final ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        final ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        final ChatCompletionInput input = new ChatCompletionInput(
+            "oci_genai/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.OCI_GENAI
+        );
+        final ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        assertTrue(output.isErrorOccurred());
+        assertEquals("Missing answer", output.getErrors().get(0));
+    }
+
+    public void testChatCompletionApiForOciGenai_whenResponseFailure() {
+        final MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        final ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        final DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        final String errorMessage = "throttled";
+        final Map<String, String> messageMap = Map.of("message", errorMessage);
+        final Map<String, ?> dataAsMap = Map.of("error", messageMap);
+        final ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        final ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        final ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        final ChatCompletionInput input = new ChatCompletionInput(
+            "oci_genai/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.OCI_GENAI
+        );
+        final ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        final MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals(errorMessage, output.getErrors().get(0));
+    }
+
+    public void testChatCompletionApiForOciGenai_whenMissingResponseFailure() {
+        final MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        final ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        final DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        final ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, Map.of());
+        final ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        final ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        final ChatCompletionInput input = new ChatCompletionInput(
+            "oci_genai/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.OCI_GENAI
+        );
+        final ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        final MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals("Unknown error or response.", output.getErrors().get(0));
+    }
+
     private boolean isJson(String Json) {
         try {
             new JSONObject(Json);

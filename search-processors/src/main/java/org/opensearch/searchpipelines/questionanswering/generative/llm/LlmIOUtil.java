@@ -29,6 +29,7 @@ public class LlmIOUtil {
 
     public static final String BEDROCK_PROVIDER_PREFIX = "bedrock/";
     public static final String COHERE_PROVIDER_PREFIX = "cohere/";
+    public static final String OCI_GENAI_PROVIDER_PREFIX = "oci_genai/";
 
     public static ChatCompletionInput createChatCompletionInput(
         String llmModel,
@@ -71,6 +72,8 @@ public class LlmIOUtil {
                     provider = Llm.ModelProvider.BEDROCK;
                 } else if (llmModel.startsWith(COHERE_PROVIDER_PREFIX)) {
                     provider = Llm.ModelProvider.COHERE;
+                } else if (llmModel.startsWith(OCI_GENAI_PROVIDER_PREFIX)) {
+                    provider = Llm.ModelProvider.OCI_GENAI;
                 }
             }
         }
