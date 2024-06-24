@@ -142,7 +142,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         mlInput.setParameters(mlAlgoParams);
         switch (action) {
             case TRAIN:
-                boolean asyncTask = args.containsKey(ASYNC) && (boolean) args.get(ASYNC);
+                boolean asyncTask = (boolean) args.getOrDefault(ASYNC, false);
                 train(mlInput, asyncTask, listener);
                 break;
             case PREDICT:
@@ -157,11 +157,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             default:
                 throw new IllegalArgumentException("Unsupported action.");
         }
-    }
-
-    @Override
-    public void getModel(String modelId, ActionListener<MLModel> listener) {
-        getModel(modelId, null, listener);
     }
 
     @Override
@@ -183,11 +178,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).tenantId(tenantId).build();
 
         client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
-    }
-
-    @Override
-    public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
-        deleteModel(modelId, null, listener);
     }
 
     @Override
@@ -223,20 +213,10 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void getTask(String taskId, ActionListener<MLTask> listener) {
-        getTask(taskId, null, listener);
-    }
-
-    @Override
     public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
         MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).tenantId(tenantId).build();
 
         client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, getMLTaskResponseActionListener(listener));
-    }
-
-    @Override
-    public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
-        deleteTask(taskId, null, listener);
     }
 
     @Override
@@ -258,19 +238,9 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
-        deploy(modelId, null, listener);
-    }
-
-    @Override
     public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, tenantId, false);
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, getMlDeployModelResponseActionListener(listener));
-    }
-
-    @Override
-    public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
-        undeploy(modelIds, nodeIds, null, listener);
     }
 
     @Override
@@ -283,11 +253,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
         client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, getMlCreateConnectorResponseActionListener(listener));
-    }
-
-    @Override
-    public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
-        deleteConnector(connectorId, null, listener);
     }
 
     @Override

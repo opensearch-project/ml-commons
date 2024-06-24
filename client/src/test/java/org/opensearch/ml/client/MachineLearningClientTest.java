@@ -207,7 +207,7 @@ public class MachineLearningClientTest {
 
             @Override
             public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
-
+                // noop
             }
 
             @Override

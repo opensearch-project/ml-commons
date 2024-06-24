@@ -265,16 +265,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                         }
                     }
                 });
-            //
-            //
-            // client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(listener::onResponse, e -> {
-            // if (e instanceof IndexNotFoundException) {
-            // listener.onResponse(null);
-            // } else {
-            // log.error("Failed to search model index", e);
-            // listener.onFailure(e);
-            // }
-            // }), context::restore));
         } catch (Exception e) {
             log.error("Failed to search model index", e);
             listener.onFailure(e);
