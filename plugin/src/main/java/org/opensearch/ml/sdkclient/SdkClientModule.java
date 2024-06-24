@@ -62,7 +62,7 @@ public class SdkClientModule extends AbstractModule {
     SdkClientModule(String remoteMetadataType, String remoteMetadataEndpoint, String region) {
         this.remoteMetadataType = remoteMetadataType;
         this.remoteMetadataEndpoint = remoteMetadataEndpoint;
-        this.region = region;
+        this.region = region == null ? "us-west-2" : region;
     }
 
     @Override
@@ -80,7 +80,8 @@ public class SdkClientModule extends AbstractModule {
                 return;
             case AWS_DYNAMO_DB:
                 log.info("Using dynamo DB as metadata store");
-                bind(SdkClient.class).toInstance(new DDBOpenSearchClient(createDynamoDbClient()));
+                bind(SdkClient.class)
+                    .toInstance(new DDBOpenSearchClient(createDynamoDbClient(), new RemoteClusterIndicesClient(createOpenSearchClient())));
                 return;
             default:
                 log.info("Using local opensearch cluster as metadata store");
