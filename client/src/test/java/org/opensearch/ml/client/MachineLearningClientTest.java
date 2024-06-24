@@ -55,6 +55,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
+import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 
 public class MachineLearningClientTest {
 
@@ -98,6 +99,9 @@ public class MachineLearningClientTest {
 
     @Mock
     MLRegisterAgentResponse registerAgentResponse;
+
+    @Mock
+    CreateConversationResponse createConversationResponse;
 
     private String modekId = "test_model_id";
     private MLModel mlModel;
@@ -230,6 +234,11 @@ public class MachineLearningClientTest {
             @Override
             public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void createConversation(String name, ActionListener<CreateConversationResponse> listener) {
+                listener.onResponse(createConversationResponse);
             }
         };
     }
@@ -502,5 +511,10 @@ public class MachineLearningClientTest {
     @Test
     public void listTools() {
         assertEquals(toolMetadata, machineLearningClient.listTools().actionGet().get(0));
+    }
+
+    @Test
+    public void createConversation() {
+        assertEquals(createConversationResponse, machineLearningClient.createConversation("Conversation for a RAG pipeline").actionGet());
     }
 }
