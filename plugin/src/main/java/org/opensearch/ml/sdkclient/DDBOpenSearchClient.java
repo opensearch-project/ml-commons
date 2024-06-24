@@ -123,7 +123,7 @@ public class DDBOpenSearchClient implements SdkClient {
                     + request.index()
                     + "\",\"_id\":\""
                     + request.id()
-                    + "\",\"_version\":1,\"_seq_no\":-2,\"_primary_term\":0,\"found\":"
+                    + "\",\"found\":"
                     + found
                     + ",\"_source\":"
                     + source
