@@ -25,7 +25,7 @@ public class MLDeployModelRequestTest {
 
     @Before
     public void setUp() throws Exception {
-        mlDeployModelRequest = mlDeployModelRequest.builder().
+        mlDeployModelRequest = MLDeployModelRequest.builder().
                 modelId("modelId").
                 modelNodeIds(new String[]{"modelNodeIds"}).
                 async(true).
@@ -36,7 +36,7 @@ public class MLDeployModelRequestTest {
 
     @Test
     public void testValidateWithBuilder() {
-         MLDeployModelRequest request = mlDeployModelRequest.builder().
+         MLDeployModelRequest request = MLDeployModelRequest.builder().
                  modelId("modelId").
                  build();
         assertNull(request.validate());
@@ -44,13 +44,13 @@ public class MLDeployModelRequestTest {
 
     @Test
     public void testValidateWithoutBuilder() {
-        MLDeployModelRequest request = new MLDeployModelRequest("modelId", true);
+        MLDeployModelRequest request = new MLDeployModelRequest("modelId", null, true);
         assertNull(request.validate());
     }
 
     @Test
     public void validate_Exception_WithNullModelId() {
-        MLDeployModelRequest request = mlDeployModelRequest.builder().
+        MLDeployModelRequest request = MLDeployModelRequest.builder().
                 modelId(null).
                 modelNodeIds(new String[]{"modelNodeIds"}).
                 async(true).
@@ -87,15 +87,15 @@ public class MLDeployModelRequestTest {
                 throw new IOException("test");
             }
         };
-        mlDeployModelRequest.fromActionRequest(actionRequest);
+        MLDeployModelRequest.fromActionRequest(actionRequest);
     }
 
     @Test
     public void fromActionRequest_Success_WithMLDeployModelRequest() {
-        MLDeployModelRequest request = mlDeployModelRequest.builder().
+        MLDeployModelRequest request = MLDeployModelRequest.builder().
                 modelId("modelId").
                 build();
-        assertSame(mlDeployModelRequest.fromActionRequest(request), request);
+        assertSame(MLDeployModelRequest.fromActionRequest(request), request);
     }
 
     @Test
@@ -112,7 +112,7 @@ public class MLDeployModelRequestTest {
                 request.writeTo(out);
             }
         };
-        MLDeployModelRequest result = mlDeployModelRequest.fromActionRequest(actionRequest);
+        MLDeployModelRequest result = MLDeployModelRequest.fromActionRequest(actionRequest);
         assertNotSame(result, request);
         assertEquals(request.isAsync(), result.isAsync());
         assertEquals(request.isDispatchTask(), result.isDispatchTask());
@@ -146,7 +146,7 @@ public class MLDeployModelRequestTest {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
         parser.nextToken();
-        MLDeployModelRequest parsedInput = mlDeployModelRequest.parse(parser, modelId);
+        MLDeployModelRequest parsedInput = MLDeployModelRequest.parse(parser, modelId, null);
         verify.accept(parsedInput);
     }
 }

@@ -99,11 +99,11 @@ public class MachineLearningClientTest {
     @Mock
     MLRegisterAgentResponse registerAgentResponse;
 
-    private String modekId = "test_model_id";
+    private final String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
     private ToolMetadata toolMetadata;
-    private List<ToolMetadata> toolsList = new ArrayList<>();
+    private final List<ToolMetadata> toolsList = new ArrayList<>();
 
     @Before
     public void setUp() {
@@ -206,7 +206,17 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
+                // noop
+            }
+
+            @Override
             public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+                listener.onResponse(undeployModelsResponse);
+            }
+
+            @Override
+            public void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener) {
                 listener.onResponse(undeployModelsResponse);
             }
 

@@ -75,6 +75,7 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -99,6 +100,11 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     @Mock
     private Client client;
 
+    SdkClient sdkClient;
+
+    @Mock
+    NamedXContentRegistry xContentRegistry;
+
     @Mock
     private DiscoveryNodeHelper nodeFilter;
 
@@ -121,6 +127,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     MLTaskDispatcher mlTaskDispatcher;
     @Mock
     NamedXContentRegistry namedXContentRegistry;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private Settings settings;
     private ClusterSettings clusterSettings;
     private final String modelId = "mock_model_id";
@@ -132,9 +142,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
-
-    @Mock
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
@@ -189,6 +196,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             clusterService,
             threadPool,
             client,
+            sdkClient,
             namedXContentRegistry,
             nodeFilter,
             mlTaskDispatcher,
@@ -256,6 +264,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
+                sdkClient,
                 namedXContentRegistry,
                 nodeFilter,
                 mlTaskDispatcher,
@@ -300,6 +309,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
+                sdkClient,
                 namedXContentRegistry,
                 nodeFilter,
                 mlTaskDispatcher,
@@ -433,6 +443,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             clusterService,
             threadPool,
             client,
+            sdkClient,
             namedXContentRegistry,
             nodeFilter,
             mlTaskDispatcher,
@@ -459,6 +470,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
+                sdkClient,
                 namedXContentRegistry,
                 nodeHelper,
                 mlTaskDispatcher,
@@ -552,7 +564,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(mlModelManager).updateModel(anyString(), captor.capture(), any());
         Map<String, Object> map = captor.getValue();
         assertNotNull(map.get(MLModel.PLANNING_WORKER_NODES_FIELD));
-        assertEquals(1, (((List) map.get(MLModel.PLANNING_WORKER_NODES_FIELD)).size()));
+        assertEquals(1, (((List<?>) map.get(MLModel.PLANNING_WORKER_NODES_FIELD)).size()));
     }
 
     public void testUpdateModelDeployStatusAndTriggerOnNodesAction_whenMLTaskManagerThrowException_ListenerOnFailureExecuted() {

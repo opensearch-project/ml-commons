@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.undeploy;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,17 +38,19 @@ public class MLUndeployModelsRequest extends MLTaskRequest {
     private String[] modelIds;
     private String[] nodeIds;
     boolean async;
+    private String tenantId;
 
     @Builder
-    public MLUndeployModelsRequest(String[] modelIds, String[] nodeIds, boolean async, boolean dispatchTask) {
+    public MLUndeployModelsRequest(String[] modelIds, String[] nodeIds, boolean async, boolean dispatchTask, String tenantId) {
         super(dispatchTask);
         this.modelIds = modelIds;
         this.nodeIds = nodeIds;
         this.async = async;
+        this.tenantId = tenantId;
     }
 
-    public MLUndeployModelsRequest(String[] modelIds, String[] nodeIds) {
-        this(modelIds, nodeIds, false, false);
+    public MLUndeployModelsRequest(String[] modelIds, String[] nodeIds, String tenantId) {
+        this(modelIds, nodeIds, false, false, tenantId);
     }
 
     public MLUndeployModelsRequest(StreamInput in) throws IOException {
@@ -55,12 +58,8 @@ public class MLUndeployModelsRequest extends MLTaskRequest {
         this.modelIds = in.readOptionalStringArray();
         this.nodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
-    }
-
-    @Override
-    public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
-        return exception;
+        // TODO: will do bwc check later.
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -69,12 +68,15 @@ public class MLUndeployModelsRequest extends MLTaskRequest {
         out.writeOptionalStringArray(modelIds);
         out.writeOptionalStringArray(nodeIds);
         out.writeBoolean(async);
+        //TODO will check bwc later
+        out.writeOptionalString(tenantId);
     }
 
     public static MLUndeployModelsRequest parse(XContentParser parser, String modelId) throws IOException {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         List<String> modelIdList = new ArrayList<>();
         List<String> nodeIdList = new ArrayList<>();
+        String tenantId = null;
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
@@ -92,14 +94,16 @@ public class MLUndeployModelsRequest extends MLTaskRequest {
                         nodeIdList.add(parser.text());
                     }
                     break;
+                case TENANT_ID:
+                    tenantId = parser.textOrNull();
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        String[] modelIds = modelIdList == null ? null : modelIdList.toArray(new String[0]);
-        String[] nodeIds = nodeIdList == null ? null : nodeIdList.toArray(new String[0]);
-        return new MLUndeployModelsRequest(modelIds, nodeIds, false, true);
+        String[] modelIds = modelIdList.toArray(new String[0]);
+        String[] nodeIds = nodeIdList.toArray(new String[0]);
+        return new MLUndeployModelsRequest(modelIds, nodeIds, false, true, tenantId);
     }
 
     public static MLUndeployModelsRequest fromActionRequest(ActionRequest actionRequest) {

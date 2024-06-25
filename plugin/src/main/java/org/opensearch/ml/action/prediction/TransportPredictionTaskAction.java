@@ -38,6 +38,8 @@ import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -53,6 +55,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     MLModelCacheHelper modelCacheHelper;
 
     Client client;
+    SdkClient sdkClient;
 
     ClusterService clusterService;
 
@@ -74,6 +77,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLPredictTaskRunner mlPredictTaskRunner,
         ClusterService clusterService,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
@@ -86,6 +90,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.modelCacheHelper = modelCacheHelper;
         this.clusterService = clusterService;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -100,7 +105,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
-
+        String tenantId = mlPredictionTaskRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
         User user = mlPredictionTaskRequest.getUser();
         if (user == null) {
             user = RestActionUtils.getUserContext(client);
@@ -109,7 +117,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         final User userInfo = user;
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
             ActionListener<MLModel> modelActionListener = new ActionListener<>() {
                 @Override
@@ -119,6 +127,9 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     FunctionName functionName = mlModel.getAlgorithm();
                     if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
                         throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                    }
+                    if (!TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), listener)) {
+                        return;
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     modelAccessControlHelper
@@ -166,7 +177,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                 }
                             }
                         }, e -> {
-                            log.error("Failed to Validate Access for ModelId " + modelId, e);
+                            log.error("Failed to Validate Access for ModelId {}", modelId, e);
                             if (e instanceof OpenSearchStatusException) {
                                 wrappedListener
                                     .onFailure(
@@ -191,7 +202,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
                 @Override
                 public void onFailure(Exception e) {
-                    log.error("Failed to find model " + modelId, e);
+                    log.error("Failed to find model {}", modelId, e);
                     wrappedListener.onFailure(e);
                 }
             };
@@ -211,7 +222,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelId
     ) {
         String requestId = mlPredictionTaskRequest.getRequestID();
-        log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
+        log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
         long startTime = System.nanoTime();
         // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
         // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
@@ -230,7 +241,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     double durationInMs = (endTime - startTime) / 1e6;
                     modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
                     modelCacheHelper.refreshLastAccessTime(modelId);
-                    log.debug("completed predict request " + requestId + " for model " + modelId);
+                    log.debug("completed predict request {} for model {}", requestId, modelId);
                 })
             );
     }

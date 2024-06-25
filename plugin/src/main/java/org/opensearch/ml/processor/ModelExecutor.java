@@ -53,7 +53,8 @@ public interface ModelExecutor {
 
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
 
-        ActionRequest request = new MLPredictionTaskRequest(modelId, mlInput, null);
+        // TODO: putting tenant ID as null by default now. I will come back here when we will finalize about this feature.
+        ActionRequest request = new MLPredictionTaskRequest(modelId, mlInput, null, null);
 
         return request;
 

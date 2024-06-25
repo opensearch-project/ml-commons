@@ -177,6 +177,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
                                 MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(
                                     modelId,
+                                    request.getTenantId(),
                                     planningWorkerNodes,
                                     false,
                                     true,
