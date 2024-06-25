@@ -5,17 +5,29 @@
 
 package org.opensearch.ml.processor;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -45,17 +57,47 @@ public interface ModelExecutor {
      * @return an ActionRequest instance for remote model inference
      * @throws IllegalArgumentException if the input parameters are null
      */
-    default <T> ActionRequest getRemoteModelInferenceRequest(Map<String, String> parameters, String modelId) {
+    default <T> ActionRequest getMLModelInferenceRequest(
+        NamedXContentRegistry xContentRegistry,
+        Map<String, String> parameters,
+        Map<String, String> modelConfigs,
+        Map<String, String> inputMappings,
+        String modelId,
+        String functionNameStr,
+        String modelInput
+    ) throws IOException {
         if (parameters == null) {
             throw new IllegalArgumentException("wrong input. The model input cannot be empty.");
         }
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        FunctionName functionName = FunctionName.REMOTE;
+        if (functionNameStr != null) {
+            functionName = FunctionName.from(functionNameStr);
+        }
 
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+        Map<String, Object> inputParams = new HashMap<>();
+        if (FunctionName.REMOTE == functionName) {
+            inputParams.put("parameters", StringUtils.toJson(parameters));
+        } else {
+            inputParams.putAll(parameters);
+        }
 
-        ActionRequest request = new MLPredictionTaskRequest(modelId, mlInput, null);
+        String payload = modelInput;
+        StringSubstitutor modelConfigSubstitutor = new StringSubstitutor(modelConfigs, "${model_config.", "}");
+        payload = modelConfigSubstitutor.replace(payload);
+        StringSubstitutor inputMapSubstitutor = new StringSubstitutor(inputMappings, "${input_map.", "}");
+        payload = inputMapSubstitutor.replace(payload);
+        StringSubstitutor parametersSubstitutor = new StringSubstitutor(inputParams, "${ml_inference.", "}");
+        payload = parametersSubstitutor.replace(payload);
 
-        return request;
+        if (!isJson(payload)) {
+            throw new IllegalArgumentException("Invalid payload: " + payload);
+        }
+        XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, null, payload);
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+        MLInput mlInput = MLInput.parse(parser, functionName.name());
+
+        return new MLPredictionTaskRequest(modelId, mlInput);
 
     }
 
@@ -74,7 +116,9 @@ public interface ModelExecutor {
         try {
             // getMlModelOutputs() returns a list or collection.
             // Adding null check for modelTensorOutput
-            if (modelTensorOutput != null && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
+            if (modelTensorOutput != null
+                && modelTensorOutput.getMlModelOutputs() != null
+                && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
                 // getMlModelOutputs() returns a list of ModelTensors
                 // accessing the first element.
                 // TODO currently remote model only return single tensor, might need to processor multiple tensors later
@@ -130,9 +174,33 @@ public interface ModelExecutor {
                 throw new RuntimeException("Model outputs are null or empty.");
             }
         } catch (Exception e) {
-            throw new RuntimeException("An unexpected error occurred: " + e.getMessage());
+            throw new RuntimeException(e.getMessage());
         }
         return modelOutputValue;
+    }
+
+    default Object getModelOutputValue(MLOutput mlOutput, String modelOutputFieldName, boolean ignoreMissing, boolean fullResponsePath) {
+        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            String modelOutputJsonStr = mlOutput.toXContent(builder, ToXContent.EMPTY_PARAMS).toString();
+            Map<String, Object> modelTensorOutputMap = gson.fromJson(modelOutputJsonStr, Map.class);
+            if (!fullResponsePath && mlOutput instanceof ModelTensorOutput) {
+                return getModelOutputValue((ModelTensorOutput) mlOutput, modelOutputFieldName, ignoreMissing);
+            } else if (modelOutputFieldName == null || modelTensorOutputMap == null) {
+                return modelTensorOutputMap;
+            } else {
+                try {
+                    return JsonPath.parse(modelTensorOutputMap).read(modelOutputFieldName);
+                } catch (Exception e) {
+                    if (ignoreMissing) {
+                        return modelTensorOutputMap;
+                    } else {
+                        throw new IllegalArgumentException("model inference output cannot find such json path: " + modelOutputFieldName, e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("An unexpected error occurred: " + e.getMessage());
+        }
     }
 
     /**

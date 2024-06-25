@@ -177,6 +177,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
         String jsonEntity = "{\n"
             + "  \"persistent\" : {\n"
+            + "    \"plugins.ml_commons.jvm_heap_memory_threshold\" : 100, \n"
             + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
             + "  }\n"
             + "}";
@@ -911,6 +912,13 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return result;
     }
 
+    public Map predictTextEmbeddingModel(String modelId, MLInput input) throws IOException {
+        String requestBody = TestHelper.toJsonString(input);
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        return parseResponseToMap(response);
+    }
+
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
         return (modelProfile) -> {
             if (modelProfile.containsKey("model_state")) {
@@ -962,10 +970,18 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     public String registerConnector(String createConnectorInput) throws IOException, InterruptedException {
-        Response response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        Response response;
+        try {
+            response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        } catch (Throwable throwable) {
+            // Add retry for `The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.`
+            TimeUnit.SECONDS.sleep(10);
+            response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        }
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
         return connectorId;
+
     }
 
     public String registerRemoteModel(String createConnectorInput, String modelName, boolean deploy) throws IOException,

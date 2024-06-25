@@ -5,9 +5,13 @@
 
 package org.opensearch.ml.common;
 
+import com.google.common.collect.ImmutableSet;
+import org.opensearch.Version;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.controller.MLController;
+
+import java.util.Set;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
@@ -70,6 +74,7 @@ public class CommonValue {
         public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
         public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
+        public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
         public static final Integer ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION = 1;
         public static final String USER_FIELD_MAPPING = "      \""
                         + CommonValue.USER
@@ -527,4 +532,9 @@ public class CommonValue {
                         + "\": {\"type\": \"long\"}\n"
                         + "    }\n"
                         + "}";
+        // Calculate Versions independently of OpenSearch core version
+        public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
+        public static final Version VERSION_2_12_0 = Version.fromString("2.12.0");
+        public static final Version VERSION_2_13_0 = Version.fromString("2.13.0");
+        public static final Version VERSION_2_14_0 = Version.fromString("2.14.0");
 }

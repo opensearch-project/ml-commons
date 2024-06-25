@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.index.query.QueryBuilders.termQuery;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING;
@@ -268,6 +269,7 @@ public class MetricsCorrelation extends DLModelExecute {
             XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
             modelGroup.toXContent(builder, ToXContent.EMPTY_PARAMS);
             createModelGroupRequest.source(builder);
+            createModelGroupRequest.setRefreshPolicy(IMMEDIATE);
             client.index(createModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
                     log.error("Failed to Register Model", e);

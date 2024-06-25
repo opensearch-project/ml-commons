@@ -8,8 +8,11 @@
 package org.opensearch.ml.settings;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -20,11 +23,13 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isAgentFrameworkEnabled;
 
     private volatile Boolean isLocalModelEnabled;
+    private volatile AtomicBoolean isConnectorPrivateIpEnabled;
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
+        isConnectorPrivateIpEnabled = new AtomicBoolean(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings));
 
         clusterService
             .getClusterSettings()
@@ -33,6 +38,9 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled.set(it));
     }
 
     /**
@@ -57,6 +65,10 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isLocalModelEnabled() {
         return isLocalModelEnabled;
+    }
+
+    public AtomicBoolean isConnectorPrivateIpEnabled() {
+        return isConnectorPrivateIpEnabled;
     }
 
 }

@@ -458,7 +458,8 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
 
-        encryptor = new EncryptorImpl(clusterService, client);
+        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -492,9 +493,13 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
-        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
+
+        mlInputDatasetHandler = new MLInputDatasetHandler(client);
+        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
+        connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
+        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
         mlModelManager = new MLModelManager(
             clusterService,
             scriptService,
@@ -509,12 +514,9 @@ public class MachineLearningPlugin extends Plugin
             mlTaskManager,
             modelCacheHelper,
             mlEngine,
-            nodeHelper
+            nodeHelper,
+            mlFeatureEnabledSetting
         );
-        mlInputDatasetHandler = new MLInputDatasetHandler(client);
-        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
-        connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
-        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
 
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
@@ -928,7 +930,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED
             );
         return settings;
     }
@@ -1006,7 +1009,10 @@ public class MachineLearningPlugin extends Plugin
     public Map<String, org.opensearch.ingest.Processor.Factory> getProcessors(org.opensearch.ingest.Processor.Parameters parameters) {
         Map<String, org.opensearch.ingest.Processor.Factory> processors = new HashMap<>();
         processors
-            .put(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
+            .put(
+                MLInferenceIngestProcessor.TYPE,
+                new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client, xContentRegistry)
+            );
         return Collections.unmodifiableMap(processors);
     }
 }

@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.opensearch.ml.rest.RestMLRemoteInferenceIT.disableClusterConnectorAccessControl;
 
 import java.io.IOException;
 
@@ -27,6 +28,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     @Before
     public void setUp() throws Exception {
         super.setUp();
+        disableClusterConnectorAccessControl();
         Thread.sleep(20000);
         this.bedrockClaudeConnectorId = createBedrockClaudeConnector("execute");
         this.bedrockClaudeConnectorIdForPredict = createBedrockClaudeConnector("predict");
@@ -84,6 +86,9 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     }
 
     public void testConnectorToolInFlowAgent_WrongAction() throws IOException, ParseException {
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
         String registerAgentRequestBody = "{\n"
             + "  \"name\": \"Test agent with connector tool\",\n"
             + "  \"type\": \"flow\",\n"
@@ -109,6 +114,9 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     }
 
     public void testConnectorToolInFlowAgent() throws IOException, ParseException {
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
         String registerAgentRequestBody = "{\n"
             + "  \"name\": \"Test agent with connector tool\",\n"
             + "  \"type\": \"flow\",\n"

@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import org.junit.Before;
@@ -109,6 +110,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -179,6 +181,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     @Mock
     ClusterApplierService clusterApplierService;
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -253,6 +257,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(new AtomicBoolean(false));
+
         modelManager = spy(
             new MLModelManager(
                 clusterService,
@@ -268,7 +274,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 mlTaskManager,
                 modelCacheHelper,
                 mlEngine,
-                nodeHelper
+                nodeHelper,
+                mlFeatureEnabledSetting
             )
         );
 
