@@ -66,6 +66,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         this.modelNodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
         this.isUserInitiatedDeployRequest = in.readBoolean();
+        //TODO: will add BWC check later.
         this.tenantId = in.readOptionalString();
     }
 
@@ -86,6 +87,7 @@ public class MLDeployModelRequest extends MLTaskRequest {
         out.writeOptionalStringArray(modelNodeIds);
         out.writeBoolean(async);
         out.writeBoolean(isUserInitiatedDeployRequest);
+        //TODO: will add BWC check later.
         out.writeOptionalString(tenantId);
     }
 
