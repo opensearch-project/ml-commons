@@ -14,12 +14,13 @@ import static org.opensearch.action.DocWriteResponse.Result.UPDATED;
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
-import java.util.Optional;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -41,7 +42,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -108,14 +109,19 @@ public class LocalClusterIndicesClient implements SdkClient {
                     .get(new GetRequest(request.index(), request.id()).fetchSourceContext(request.fetchSourceContext()))
                     .actionGet();
                 if (getResponse == null || !getResponse.isExists()) {
-                    return new GetDataObjectResponse.Builder().id(request.id()).build();
+                    getResponse = new GetResponse(
+                        new GetResult(request.index(), request.id(), UNASSIGNED_SEQ_NO, 0, 1, false, null, null, null)
+                    );
+                    return new GetDataObjectResponse.Builder()
+                        .id(request.id())
+                        .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.toString()))
+                        .source(Collections.emptyMap())
+                        .build();
                 }
-                XContentParser parser = jsonXContent
-                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
                 log.info("Retrieved data object");
                 return new GetDataObjectResponse.Builder()
                     .id(getResponse.getId())
-                    .parser(Optional.of(parser))
+                    .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.toString()))
                     .source(getResponse.getSource())
                     .build();
             } catch (IOException e) {

@@ -50,6 +50,10 @@ import org.opensearch.client.transport.OpenSearchTransport;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -209,10 +213,16 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         assertEquals(TEST_INDEX, getRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
         assertEquals("foo", response.source().get("data"));
-        assertTrue(response.parser().isPresent());
-        XContentParser parser = response.parser().get();
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        assertEquals("foo", TestDataObject.parse(parser).data());
+        XContentParser parser = response.parser();
+        XContentParser dataParser = XContentHelper
+            .createParser(
+                NamedXContentRegistry.EMPTY,
+                LoggingDeprecationHandler.INSTANCE,
+                org.opensearch.action.get.GetResponse.fromXContent(parser).getSourceAsBytesRef(),
+                XContentType.JSON
+            );
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, dataParser.nextToken(), dataParser);
+        assertEquals("foo", TestDataObject.parse(dataParser).data());
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -232,7 +242,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, getRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        assertFalse(response.parser().isPresent());
+        assertTrue(response.source().isEmpty());
+        assertFalse(org.opensearch.action.get.GetResponse.fromXContent(response.parser()).isExists());
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

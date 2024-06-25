@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.tasks;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
@@ -13,11 +14,13 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
@@ -97,48 +100,56 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
                             actionListener.onFailure(rootCause);
                         }
                     } else {
-                        if (r != null && r.parser().isPresent()) {
-                            try {
-                                XContentParser parser = r.parser().get();
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLTask mlTask = MLTask.parse(parser);
-                                if (!TenantAwareHelper
-                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlTask.getTenantId(), actionListener)) {
-                                    return;
-                                }
-                                MLTaskState mlTaskState = mlTask.getState();
-                                if (mlTaskState.equals(MLTaskState.RUNNING)) {
-                                    actionListener.onFailure(new Exception("Task cannot be deleted in running state. Try after sometime"));
-                                } else {
-                                    DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
-                                    try {
-                                        sdkClient
-                                            .deleteDataObjectAsync(
-                                                new DeleteDataObjectRequest.Builder()
-                                                    .index(deleteRequest.index())
-                                                    .id(deleteRequest.id())
-                                                    .build(),
-                                                client.threadPool().executor(GENERAL_THREAD_POOL)
-                                            )
-                                            .whenComplete(
-                                                (response, delThrowable) -> handleDeleteResponse(
-                                                    response,
-                                                    delThrowable,
-                                                    tenantId,
-                                                    actionListener
-                                                )
-                                            );
-                                    } catch (Exception e) {
-                                        log.error("Failed to delete ML task: {}", taskId, e);
-                                        actionListener.onFailure(e);
+                        try {
+                            GetResponse gr = GetResponse.fromXContent(r.parser());
+                            if (gr != null && gr.isExists()) {
+                                try (
+                                    XContentParser parser = jsonXContent
+                                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    MLTask mlTask = MLTask.parse(parser);
+                                    if (!TenantAwareHelper
+                                        .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlTask.getTenantId(), actionListener)) {
+                                        return;
                                     }
+                                    MLTaskState mlTaskState = mlTask.getState();
+                                    if (mlTaskState.equals(MLTaskState.RUNNING)) {
+                                        actionListener
+                                            .onFailure(new Exception("Task cannot be deleted in running state. Try after sometime"));
+                                    } else {
+                                        DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
+                                        try {
+                                            sdkClient
+                                                .deleteDataObjectAsync(
+                                                    new DeleteDataObjectRequest.Builder()
+                                                        .index(deleteRequest.index())
+                                                        .id(deleteRequest.id())
+                                                        .build(),
+                                                    client.threadPool().executor(GENERAL_THREAD_POOL)
+                                                )
+                                                .whenComplete(
+                                                    (response, delThrowable) -> handleDeleteResponse(
+                                                        response,
+                                                        delThrowable,
+                                                        tenantId,
+                                                        actionListener
+                                                    )
+                                                );
+                                        } catch (Exception e) {
+                                            log.error("Failed to delete ML task: {}", taskId, e);
+                                            actionListener.onFailure(e);
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    log.error("Failed to parse ml task {}", r.id(), e);
+                                    wrappedListener.onFailure(e);
                                 }
-                            } catch (Exception e) {
-                                log.error("Failed to parse ml task {}", r.id(), e);
-                                wrappedListener.onFailure(e);
+                            } else {
+                                wrappedListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
                             }
-                        } else {
-                            wrappedListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
+                        } catch (Exception e) {
+                            wrappedListener.onFailure(e);
                         }
                     }
                 });

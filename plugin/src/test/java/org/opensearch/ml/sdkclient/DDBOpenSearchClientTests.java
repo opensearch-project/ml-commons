@@ -9,6 +9,7 @@
 
 package org.opensearch.ml.sdkclient;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -27,12 +28,18 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -187,8 +194,17 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Assert.assertEquals(TENANT_ID, getItemRequest.key().get("tenant_id").s());
         Assert.assertEquals(TEST_ID, getItemRequest.key().get("id").s());
         Assert.assertEquals(TEST_ID, response.id());
-        Assert.assertTrue(response.parser().isPresent());
-        Assert.assertEquals("foo", response.parser().get().map().get("data"));
+        Assert.assertEquals("foo", response.source().get("data"));
+        XContentParser parser = response.parser();
+        XContentParser dataParser = XContentHelper
+            .createParser(
+                NamedXContentRegistry.EMPTY,
+                LoggingDeprecationHandler.INSTANCE,
+                GetResponse.fromXContent(parser).getSourceAsBytesRef(),
+                XContentType.JSON
+            );
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, dataParser.nextToken(), dataParser);
+        Assert.assertEquals("foo", TestDataObject.parse(dataParser).data());
     }
 
     @Test
@@ -201,7 +217,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .toCompletableFuture()
             .join();
         Assert.assertEquals(TEST_ID, response.id());
-        Assert.assertFalse(response.parser().isPresent());
+        assertTrue(response.source().isEmpty());
+        assertFalse(GetResponse.fromXContent(response.parser()).isExists());
     }
 
     @Test

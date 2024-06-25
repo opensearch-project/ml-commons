@@ -5,18 +5,21 @@
 
 package org.opensearch.ml.action.model_group;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -141,28 +144,35 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         User user,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
-        if (getDataObjectResponse != null && getDataObjectResponse.parser().isPresent()) {
-            try {
-                XContentParser parser = getDataObjectResponse.parser().get();
-                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+        try {
+            GetResponse r = GetResponse.fromXContent(getDataObjectResponse.parser());
+            if (r != null && r.isExists()) {
+                try (
+                    XContentParser parser = jsonXContent
+                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
 
-                if (TenantAwareHelper
-                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
-                    validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                    if (TenantAwareHelper
+                        .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
+                        validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse ml connector {}", getDataObjectResponse.id(), e);
+                    wrappedListener.onFailure(e);
                 }
-            } catch (Exception e) {
-                log.error("Failed to parse ml connector {}", getDataObjectResponse.id(), e);
-                wrappedListener.onFailure(e);
+            } else {
+                wrappedListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Failed to find model group with the provided model group id: " + modelGroupId,
+                            RestStatus.NOT_FOUND
+                        )
+                    );
             }
-        } else {
-            wrappedListener
-                .onFailure(
-                    new OpenSearchStatusException(
-                        "Failed to find model group with the provided model group id: " + modelGroupId,
-                        RestStatus.NOT_FOUND
-                    )
-                );
+        } catch (Exception e) {
+            wrappedListener.onFailure(e);
         }
     }
 
