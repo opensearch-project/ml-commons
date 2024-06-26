@@ -116,7 +116,7 @@ public class SearchInteractionsTransportActionsTests extends OpenSearchTestCase 
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().startsWith("The experimental Conversation Memory feature is not enabled."));
+        assert (argCaptor.getValue().getMessage().startsWith("The Conversation Memory feature is not enabled."));
     }
 
 }
