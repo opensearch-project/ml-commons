@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.RestActionUtils.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -64,9 +65,10 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
             throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
         }
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAgent mlAgent = MLAgent.parseFromUserInput(parser);
+        MLAgent mlAgent = MLAgent.parseFromUserInput(parser).toBuilder().tenantId(tenantId).build();
         return new MLRegisterAgentRequest(mlAgent);
     }
 }

@@ -273,8 +273,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
-        MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId);
+    public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
+        MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId, tenantId);
         client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 

@@ -29,17 +29,21 @@ public class MLAgentGetRequest extends ActionRequest {
     // delete/update options, we also perform get operation. This field is to distinguish between
     // these two situations.
     boolean isUserInitiatedGetRequest;
+    String tenantId;
 
     @Builder
-    public MLAgentGetRequest(String agentId, boolean isUserInitiatedGetRequest) {
+    public MLAgentGetRequest(String agentId, boolean isUserInitiatedGetRequest, String tenantId) {
         this.agentId = agentId;
         this.isUserInitiatedGetRequest = isUserInitiatedGetRequest;
+        this.tenantId = tenantId;
     }
 
     public MLAgentGetRequest(StreamInput in) throws IOException {
         super(in);
         this.agentId = in.readString();
         this.isUserInitiatedGetRequest = in.readBoolean();
+        //TODO: will do BWC later.
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -47,6 +51,8 @@ public class MLAgentGetRequest extends ActionRequest {
         super.writeTo(out);
         out.writeString(this.agentId);
         out.writeBoolean(isUserInitiatedGetRequest);
+        //TODO: will do BWC later
+        out.writeOptionalString(tenantId);
     }
 
     @Override
