@@ -22,7 +22,7 @@ import java.io.UncheckedIOException;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 
-@Data
+@Getter
 public class MLAgentDeleteRequest extends ActionRequest {
 
     String agentId;

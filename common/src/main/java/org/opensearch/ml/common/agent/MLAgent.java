@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -35,7 +36,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @EqualsAndHashCode
-@Data
+@Getter
 public class MLAgent implements ToXContentObject, Writeable {
     public static final String AGENT_NAME_FIELD = "name";
     public static final String AGENT_TYPE_FIELD = "type";
@@ -52,19 +53,19 @@ public class MLAgent implements ToXContentObject, Writeable {
 
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
 
-    private String name;
-    private String type;
-    private String description;
+    private final String name;
+    private final String type;
+    private final String description;
     private LLMSpec llm;
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
 
-    private Instant createdTime;
-    private Instant lastUpdateTime;
-    private String appType;
+    private final Instant createdTime;
+    private final Instant lastUpdateTime;
+    private final String appType;
     private Boolean isHidden;
-    private String tenantId;
+    private final String tenantId;
 
     @Builder(toBuilder = true)
     public MLAgent(String name,

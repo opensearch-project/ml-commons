@@ -68,8 +68,7 @@ public class RestMLRegisterAgentAction extends BaseRestHandler {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAgent mlAgent = MLAgent.parseFromUserInput(parser);
-        mlAgent.setTenantId(tenantId);
+        MLAgent mlAgent = MLAgent.parseFromUserInput(parser).toBuilder().tenantId(tenantId).build();
         return new MLRegisterAgentRequest(mlAgent);
     }
 }

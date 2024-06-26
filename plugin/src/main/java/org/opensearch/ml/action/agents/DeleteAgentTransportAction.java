@@ -102,7 +102,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (cause instanceof IndexNotFoundException) {
-                            log.error("Failed to get Agent index", cause);
+                            log.info("Failed to get Agent index", cause);
                             actionListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                         } else {
                             log.error("Failed to get ML Agent {}", agentId, cause);
@@ -159,9 +159,10 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                     actionListener.onFailure(e);
                                 }
                             } else {
-                                actionListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
+                                actionListener.onFailure(new OpenSearchStatusException("Fail to find ml agent", RestStatus.NOT_FOUND));
                             }
                         } catch (Exception e) {
+                            log.error("Failed to delete ML agent: {}", agentId, e);
                             actionListener.onFailure(e);
                         }
                     }
