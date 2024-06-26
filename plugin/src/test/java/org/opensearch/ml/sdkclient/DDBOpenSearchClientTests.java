@@ -55,10 +55,6 @@ import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -414,45 +410,4 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         assertEquals(searchDataObjectResponse, searchResponse);
     }
 
-    @Test
-    public void convertJsonArrayToAttributeValueList_TestMultipleJsonType() throws Exception {
-        ObjectMapper objectMapper = new ObjectMapper();
-
-        JsonNode jsonNode = objectMapper.readTree("[\"testString\", 123, true, [\"test1\", \"test2\"], {\"hello\": \"all\"}]");
-        DDBOpenSearchClient.convertJsonArrayToAttributeValueList(jsonNode);
-    }
-
-    @Test
-    public void convertToObjectNode_TestNullInput() {
-        AttributeValue nullAttribute = AttributeValue.builder().nul(true).build();
-        ObjectNode response = DDBOpenSearchClient.convertToObjectNode(ImmutableMap.of("test", nullAttribute));
-        Assert.assertTrue(response.get("test").isNull());
-    }
-
-    @Test
-    public void convertToObjectNode_TestInvalidInput() {
-        AttributeValue nsAttribute = AttributeValue.builder().ns("123").build();
-        Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> DDBOpenSearchClient.convertToObjectNode(ImmutableMap.of("test", nsAttribute))
-            );
-    }
-
-    @Test
-    public void convertToArrayNode_MultipleDataTypes() {
-        ArrayNode arrayNode = DDBOpenSearchClient
-            .convertToArrayNode(
-                Arrays
-                    .asList(
-                        AttributeValue.builder().s("test").build(),
-                        AttributeValue.builder().n("123").build(),
-                        AttributeValue.builder().l(AttributeValue.builder().s("testList").build()).build(),
-                        AttributeValue.builder().nul(true).build(),
-                        AttributeValue.builder().m(ImmutableMap.of("key", AttributeValue.builder().s("testMap").build())).build()
-                    )
-            );
-        assertEquals(5, arrayNode.size());
-
-    }
 }

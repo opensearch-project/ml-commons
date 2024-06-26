@@ -62,7 +62,7 @@ public class SdkClientModule extends AbstractModule {
     SdkClientModule(String remoteMetadataType, String remoteMetadataEndpoint, String region) {
         this.remoteMetadataType = remoteMetadataType;
         this.remoteMetadataEndpoint = remoteMetadataEndpoint;
-        this.region = region == null ? "us-west-2" : region;
+        this.region = region;
     }
 
     @Override

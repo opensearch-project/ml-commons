@@ -22,7 +22,7 @@ public class TestDataObject implements ToXContentObject {
 
     private final String data;
 
-    TestDataObject(String data) {
+    public TestDataObject(String data) {
         this.data = data;
     }
 
