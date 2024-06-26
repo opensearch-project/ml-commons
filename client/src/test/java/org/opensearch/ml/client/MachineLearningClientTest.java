@@ -207,7 +207,7 @@ public class MachineLearningClientTest {
 
             @Override
             public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
-                // noop
+                listener.onResponse(deployModelResponse);
             }
 
             @Override
@@ -264,6 +264,11 @@ public class MachineLearningClientTest {
 
             @Override
             public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
         };

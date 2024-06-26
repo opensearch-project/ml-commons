@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.agent;
 
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -21,24 +22,31 @@ import java.io.UncheckedIOException;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 
+@Data
 public class MLAgentDeleteRequest extends ActionRequest {
-    @Getter
+
     String agentId;
+    String tenantId;
 
     @Builder
-    public MLAgentDeleteRequest(String agentId) {
+    public MLAgentDeleteRequest(String agentId, String tenantId) {
         this.agentId = agentId;
+        this.tenantId = tenantId;
     }
 
     public MLAgentDeleteRequest(StreamInput input) throws IOException {
         super(input);
         this.agentId = input.readString();
+        //TODO: Will check BWC later
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(agentId);
+        // TODO: will check BWC later.
+        output.writeOptionalString(tenantId);
     }
 
     @Override
