@@ -23,10 +23,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.mockito.MockSettings;
 import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.internal.creation.MockSettingsImpl;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -51,19 +48,16 @@ import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
-public class MLEngineTest {
+public class MLEngineTest extends MLStaticMockBase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private MLEngine mlEngine;
-    private MockSettings mockSettingsWithInlineMockMaker;
 
     @Before
     public void setUp() {
         Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
-        mockSettingsWithInlineMockMaker = new MockSettingsImpl()
-            .mockMaker("org.mockito.internal.creation.bytebuddy.InlineByteBuddyMockMaker");
     }
 
     @Test
@@ -149,7 +143,7 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input should not be null");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
-        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class, mockSettingsWithInlineMockMaker)) {
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             mlEngine.train(null);
         }
@@ -160,7 +154,7 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input data set should not be null");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
-        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class, mockSettingsWithInlineMockMaker)) {
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             mlEngine.train(MLInput.builder().algorithm(algoName).build());
         }
@@ -171,7 +165,7 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input data frame should not be null or empty");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
-        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class, mockSettingsWithInlineMockMaker)) {
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             DataFrame dataFrame = new DefaultDataFrame(new ColumnMeta[0]);
             mlEngine.train(MLInput.builder().inputDataset(new DataFrameInputDataset(dataFrame)).algorithm(algoName).build());
@@ -183,7 +177,7 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input data frame should not be null or empty");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
-        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class, mockSettingsWithInlineMockMaker)) {
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructTestDataFrame(0)).build();
             mlEngine.train(MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build());
@@ -195,7 +189,7 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported algorithm: LINEAR_REGRESSION");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
-        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class, mockSettingsWithInlineMockMaker)) {
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructTestDataFrame(10)).build();
             mlEngine.train(MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build());
@@ -232,7 +226,7 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported algorithm: LINEAR_REGRESSION");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
-        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class, mockSettingsWithInlineMockMaker)) {
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructLinearRegressionPredictionDataFrame()).build();
             Input mlInput = MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build();
