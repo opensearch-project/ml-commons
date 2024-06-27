@@ -10,7 +10,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.action.DocWriteResponse.Result.CREATED;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -50,6 +50,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -95,7 +96,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     @Mock
     private ActionListener<GetResponse> modelGroupListener;
 
-    @Mock
     private IndexResponse indexResponse;
 
     ThreadContext threadContext;
@@ -142,9 +142,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         );
         assertNotNull(mlModelGroupManager);
 
-        when(indexResponse.getId()).thenReturn("model_group_ID");
-
-        when(indexResponse.getResult()).thenReturn(CREATED);
+        indexResponse = new IndexResponse(new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0), "model_group_ID", 1, 0, 2, true);
 
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
         future.onResponse(indexResponse);
@@ -181,7 +179,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -198,7 +196,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -217,7 +215,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -230,7 +228,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -244,7 +242,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -258,7 +256,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -271,7 +269,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
@@ -285,7 +283,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You cannot specify backend roles and add all backend roles at the same time.", argumentCaptor.getValue().getMessage());
@@ -299,7 +297,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
@@ -315,7 +313,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
@@ -330,7 +328,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -348,7 +346,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -366,7 +364,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -386,7 +384,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
@@ -400,7 +398,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -413,7 +411,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -430,7 +428,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
@@ -446,7 +444,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
@@ -465,7 +463,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<String> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());

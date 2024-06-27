@@ -10,12 +10,15 @@ package org.opensearch.sdk;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
+import org.opensearch.core.common.Strings;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.XContentParser;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 
-public class PutDataObjectResponseTests {
+public class UpdateDataObjectResponseTests {
 
     private String testId;
     private XContentParser testParser;
@@ -27,8 +30,8 @@ public class PutDataObjectResponseTests {
     }
 
     @Test
-    public void testPutDataObjectResponse() {
-        PutDataObjectResponse response = new PutDataObjectResponse.Builder().id(testId).parser(testParser).build();
+    public void testUpdateDataObjectResponse() {
+        UpdateDataObjectResponse response = new UpdateDataObjectResponse.Builder().id(testId).parser(testParser).build();
 
         assertEquals(testId, response.id());
         assertEquals(testParser, response.parser());

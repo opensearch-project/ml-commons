@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -17,7 +18,6 @@ import java.util.List;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.DocWriteResponse.Result;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -234,8 +234,13 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             updateListener.onFailure(cause);
         } else {
-            log.info("Connector update result: {}, connector id: {}", r.updated(), r.id());
-            updateListener.onResponse(new UpdateResponse(r.shardId(), r.id(), 0, 0, 0, r.updated() ? Result.UPDATED : Result.CREATED));
+            try {
+                UpdateResponse updateResponse = UpdateResponse.fromXContent(r.parser());
+                log.info("Connector update result: {}, connector id: {}", updateResponse.getResult(), updateResponse.getId());
+                updateListener.onResponse(updateResponse);
+            } catch (IOException e) {
+                updateListener.onFailure(e);
+            }
         }
     }
 

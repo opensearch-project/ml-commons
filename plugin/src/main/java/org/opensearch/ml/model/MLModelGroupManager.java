@@ -14,6 +14,7 @@ import java.util.HashSet;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
@@ -132,8 +133,18 @@ public class MLModelGroupManager {
                                         log.error("Failed to index model group", cause);
                                         wrappedListener.onFailure(cause);
                                     } else {
-                                        log.info("Model group creation result: {}, model group id: {}", r.created(), r.id());
-                                        wrappedListener.onResponse(r.id());
+                                        try {
+                                            IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                            log
+                                                .info(
+                                                    "Model group creation result: {}, model group id: {}",
+                                                    indexResponse.getResult(),
+                                                    indexResponse.getId()
+                                                );
+                                            wrappedListener.onResponse(r.id());
+                                        } catch (Exception e) {
+                                            wrappedListener.onFailure(e);
+                                        }
                                     }
                                 });
 

@@ -8,6 +8,10 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -19,10 +23,12 @@ import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -92,8 +98,8 @@ public class DDBOpenSearchClient implements SdkClient {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final String tableName = getTableName(request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
-            String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
             try {
+                String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> item = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
@@ -101,8 +107,15 @@ public class DDBOpenSearchClient implements SdkClient {
                 final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
 
                 dynamoDbClient.putItem(putItemRequest);
-                return new PutDataObjectResponse.Builder().id(id).created(true).build();
+                String simulatedIndexResponse = simulateOpenSearchResponse(
+                    request.index(),
+                    request.id(),
+                    source,
+                    Map.of("result", "created")
+                );
+                return new PutDataObjectResponse.Builder().id(id).parser(createParser(simulatedIndexResponse)).build();
             } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
             }
         }), executor);
@@ -136,19 +149,10 @@ public class DDBOpenSearchClient implements SdkClient {
                     sourceObject = null;
                 } else {
                     found = true;
-                    sourceObject = JsonTransformer.convertDDBAttributeValueMapToObjectNode((getItemResponse.item()));
+                    sourceObject = JsonTransformer.convertDDBAttributeValueMapToObjectNode(getItemResponse.item());
                 }
                 final String source = OBJECT_MAPPER.writeValueAsString(sourceObject);
-                String simulatedGetResponse = "{\"_index\":\""
-                    + request.index()
-                    + "\",\"_id\":\""
-                    + request.id()
-                    + "\",\"found\":"
-                    + found
-                    + ",\"_source\":"
-                    + source
-                    + "}";
-
+                String simulatedGetResponse = simulateOpenSearchResponse(request.index(), request.id(), source, Map.of("found", found));
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, simulatedGetResponse);
                 // This would consume parser content so we need to create a new parser for the map
@@ -161,7 +165,7 @@ public class DDBOpenSearchClient implements SdkClient {
                 return new GetDataObjectResponse.Builder().id(request.id()).parser(parser).source(sourceAsMap).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
-                throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
+                throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
             }
         }), executor);
     }
@@ -187,7 +191,8 @@ public class DDBOpenSearchClient implements SdkClient {
                     .build();
                 dynamoDbClient.updateItem(updateItemRequest);
 
-                return new UpdateDataObjectResponse.Builder().id(request.id()).shardId(request.index()).updated(true).build();
+                String simulatedUpdateResponse = simulateOpenSearchResponse(request.index(), request.id(), source, Map.of("found", true));
+                return new UpdateDataObjectResponse.Builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -218,8 +223,19 @@ public class DDBOpenSearchClient implements SdkClient {
             )
             .build();
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
-            dynamoDbClient.deleteItem(deleteItemRequest);
-            return new DeleteDataObjectResponse.Builder().id(request.id()).deleted(true).build();
+            try {
+                dynamoDbClient.deleteItem(deleteItemRequest);
+                String simulatedDeleteResponse = simulateOpenSearchResponse(
+                    request.index(),
+                    request.id(),
+                    null,
+                    Map.of("result", "deleted")
+                );
+                return new DeleteDataObjectResponse.Builder().id(request.id()).parser(createParser(simulatedDeleteResponse)).build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
+            }
         }), executor);
     }
 
@@ -242,4 +258,33 @@ public class DDBOpenSearchClient implements SdkClient {
         return index.replaceAll("\\.", "");
     }
 
+    private XContentParser createParser(String json) throws IOException {
+        return jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, json);
+    }
+
+    private String simulateOpenSearchResponse(String index, String id, String source, Map<String, Object> additionalFields) {
+        StringBuilder sb = new StringBuilder("{");
+        // Fields with a DDB counterpart
+        sb.append("\"_index\":\"").append(index).append("\",");
+        sb.append("\"_id\":\"").append(id).append("\",");
+        // Fields we must simulate using default values
+        sb.append("\"_primary_term\":").append(UNASSIGNED_PRIMARY_TERM).append(",");
+        sb.append("\"_seq_no\":").append(UNASSIGNED_SEQ_NO).append(",");
+        sb.append("\"_version\":").append(-1).append(",");
+        sb.append("\"_shards\":").append(Strings.toString(MediaTypeRegistry.JSON, new ShardInfo())).append(",");
+        // Finish up
+        additionalFields
+            .entrySet()
+            .stream()
+            .forEach(
+                e -> sb
+                    .append("\"")
+                    .append(e.getKey())
+                    .append("\":")
+                    .append(e.getValue() instanceof String ? ("\"" + e.getValue() + "\"") : e.getValue())
+                    .append(",")
+            );
+        sb.append("\"_source\":").append(source).append("}");
+        return sb.toString();
+    }
 }

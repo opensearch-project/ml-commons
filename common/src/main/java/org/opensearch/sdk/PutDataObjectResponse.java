@@ -8,20 +8,22 @@
  */
 package org.opensearch.sdk;
 
+import org.opensearch.core.xcontent.XContentParser;
+
 public class PutDataObjectResponse {
     private final String id;
-    private final boolean created;
+    private final XContentParser parser;
 
     /**
-     * Instantiate this request with an id and creation status.
+     * Instantiate this request with an id and parser representing an IndexResponse
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
      * @param id the document id
-     * @param created Whether the object was created.
+     * @param parser a parser that can be used to create an IndexResponse
      */
-    public PutDataObjectResponse(String id, boolean created) {
+    public PutDataObjectResponse(String id, XContentParser parser) {
         this.id = id;
-        this.created = created;
+        this.parser = parser;
     }
 
     /**
@@ -29,23 +31,23 @@ public class PutDataObjectResponse {
      * @return the id
      */
     public String id() {
-        return id;
+        return this.id;
     }
-
+    
     /**
-     * Returns whether creation was successful
-     * @return true if creation was successful
+     * Returns the parser that can be used to create an IndexResponse
+     * @return the parser
      */
-    public boolean created() {
-        return created;
+    public XContentParser parser() {
+        return this.parser;
     }
-
+    
     /**
      * Class for constructing a Builder for this Response Object
      */
     public static class Builder {
         private String id = null;
-        private boolean created = false;
+        private XContentParser parser = null;
 
         /**
          * Empty Constructor for the Builder object
@@ -61,23 +63,23 @@ public class PutDataObjectResponse {
             this.id = id;
             return this;
         }
-
+        
         /**
-         * Add a created status to this builder
-         * @param created the created status to add
+         * Add a parser to this builder
+         * @param parser a parser that can be used to create an IndexResponse
          * @return the updated builder
          */
-        public Builder created(boolean created) {
-            this.created = created;
+        public Builder parser(XContentParser parser) {
+            this.parser = parser;
             return this;
         }
-
+        
         /**
-         * Builds the object
+         * Builds the response
          * @return A {@link PutDataObjectResponse}
          */
         public PutDataObjectResponse build() {
-            return new PutDataObjectResponse(this.id, this.created);
+            return new PutDataObjectResponse(this.id, this.parser);
         }
     }
 }

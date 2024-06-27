@@ -205,7 +205,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -221,7 +221,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -241,7 +241,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -259,7 +259,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
@@ -276,7 +276,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
@@ -291,7 +291,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
@@ -308,7 +308,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have any backend roles.", argumentCaptor.getValue().getMessage());
@@ -325,7 +325,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You have to specify backend roles when add all backend roles is set to false.", argumentCaptor.getValue().getMessage());
@@ -342,7 +342,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -364,7 +364,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
@@ -380,7 +380,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -396,7 +396,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -411,7 +411,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -425,7 +425,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -441,7 +441,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -456,7 +456,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -473,7 +473,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -490,7 +490,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -511,7 +511,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to update Model Group", argumentCaptor.getValue().getMessage());
@@ -525,7 +525,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -545,7 +545,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -563,7 +563,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLUpdateModelGroupResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

@@ -12,6 +12,7 @@ import java.time.Instant;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -95,9 +96,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                                 log.error("Failed to index ML agent", cause);
                                 listener.onFailure(cause);
                             } else {
-                                log.info("Agent creation result: {}, Agent id: {}", r.created(), r.id());
-                                MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
-                                listener.onResponse(response);
+                                try {
+                                    IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                    log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
+                                    MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
+                                    listener.onResponse(response);
+                                } catch (Exception e) {
+                                    listener.onFailure(e);
+                                }
                             }
                         });
                 } catch (Exception e) {

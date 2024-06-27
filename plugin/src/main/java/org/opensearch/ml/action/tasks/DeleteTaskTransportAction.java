@@ -10,6 +10,8 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
+import java.io.IOException;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -171,10 +173,13 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             log.error("Failed to delete ML task: {}", taskId, cause);
             actionListener.onFailure(cause);
         } else {
-            log.info("Task deletion result: {}, task id: {}", response.deleted(), response.id());
-            DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
-            deleteResponse.setShardInfo(response.shardInfo());
-            actionListener.onResponse(deleteResponse);
+            try {
+                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                log.info("Task deletion result: {}, task id: {}", deleteResponse.getResult(), deleteResponse.getId());
+                actionListener.onResponse(deleteResponse);
+            } catch (IOException e) {
+                actionListener.onFailure(e);
+            }
         }
     }
 }
