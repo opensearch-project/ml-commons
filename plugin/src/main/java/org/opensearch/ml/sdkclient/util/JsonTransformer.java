@@ -27,7 +27,7 @@ public class JsonTransformer {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @VisibleForTesting
-    public static Map<String, AttributeValue> convertJsonObjectToItem(JsonNode jsonNode) {
+    public static Map<String, AttributeValue> convertJsonObjectToDDBAttributeMap(JsonNode jsonNode) {
         Map<String, AttributeValue> item = new HashMap<>();
         Iterator<Map.Entry<String, JsonNode>> fields = jsonNode.fields();
 
@@ -42,7 +42,7 @@ public class JsonTransformer {
             } else if (field.getValue().isNull()) {
                 item.put(field.getKey(), AttributeValue.builder().nul(true).build());
             } else if (field.getValue().isObject()) {
-                item.put(field.getKey(), AttributeValue.builder().m(convertJsonObjectToItem(field.getValue())).build());
+                item.put(field.getKey(), AttributeValue.builder().m(convertJsonObjectToDDBAttributeMap(field.getValue())).build());
             } else if (field.getValue().isArray()) {
                 item.put(field.getKey(), AttributeValue.builder().l(convertJsonArrayToAttributeValueList(field.getValue())).build());
             } else {
@@ -67,7 +67,7 @@ public class JsonTransformer {
             } else if (element.isNull()) {
                 attributeValues.add(AttributeValue.builder().nul(true).build());
             } else if (element.isObject()) {
-                attributeValues.add(AttributeValue.builder().m(convertJsonObjectToItem(element)).build());
+                attributeValues.add(AttributeValue.builder().m(convertJsonObjectToDDBAttributeMap(element)).build());
             } else if (element.isArray()) {
                 attributeValues.add(AttributeValue.builder().l(convertJsonArrayToAttributeValueList(element)).build());
             } else {
@@ -79,7 +79,7 @@ public class JsonTransformer {
         return attributeValues;
     }
 
-    public static ObjectNode convertToObjectNode(Map<String, AttributeValue> item) {
+    public static ObjectNode convertDDBAttributeValueMapToObjectNode(Map<String, AttributeValue> item) {
         ObjectNode objectNode = OBJECT_MAPPER.createObjectNode();
 
         item.forEach((key, value) -> {
@@ -94,10 +94,10 @@ public class JsonTransformer {
                     objectNode.put(key, value.bool());
                     break;
                 case L:
-                    objectNode.put(key, convertToArrayNode(value.l()));
+                    objectNode.put(key, convertAttributeValueListToArrayNode(value.l()));
                     break;
                 case M:
-                    objectNode.set(key, convertToObjectNode(value.m()));
+                    objectNode.set(key, convertDDBAttributeValueMapToObjectNode(value.m()));
                     break;
                 case NUL:
                     objectNode.putNull(key);
@@ -111,7 +111,7 @@ public class JsonTransformer {
 
     }
 
-    public static ArrayNode convertToArrayNode(final List<AttributeValue> attributeValueList) {
+    public static ArrayNode convertAttributeValueListToArrayNode(final List<AttributeValue> attributeValueList) {
         ArrayNode arrayNode = OBJECT_MAPPER.createArrayNode();
         attributeValueList.forEach(attribute -> {
             switch (attribute.type()) {
@@ -125,10 +125,10 @@ public class JsonTransformer {
                     arrayNode.add(attribute.bool());
                     break;
                 case L:
-                    arrayNode.add(convertToArrayNode(attribute.l()));
+                    arrayNode.add(convertAttributeValueListToArrayNode(attribute.l()));
                     break;
                 case M:
-                    arrayNode.add(convertToObjectNode(attribute.m()));
+                    arrayNode.add(convertDDBAttributeValueMapToObjectNode(attribute.m()));
                     break;
                 case NUL:
                     arrayNode.add((JsonNode) null);

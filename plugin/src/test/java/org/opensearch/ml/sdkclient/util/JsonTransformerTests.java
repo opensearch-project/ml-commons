@@ -46,7 +46,7 @@ public class JsonTransformerTests extends OpenSearchTestCase {
             .testObject(testDataObject)
             .build();
         String source = Strings.toString(MediaTypeRegistry.JSON, complexDataObject);
-        Map<String, AttributeValue> itemResponse = JsonTransformer.convertJsonObjectToItem(OBJECT_MAPPER.readTree(source));
+        Map<String, AttributeValue> itemResponse = JsonTransformer.convertJsonObjectToDDBAttributeMap(OBJECT_MAPPER.readTree(source));
         Assert.assertEquals(5, itemResponse.size());
         Assert.assertEquals("testString", itemResponse.get("testString").s());
         Assert.assertEquals("123", itemResponse.get("testNumber").n());
@@ -80,7 +80,7 @@ public class JsonTransformerTests extends OpenSearchTestCase {
     @Test
     public void convertToObjectNode_TestNullInput() {
         AttributeValue nullAttribute = AttributeValue.builder().nul(true).build();
-        ObjectNode response = JsonTransformer.convertToObjectNode(ImmutableMap.of("test", nullAttribute));
+        ObjectNode response = JsonTransformer.convertDDBAttributeValueMapToObjectNode(ImmutableMap.of("test", nullAttribute));
         Assert.assertTrue(response.get("test").isNull());
     }
 
@@ -88,13 +88,16 @@ public class JsonTransformerTests extends OpenSearchTestCase {
     public void convertToObjectNode_TestInvalidInput() {
         AttributeValue nsAttribute = AttributeValue.builder().ns("123").build();
         Assert
-            .assertThrows(IllegalArgumentException.class, () -> JsonTransformer.convertToObjectNode(ImmutableMap.of("test", nsAttribute)));
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> JsonTransformer.convertDDBAttributeValueMapToObjectNode(ImmutableMap.of("test", nsAttribute))
+            );
     }
 
     @Test
     public void convertToArrayNode_MultipleDataTypes() {
         ArrayNode arrayNode = JsonTransformer
-            .convertToArrayNode(
+            .convertAttributeValueListToArrayNode(
                 Arrays
                     .asList(
                         AttributeValue.builder().s("test").build(),

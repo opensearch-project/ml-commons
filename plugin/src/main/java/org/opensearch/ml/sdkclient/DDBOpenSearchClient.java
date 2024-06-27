@@ -95,7 +95,7 @@ public class DDBOpenSearchClient implements SdkClient {
             String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
             try {
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
-                Map<String, AttributeValue> item = JsonTransformer.convertJsonObjectToItem(jsonNode);
+                Map<String, AttributeValue> item = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
                 final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
@@ -136,7 +136,7 @@ public class DDBOpenSearchClient implements SdkClient {
                     sourceObject = null;
                 } else {
                     found = true;
-                    sourceObject = JsonTransformer.convertToObjectNode((getItemResponse.item()));
+                    sourceObject = JsonTransformer.convertDDBAttributeValueMapToObjectNode((getItemResponse.item()));
                 }
                 final String source = OBJECT_MAPPER.writeValueAsString(sourceObject);
                 String simulatedGetResponse = "{\"_index\":\""
@@ -177,7 +177,7 @@ public class DDBOpenSearchClient implements SdkClient {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
-                Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToItem(jsonNode);
+                Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 updateItem.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
                 updateItem.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest updateItemRequest = UpdateItemRequest
