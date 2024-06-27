@@ -37,5 +37,5 @@ public class Constants {
     public static final String AD_ANOMALY_SCORE_THRESHOLD = "anomalyScoreThreshold";
     public static final String AD_DATE_FORMAT = "dateFormat";
 
-    public static final String TENANT_ID = "tenant_id";
+    public static final String TENANT_ID = "x-tenant-id";
 }
