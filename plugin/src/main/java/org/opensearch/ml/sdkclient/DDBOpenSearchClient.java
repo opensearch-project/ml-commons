@@ -26,6 +26,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.sdkclient.util.JsonTransformer;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -38,7 +39,10 @@ import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -46,22 +50,35 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 
 /**
  * DDB implementation of {@link SdkClient}. DDB table name will be mapped to index name.
  *
  */
-@AllArgsConstructor
 @Log4j2
 public class DDBOpenSearchClient implements SdkClient {
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     private static final String HASH_KEY = "tenant_id";
     private static final String RANGE_KEY = "id";
-    private static final String SOURCE = "source";
 
     private DynamoDbClient dynamoDbClient;
+    private RemoteClusterIndicesClient remoteClusterIndicesClient;
+
+    /**
+     * Default constructor
+     *
+     * @param dynamoDbClient AWS DDB client to perform CRUD operations on a DDB table.
+     * @param remoteClusterIndicesClient Remote opensearch client to perform search operations. Documents written to DDB
+     *                                  needs to be synced offline with remote opensearch.
+     */
+    public DDBOpenSearchClient(DynamoDbClient dynamoDbClient, RemoteClusterIndicesClient remoteClusterIndicesClient) {
+        this.dynamoDbClient = dynamoDbClient;
+        this.remoteClusterIndicesClient = remoteClusterIndicesClient;
+    }
 
     /**
      * DDB implementation to write data objects to DDB table. Tenant ID will be used as hash key and document ID will
@@ -76,16 +93,18 @@ public class DDBOpenSearchClient implements SdkClient {
         final String tableName = getTableName(request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
-            final Map<String, AttributeValue> item = Map
-                .ofEntries(
-                    Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
-                    Map.entry(RANGE_KEY, AttributeValue.builder().s(id).build()),
-                    Map.entry(SOURCE, AttributeValue.builder().s(source).build())
-                );
-            final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
+            try {
+                JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
+                Map<String, AttributeValue> item = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
+                item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
+                final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
 
-            dynamoDbClient.putItem(putItemRequest);
-            return new PutDataObjectResponse.Builder().id(id).created(true).build();
+                dynamoDbClient.putItem(putItemRequest);
+                return new PutDataObjectResponse.Builder().id(id).created(true).build();
+            } catch (IOException e) {
+                throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
+            }
         }), executor);
     }
 
@@ -110,15 +129,16 @@ public class DDBOpenSearchClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 final GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
-                String source;
+                ObjectNode sourceObject;
                 boolean found;
                 if (getItemResponse == null || getItemResponse.item() == null || getItemResponse.item().isEmpty()) {
                     found = false;
-                    source = null;
+                    sourceObject = null;
                 } else {
                     found = true;
-                    source = getItemResponse.item().get(SOURCE).s();
+                    sourceObject = JsonTransformer.convertDDBAttributeValueMapToObjectNode((getItemResponse.item()));
                 }
+                final String source = OBJECT_MAPPER.writeValueAsString(sourceObject);
                 String simulatedGetResponse = "{\"_index\":\""
                     + request.index()
                     + "\",\"_id\":\""
@@ -128,6 +148,7 @@ public class DDBOpenSearchClient implements SdkClient {
                     + ",\"_source\":"
                     + source
                     + "}";
+
                 XContentParser parser = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, simulatedGetResponse);
                 // This would consume parser content so we need to create a new parser for the map
@@ -145,10 +166,37 @@ public class DDBOpenSearchClient implements SdkClient {
         }), executor);
     }
 
+    /**
+     * Makes use of DDB update request to update data object.
+     *
+     */
     @Override
     public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
-        // TODO: Implement update
-        return null;
+        final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+            try {
+                String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
+                JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
+                Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
+                updateItem.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                updateItem.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
+                UpdateItemRequest updateItemRequest = UpdateItemRequest
+                    .builder()
+                    .tableName(getTableName(request.index()))
+                    .key(updateItem)
+                    .build();
+                dynamoDbClient.updateItem(updateItemRequest);
+
+                return new UpdateDataObjectResponse.Builder().id(request.id()).shardId(request.index()).updated(true).build();
+            } catch (IOException e) {
+                log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
+                // Rethrow unchecked exception on update IOException
+                throw new OpenSearchStatusException(
+                    "Parsing error updating data object " + request.id() + " in index " + request.index(),
+                    RestStatus.BAD_REQUEST
+                );
+            }
+        }), executor);
     }
 
     /**
@@ -175,11 +223,17 @@ public class DDBOpenSearchClient implements SdkClient {
         }), executor);
     }
 
+    /**
+     * DDB data needs to be synced with opensearch cluster. {@link RemoteClusterIndicesClient} will then be used to
+     * search data in opensearch cluster.
+     *
+     * @param request
+     * @param executor
+     * @return Search data object response
+     */
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        // TODO will implement this later.
-
-        return null;
+        return this.remoteClusterIndicesClient.searchDataObjectAsync(request, executor);
     }
 
     private String getTableName(String index) {
@@ -187,4 +241,5 @@ public class DDBOpenSearchClient implements SdkClient {
         // it will be removed from name.
         return index.replaceAll("\\.", "");
     }
+
 }

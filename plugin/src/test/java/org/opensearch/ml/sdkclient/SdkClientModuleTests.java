@@ -44,7 +44,7 @@ public class SdkClientModuleTests extends OpenSearchTestCase {
     }
 
     public void testDDBBinding() {
-        Injector injector = Guice.createInjector(new SdkClientModule(SdkClientModule.AWS_DYNAMO_DB, null, "eu-west-3"));
+        Injector injector = Guice.createInjector(new SdkClientModule(SdkClientModule.AWS_DYNAMO_DB, "http://example.org", "eu-west-3"));
 
         SdkClient sdkClient = injector.getInstance(SdkClient.class);
         assertTrue(sdkClient instanceof DDBOpenSearchClient);
