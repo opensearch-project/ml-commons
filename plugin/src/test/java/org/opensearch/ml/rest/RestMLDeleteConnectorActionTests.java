@@ -27,6 +27,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
@@ -124,7 +125,7 @@ public class RestMLDeleteConnectorActionTests extends OpenSearchTestCase {
 
         Map<String, List<String>> headers = new HashMap<>();
         if (tenantId != null) {
-            headers.put("tenant_id", Collections.singletonList(tenantId));
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         }
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();

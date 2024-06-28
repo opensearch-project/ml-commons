@@ -35,6 +35,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
@@ -157,7 +158,7 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
 
         Map<String, List<String>> headers = new HashMap<>();
         if (tenantId != null) {
-            headers.put("tenant_id", Collections.singletonList(tenantId));
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         }
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();
