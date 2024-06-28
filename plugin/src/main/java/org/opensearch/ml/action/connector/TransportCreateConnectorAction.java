@@ -9,10 +9,12 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -152,9 +154,18 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                             log.error("Failed to create ML connector", cause);
                             listener.onFailure(cause);
                         } else {
-                            log.info("Connector creation result: {}, connector id: {}", r.created(), r.id());
-                            MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.id());
-                            listener.onResponse(response);
+                            try {
+                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                log
+                                    .info(
+                                        "Connector creation result: {}, connector id: {}",
+                                        indexResponse.getResult(),
+                                        indexResponse.getId()
+                                    );
+                                listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
+                            } catch (IOException e) {
+                                listener.onFailure(e);
+                            }
                         }
                     });
             } catch (Exception e) {

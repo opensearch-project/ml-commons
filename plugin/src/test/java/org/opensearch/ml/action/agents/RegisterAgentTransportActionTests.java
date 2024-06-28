@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -39,6 +40,7 @@ import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -80,6 +82,8 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private ActionListener<MLRegisterAgentResponse> actionListener;
+
+    IndexResponse indexResponse;
 
     @Mock
     private NamedXContentRegistry xContentRegistry;
@@ -127,6 +131,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             clusterService,
             mlFeatureEnabledSetting
         );
+        indexResponse = new IndexResponse(new ShardId(ML_AGENT_INDEX, "_na_", 0), "AGENT_ID", 1, 0, 2, true);
     }
 
     @AfterClass
@@ -153,13 +158,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         }).when(mlIndicesHandler).initMLAgentIndex(any());
 
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterAgentResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportRegisterAgentAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -185,7 +190,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterAgentResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportRegisterAgentAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to create ML agent index", argumentCaptor.getValue().getMessage());
@@ -216,7 +221,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterAgentResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportRegisterAgentAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
 
@@ -244,7 +249,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterAgentResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportRegisterAgentAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -270,13 +275,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         }).when(mlIndicesHandler).initMLAgentIndex(any());
 
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterAgentResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportRegisterAgentAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -297,13 +302,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         }).when(mlIndicesHandler).initMLAgentIndex(any());
 
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterAgentResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         transportRegisterAgentAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());

@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.input.Constants.TENANT_ID;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -211,10 +212,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             log.error("Failed to delete ML connector: {}", connectorId, cause);
             actionListener.onFailure(cause);
         } else {
-            log.info("Connector deletion result: {}, connector id: {}", response.deleted(), response.id());
-            DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
-            deleteResponse.setShardInfo(response.shardInfo());
-            actionListener.onResponse(deleteResponse);
+            try {
+                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                log.info("Connector deletion result: {}, connector id: {}", deleteResponse.getResult(), response.id());
+                actionListener.onResponse(deleteResponse);
+            } catch (IOException e) {
+                actionListener.onFailure(e);
+            }
         }
     }
 }

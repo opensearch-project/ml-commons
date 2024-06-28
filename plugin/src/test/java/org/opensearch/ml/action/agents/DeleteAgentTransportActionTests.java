@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -35,7 +36,6 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.action.support.replication.ReplicationResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -82,7 +82,6 @@ public class DeleteAgentTransportActionTests {
     @Mock
     ClusterService clusterService;
 
-    @Mock
     DeleteResponse deleteResponse;
 
     @Mock
@@ -129,9 +128,7 @@ public class DeleteAgentTransportActionTests {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
 
-        when(deleteResponse.getId()).thenReturn("AGENT_ID");
-        when(deleteResponse.getShardId()).thenReturn(mock(ShardId.class));
-        when(deleteResponse.getShardInfo()).thenReturn(mock(ReplicationResponse.ShardInfo.class));
+        deleteResponse = new DeleteResponse(new ShardId(ML_AGENT_INDEX, "_na_", 0), "AGENT_ID", 1, 0, 2, true);
     }
 
     @AfterClass
@@ -162,7 +159,6 @@ public class DeleteAgentTransportActionTests {
         getFuture.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(getFuture);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -170,7 +166,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -193,7 +189,6 @@ public class DeleteAgentTransportActionTests {
         getFuture.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(getFuture);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new NullPointerException("Failed to delete ML Agent " + agentId));
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -201,7 +196,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -226,7 +221,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -251,7 +246,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -272,7 +267,6 @@ public class DeleteAgentTransportActionTests {
         getFuture.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(getFuture);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -282,7 +276,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -306,7 +300,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -329,7 +323,6 @@ public class DeleteAgentTransportActionTests {
         getFuture.onResponse(getResponse);
         when(client.get(any(GetRequest.class))).thenReturn(getFuture);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onFailure(expectedException);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -338,7 +331,7 @@ public class DeleteAgentTransportActionTests {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteAgentTransportAction.doExecute(task, deleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         // Verify that actionListener.onFailure() was called with the expected exception
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
@@ -353,7 +346,7 @@ public class DeleteAgentTransportActionTests {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(new MLToolSpec("test", "test", "test", Collections.emptyMap(), false)),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,

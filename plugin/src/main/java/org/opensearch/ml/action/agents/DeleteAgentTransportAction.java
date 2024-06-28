@@ -14,7 +14,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -81,7 +80,6 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
         MLAgentDeleteRequest mlAgentDeleteRequest = MLAgentDeleteRequest.fromActionRequest(request);
         String agentId = mlAgentDeleteRequest.getAgentId();
         String tenantId = mlAgentDeleteRequest.getTenantId();
-        GetRequest getRequest = new GetRequest(ML_AGENT_INDEX).id(agentId);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
@@ -190,10 +188,13 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
             log.error("Failed to delete ML Agent : {}", agentId, cause);
             actionListener.onFailure(cause);
         } else {
-            log.info("Agent deletion result: {}, agent id: {}", response.deleted(), response.id());
-            DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
-            deleteResponse.setShardInfo(response.shardInfo());
-            actionListener.onResponse(deleteResponse);
+            try {
+                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                log.info("Agent deletion result: {}, agent id: {}", deleteResponse.getResult(), response.id());
+                actionListener.onResponse(deleteResponse);
+            } catch (Exception e) {
+                actionListener.onFailure(e);
+            }
         }
     }
 }

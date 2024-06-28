@@ -7,11 +7,11 @@ package org.opensearch.ml.action.tasks;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -35,7 +35,6 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.action.support.replication.ReplicationResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
@@ -82,9 +81,6 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
     ActionListener<DeleteResponse> actionListener;
 
     @Mock
-    DeleteResponse deleteResponse;
-
-    @Mock
     NamedXContentRegistry xContentRegistry;
 
     @Mock
@@ -123,10 +119,6 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
-
-        when(deleteResponse.getId()).thenReturn("TASK_ID");
-        when(deleteResponse.getShardId()).thenReturn(mock(ShardId.class));
-        when(deleteResponse.getShardInfo()).thenReturn(mock(ReplicationResponse.ShardInfo.class));
     }
 
     @AfterClass
@@ -136,7 +128,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testDeleteTask_Success() throws IOException, InterruptedException {
-        when(deleteResponse.getResult()).thenReturn(DELETED);
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "TASK_ID", 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -150,7 +142,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -169,7 +161,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -185,7 +177,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -201,7 +193,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -217,7 +209,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -226,8 +218,6 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testDeleteTask_RuntimeException() throws IOException, InterruptedException {
-
-        when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new RuntimeException("errorMessage"));
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -241,7 +231,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -255,7 +245,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -271,7 +261,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -288,7 +278,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -302,7 +292,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onFailure(any(Exception.class));
     }

@@ -29,6 +29,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.Result;
@@ -147,7 +148,14 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, indexRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        assertTrue(response.created());
+
+        org.opensearch.action.index.IndexResponse indexActionResponse = org.opensearch.action.index.IndexResponse
+            .fromXContent(response.parser());
+        assertEquals(TEST_ID, indexActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.CREATED, indexActionResponse.getResult());
+        assertEquals(0, indexActionResponse.getShardInfo().getFailed());
+        assertEquals(1, indexActionResponse.getShardInfo().getSuccessful());
+        assertEquals(1, indexActionResponse.getShardInfo().getTotal());
     }
 
     public void testPutDataObject_Updated() throws IOException {
@@ -173,7 +181,14 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, indexRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        assertFalse(response.created());
+
+        org.opensearch.action.index.IndexResponse indexActionResponse = org.opensearch.action.index.IndexResponse
+            .fromXContent(response.parser());
+        assertEquals(TEST_ID, indexActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.UPDATED, indexActionResponse.getResult());
+        assertEquals(0, indexActionResponse.getShardInfo().getFailed());
+        assertEquals(1, indexActionResponse.getShardInfo().getSuccessful());
+        assertEquals(1, indexActionResponse.getShardInfo().getTotal());
     }
 
     public void testPutDataObject_Exception() throws IOException {
@@ -290,7 +305,14 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        assertTrue(response.updated());
+
+        org.opensearch.action.update.UpdateResponse updateActionResponse = org.opensearch.action.update.UpdateResponse
+            .fromXContent(response.parser());
+        assertEquals(TEST_ID, updateActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.UPDATED, updateActionResponse.getResult());
+        assertEquals(0, updateActionResponse.getShardInfo().getFailed());
+        assertEquals(1, updateActionResponse.getShardInfo().getSuccessful());
+        assertEquals(1, updateActionResponse.getShardInfo().getTotal());
     }
 
     public void testUpdateDataObject_NotFound() throws IOException {
@@ -321,7 +343,14 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        assertFalse(response.updated());
+
+        org.opensearch.action.update.UpdateResponse updateActionResponse = org.opensearch.action.update.UpdateResponse
+            .fromXContent(response.parser());
+        assertEquals(TEST_ID, updateActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.CREATED, updateActionResponse.getResult());
+        assertEquals(0, updateActionResponse.getShardInfo().getFailed());
+        assertEquals(1, updateActionResponse.getShardInfo().getSuccessful());
+        assertEquals(1, updateActionResponse.getShardInfo().getTotal());
     }
 
     public void testtUpdateDataObject_Exception() throws IOException {
@@ -365,10 +394,14 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         assertEquals(TEST_INDEX, deleteRequestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
-        assertEquals(2, response.shardInfo().getTotal());
-        assertEquals(2, response.shardInfo().getSuccessful());
-        assertEquals(0, response.shardInfo().getFailed());
-        assertTrue(response.deleted());
+
+        org.opensearch.action.delete.DeleteResponse deleteActionResponse = org.opensearch.action.delete.DeleteResponse
+            .fromXContent(response.parser());
+        assertEquals(TEST_ID, deleteActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.DELETED, deleteActionResponse.getResult());
+        assertEquals(0, deleteActionResponse.getShardInfo().getFailed());
+        assertEquals(2, deleteActionResponse.getShardInfo().getSuccessful());
+        assertEquals(2, deleteActionResponse.getShardInfo().getTotal());
     }
 
     public void testDeleteDataObject_NotFound() throws IOException {
@@ -392,12 +425,13 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .toCompletableFuture()
             .join();
 
-        assertEquals(TEST_INDEX, deleteRequestCaptor.getValue().index());
-        assertEquals(TEST_ID, response.id());
-        assertEquals(2, response.shardInfo().getTotal());
-        assertEquals(2, response.shardInfo().getSuccessful());
-        assertEquals(0, response.shardInfo().getFailed());
-        assertFalse(response.deleted());
+        org.opensearch.action.delete.DeleteResponse deleteActionResponse = org.opensearch.action.delete.DeleteResponse
+            .fromXContent(response.parser());
+        assertEquals(TEST_ID, deleteActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.NOT_FOUND, deleteActionResponse.getResult());
+        assertEquals(0, deleteActionResponse.getShardInfo().getFailed());
+        assertEquals(2, deleteActionResponse.getShardInfo().getSuccessful());
+        assertEquals(2, deleteActionResponse.getShardInfo().getTotal());
     }
 
     public void testDeleteDataObject_Exception() throws IOException {

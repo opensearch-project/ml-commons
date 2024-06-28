@@ -460,7 +460,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 "connectorId",
                 latchedActionListener
             );
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         verify(client, times(1)).get(requestCaptor.capture());
@@ -489,7 +489,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 "connectorId",
                 latchedActionListener
             );
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConnectorActionListener).onFailure(argumentCaptor.capture());
@@ -518,7 +518,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 "connectorId",
                 latchedActionListener
             );
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(getConnectorActionListener).onFailure(argumentCaptor.capture());

@@ -8,19 +8,16 @@
  */
 package org.opensearch.ml.sdkclient;
 
-import static org.opensearch.action.DocWriteResponse.Result.CREATED;
-import static org.opensearch.action.DocWriteResponse.Result.DELETED;
-import static org.opensearch.action.DocWriteResponse.Result.UPDATED;
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -37,11 +34,15 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.DeprecationHandler;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -89,7 +90,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                     )
                     .actionGet();
                 log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
-                return new PutDataObjectResponse.Builder().id(indexResponse.getId()).created(indexResponse.getResult() == CREATED).build();
+                return new PutDataObjectResponse.Builder().id(indexResponse.getId()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -108,20 +109,33 @@ public class LocalClusterIndicesClient implements SdkClient {
                 GetResponse getResponse = client
                     .get(new GetRequest(request.index(), request.id()).fetchSourceContext(request.fetchSourceContext()))
                     .actionGet();
-                if (getResponse == null || !getResponse.isExists()) {
-                    getResponse = new GetResponse(
-                        new GetResult(request.index(), request.id(), UNASSIGNED_SEQ_NO, 0, 1, false, null, null, null)
-                    );
+                if (getResponse == null) {
+                    log.info("Null GetResponse");
                     return new GetDataObjectResponse.Builder()
                         .id(request.id())
-                        .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.toString()))
-                        .source(Collections.emptyMap())
+                        .parser(
+                            createParser(
+                                new GetResponse(
+                                    new GetResult(
+                                        request.index(),
+                                        request.id(),
+                                        UNASSIGNED_SEQ_NO,
+                                        UNASSIGNED_PRIMARY_TERM,
+                                        -1,
+                                        false,
+                                        null,
+                                        null,
+                                        null
+                                    )
+                                )
+                            )
+                        )
                         .build();
                 }
                 log.info("Retrieved data object");
                 return new GetDataObjectResponse.Builder()
                     .id(getResponse.getId())
-                    .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.toString()))
+                    .parser(createParser(getResponse))
                     .source(getResponse.getSource())
                     .build();
             } catch (IOException e) {
@@ -145,12 +159,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                     )
                     .actionGet();
                 log.info("Update status for id {}: {}", updateResponse.getId(), updateResponse.getResult());
-                return new UpdateDataObjectResponse.Builder()
-                    .id(updateResponse.getId())
-                    .shardId(updateResponse.getShardId())
-                    .shardInfo(updateResponse.getShardInfo())
-                    .updated(updateResponse.getResult() == UPDATED)
-                    .build();
+                return new UpdateDataObjectResponse.Builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -164,15 +173,18 @@ public class LocalClusterIndicesClient implements SdkClient {
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
-            log.info("Deleting {} from {}", request.id(), request.index());
-            DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
-            log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
-            return new DeleteDataObjectResponse.Builder()
-                .id(deleteResponse.getId())
-                .shardId(deleteResponse.getShardId())
-                .shardInfo(deleteResponse.getShardInfo())
-                .deleted(deleteResponse.getResult() == DELETED)
-                .build();
+            try {
+                log.info("Deleting {} from {}", request.id(), request.index());
+                DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
+                log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
+                return new DeleteDataObjectResponse.Builder().id(deleteResponse.getId()).parser(createParser(deleteResponse)).build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to parse data object to deletion response in index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+            }
         }), executor);
     }
 
@@ -183,9 +195,7 @@ public class LocalClusterIndicesClient implements SdkClient {
             SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
             try {
-                return new SearchDataObjectResponse.Builder()
-                    .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchResponse.toString()))
-                    .build();
+                return new SearchDataObjectResponse.Builder().parser(createParser(searchResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -194,5 +204,10 @@ public class LocalClusterIndicesClient implements SdkClient {
                 );
             }
         }), executor);
+    }
+
+    private XContentParser createParser(ToXContent obj) throws IOException {
+        return jsonXContent
+            .createParser(xContentRegistry, DeprecationHandler.IGNORE_DEPRECATIONS, Strings.toString(MediaTypeRegistry.JSON, obj));
     }
 }

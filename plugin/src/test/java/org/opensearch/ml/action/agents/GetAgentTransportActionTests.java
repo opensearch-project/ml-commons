@@ -159,7 +159,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -185,7 +185,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -214,7 +214,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -236,7 +236,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -257,7 +257,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -291,7 +291,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             CountDownLatch latch = new CountDownLatch(1);
             LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
             getAgentTransportActionNullContext.doExecute(task, getRequest, latchedActionListener);
-            latch.await();
+            latch.await(500, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             assertEquals(e.getClass(), RuntimeException.class);
         }
@@ -316,7 +316,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             CountDownLatch latch = new CountDownLatch(1);
             LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
             getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-            latch.await();
+            latch.await(500, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             assertEquals(e.getClass(), IllegalArgumentException.class);
         }
@@ -338,7 +338,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, getRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(MLAgentGetResponse.class));
 
@@ -364,7 +364,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -389,7 +389,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLAgentGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getAgentTransportAction.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<MLAgentGetResponse> captor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
         verify(actionListener, times(1)).onResponse(captor.capture());

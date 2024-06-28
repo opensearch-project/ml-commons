@@ -263,7 +263,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(UpdateResponse.class));
     }
@@ -321,7 +321,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -341,7 +341,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -359,7 +359,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -379,7 +379,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -430,7 +430,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         ActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         updateConnectorTransportAction.doExecute(task, updateRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());

@@ -120,7 +120,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLTaskGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -135,7 +135,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLTaskGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
@@ -149,7 +149,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLTaskGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

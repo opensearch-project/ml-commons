@@ -30,13 +30,18 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.sdk.DeleteDataObjectRequest;
@@ -128,7 +133,10 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .join();
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
         Assert.assertEquals(TEST_ID, response.id());
-        Assert.assertEquals(true, response.created());
+
+        IndexResponse indexActionResponse = IndexResponse.fromXContent(response.parser());
+        assertEquals(TEST_ID, indexActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.CREATED, indexActionResponse.getResult());
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, putItemRequest.tableName());
@@ -277,7 +285,10 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .join();
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
         GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
-        XContentParser parser = response.parser();
+
+        GetResponse getResponse = GetResponse.fromXContent(response.parser());
+        XContentParser parser = JsonXContent.jsonXContent
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, getResponse.getSourceAsString());
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         ComplexDataObject complexDataObject = ComplexDataObject.parse(parser);
         assertEquals("testString", complexDataObject.getTestString());
@@ -306,10 +317,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
         GetItemResponse getItemResponse = GetItemResponse.builder().build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
-        GetDataObjectResponse response = sdkClient
-            .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-            .toCompletableFuture()
-            .join();
+        sdkClient.getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
         GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
         Assert.assertEquals("DEFAULT_TENANT", getItemRequest.key().get("tenant_id").s());
@@ -327,7 +335,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testDeleteDataObject_HappyCase() {
+    public void testDeleteDataObject_HappyCase() throws IOException {
         DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder()
             .id(TEST_ID)
             .index(TEST_INDEX)
@@ -343,17 +351,20 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Assert.assertEquals(TENANT_ID, deleteItemRequest.key().get("tenant_id").s());
         Assert.assertEquals(TEST_ID, deleteItemRequest.key().get("id").s());
         Assert.assertEquals(TEST_ID, deleteResponse.id());
-        Assert.assertTrue(deleteResponse.deleted());
+
+        DeleteResponse deleteActionResponse = DeleteResponse.fromXContent(deleteResponse.parser());
+        assertEquals(TEST_ID, deleteActionResponse.getId());
+        assertEquals(DocWriteResponse.Result.DELETED, deleteActionResponse.getResult());
+        assertEquals(0, deleteActionResponse.getShardInfo().getFailed());
+        assertEquals(0, deleteActionResponse.getShardInfo().getSuccessful());
+        assertEquals(0, deleteActionResponse.getShardInfo().getTotal());
     }
 
     @Test
     public void testDeleteDataObject_NullTenantId_UsesDefaultTenantId() {
         DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().id(TEST_ID).index(TEST_INDEX).build();
         Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
-        DeleteDataObjectResponse deleteResponse = sdkClient
-            .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-            .toCompletableFuture()
-            .join();
+        sdkClient.deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
         Assert.assertEquals("DEFAULT_TENANT", deleteItemRequest.key().get("tenant_id").s());
     }

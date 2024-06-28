@@ -155,7 +155,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -179,7 +179,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -203,7 +203,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<MLConnectorGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLConnectorGetResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -228,7 +228,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
