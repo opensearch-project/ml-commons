@@ -389,7 +389,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     public void testGetTenantID_IndependentNode() {
         String tenantId = "test-tenant";
         Map<String, List<String>> headers = new HashMap<>();
-        headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));
+        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
 
         String actualTenantID = RestActionUtils.getTenantID(Boolean.TRUE, restRequest);
@@ -399,7 +399,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     @Test
     public void testGetTenantID_IndependentNode_NullTenantID() {
         Map<String, List<String>> headers = new HashMap<>();
-        headers.put(Constants.TENANT_ID, Collections.singletonList(null));
+        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(null));
         RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
 
         try {
@@ -417,7 +417,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
         String tenantId = "test-tenant";
         Map<String, List<String>> headers = new HashMap<>();
-        headers.put(Constants.TENANT_ID, Collections.singletonList(tenantId));
+        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry()).withHeaders(headers).build();
 
         String tenantID = RestActionUtils.getTenantID(Boolean.FALSE, restRequest);
