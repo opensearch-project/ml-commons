@@ -235,8 +235,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             updateListener.onFailure(cause);
         } else {
             try {
-                UpdateResponse updateResponse = UpdateResponse.fromXContent(r.parser());
-                log.info("Connector update result: {}, connector id: {}", updateResponse.getResult(), updateResponse.getId());
+                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
                 updateListener.onResponse(updateResponse);
             } catch (IOException e) {
                 updateListener.onFailure(e);

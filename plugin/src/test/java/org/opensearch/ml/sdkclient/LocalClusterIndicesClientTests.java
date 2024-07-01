@@ -225,8 +225,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         verify(mockedClient, times(1)).get(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
         assertEquals(TEST_ID, response.id());
+        assertNull(response.parser());
         assertTrue(response.source().isEmpty());
-        assertFalse(GetResponse.fromXContent(response.parser()).isExists());
     }
 
     public void testGetDataObject_NotFound() throws IOException {
@@ -345,6 +345,30 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         assertEquals(0, updateActionResponse.getShardInfo().getFailed());
         assertEquals(1, updateActionResponse.getShardInfo().getSuccessful());
         assertEquals(1, updateActionResponse.getShardInfo().getTotal());
+    }
+
+    public void testUpdateDataObject_Null() throws IOException {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ActionFuture<UpdateResponse> future = mock(ActionFuture.class);
+        when(mockedClient.update(any(UpdateRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(null);
+
+        UpdateDataObjectResponse response = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        ArgumentCaptor<UpdateRequest> requestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(mockedClient, times(1)).update(requestCaptor.capture());
+        assertEquals(TEST_INDEX, requestCaptor.getValue().index());
+        assertEquals(TEST_ID, response.id());
+        assertNull(response.parser());
     }
 
     public void testUpdateDataObject_Exception() throws IOException {

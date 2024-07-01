@@ -11,8 +11,6 @@ package org.opensearch.ml.sdkclient;
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
-import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -43,7 +41,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.get.GetResult;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -111,26 +108,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                     .actionGet();
                 if (getResponse == null) {
                     log.info("Null GetResponse");
-                    return new GetDataObjectResponse.Builder()
-                        .id(request.id())
-                        .parser(
-                            createParser(
-                                new GetResponse(
-                                    new GetResult(
-                                        request.index(),
-                                        request.id(),
-                                        UNASSIGNED_SEQ_NO,
-                                        UNASSIGNED_PRIMARY_TERM,
-                                        -1,
-                                        false,
-                                        null,
-                                        null,
-                                        null
-                                    )
-                                )
-                            )
-                        )
-                        .build();
+                    return new GetDataObjectResponse.Builder().id(request.id()).parser(null).build();
                 }
                 log.info("Retrieved data object");
                 return new GetDataObjectResponse.Builder()
@@ -158,6 +136,10 @@ public class LocalClusterIndicesClient implements SdkClient {
                         new UpdateRequest(request.index(), request.id()).doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS))
                     )
                     .actionGet();
+                if (updateResponse == null) {
+                    log.info("Null UpdateResponse");
+                    return new UpdateDataObjectResponse.Builder().id(request.id()).parser(null).build();
+                }
                 log.info("Update status for id {}: {}", updateResponse.getId(), updateResponse.getResult());
                 return new UpdateDataObjectResponse.Builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
             } catch (IOException e) {

@@ -145,11 +145,11 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
         try {
-            GetResponse r = GetResponse.fromXContent(getDataObjectResponse.parser());
-            if (r != null && r.isExists()) {
+            GetResponse gr = getDataObjectResponse.parser() == null ? null : GetResponse.fromXContent(getDataObjectResponse.parser());
+            if (gr != null && gr.isExists()) {
                 try (
                     XContentParser parser = jsonXContent
-                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString())
+                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
                 ) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLModelGroup mlModelGroup = MLModelGroup.parse(parser);

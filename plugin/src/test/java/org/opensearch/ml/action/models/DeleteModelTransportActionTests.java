@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -19,11 +20,16 @@ import static org.opensearch.ml.action.models.DeleteModelTransportAction.OS_STAT
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.SEARCH_FAILURE_MSG;
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.TIMEOUT_MSG;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -33,17 +39,23 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.Index;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -57,17 +69,35 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class DeleteModelTransportActionTests extends OpenSearchTestCase {
+
+    private static final TestThreadPool testThreadPool = new TestThreadPool(
+        DeleteModelTransportActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
+
     @Mock
     ThreadPool threadPool;
 
     @Mock
     Client client;
+
+    SdkClient sdkClient;
 
     @Mock
     TransportService transportService;
@@ -78,7 +108,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ActionListener<DeleteResponse> actionListener;
 
-    @Mock
     DeleteResponse deleteResponse;
 
     @Mock
@@ -111,7 +140,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
+
+        deleteResponse = new DeleteResponse(new ShardId(new Index(ML_MODEL_INDEX, "_na_"), 1), "taskId", 1, 1, 1, true);
 
         Settings settings = Settings.builder().build();
         deleteModelTransportAction = spy(
@@ -119,6 +151,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 settings,
                 xContentRegistry,
                 clusterService,
@@ -137,14 +170,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         when(clusterService.getSettings()).thenReturn(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
     }
 
-    public void testDeleteModel_Success() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
+    }
+
+    public void testDeleteModel_Success() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -154,22 +191,25 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        verify(actionListener).onResponse(deleteResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(deleteResponse.getId(), captor.getValue().getId());
+        assertEquals(deleteResponse.getResult(), captor.getValue().getResult());
     }
 
-    public void testDeleteRemoteModel_Success() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteRemoteModel_Success() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -179,26 +219,27 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        verify(actionListener).onResponse(deleteResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(deleteResponse.getId(), captor.getValue().getId());
+        assertEquals(deleteResponse.getResult(), captor.getValue().getResult());
     }
 
-    public void testDeleteRemoteModel_deleteModelController_failed() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("runtime exception"));
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteRemoteModel_deleteModelController_failed() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
+        failFuture.onFailure(new RuntimeException("runtime exception"));
+        when(client.delete(any())).thenReturn(future).thenReturn(failFuture);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -208,28 +249,26 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteLocalModel_deleteModelController_failed() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("runtime exception"));
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteLocalModel_deleteModelController_failed() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
+        failFuture.onFailure(new RuntimeException("runtime exception"));
+        when(client.delete(any())).thenReturn(future).thenReturn(failFuture);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -239,24 +278,24 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.TEXT_EMBEDDING);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteRemoteModel_deleteModelChunks_failed() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteRemoteModel_deleteModelChunks_failed() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -265,24 +304,24 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model is not all cleaned up, please try again. Model ID: test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteHiddenModel_Success() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteHiddenModel_Success() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -292,23 +331,27 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
         doReturn(true).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        verify(actionListener).onResponse(deleteResponse);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(deleteResponse.getId(), captor.getValue().getId());
+        assertEquals(deleteResponse.getResult(), captor.getValue().getResult());
     }
 
-    public void testDeleteHiddenModel_NoSuperAdminPermission() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteHiddenModel_NoSuperAdminPermission() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -318,25 +361,26 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
         doReturn(false).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteModel_Success_AlgorithmNotNull() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteModel_Success_AlgorithmNotNull() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -346,23 +390,26 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        verify(actionListener).onResponse(deleteResponse);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(deleteResponse.getId(), captor.getValue().getId());
+        assertEquals(deleteResponse.getResult(), captor.getValue().getResult());
     }
 
-    public void test_UserHasNoAccessException() throws IOException {
+    public void test_UserHasNoAccessException() throws IOException, InterruptedException {
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID", false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -370,21 +417,27 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteModel_CheckModelState() throws IOException {
+    public void testDeleteModel_CheckModelState() throws IOException, InterruptedException {
         GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -393,29 +446,27 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         );
     }
 
-    public void testDeleteModel_ModelNotFoundException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new Exception("Fail to find model"));
-            return null;
-        }).when(client).get(any(), any());
+    public void testDeleteModel_ModelNotFoundException() throws IOException, InterruptedException {
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onFailure(new Exception("Fail to find model"));
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteModel_deleteModelController_ResourceNotFoundException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new ResourceNotFoundException("errorMessage"));
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteModel_deleteModelController_ResourceNotFoundException() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
+        failFuture.onFailure(new ResourceNotFoundException("errorMessage"));
+        when(client.delete(any())).thenReturn(future).thenReturn(failFuture);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -425,24 +476,24 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener, times(1)).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ValidationFailedException() throws IOException {
+    public void test_ValidationFailedException() throws IOException, InterruptedException {
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -450,22 +501,22 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteRemoteModel_modelNotFound_ResourceNotFoundException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new ResourceNotFoundException("resource not found"));
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteRemoteModel_modelNotFound_ResourceNotFoundException() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
+        failFuture.onFailure(new ResourceNotFoundException("resource not found"));
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(failFuture).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -475,28 +526,26 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue().getMessage().equals("Failed to find model");
     }
 
-    public void testDeleteRemoteModel_modelNotFound_RuntimeException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("runtime exception"));
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+    public void testDeleteRemoteModel_modelNotFound_RuntimeException() throws IOException, InterruptedException {
+        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
+        failFuture.onFailure(new RuntimeException("runtime exception"));
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(failFuture).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -506,30 +555,28 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any())).thenReturn(getFuture);
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assert argumentCaptor.getValue().getMessage().equals("runtime exception");
     }
 
-    public void testModelNotFound_modelChunks_modelController_delete_success() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(null);
-            return null;
-        }).when(client).get(any(), any());
+    public void testModelNotFound_modelChunks_modelController_delete_success() throws IOException, InterruptedException {
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(null);
+        when(client.get(any())).thenReturn(getFuture);
 
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(deleteResponse);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -537,7 +584,12 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(response);
             return null;
         }).when(client).execute(any(), any(), any());
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());

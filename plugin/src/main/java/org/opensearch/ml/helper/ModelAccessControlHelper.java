@@ -7,8 +7,10 @@
 
 package org.opensearch.ml.helper;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import java.util.HashSet;
@@ -17,10 +19,12 @@ import java.util.Optional;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
@@ -44,6 +48,9 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.utils.MLNodeUtils;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.collect.ImmutableList;
@@ -74,6 +81,7 @@ public class ModelAccessControlHelper {
             RangeQueryBuilder.class
         );
 
+    // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
     public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
         if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
@@ -140,6 +148,90 @@ public class ModelAccessControlHelper {
                 wrappedListener.onResponse(true);
             else
                 wrappedListener.onResponse(false);
+        }
+    }
+
+    public void validateModelGroupAccess(
+        User user,
+        String modelGroupId,
+        Client client,
+        SdkClient sdkClient,
+        ActionListener<Boolean> listener
+    ) {
+        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+            listener.onResponse(true);
+            return;
+        }
+
+        List<String> userBackendRoles = user.getBackendRoles();
+        GetDataObjectRequest getModelGroupRequest = new GetDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            sdkClient
+                .getDataObjectAsync(getModelGroupRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    if (throwable == null) {
+                        try {
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                            if (gr != null && gr.isExists()) {
+                                try (
+                                    XContentParser parser = jsonXContent
+                                        .createParser(
+                                            NamedXContentRegistry.EMPTY,
+                                            LoggingDeprecationHandler.INSTANCE,
+                                            gr.getSourceAsString()
+                                        )
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+                                    AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
+                                    if (mlModelGroup.getOwner() == null) {
+                                        // previous security plugin not enabled, model defaults to public.
+                                        wrappedListener.onResponse(true);
+                                    } else if (AccessMode.RESTRICTED == modelAccessMode) {
+                                        if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
+                                            throw new IllegalStateException("Backend roles shouldn't be null");
+                                        } else {
+                                            wrappedListener
+                                                .onResponse(
+                                                    Optional
+                                                        .ofNullable(userBackendRoles)
+                                                        .orElse(ImmutableList.of())
+                                                        .stream()
+                                                        .anyMatch(mlModelGroup.getBackendRoles()::contains)
+                                                );
+                                        }
+                                    } else if (AccessMode.PUBLIC == modelAccessMode) {
+                                        wrappedListener.onResponse(true);
+                                    } else if (AccessMode.PRIVATE == modelAccessMode) {
+                                        if (isOwner(mlModelGroup.getOwner(), user))
+                                            wrappedListener.onResponse(true);
+                                        else
+                                            wrappedListener.onResponse(false);
+                                    }
+                                } catch (Exception e) {
+                                    log.error("Failed to parse ml model group");
+                                    wrappedListener.onFailure(e);
+                                }
+                            } else {
+                                wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                            }
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    } else {
+                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        if (e instanceof IndexNotFoundException) {
+                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        } else {
+                            log.error("Fail to get model group", e);
+                            wrappedListener.onFailure(new MLValidationException("Fail to get model group"));
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            log.error("Failed to validate Access", e);
+            listener.onFailure(e);
         }
     }
 

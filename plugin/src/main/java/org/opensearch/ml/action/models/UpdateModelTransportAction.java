@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
@@ -27,7 +29,6 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -36,12 +37,12 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
@@ -63,6 +64,8 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
+import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -135,7 +138,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(sdkClient, modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
                     if (!isModelDeploying(mlModel.getModelState())) {
                         FunctionName functionName = mlModel.getAlgorithm();
@@ -159,6 +162,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         user,
                                         mlModel.getModelGroupId(),
                                         client,
+                                        sdkClient,
                                         ActionListener.wrap(hasPermission -> {
                                             if (hasPermission) {
                                                 updateRemoteOrTextEmbeddingModel(
@@ -419,26 +423,37 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         ActionListener<UpdateResponse> wrappedListener,
         boolean isUpdateModelCache
     ) {
-        try {
-            updateModelInput.setLastUpdateTime(Instant.now());
-            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
-            updateRequest.docAsUpsert(true);
-            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (isUpdateModelCache) {
-                String[] targetNodeIds = getAllNodes();
-                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
-                client
-                    .update(
-                        updateRequest,
-                        getUpdateResponseListenerWithUpdateModelCache(modelId, wrappedListener, mlUpdateModelCacheNodesRequest)
-                    );
-            } else {
-                client.update(updateRequest, getUpdateResponseListener(modelId, wrappedListener));
-            }
-        } catch (IOException e) {
-            log.error("Failed to build update request.", e);
-            wrappedListener.onFailure(e);
+        updateModelInput.setLastUpdateTime(Instant.now());
+        UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+            .index(updateRequest.index())
+            .id(updateRequest.id())
+            .dataObject(updateModelInput)
+            .build();
+        // TODO: This should probably be default on update data object:
+        // updateRequest.docAsUpsert(true);
+        ActionListener<UpdateResponse> updateListener;
+        if (isUpdateModelCache) {
+            String[] targetNodeIds = getAllNodes();
+            MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
+            updateListener = getUpdateResponseListenerWithUpdateModelCache(modelId, wrappedListener, mlUpdateModelCacheNodesRequest);
+        } else {
+            updateListener = getUpdateResponseListener(modelId, wrappedListener);
         }
+        sdkClient
+            .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+            .whenComplete((ur, ut) -> {
+                if (ut == null) {
+                    try {
+                        UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
+                        updateListener.onResponse(updateResponse);
+                    } catch (Exception e) {
+                        updateListener.onFailure(e);
+                    }
+                } else {
+                    Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
+                    updateListener.onFailure(e);
+                }
+            });
     }
 
     private void buildUpdateRequest(
@@ -454,54 +469,59 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String updatedVersion = incrementLatestVersion(newModelGroupSourceMap);
         updateModelInput.setVersion(updatedVersion);
         updateModelInput.setLastUpdateTime(Instant.now());
-        UpdateRequest updateModelGroupRequest = createUpdateModelGroupRequest(
+        UpdateDataObjectRequest updateModelGroupRequest = createUpdateModelGroupRequest(
             newModelGroupSourceMap,
             newModelGroupId,
             newModelGroupResponse.getSeqNo(),
             newModelGroupResponse.getPrimaryTerm(),
             Integer.parseInt(updatedVersion)
         );
-        try {
-            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
-            updateRequest.docAsUpsert(true);
-            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (isUpdateModelCache) {
-                String[] targetNodeIds = getAllNodes();
-                MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
-                client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
-                    client
-                        .update(
-                            updateRequest,
-                            getUpdateResponseListenerWithUpdateModelCache(modelId, wrappedListener, mlUpdateModelCacheNodesRequest)
-                        );
-                }, e -> {
-                    log
-                        .error(
-                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
-                            modelId,
-                            newModelGroupId,
-                            e
-                        );
-                    wrappedListener.onFailure(e);
-                }));
-            } else {
-                client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
-                    client.update(updateRequest, getUpdateResponseListener(modelId, wrappedListener));
-                }, e -> {
-                    log
-                        .error(
-                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
-                            modelId,
-                            newModelGroupId,
-                            e
-                        );
-                    wrappedListener.onFailure(e);
-                }));
-            }
-        } catch (IOException e) {
-            log.error("Failed to build update request.");
-            wrappedListener.onFailure(e);
+        UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+            .index(updateRequest.index())
+            .id(updateRequest.id())
+            .dataObject(updateModelInput)
+            .build();
+        // TODO: This should probably be default on update data object:
+        // updateRequest.docAsUpsert(true);
+        ActionListener<UpdateResponse> updateListener;
+        if (isUpdateModelCache) {
+            String[] targetNodeIds = getAllNodes();
+            MLUpdateModelCacheNodesRequest mlUpdateModelCacheNodesRequest = new MLUpdateModelCacheNodesRequest(targetNodeIds, modelId);
+            updateListener = getUpdateResponseListenerWithUpdateModelCache(modelId, wrappedListener, mlUpdateModelCacheNodesRequest);
+        } else {
+            updateListener = getUpdateResponseListener(modelId, wrappedListener);
         }
+        sdkClient
+            .updateDataObjectAsync(updateModelGroupRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+            .whenComplete((r, throwable) -> {
+                if (throwable == null) {
+                    sdkClient
+                        .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                        .whenComplete((ur, ut) -> {
+                            if (ut == null) {
+                                try {
+                                    UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
+                                    updateListener.onResponse(updateResponse);
+                                } catch (Exception e) {
+                                    updateListener.onFailure(e);
+                                }
+                            } else {
+                                Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
+                                updateListener.onFailure(e);
+                            }
+                        });
+                } else {
+                    Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    log
+                        .error(
+                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+                            modelId,
+                            newModelGroupId,
+                            e
+                        );
+                    wrappedListener.onFailure(e);
+                }
+            });
     }
 
     private ActionListener<UpdateResponse> getUpdateResponseListenerWithUpdateModelCache(
@@ -584,7 +604,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         return Integer.toString((int) modelGroupSourceMap.get(MLModelGroup.LATEST_VERSION_FIELD) + 1);
     }
 
-    private UpdateRequest createUpdateModelGroupRequest(
+    private UpdateDataObjectRequest createUpdateModelGroupRequest(
         Map<String, Object> modelGroupSourceMap,
         String modelGroupId,
         long seqNo,
@@ -593,8 +613,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
         modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-        UpdateRequest updateModelGroupRequest = new UpdateRequest();
-
+        /* Old code here. TODO investigate if we need to add seqNo and primaryTerm to data object request
+        UpdateRequest updateModelGroupRequest = new UpdateRequest();        
         updateModelGroupRequest
             .index(ML_MODEL_GROUP_INDEX)
             .id(modelGroupId)
@@ -602,8 +622,18 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             .setIfPrimaryTerm(primaryTerm)
             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
             .doc(modelGroupSourceMap);
-
-        return updateModelGroupRequest;
+        */
+        ToXContentObject dataObject = new ToXContentObject() {
+            @Override
+            public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+                builder.startObject();
+                for (Entry<String, Object> e : modelGroupSourceMap.entrySet()) {
+                    builder.field(e.getKey(), e.getValue());
+                }
+                return builder.endObject();
+            }
+        };
+        return new UpdateDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).dataObject(dataObject).build();
     }
 
     private Boolean isModelDeployed(MLModelState mlModelState) {
