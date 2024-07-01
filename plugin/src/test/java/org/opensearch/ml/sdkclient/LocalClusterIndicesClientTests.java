@@ -19,6 +19,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREF
 
 import java.io.IOException;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -305,6 +306,37 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         assertEquals(0, updateActionResponse.getShardInfo().getFailed());
         assertEquals(1, updateActionResponse.getShardInfo().getSuccessful());
         assertEquals(1, updateActionResponse.getShardInfo().getTotal());
+    }
+
+    public void testUpdateDataObjectWithMap() throws IOException {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(Map.of("foo", "bar"))
+            .build();
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardInfo(1, 1),
+            new ShardId(TEST_INDEX, "_na_", 0),
+            TEST_ID,
+            1,
+            0,
+            2,
+            Result.UPDATED
+        );
+
+        @SuppressWarnings("unchecked")
+        ActionFuture<UpdateResponse> future = mock(ActionFuture.class);
+        when(mockedClient.update(any(UpdateRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(updateResponse);
+
+        sdkClient.updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
+
+        ArgumentCaptor<UpdateRequest> requestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(mockedClient, times(1)).update(requestCaptor.capture());
+        assertEquals(TEST_INDEX, requestCaptor.getValue().index());
+        assertEquals(TEST_ID, requestCaptor.getValue().id());
+        assertEquals("bar", requestCaptor.getValue().doc().sourceAsMap().get("foo"));
     }
 
     public void testUpdateDataObject_NotFound() throws IOException {

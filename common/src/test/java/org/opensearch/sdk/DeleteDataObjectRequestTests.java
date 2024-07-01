@@ -16,18 +16,21 @@ import static org.junit.Assert.assertEquals;
 public class DeleteDataObjectRequestTests {
     private String testIndex;
     private String testId;
+    private String testTenantId;
 
     @Before
     public void setUp() {
         testIndex = "test-index";
         testId = "test-id";
+        testTenantId = "test-tenant-id";
     }
 
     @Test
     public void testDeleteDataObjectRequest() {
-        DeleteDataObjectRequest request = new DeleteDataObjectRequest.Builder().index(testIndex).id(testId).build();
+        DeleteDataObjectRequest request = new DeleteDataObjectRequest.Builder().index(testIndex).id(testId).tenantId(testTenantId).build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());
+        assertEquals(testTenantId, request.tenantId());
     }
 }

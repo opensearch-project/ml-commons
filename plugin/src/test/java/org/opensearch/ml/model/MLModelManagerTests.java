@@ -21,12 +21,15 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
@@ -60,9 +63,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -70,17 +76,22 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.MemoryCircuitBreaker;
@@ -107,6 +118,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -116,7 +128,10 @@ import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.script.ScriptService;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
@@ -125,12 +140,24 @@ import com.google.common.collect.ImmutableSet;
 
 public class MLModelManagerTests extends OpenSearchTestCase {
 
+    private static TestThreadPool testThreadPool = new TestThreadPool(
+        MLModelManagerTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
+
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
     private ClusterService clusterService;
     @Mock
     private Client client;
+    private SdkClient sdkClient;
     @Mock
     private ThreadPool threadPool;
     private NamedXContentRegistry xContentRegistry;
@@ -183,6 +210,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void setup() throws URISyntaxException {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
+
         encryptor = new EncryptorImpl(masterKey);
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
@@ -198,6 +226,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;
+        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
 
         modelName = "model_name1";
         modelId = randomAlphaOfLength(10);
@@ -251,6 +280,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(any())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
 
         modelManager = spy(
             new MLModelManager(
@@ -307,6 +337,11 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             updateActionListener.onResponse(null);
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
     public void testRegisterMLModel_ExceedMaxRunningTask() {
@@ -431,7 +466,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testRegisterMLRemoteModel() throws PrivilegedActionException {
+    public void testRegisterMLRemoteModel() throws PrivilegedActionException, InterruptedException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -441,13 +476,17 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
         MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
-            indexResponseActionListener.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-        when(indexResponse.getId()).thenReturn("mockIndexId");
-        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+
+        IndexResponse indexResponse = new IndexResponse(new ShardId(ML_MODEL_INDEX, "_na_", 0), "mockIndexId", 1, 0, 2, true);
+        PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(indexResponse);
+        when(client.index(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<MLRegisterModelResponse> latchedActionListener = new LatchedActionListener<>(listener, latch);
+        modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
@@ -460,7 +499,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
         MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
         MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
-        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+        modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
 
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener, times(1)).onFailure(argCaptor.capture());

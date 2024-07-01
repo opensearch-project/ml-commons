@@ -18,11 +18,13 @@ import static org.junit.Assert.assertEquals;
 public class SearchDataObjectRequestTests {
 
     private String[] testIndices;
+    private String testTenantId;
     private SearchSourceBuilder testSearchSourceBuilder;
 
     @Before
     public void setUp() {
         testIndices = new String[] {"test-index"};
+        testTenantId = "test-tenant-id";
         testSearchSourceBuilder = new SearchSourceBuilder();
     }
 
@@ -30,10 +32,12 @@ public class SearchDataObjectRequestTests {
     public void testGetDataObjectRequest() {
         SearchDataObjectRequest request = new SearchDataObjectRequest.Builder()
             .indices(testIndices)
+            .tenantId(testTenantId)
             .searchSourceBuilder(testSearchSourceBuilder)
             .build();
 
         assertArrayEquals(testIndices, request.indices());
+        assertEquals(testTenantId, request.tenantId());
         assertEquals(testSearchSourceBuilder, request.searchSourceBuilder());
     }
 }

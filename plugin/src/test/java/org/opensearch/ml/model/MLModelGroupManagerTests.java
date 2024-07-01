@@ -6,7 +6,6 @@
 package org.opensearch.ml.model;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -469,31 +468,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
     }
 
-    // Remove when all calls to the non-sdkclient method are migrated
-    @Test
-    public void test_SuccessGetModelGroup_NoSdkClient() throws IOException {
-        MLModelGroup modelGroup = MLModelGroup
-            .builder()
-            .modelGroupId("testModelGroupID")
-            .name("test")
-            .description("this is test group")
-            .latestVersion(1)
-            .backendRoles(Arrays.asList("role1", "role2"))
-            .owner(new User())
-            .access(AccessMode.PUBLIC.name())
-            .build();
-
-        GetResponse getResponse = prepareGetResponse(modelGroup);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
-        verify(modelGroupListener).onResponse(getResponse);
-    }
-
     @Test
     public void test_SuccessGetModelGroup() throws IOException, InterruptedException {
         MLModelGroup modelGroup = MLModelGroup
@@ -523,17 +497,19 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_OtherExceptionGetModelGroup() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException("Any other Exception occurred during getting the model group. Please check log for more details.")
-                );
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+    public void test_OtherExceptionGetModelGroup() throws IOException, InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future
+            .onFailure(
+                new RuntimeException("Any other Exception occurred during getting the model group. Please check log for more details.")
+            );
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
-        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<GetResponse> latchedActionListener = new LatchedActionListener<>(modelGroupListener, latch);
+        mlModelGroupManager.getModelGroupResponse(sdkClient, "testModelGroupID", latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -543,14 +519,16 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_NotFoundGetModelGroup() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+    public void test_NotFoundGetModelGroup() throws IOException, InterruptedException {
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(null);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
 
-        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<GetResponse> latchedActionListener = new LatchedActionListener<>(modelGroupListener, latch);
+        mlModelGroupManager.getModelGroupResponse(sdkClient, "testModelGroupID", latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model group with ID: testModelGroupID", argumentCaptor.getValue().getMessage());

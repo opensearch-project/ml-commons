@@ -315,6 +315,34 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         assertEquals(1, updateActionResponse.getShardInfo().getTotal());
     }
 
+    public void testUpdateDataObjectWithMap() throws IOException {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(Map.of("foo", "bar"))
+            .build();
+
+        UpdateResponse<Map<String, Object>> updateResponse = new UpdateResponse.Builder<Map<String, Object>>()
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .primaryTerm(0)
+            .result(Result.Updated)
+            .seqNo(0)
+            .shards(new ShardStatistics.Builder().failed(0).successful(1).total(1).build())
+            .version(0)
+            .build();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<UpdateRequest<Map<String, Object>, ?>> updateRequestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        when(mockedOpenSearchClient.update(updateRequestCaptor.capture(), any())).thenReturn(updateResponse);
+
+        sdkClient.updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
+
+        assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
+        assertEquals(TEST_ID, updateRequestCaptor.getValue().id());
+        assertEquals("bar", ((Map<String, Object>) updateRequestCaptor.getValue().doc()).get("foo"));
+    }
+
     public void testUpdateDataObject_NotFound() throws IOException {
         UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
             .index(TEST_INDEX)
