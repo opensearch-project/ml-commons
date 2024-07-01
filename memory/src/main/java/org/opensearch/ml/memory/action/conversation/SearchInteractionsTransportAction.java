@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -37,8 +39,8 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class SearchInteractionsTransportAction extends HandledTransportAction<SearchInteractionsRequest, SearchResponse> {
 
-    private ConversationalMemoryHandler cmHandler;
-    private Client client;
+    private final ConversationalMemoryHandler cmHandler;
+    private final Client client;
 
     private volatile boolean featureIsEnabled;
 
@@ -70,17 +72,11 @@ public class SearchInteractionsTransportAction extends HandledTransportAction<Se
     @Override
     public void doExecute(Task task, SearchInteractionsRequest request, ActionListener<SearchResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         } else {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
-                ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
+                ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
                 cmHandler.searchInteractions(request.getConversationId(), request, internalListener);
             } catch (Exception e) {
                 log.error("Failed to search memories", e);
