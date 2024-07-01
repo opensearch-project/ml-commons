@@ -144,7 +144,11 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .putDataObjectAsync(
-                        new PutDataObjectRequest.Builder().index(ML_CONNECTOR_INDEX).dataObject(connector).build(),
+                        new PutDataObjectRequest.Builder()
+                            .tenantId(connector.getTenantId())
+                            .index(ML_CONNECTOR_INDEX)
+                            .dataObject(connector)
+                            .build(),
                         client.threadPool().executor(GENERAL_THREAD_POOL)
                     )
                     .whenComplete((r, throwable) -> {

@@ -124,7 +124,11 @@ public class MLModelGroupManager {
                         mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
                             sdkClient
                                 .putDataObjectAsync(
-                                    new PutDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).dataObject(mlModelGroup).build(),
+                                    new PutDataObjectRequest.Builder()
+                                        .tenantId(mlModelGroup.getTenantId())
+                                        .index(ML_MODEL_GROUP_INDEX)
+                                        .dataObject(mlModelGroup)
+                                        .build(),
                                     client.threadPool().executor(GENERAL_THREAD_POOL)
                                 )
                                 .whenComplete((r, throwable) -> {

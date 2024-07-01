@@ -22,12 +22,15 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetRequest;
@@ -63,6 +66,7 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -73,6 +77,8 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 public class MLModelGroupManagerTests extends OpenSearchTestCase {
+    private static final String TENANT_ID = "tenant_id";
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -112,6 +118,9 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
+    @Captor
+    ArgumentCaptor<PutDataObjectRequest> putDataObjectRequestArgumentCaptor;
+
     private final List<String> backendRoles = Arrays.asList("IT", "HR");
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
@@ -129,7 +138,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        sdkClient = Mockito.spy(new LocalClusterIndicesClient(client, xContentRegistry));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         mlModelGroupManager = new MLModelGroupManager(
@@ -218,6 +227,8 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
+        verify(sdkClient).putDataObjectAsync(putDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Assert.assertEquals(TENANT_ID, putDataObjectRequestArgumentCaptor.getValue().tenantId());
     }
 
     @Test
@@ -535,6 +546,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             .backendRoles(backendRoles)
             .modelAccessMode(modelAccessMode)
             .isAddAllBackendRoles(isAddAllBackendRoles)
+            .tenantId(TENANT_ID)
             .build();
     }
 
