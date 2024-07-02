@@ -48,6 +48,7 @@ import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
+// TODO: refactor MLEngineClassLoader's static functions to avoid mockStatic
 public class MLEngineTest extends MLStaticMockBase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
