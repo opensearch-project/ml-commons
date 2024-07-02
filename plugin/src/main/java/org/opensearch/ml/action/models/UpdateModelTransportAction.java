@@ -377,7 +377,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             modelAccessControlHelper
                 .validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasNewModelGroupPermission -> {
                     if (hasNewModelGroupPermission) {
-                        mlModelGroupManager.getModelGroupResponse(newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
+                        mlModelGroupManager.getModelGroupResponse(sdkClient, newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
                             buildUpdateRequest(
                                 modelId,
                                 newModelGroupId,

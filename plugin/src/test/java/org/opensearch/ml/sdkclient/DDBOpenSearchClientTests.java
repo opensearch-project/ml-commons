@@ -398,6 +398,29 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void updateDataObjectAsync_HappyCaseWithMap() {
+        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .tenantId(TENANT_ID)
+            .dataObject(Map.of("foo", "bar"))
+            .build();
+        Mockito.when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture())).thenReturn(UpdateItemResponse.builder().build());
+        UpdateDataObjectResponse updateResponse = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+        assertEquals(TEST_ID, updateResponse.id());
+        UpdateItemRequest updateItemRequest = updateItemRequestArgumentCaptor.getValue();
+        assertEquals(TEST_ID, updateRequest.id());
+        assertEquals(TEST_INDEX, updateItemRequest.tableName());
+        assertEquals(TEST_ID, updateItemRequest.key().get("id").s());
+        assertEquals(TENANT_ID, updateItemRequest.key().get("tenant_id").s());
+        assertEquals("bar", updateItemRequest.key().get("foo").s());
+
+    }
+
+    @Test
     public void updateDataObjectAsync_NullTenantId_UsesDefaultTenantId() {
         UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
             .id(TEST_ID)

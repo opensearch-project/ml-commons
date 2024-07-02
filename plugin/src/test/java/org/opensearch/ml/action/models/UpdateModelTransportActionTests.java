@@ -311,7 +311,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             )
             .build();
 
-        // TODO eventually remove
+        // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
@@ -326,7 +326,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .when(modelAccessControlHelper)
             .validateModelGroupAccess(any(), eq("test_model_group_id"), any(), any(SdkClient.class), isA(ActionListener.class));
 
-        // TODO eventually remove
+        // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
@@ -359,12 +359,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         future.onResponse(updateResponse);
         when(client.update(any(UpdateRequest.class))).thenReturn(future);
 
-        // TODO eventually remove
+        // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(4);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(localModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
@@ -386,10 +386,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         GetResponse getResponse = prepareGetResponse(modelGroup);
 
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
             listener.onResponse(getResponse);
             return null;
-        }).when(mlModelGroupManager).getModelGroupResponse(eq("updated_test_model_group_id"), isA(ActionListener.class));
+        }).when(mlModelGroupManager).getModelGroupResponse(eq(sdkClient), eq("updated_test_model_group_id"), isA(ActionListener.class));
     }
 
     @AfterClass
@@ -692,10 +692,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithRegisterToNewModelGroupNotFound() {
         doAnswer(invocation -> {
-            ActionListener<MLModelGroup> listener = invocation.getArgument(1);
+            ActionListener<MLModelGroup> listener = invocation.getArgument(2);
             listener.onFailure(new MLResourceNotFoundException("Model group not found with MODEL_GROUP_ID: updated_test_model_group_id"));
             return null;
-        }).when(mlModelGroupManager).getModelGroupResponse(eq("updated_test_model_group_id"), isA(ActionListener.class));
+        }).when(mlModelGroupManager).getModelGroupResponse(eq(sdkClient), eq("updated_test_model_group_id"), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -800,7 +800,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq(sdkClient), eq("mockId"), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
@@ -809,10 +809,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         doReturn("mockUpdateModelGroupId").when(mockUpdateModelInput).getModelGroupId();
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("mockUpdateModelGroupId"), any(), isA(ActionListener.class));
+        })
+            .when(modelAccessControlHelper)
+            .validateModelGroupAccess(any(), eq("mockUpdateModelGroupId"), any(), eq(sdkClient), isA(ActionListener.class));
 
         MLModelGroup modelGroup = MLModelGroup
             .builder()
@@ -828,10 +830,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         GetResponse getResponse = prepareGetResponse(modelGroup);
 
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
             listener.onResponse(getResponse);
             return null;
-        }).when(mlModelGroupManager).getModelGroupResponse(eq("mockUpdateModelGroupId"), isA(ActionListener.class));
+        }).when(mlModelGroupManager).getModelGroupResponse(eq(sdkClient), eq("mockUpdateModelGroupId"), isA(ActionListener.class));
 
         doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
 

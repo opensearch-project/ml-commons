@@ -196,7 +196,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ) {
         User user = RestActionUtils.getUserContext(client);
         modelAccessControlHelper
-            .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
+            .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, sdkClient, ActionListener.wrap(access -> {
                 if (access) {
                     doRegister(registerModelInput, listener);
                     return;
@@ -351,7 +351,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                 String taskId = response.getId();
                 mlTask.setTaskId(taskId);
-                mlModelManager.registerMLRemoteModel(registerModelInput, mlTask, listener);
+                mlModelManager.registerMLRemoteModel(sdkClient, registerModelInput, mlTask, listener);
             }, e -> {
                 logException("Failed to register model", e, log);
                 listener.onFailure(e);
