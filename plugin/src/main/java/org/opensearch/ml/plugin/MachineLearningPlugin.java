@@ -471,7 +471,8 @@ public class MachineLearningPlugin extends Plugin
         // Get the injected SdkClient instance from the injector
         SdkClient sdkClient = injector.getInstance(SdkClient.class);
 
-        encryptor = new EncryptorImpl(clusterService, client);
+        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -505,7 +506,6 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
-        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
         mlModelManager = new MLModelManager(
