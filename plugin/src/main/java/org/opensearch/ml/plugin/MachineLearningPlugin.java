@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -338,6 +337,7 @@ public class MachineLearningPlugin extends Plugin
     private MLEngine mlEngine;
 
     private Client client;
+
     private ClusterService clusterService;
     private ThreadPool threadPool;
     private Set<String> indicesToListen;
@@ -460,7 +460,7 @@ public class MachineLearningPlugin extends Plugin
         SdkClient sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
-        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -637,12 +637,14 @@ public class MachineLearningPlugin extends Plugin
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
             clusterService,
             client,
+            sdkClient,
             settings,
             threadPool,
             nodeHelper,
             mlIndicesHandler,
             encryptor,
-            mlModelAutoRedeployer
+            mlModelAutoRedeployer,
+            mlFeatureEnabledSetting
         );
 
         // TODO move this into MLFeatureEnabledSetting
@@ -751,7 +753,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction(mlFeatureEnabledSetting);
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
-        RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
+        RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
         return List
             .of(
                 restMLStatsAction,
@@ -901,7 +903,7 @@ public class MachineLearningPlugin extends Plugin
 
     @Override
     public List<Setting<?>> getSettings() {
-        List<Setting<?>> settings = List
+        return List
             .of(
                 MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY,
                 MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE,
@@ -940,7 +942,6 @@ public class MachineLearningPlugin extends Plugin
                 SdkClientSettings.REMOTE_METADATA_ENDPOINT,
                 SdkClientSettings.REMOTE_METADATA_REGION
             );
-        return settings;
     }
 
     /**
@@ -957,8 +958,8 @@ public class MachineLearningPlugin extends Plugin
             .add(
                 new SearchPlugin.SearchExtSpec<>(
                     GenerativeQAParamExtBuilder.PARAMETER_NAME,
-                    input -> new GenerativeQAParamExtBuilder(input),
-                    parser -> GenerativeQAParamExtBuilder.parse(parser)
+                    GenerativeQAParamExtBuilder::new,
+                    GenerativeQAParamExtBuilder::parse
                 )
             );
 
@@ -1014,9 +1015,6 @@ public class MachineLearningPlugin extends Plugin
      */
     @Override
     public Map<String, org.opensearch.ingest.Processor.Factory> getProcessors(org.opensearch.ingest.Processor.Parameters parameters) {
-        Map<String, org.opensearch.ingest.Processor.Factory> processors = new HashMap<>();
-        processors
-            .put(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
-        return Collections.unmodifiableMap(processors);
+        return Map.of(MLInferenceIngestProcessor.TYPE, new MLInferenceIngestProcessor.Factory(parameters.scriptService, parameters.client));
     }
 }

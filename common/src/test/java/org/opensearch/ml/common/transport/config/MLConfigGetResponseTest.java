@@ -68,7 +68,7 @@ public class MLConfigGetResponseTest {
     @Test
     public void writeTo() throws IOException {
         //create ml agent using mlConfig and mlConfigGetResponse
-        mlConfig = new MLConfig("olly_agent",new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH);
+        mlConfig = new MLConfig("olly_agent",new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH, null);
         MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
                 .mlConfig(mlConfig)
                 .build();
@@ -86,7 +86,7 @@ public class MLConfigGetResponseTest {
 
     @Test
     public void toXContent() throws IOException {
-        mlConfig = new MLConfig(null, null, null, null);
+        mlConfig = new MLConfig(null, null, null, null, null);
         MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
                 .mlConfig(mlConfig)
                 .build();

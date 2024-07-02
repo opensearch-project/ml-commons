@@ -79,6 +79,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             .builder()
             .index(ML_TASK_INDEX)
             .id(taskId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
 

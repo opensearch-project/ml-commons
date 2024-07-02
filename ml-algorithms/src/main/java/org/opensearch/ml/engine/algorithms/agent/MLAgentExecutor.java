@@ -250,17 +250,11 @@ public class MLAgentExecutor implements Executable {
                     modelTensors.add((ModelTensor) output);
                 } else if (output instanceof List) {
                     if (((List) output).get(0) instanceof ModelTensor) {
-                        ((List<ModelTensor>) output).forEach(mlModelTensor -> modelTensors.add(mlModelTensor));
+                        modelTensors.addAll(((List<ModelTensor>) output));
                     } else if (((List) output).get(0) instanceof ModelTensors) {
-                        ((List<ModelTensors>) output).forEach(outs -> {
-                            for (ModelTensor mlModelTensor : outs.getMlModelTensors()) {
-                                modelTensors.add(mlModelTensor);
-                            }
-                        });
+                        ((List<ModelTensors>) output).forEach(outs -> { modelTensors.addAll(outs.getMlModelTensors()); });
                     } else {
-                        String result = output instanceof String
-                            ? (String) output
-                            : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                        String result = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
                         modelTensors.add(ModelTensor.builder().name("response").result(result).build());
                     }
                 } else {

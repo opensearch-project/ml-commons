@@ -193,7 +193,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             SearchResponse.Clusters.EMPTY
         );
 
-        Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        Encryptor encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
 
         updateConnectorTransportAction = new UpdateConnectorTransportAction(

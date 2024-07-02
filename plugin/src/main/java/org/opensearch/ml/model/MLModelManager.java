@@ -554,7 +554,9 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+                registerModelInput
+                    .getConnector()
+                    .encrypt((credential, tenantId) -> mlEngine.encrypt(credential, tenantId), registerModelInput.getTenantId());
             }
 
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
@@ -638,7 +640,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId());
             }
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel

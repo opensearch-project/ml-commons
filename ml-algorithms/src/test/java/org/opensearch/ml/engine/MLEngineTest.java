@@ -58,7 +58,7 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        Encryptor encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
@@ -394,7 +394,7 @@ public class MLEngineTest {
     @Test
     public void testMLEngineInitialization() {
         Path testPath = Path.of("/tmp/test" + UUID.randomUUID());
-        mlEngine = new MLEngine(testPath, new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+        mlEngine = new MLEngine(testPath, new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
 
         Path expectedMlCachePath = testPath.resolve("ml_cache");
         Path expectedMlConfigPath = expectedMlCachePath.resolve("config");
@@ -416,7 +416,7 @@ public class MLEngineTest {
     @Test
     public void testEncryptMethod() {
         String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString);
+        String encryptedString = mlEngine.encrypt(testString, null);
         assertNotNull(encryptedString);
         assertNotEquals(testString, encryptedString);
     }

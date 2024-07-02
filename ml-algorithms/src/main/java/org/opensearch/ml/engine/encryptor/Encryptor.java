@@ -11,26 +11,32 @@ public interface Encryptor {
      * Takes plaintext and returns encrypted text.
      *
      * @param plainText plainText.
+     * @param tenantId id of the tenant
      * @return String encryptedText.
      */
-    String encrypt(String plainText);
+    String encrypt(String plainText, String tenantId);
 
     /**
      * Takes encryptedText and returns plain text.
      *
      * @param encryptedText encryptedText.
      * @return String plainText.
+     * @param tenantId id of the tenant
      */
-    String decrypt(String encryptedText);
+    String decrypt(String encryptedText, String tenantId);
 
     /**
      * Set up the masterKey for dynamic updating
-     *
+     * @param tenantId ID of the tenant
      * @param masterKey masterKey to be set.
      */
-    void setMasterKey(String masterKey);
+    void setMasterKey(String tenantId, String masterKey);
 
-    String getMasterKey();
+    /**
+     * Get the masterKey
+     * @param tenantId ID of the tenant
+     */
+    String getMasterKey(String tenantId);
 
     String generateMasterKey();
 

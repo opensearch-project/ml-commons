@@ -71,6 +71,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -95,6 +96,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     @Mock
     private MLIndicesHandler mlIndicesHandler;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private DiscoveryNode mlNode1;
     private DiscoveryNode mlNode2;
     private MLSyncUpCron syncUpCron;
@@ -115,8 +119,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlNode1 = new DiscoveryNode(mlNode1Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         mlNode2 = new DiscoveryNode(mlNode2Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
-        encryptor = spy(new EncryptorImpl(null));
-        syncUpCron = new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor);
+        encryptor = spy(new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+        syncUpCron = new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor, mlFeatureEnabledSetting);
 
         testState = setupTestClusterState();
         when(clusterService.state()).thenReturn(testState);
@@ -151,9 +155,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test"));
+        Assert.assertNotNull(encryptor.encrypt("test", null));
         syncUpCron.initMLConfig();
-        verify(encryptor, times(1)).setMasterKey(any());
+        verify(encryptor, times(1)).setMasterKey(any(), any());
     }
 
     public void testInitMlConfig_MasterKeyExists() {
@@ -169,9 +173,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test"));
+        Assert.assertNotNull(encryptor.encrypt("test", null));
         syncUpCron.initMLConfig();
-        verify(encryptor, times(1)).setMasterKey(any());
+        verify(encryptor, times(1)).setMasterKey(any(), any());
     }
 
     public void testRun_NoMLModelIndex() {

@@ -33,6 +33,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
@@ -72,6 +73,7 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
      * @param client The client to wrap
      * @param xContentRegistry the registry of XContent objects
      */
+    @Inject
     public LocalClusterIndicesClient(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
@@ -186,7 +188,7 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
-            log.info("Searching {}", Arrays.toString(request.indices()), null);
+            log.info("Searching {}", Arrays.toString(request.indices()));
             SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
             try {
