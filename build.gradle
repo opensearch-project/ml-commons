@@ -11,6 +11,7 @@ buildscript {
         isSnapshot = "true" == System.getProperty("build.snapshot", "true")
         opensearch_version = System.getProperty("opensearch.version", "3.0.0-SNAPSHOT")
         buildVersionQualifier = System.getProperty("build.version_qualifier", "")
+        asm_version = "9.7"
 
         // 2.0.0-rc1-SNAPSHOT -> 2.0.0.0-rc1-SNAPSHOT
         version_tokens = opensearch_version.tokenize('-')
@@ -43,6 +44,16 @@ buildscript {
             }
         }
     }
+
+    configurations {
+        classpath {
+            resolutionStrategy {
+                //in order to handle jackson's higher release version in shadow, this needs to be upgraded to latest
+                force(group: "org.ow2.asm", name: "asm", version: asm_version)
+                force(group: "org.ow2.asm", name: "asm-commons", version: asm_version)
+            }
+        }
+    }
 }
 
 plugins {
@@ -61,8 +72,10 @@ allprojects {
     apply from: "$rootDir/build-tools/repositories.gradle"
 
     plugins.withId('java') {
-        sourceCompatibility = targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21;
+        targetCompatibility = JavaVersion.VERSION_21;
     }
+
     plugins.withId('jacoco') {
         jacoco.toolVersion = '0.8.10'
     }

@@ -13,7 +13,7 @@ plugins {
     id "io.freefair.lombok"
     id 'jacoco'
     id 'java-library'
-    id 'com.diffplug.spotless' version '6.23.0'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 ext {
@@ -28,6 +28,11 @@ ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
     noticeFile = rootProject.file('NOTICE')
+}
+
+java {
+    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_21
 }
 
 lombok {
