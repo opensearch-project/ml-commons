@@ -8,6 +8,9 @@ import org.mockito.internal.creation.MockSettingsImpl;
  * This class provides a way to use Mockito's MockedStatic with inline mock maker enabled.
  * It can be used as a base class for other test classes that require mocking static methods.
  *
+ * Note: before using this class to mock static function, think twice if your function really has to be
+ * static as static functions are tightly coupled with coding using them and have bad testability.
+ *
  * Example usage:
  *
  * public class MyClassTest extends MLStaticMockBase {
