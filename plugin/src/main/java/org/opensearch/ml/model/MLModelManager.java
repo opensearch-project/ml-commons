@@ -377,25 +377,14 @@ public class MLModelManager {
                             if (getModelGroupResponse.isExists()) {
                                 Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
                                 int updatedVersion = incrementLatestVersion(modelGroupSourceMap);
-                                /* TODO UpdateDataObjectRequest needs to track response seqNo + primary term
-                                UpdateRequest updateModelGroupRequest = createUpdateModelGroupRequest(
-                                modelGroupSourceMap,
-                                modelGroupId,
-                                getModelGroupResponse.getSeqNo(),
-                                getModelGroupResponse.getPrimaryTerm(),
-                                updatedVersion
-                                );
-                                */
                                 modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
                                 modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
                                 UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
                                     .builder()
                                     .index(ML_MODEL_GROUP_INDEX)
                                     .id(modelGroupId)
-                                    // TODO need to track these for concurrency
-                                    // .setIfSeqNo(seqNo)
-                                    // .setIfPrimaryTerm(primaryTerm)
-                                    // .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+                                    .ifSeqNo(getModelGroupResponse.getSeqNo())
+                                    .ifPrimaryTerm(getModelGroupResponse.getPrimaryTerm())
                                     .dataObject(modelGroupSourceMap)
                                     .build();
                                 sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {

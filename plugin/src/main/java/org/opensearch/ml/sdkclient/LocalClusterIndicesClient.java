@@ -132,11 +132,15 @@ public class LocalClusterIndicesClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Updating {} from {}", request.id(), request.index());
-                UpdateResponse updateResponse = client
-                    .update(
-                        new UpdateRequest(request.index(), request.id()).doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS))
-                    )
-                    .actionGet();
+                UpdateRequest updateRequest = new UpdateRequest(request.index(), request.id())
+                    .doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+                if (request.ifSeqNo() != null) {
+                    updateRequest.setIfSeqNo(request.ifSeqNo());
+                }
+                if (request.ifPrimaryTerm() != null) {
+                    updateRequest.setIfPrimaryTerm(request.ifPrimaryTerm());
+                }
+                UpdateResponse updateResponse = client.update(updateRequest).actionGet();
                 if (updateResponse == null) {
                     log.info("Null UpdateResponse");
                     return UpdateDataObjectResponse.builder().id(request.id()).parser(null).build();

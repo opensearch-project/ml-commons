@@ -15,10 +15,13 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.sdk.UpdateDataObjectRequest.Builder;
 
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
 public class UpdateDataObjectRequestTests {
@@ -26,6 +29,8 @@ public class UpdateDataObjectRequestTests {
     private String testIndex;
     private String testId;
     private String testTenantId;
+    private Long testSeqNo;
+    private Long testPrimaryTerm;
     private ToXContentObject testDataObject;
     private Map<String, Object> testDataObjectMap;
 
@@ -34,6 +39,8 @@ public class UpdateDataObjectRequestTests {
         testIndex = "test-index";
         testId = "test-id";
         testTenantId = "test-tenant-id";
+        testSeqNo = 42L;
+        testPrimaryTerm = 6L;
         testDataObject = mock(ToXContentObject.class);
         testDataObjectMap = Map.of("foo", "bar");
     }
@@ -46,6 +53,8 @@ public class UpdateDataObjectRequestTests {
         assertEquals(testId, request.id());
         assertEquals(testTenantId, request.tenantId());
         assertEquals(testDataObject, request.dataObject());
+        assertNull(request.ifSeqNo());
+        assertNull(request.ifPrimaryTerm());
     }
 
     @Test
@@ -56,5 +65,27 @@ public class UpdateDataObjectRequestTests {
         assertEquals(testId, request.id());
         assertEquals(testTenantId, request.tenantId());
         assertEquals(testDataObjectMap, XContentHelper.convertToMap(JsonXContent.jsonXContent, Strings.toString(XContentType.JSON, request.dataObject()), false));        
+    }
+    
+    @Test
+    public void testUpdateDataObjectRequestConcurrency() {
+        UpdateDataObjectRequest request = new UpdateDataObjectRequest.Builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject)
+            .ifSeqNo(testSeqNo).ifPrimaryTerm(testPrimaryTerm).build();
+
+        assertEquals(testIndex, request.index());
+        assertEquals(testId, request.id());
+        assertEquals(testTenantId, request.tenantId());
+        assertEquals(testDataObject, request.dataObject());
+        assertEquals(testSeqNo, request.ifSeqNo());
+        assertEquals(testPrimaryTerm, request.ifPrimaryTerm());
+
+        final Builder badSeqNoBuilder = new UpdateDataObjectRequest.Builder();
+        assertThrows(IllegalArgumentException.class, () -> badSeqNoBuilder.ifSeqNo(-99));
+        final Builder badPrimaryTermBuilder = new UpdateDataObjectRequest.Builder();
+        assertThrows(IllegalArgumentException.class, () -> badPrimaryTermBuilder.ifPrimaryTerm(-99));
+        final Builder onlySeqNoBuilder = new UpdateDataObjectRequest.Builder().ifSeqNo(testSeqNo);
+        assertThrows(IllegalArgumentException.class, () -> onlySeqNoBuilder.build());
+        final Builder onlyPrimaryTermBuilder = new UpdateDataObjectRequest.Builder().ifPrimaryTerm(testPrimaryTerm);
+        assertThrows(IllegalArgumentException.class, () -> onlyPrimaryTermBuilder.build());
     }
 }

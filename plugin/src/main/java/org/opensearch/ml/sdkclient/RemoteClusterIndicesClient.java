@@ -34,6 +34,7 @@ import org.opensearch.client.opensearch.core.IndexResponse;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.UpdateRequest;
+import org.opensearch.client.opensearch.core.UpdateRequest.Builder;
 import org.opensearch.client.opensearch.core.UpdateResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -130,11 +131,18 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 Map<String, Object> docMap = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString())
                     .map();
-                UpdateRequest<Map<String, Object>, ?> updateRequest = new UpdateRequest.Builder<Map<String, Object>, Map<String, Object>>()
-                    .index(request.index())
-                    .id(request.id())
-                    .doc(docMap)
-                    .build();
+                Builder<Map<String, Object>, Map<String, Object>> updateRequestBuilder =
+                    new UpdateRequest.Builder<Map<String, Object>, Map<String, Object>>()
+                        .index(request.index())
+                        .id(request.id())
+                        .doc(docMap);
+                if (request.ifSeqNo() != null) {
+                    updateRequestBuilder.ifSeqNo(request.ifSeqNo());
+                }
+                if (request.ifPrimaryTerm() != null) {
+                    updateRequestBuilder.ifPrimaryTerm(request.ifPrimaryTerm());
+                }
+                UpdateRequest<Map<String, Object>, ?> updateRequest = updateRequestBuilder.build();
                 log.info("Updating {} in {}", request.id(), request.index());
                 UpdateResponse<Map<String, Object>> updateResponse = openSearchClient.update(updateRequest, MAP_DOCTYPE);
                 log.info("Update status for id {}: {}", updateResponse.id(), updateResponse.result());
