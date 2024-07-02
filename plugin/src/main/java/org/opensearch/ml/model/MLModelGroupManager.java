@@ -13,7 +13,6 @@ import java.time.Instant;
 import java.util.HashSet;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -259,25 +258,6 @@ public class MLModelGroupManager {
             log.error("Failed to search model group index", e);
             listener.onFailure(e);
         }
-    }
-
-    // TODO Remove when all calls migrated to SDKClient version
-    /**
-     * Get model group from model group index.
-     *
-     * @param modelGroupId  model group id
-     * @param listener action listener
-     */
-    public void getModelGroupResponse(String modelGroupId, ActionListener<GetResponse> listener) {
-        GetRequest getRequest = new GetRequest();
-        getRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                listener.onResponse(r);
-            } else {
-                listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
-            }
-        }, listener::onFailure));
     }
 
     /**
