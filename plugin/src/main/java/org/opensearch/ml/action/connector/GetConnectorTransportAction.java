@@ -75,6 +75,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
             .index(ML_CONNECTOR_INDEX)
             .id(connectorId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
         User user = RestActionUtils.getUserContext(client);

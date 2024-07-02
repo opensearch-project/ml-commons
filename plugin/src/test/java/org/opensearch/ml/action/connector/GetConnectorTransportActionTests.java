@@ -19,9 +19,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
@@ -50,6 +52,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
@@ -59,6 +62,8 @@ import org.opensearch.transport.TransportService;
 
 public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     private static final String CONNECTOR_ID = "connector_id";
+
+    private static final String TENANT_ID = "tenant_id";
 
     private static final TestThreadPool testThreadPool = new TestThreadPool(
         GetConnectorTransportActionTests.class.getName(),
@@ -104,12 +109,15 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Captor
+    private ArgumentCaptor<GetDataObjectRequest> getDataObjectRequestArgumentCaptor;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
         sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
-        mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).build();
+        mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).tenantId(TENANT_ID).build();
         when(getResponse.getId()).thenReturn(CONNECTOR_ID);
         when(getResponse.getSourceAsString()).thenReturn("{}");
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
@@ -198,13 +206,16 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
             ActionListener<Connector> listener = invocation.getArgument(5);
             listener.onResponse(httpConnector);
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(),
+                getDataObjectRequestArgumentCaptor.capture(), any(), any());
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
+        Assert.assertEquals(tenantId, getDataObjectRequestArgumentCaptor.getValue().tenantId());
+        Assert.assertEquals(CONNECTOR_ID, getDataObjectRequestArgumentCaptor.getValue().id());
         ArgumentCaptor<MLConnectorGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLConnectorGetResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(tenantId, argumentCaptor.getValue().getMlConnector().getTenantId());

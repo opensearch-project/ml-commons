@@ -55,6 +55,7 @@ import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
@@ -78,6 +79,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     private static final String TEST_ID = "123";
     private static final String TENANT_ID = "TEST_TENANT_ID";
     private static final String TEST_INDEX = "test_index";
+    private static final String TEST_INDEX_2 = "test_index_2";
+    private static final String TEST_SYSTEM_INDEX = ".test_index";
     private SdkClient sdkClient;
 
     @Mock
@@ -92,6 +95,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     private ArgumentCaptor<DeleteItemRequest> deleteItemRequestArgumentCaptor;
     @Captor
     private ArgumentCaptor<UpdateItemRequest> updateItemRequestArgumentCaptor;
+    @Captor
+    private ArgumentCaptor<SearchDataObjectRequest> searchDataObjectRequestArgumentCaptor;
     private TestDataObject testDataObject;
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
@@ -408,17 +413,39 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void searchDataObjectAsync_HappyCase() {
+        SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource();
         SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
-            .indices(TEST_INDEX)
+            .indices(TEST_INDEX, TEST_INDEX_2)
             .tenantId(TENANT_ID)
+            .searchSourceBuilder(searchSourceBuilder)
             .build();
         CompletionStage<SearchDataObjectResponse> searchDataObjectResponse = Mockito.mock(CompletionStage.class);
-        Mockito
-            .when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.eq(searchDataObjectRequest), Mockito.any()))
-            .thenReturn(searchDataObjectResponse);
+        Mockito.when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any())).thenReturn(searchDataObjectResponse);
         CompletionStage<SearchDataObjectResponse> searchResponse = sdkClient.searchDataObjectAsync(searchDataObjectRequest);
 
         assertEquals(searchDataObjectResponse, searchResponse);
+        Mockito.verify(remoteClusterIndicesClient).searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Assert.assertEquals(TENANT_ID, searchDataObjectRequestArgumentCaptor.getValue().tenantId());
+        Assert.assertEquals(TEST_INDEX, searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
+        Assert.assertEquals(TEST_INDEX_2, searchDataObjectRequestArgumentCaptor.getValue().indices()[1]);
+        Assert.assertEquals(searchSourceBuilder, searchDataObjectRequestArgumentCaptor.getValue().searchSourceBuilder());
+    }
+
+    @Test
+    public void searchDataObjectAsync_SystemIndex() {
+        SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource();
+        SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            .indices(TEST_SYSTEM_INDEX)
+            .tenantId(TENANT_ID)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        CompletionStage<SearchDataObjectResponse> searchDataObjectResponse = Mockito.mock(CompletionStage.class);
+        Mockito.when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any())).thenReturn(searchDataObjectResponse);
+        CompletionStage<SearchDataObjectResponse> searchResponse = sdkClient.searchDataObjectAsync(searchDataObjectRequest);
+
+        assertEquals(searchDataObjectResponse, searchResponse);
+        Mockito.verify(remoteClusterIndicesClient).searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Assert.assertEquals("test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
     }
 
 }

@@ -15,11 +15,14 @@ import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
@@ -249,7 +252,14 @@ public class DDBOpenSearchClient implements SdkClient {
      */
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        return this.remoteClusterIndicesClient.searchDataObjectAsync(request, executor);
+        List<String> indices = Arrays.stream(request.indices()).map(this::getTableName).collect(Collectors.toList());
+
+        SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest(
+            indices.toArray(new String[0]),
+            request.tenantId(),
+            request.searchSourceBuilder()
+        );
+        return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor);
     }
 
     private String getTableName(String index) {

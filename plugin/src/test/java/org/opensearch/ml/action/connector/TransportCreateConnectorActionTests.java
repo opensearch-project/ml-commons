@@ -26,9 +26,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.LatchedActionListener;
@@ -60,6 +63,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -74,6 +78,7 @@ import com.google.common.collect.ImmutableMap;
 public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private static final String CONNECTOR_ID = "connector_id";
+    private static final String TENANT_ID = "tenant_id";
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
         TransportCreateConnectorActionTests.class.getName(),
@@ -133,6 +138,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Captor
+    private ArgumentCaptor<PutDataObjectRequest> putDataObjectRequestArgumentCaptor;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
@@ -140,7 +148,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        sdkClient = Mockito.spy(new LocalClusterIndicesClient(client, xContentRegistry));
         indexResponse = new IndexResponse(new ShardId(ML_CONNECTOR_INDEX, "_na_", 0), CONNECTOR_ID, 1, 0, 2, true);
 
         settings = Settings
@@ -304,10 +312,13 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        request.getMlCreateConnectorInput().setTenantId(TENANT_ID);
         action.doExecute(task, request, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+        verify(sdkClient).putDataObjectAsync(putDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Assert.assertEquals(TENANT_ID, putDataObjectRequestArgumentCaptor.getValue().tenantId());
     }
 
     public void test_execute_connectorAccessControlEnabled_missingPermissionInfo_defaultToPrivate() throws InterruptedException {
