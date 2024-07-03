@@ -86,6 +86,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
+            // TODO: Add support for multi tenancy
             mlModelManager.getModel(modelId, null, null, excludes, ActionListener.wrap(mlModel -> {
                 Boolean isHidden = mlModel.getIsHidden();
                 modelAccessControlHelper

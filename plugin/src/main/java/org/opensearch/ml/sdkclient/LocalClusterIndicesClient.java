@@ -108,7 +108,8 @@ public class LocalClusterIndicesClient implements SdkClient {
                 if (getResponse == null) {
                     return GetDataObjectResponse.builder().id(request.id()).parser(null).build();
                 }
-                return GetDataObjectResponse.builder()
+                return GetDataObjectResponse
+                    .builder()
                     .id(getResponse.getId())
                     .parser(createParser(getResponse))
                     .source(getResponse.getSource())

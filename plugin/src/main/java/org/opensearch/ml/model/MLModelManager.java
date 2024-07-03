@@ -9,8 +9,8 @@ import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
@@ -370,7 +370,8 @@ public class MLModelManager {
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
 
             String modelGroupId = mlRegisterModelInput.getModelGroupId();
-            GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest.builder()
+            GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest
+                .builder()
                 .index(ML_MODEL_GROUP_INDEX)
                 .tenantId(mlRegisterModelInput.getTenantId())
                 .id(modelGroupId)
@@ -395,7 +396,8 @@ public class MLModelManager {
                                 */
                                 modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
                                 modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest.builder()
+                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                    .builder()
                                     .index(ML_MODEL_GROUP_INDEX)
                                     .id(modelGroupId)
                                     .tenantId(mlRegisterModelInput.getTenantId())
@@ -589,7 +591,8 @@ public class MLModelManager {
                     .tenantId(registerModelInput.getTenantId())
                     .build();
 
-                PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest.builder()
+                PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
+                    .builder()
                     .index(ML_MODEL_INDEX)
                     .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
                     .tenantId(registerModelInput.getTenantId())
@@ -1635,7 +1638,8 @@ public class MLModelManager {
      * @param listener action listener
      */
     public void getModel(String modelId, String tenantId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
-        GetDataObjectRequest getRequest = GetDataObjectRequest.builder()
+        GetDataObjectRequest getRequest = GetDataObjectRequest
+            .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
             .tenantId(tenantId)
@@ -1706,7 +1710,8 @@ public class MLModelManager {
      * @param listener    action listener
      */
     private void getConnector(String connectorId, String tenantId, ActionListener<Connector> listener) {
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest.builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_CONNECTOR_INDEX)
             .id(connectorId)
             .tenantId(tenantId)

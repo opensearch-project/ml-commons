@@ -91,6 +91,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
+            // TODO: Add support for multi tenancy
             mlModelManager.getModel(modelId, null, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
                 Boolean isHidden = mlModel.getIsHidden();

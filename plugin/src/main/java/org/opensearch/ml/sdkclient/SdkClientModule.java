@@ -9,12 +9,14 @@
 package org.opensearch.ml.sdkclient;
 
 import org.apache.http.HttpHost;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.opensearch.OpenSearchException;
 import org.opensearch.client.Client;
+import org.opensearch.client.RestClient;
+import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.transport.aws.AwsSdk2Transport;
-import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
+import org.opensearch.client.transport.rest_client.RestClientTransport;
 import org.opensearch.common.inject.AbstractModule;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
@@ -28,8 +30,6 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -135,33 +135,24 @@ public class SdkClientModule extends AbstractModule {
         try {
             BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
             // Basic http(not-s) client using RestClient.
-            SdkHttpClient httpClient = ApacheHttpClient.builder().build();
-            AwsSdk2Transport awsSdk2Transport = new AwsSdk2Transport(
-                httpClient,
-                HttpHost.create(remoteMetadataEndpoint).getHostName(),
-                "aoss",
-                Region.of(region),
-                AwsSdk2TransportOptions.builder().build()
-            );
-            /*RestClient restClient = RestClient
+            RestClient restClient = RestClient
                 // This HttpHost syntax works with export REMOTE_METADATA_ENDPOINT=http://127.0.0.1:9200
                 .builder(HttpHost.create(remoteMetadataEndpoint))
                 .setStrictDeprecationMode(true)
                 .setHttpClientConfigCallback(httpClientBuilder -> {
                     try {
                         return httpClientBuilder
-                                .setDefaultCredentialsProvider(credentialsProvider)
-                                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+                            .setDefaultCredentialsProvider(credentialsProvider)
+                            .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
                     } catch (Exception e) {
                         throw new OpenSearchException(e);
                     }
                 })
-                .build();*/
+                .build();
             ObjectMapper objectMapper = new ObjectMapper()
                 .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
-            // return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
-            return new OpenSearchClient(awsSdk2Transport);
+            return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
         } catch (Exception e) {
             throw new OpenSearchException(e);
         }

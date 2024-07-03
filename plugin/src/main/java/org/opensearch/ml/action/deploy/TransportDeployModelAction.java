@@ -284,7 +284,10 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
             String taskId = response.getId();
             mlTask.setTaskId(taskId);
-            if (algorithm == FunctionName.REMOTE && !mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+            if (algorithm == FunctionName.REMOTE) {
+                if (!mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+                    return;
+                }
                 mlTaskManager.add(mlTask, eligibleNodeIds);
                 deployRemoteModel(mlModel, mlTask, localNodeId, eligibleNodes, deployToAllNodes, listener);
                 return;
