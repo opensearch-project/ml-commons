@@ -265,8 +265,7 @@ Response:
         "_id": "tYLLdZABHToP7ahNFqmx",
         "_score": 0.99424136,
         "_source": {
-          "passage_text": "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district.",
-          "title": "title3"
+          "passage_text": "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district."
         }
       },
       {
@@ -274,8 +273,7 @@ Response:
         "_id": "toLLdZABHToP7ahNFqmx",
         "_score": 0.69457644,
         "_source": {
-          "passage_text": "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states.",
-          "title": "title4"
+          "passage_text": "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states."
         }
       },
       {
@@ -283,8 +281,7 @@ Response:
         "_id": "s4LLdZABHToP7ahNFqmx",
         "_score": 0.41946858,
         "_source": {
-          "passage_text": "Carson City is the capital city of the American state of Nevada.",
-          "title": "title1"
+          "passage_text": "Carson City is the capital city of the American state of Nevada."
         }
       },
       {
@@ -292,8 +289,7 @@ Response:
         "_id": "tILLdZABHToP7ahNFqmx",
         "_score": 0.2727688,
         "_source": {
-          "passage_text": "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan.",
-          "title": "title2"
+          "passage_text": "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
         }
       }
     ]
@@ -342,8 +338,7 @@ The first document in the response is `Carson City is the capital city of the Am
         "_id": "s4LLdZABHToP7ahNFqmx",
         "_score": 1.0,
         "_source": {
-          "passage_text": "Carson City is the capital city of the American state of Nevada.",
-          "title": "title1"
+          "passage_text": "Carson City is the capital city of the American state of Nevada."
         }
       },
       {
@@ -351,8 +346,7 @@ The first document in the response is `Carson City is the capital city of the Am
         "_id": "tILLdZABHToP7ahNFqmx",
         "_score": 1.0,
         "_source": {
-          "passage_text": "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan.",
-          "title": "title2"
+          "passage_text": "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
         }
       },
       {
@@ -360,8 +354,7 @@ The first document in the response is `Carson City is the capital city of the Am
         "_id": "tYLLdZABHToP7ahNFqmx",
         "_score": 1.0,
         "_source": {
-          "passage_text": "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district.",
-          "title": "title3"
+          "passage_text": "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district."
         }
       },
       {
@@ -369,8 +362,7 @@ The first document in the response is `Carson City is the capital city of the Am
         "_id": "toLLdZABHToP7ahNFqmx",
         "_score": 1.0,
         "_source": {
-          "passage_text": "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states.",
-          "title": "title4"
+          "passage_text": "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states."
         }
       }
     ]
