@@ -26,7 +26,7 @@ public class SearchDataObjectResponseTests {
 
     @Test
     public void testSearchDataObjectResponse() {
-        SearchDataObjectResponse response = new SearchDataObjectResponse.Builder().parser(testParser).build();
+        SearchDataObjectResponse response = SearchDataObjectResponse.builder().parser(testParser).build();
 
         assertEquals(testParser, response.parser());
     }

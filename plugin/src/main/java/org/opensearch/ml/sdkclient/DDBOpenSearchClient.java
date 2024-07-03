@@ -116,7 +116,7 @@ public class DDBOpenSearchClient implements SdkClient {
                     source,
                     Map.of("result", "created")
                 );
-                return new PutDataObjectResponse.Builder().id(id).parser(createParser(simulatedIndexResponse)).build();
+                return PutDataObjectResponse.builder().id(id).parser(createParser(simulatedIndexResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
@@ -165,7 +165,7 @@ public class DDBOpenSearchClient implements SdkClient {
                             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, simulatedGetResponse)
                     )
                     .getSourceAsMap();
-                return new GetDataObjectResponse.Builder().id(request.id()).parser(parser).source(sourceAsMap).build();
+                return GetDataObjectResponse.builder().id(request.id()).parser(parser).source(sourceAsMap).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
@@ -195,7 +195,7 @@ public class DDBOpenSearchClient implements SdkClient {
                 dynamoDbClient.updateItem(updateItemRequest);
 
                 String simulatedUpdateResponse = simulateOpenSearchResponse(request.index(), request.id(), source, Map.of("found", true));
-                return new UpdateDataObjectResponse.Builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
+                return UpdateDataObjectResponse.builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -234,7 +234,7 @@ public class DDBOpenSearchClient implements SdkClient {
                     null,
                     Map.of("result", "deleted")
                 );
-                return new DeleteDataObjectResponse.Builder().id(request.id()).parser(createParser(simulatedDeleteResponse)).build();
+                return DeleteDataObjectResponse.builder().id(request.id()).parser(createParser(simulatedDeleteResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);

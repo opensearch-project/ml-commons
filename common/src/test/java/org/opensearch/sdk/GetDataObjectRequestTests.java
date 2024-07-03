@@ -32,7 +32,7 @@ public class GetDataObjectRequestTests {
 
     @Test
     public void testGetDataObjectRequest() {
-        GetDataObjectRequest request = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest request = GetDataObjectRequest.builder()
             .index(testIndex)
             .id(testId)
             .tenantId(testTenantId)

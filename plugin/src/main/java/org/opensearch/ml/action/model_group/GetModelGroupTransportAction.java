@@ -89,7 +89,8 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         }
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_MODEL_GROUP_INDEX)
             .id(modelGroupId)
             .tenantId(tenantId)

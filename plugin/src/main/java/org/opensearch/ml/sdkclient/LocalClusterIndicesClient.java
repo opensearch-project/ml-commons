@@ -87,7 +87,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                     )
                     .actionGet();
                 log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
-                return new PutDataObjectResponse.Builder().id(indexResponse.getId()).parser(createParser(indexResponse)).build();
+                return PutDataObjectResponse.builder().id(indexResponse.getId()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -108,10 +108,11 @@ public class LocalClusterIndicesClient implements SdkClient {
                     .actionGet();
                 if (getResponse == null) {
                     log.info("Null GetResponse");
-                    return new GetDataObjectResponse.Builder().id(request.id()).parser(null).build();
+                    return GetDataObjectResponse.builder().id(request.id()).parser(null).build();
                 }
                 log.info("Retrieved data object");
-                return new GetDataObjectResponse.Builder()
+                return GetDataObjectResponse
+                    .builder()
                     .id(getResponse.getId())
                     .parser(createParser(getResponse))
                     .source(getResponse.getSource())
@@ -138,10 +139,10 @@ public class LocalClusterIndicesClient implements SdkClient {
                     .actionGet();
                 if (updateResponse == null) {
                     log.info("Null UpdateResponse");
-                    return new UpdateDataObjectResponse.Builder().id(request.id()).parser(null).build();
+                    return UpdateDataObjectResponse.builder().id(request.id()).parser(null).build();
                 }
                 log.info("Update status for id {}: {}", updateResponse.getId(), updateResponse.getResult());
-                return new UpdateDataObjectResponse.Builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
+                return UpdateDataObjectResponse.builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -159,7 +160,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                 log.info("Deleting {} from {}", request.id(), request.index());
                 DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
                 log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
-                return new DeleteDataObjectResponse.Builder().id(deleteResponse.getId()).parser(createParser(deleteResponse)).build();
+                return DeleteDataObjectResponse.builder().id(deleteResponse.getId()).parser(createParser(deleteResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -177,7 +178,7 @@ public class LocalClusterIndicesClient implements SdkClient {
             SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
             try {
-                return new SearchDataObjectResponse.Builder().parser(createParser(searchResponse)).build();
+                return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(

@@ -31,7 +31,7 @@ public class GetDataObjectResponseTests {
 
     @Test
     public void testGetDataObjectResponse() {
-        GetDataObjectResponse response = new GetDataObjectResponse.Builder().id(testId).parser(testParser).source(testSource).build();
+        GetDataObjectResponse response = GetDataObjectResponse.builder().id(testId).parser(testParser).source(testSource).build();
 
         assertEquals(testId, response.id());
         assertEquals(testParser, response.parser());

@@ -30,7 +30,7 @@ public class SearchDataObjectRequestTests {
 
     @Test
     public void testGetDataObjectRequest() {
-        SearchDataObjectRequest request = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest request = SearchDataObjectRequest.builder()
             .indices(testIndices)
             .tenantId(testTenantId)
             .searchSourceBuilder(testSearchSourceBuilder)

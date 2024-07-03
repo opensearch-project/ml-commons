@@ -30,6 +30,14 @@ public class SearchDataObjectResponse {
     }
 
     /**
+     * Instantiate a builder for this object
+     * @return a builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
      * Class for constructing a Builder for this Response Object
      */
     public static class Builder {
@@ -38,7 +46,7 @@ public class SearchDataObjectResponse {
         /**
          * Empty Constructor for the Builder object
          */
-        public Builder() {}
+        private Builder() {}
 
         /**
          * Add aparser to this builder

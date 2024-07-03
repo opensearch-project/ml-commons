@@ -424,7 +424,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         boolean isUpdateModelCache
     ) {
         updateModelInput.setLastUpdateTime(Instant.now());
-        UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+            .builder()
             .index(updateRequest.index())
             .id(updateRequest.id())
             .dataObject(updateModelInput)
@@ -476,7 +477,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             newModelGroupResponse.getPrimaryTerm(),
             Integer.parseInt(updatedVersion)
         );
-        UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+            .builder()
             .index(updateRequest.index())
             .id(updateRequest.id())
             .dataObject(updateModelInput)
@@ -633,7 +635,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 return builder.endObject();
             }
         };
-        return new UpdateDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).dataObject(dataObject).build();
+        return UpdateDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).dataObject(dataObject).build();
     }
 
     private Boolean isModelDeployed(MLModelState mlModelState) {

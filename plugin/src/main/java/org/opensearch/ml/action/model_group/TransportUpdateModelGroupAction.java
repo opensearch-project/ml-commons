@@ -108,7 +108,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         }
         User user = RestActionUtils.getUserContext(client);
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_MODEL_GROUP_INDEX)
             .id(modelGroupId)
             .tenantId(tenantId)

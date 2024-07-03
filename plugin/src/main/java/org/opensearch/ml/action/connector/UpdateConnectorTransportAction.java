@@ -105,7 +105,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         }
         String connectorId = mlUpdateConnectorAction.getConnectorId();
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_CONNECTOR_INDEX)
             .id(connectorId)
             .fetchSourceContext(fetchSourceContext)
@@ -125,7 +126,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         if (Boolean.TRUE.equals(hasPermission)) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
                             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                            UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+                            UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                .builder()
                                 .index(ML_CONNECTOR_INDEX)
                                 .id(connectorId)
                                 .dataObject(connector)
@@ -162,7 +164,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
         sourceBuilder.query(boolQueryBuilder);
 
-        SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+            .builder()
             .indices(ML_MODEL_INDEX)
             .searchSourceBuilder(sourceBuilder)
             .build();
