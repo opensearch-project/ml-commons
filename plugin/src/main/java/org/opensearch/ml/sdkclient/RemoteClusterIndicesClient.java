@@ -89,7 +89,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Indexing data object in {}", request.index());
                 IndexResponse indexResponse = openSearchClient.index(indexRequest);
                 log.info("Creation status for id {}: {}", indexResponse.id(), indexResponse.result());
-                return new PutDataObjectResponse.Builder().id(indexResponse.id()).parser(createParser(indexResponse)).build();
+                return PutDataObjectResponse.builder().id(indexResponse.id()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {
                 log.error("Error putting data object in {}: {}", request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on XContent parsing error
@@ -110,7 +110,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 GetResponse<Map<String, Object>> getResponse = openSearchClient.get(getRequest, MAP_DOCTYPE);
                 log.info("Get found status for id {}: {}", getResponse.id(), getResponse.found());
                 Map<String, Object> source = getResponse.source();
-                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(createParser(getResponse)).source(source).build();
+                return GetDataObjectResponse.builder().id(getResponse.id()).parser(createParser(getResponse)).source(source).build();
             } catch (IOException e) {
                 log.error("Error getting data object {} from {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on XContent parser creation error
@@ -138,7 +138,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Updating {} in {}", request.id(), request.index());
                 UpdateResponse<Map<String, Object>> updateResponse = openSearchClient.update(updateRequest, MAP_DOCTYPE);
                 log.info("Update status for id {}: {}", updateResponse.id(), updateResponse.result());
-                return new UpdateDataObjectResponse.Builder().id(updateResponse.id()).parser(createParser(updateResponse)).build();
+                return UpdateDataObjectResponse.builder().id(updateResponse.id()).parser(createParser(updateResponse)).build();
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -158,7 +158,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Deleting {} from {}", request.id(), request.index());
                 DeleteResponse deleteResponse = openSearchClient.delete(deleteRequest);
                 log.info("Deletion status for id {}: {}", deleteResponse.id(), deleteResponse.result());
-                return new DeleteDataObjectResponse.Builder().id(deleteResponse.id()).parser(createParser(deleteResponse)).build();
+                return DeleteDataObjectResponse.builder().id(deleteResponse.id()).parser(createParser(deleteResponse)).build();
             } catch (IOException e) {
                 log.error("Error deleting {} from {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on deletion IOException
@@ -180,7 +180,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).build();
                 SearchResponse<?> searchResponse = openSearchClient.search(searchRequest, MAP_DOCTYPE);
                 log.info("Search returned {} hits", searchResponse.hits().total().value());
-                return new SearchDataObjectResponse.Builder().parser(createParser(searchResponse)).build();
+                return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
             } catch (IOException e) {
                 log.error("Error searching {}: {}", Arrays.toString(request.indices()), e.getMessage(), e);
                 // Rethrow unchecked exception on exception

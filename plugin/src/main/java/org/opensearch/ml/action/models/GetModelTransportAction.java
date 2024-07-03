@@ -99,7 +99,8 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
             return;
         }
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
             .fetchSourceContext(fetchSourceContext)

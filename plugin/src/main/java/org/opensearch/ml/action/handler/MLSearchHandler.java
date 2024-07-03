@@ -133,7 +133,8 @@ public class MLSearchHandler {
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             if (modelAccessControlHelper.skipModelAccessControl(user)
                 || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
-                SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
                     .indices(request.indices())
                     .searchSourceBuilder(request.source())
                     .build();
@@ -175,7 +176,8 @@ public class MLSearchHandler {
                         log.debug("No model group found");
                         request.source().query(rewriteQueryBuilder(request.source().query(), null));
                     }
-                    SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                    SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                        .builder()
                         .indices(request.indices())
                         .searchSourceBuilder(request.source())
                         .build();
@@ -199,7 +201,8 @@ public class MLSearchHandler {
                     log.error("Fail to search model groups!", e);
                     wrappedListener.onFailure(e);
                 });
-                SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
                     .indices(modelGroupSearchRequest.indices())
                     .searchSourceBuilder(modelGroupSearchRequest.source())
                     .build();

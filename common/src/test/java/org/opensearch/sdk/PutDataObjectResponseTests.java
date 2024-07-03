@@ -28,7 +28,7 @@ public class PutDataObjectResponseTests {
 
     @Test
     public void testPutDataObjectResponse() {
-        PutDataObjectResponse response = new PutDataObjectResponse.Builder().id(testId).parser(testParser).build();
+        PutDataObjectResponse response = PutDataObjectResponse.builder().id(testId).parser(testParser).build();
 
         assertEquals(testId, response.id());
         assertEquals(testParser, response.parser());

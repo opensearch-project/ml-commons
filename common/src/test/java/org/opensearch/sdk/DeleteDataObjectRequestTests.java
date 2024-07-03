@@ -27,7 +27,7 @@ public class DeleteDataObjectRequestTests {
 
     @Test
     public void testDeleteDataObjectRequest() {
-        DeleteDataObjectRequest request = new DeleteDataObjectRequest.Builder().index(testIndex).id(testId).tenantId(testTenantId).build();
+        DeleteDataObjectRequest request = DeleteDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());

@@ -114,7 +114,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }
         MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false, tenantId);
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
             .fetchSourceContext(fetchSourceContext)
@@ -263,7 +264,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
-        DeleteDataObjectRequest deleteDataObjectRequest = new DeleteDataObjectRequest.Builder().index(ML_MODEL_INDEX).id(modelId).build();
+        DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest.builder().index(ML_MODEL_INDEX).id(modelId).build();
         sdkClient
             .deleteDataObjectAsync(deleteDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
             .whenComplete((r, throwable) -> {
@@ -342,10 +343,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
      * @param modelId model ID
      */
     private void deleteController(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
-        DeleteDataObjectRequest deleteDataObjectRequest = new DeleteDataObjectRequest.Builder()
-            .index(ML_CONTROLLER_INDEX)
-            .id(modelId)
-            .build();
+        DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest.builder().index(ML_CONTROLLER_INDEX).id(modelId).build();
         sdkClient
             .deleteDataObjectAsync(deleteDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
             .whenComplete((r, throwable) -> {

@@ -83,7 +83,8 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
             .tenantId(tenantId)
@@ -131,7 +132,8 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                             try {
                                                 sdkClient
                                                     .deleteDataObjectAsync(
-                                                        new DeleteDataObjectRequest.Builder()
+                                                        DeleteDataObjectRequest
+                                                            .builder()
                                                             .index(deleteRequest.index())
                                                             .id(deleteRequest.id())
                                                             .tenantId(tenantId)

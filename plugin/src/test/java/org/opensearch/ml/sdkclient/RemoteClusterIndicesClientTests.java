@@ -126,7 +126,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
         IndexResponse indexResponse = new IndexResponse.Builder()
             .id(TEST_ID)
@@ -159,7 +159,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject_Updated() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
         IndexResponse indexResponse = new IndexResponse.Builder()
             .id(TEST_ID)
@@ -192,7 +192,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject_Exception() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
         ArgumentCaptor<IndexRequest<?>> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         when(mockedOpenSearchClient.index(indexRequestCaptor.capture())).thenThrow(new IOException("test"));
@@ -207,7 +207,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testGetDataObject() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         GetResponse<?> getResponse = new GetResponse.Builder<>()
             .index(TEST_INDEX)
@@ -242,7 +242,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testGetDataObject_NotFound() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         GetResponse<?> getResponse = new GetResponse.Builder<>().index(TEST_INDEX).id(TEST_ID).found(false).build();
 
@@ -263,7 +263,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testGetDataObject_Exception() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         ArgumentCaptor<Class<Map>> mapClassCaptor = ArgumentCaptor.forClass(Class.class);
@@ -278,7 +278,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObject() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -316,7 +317,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObjectWithMap() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(Map.of("foo", "bar"))
@@ -344,7 +346,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObject_NotFound() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -382,7 +385,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testtUpdateDataObject_Exception() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -400,7 +404,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testDeleteDataObject() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         DeleteResponse deleteResponse = new DeleteResponse.Builder()
             .id(TEST_ID)
@@ -433,7 +437,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testDeleteDataObject_NotFound() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         DeleteResponse deleteResponse = new DeleteResponse.Builder()
             .id(TEST_ID)
@@ -463,7 +467,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testDeleteDataObject_Exception() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         when(mockedOpenSearchClient.delete(deleteRequestCaptor.capture())).thenThrow(new IOException("test"));
@@ -479,7 +483,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testSearchDataObject() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        SearchDataObjectRequest searchRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
             .indices(TEST_INDEX)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
@@ -515,7 +520,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     public void testSearchDataObject_Exception() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        SearchDataObjectRequest searchRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
             .indices(TEST_INDEX)
             .searchSourceBuilder(searchSourceBuilder)
             .build();

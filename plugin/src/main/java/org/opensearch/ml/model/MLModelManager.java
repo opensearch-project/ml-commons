@@ -367,10 +367,7 @@ public class MLModelManager {
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
 
             String modelGroupId = mlRegisterModelInput.getModelGroupId();
-            GetDataObjectRequest getModelGroupRequest = new GetDataObjectRequest.Builder()
-                .index(ML_MODEL_GROUP_INDEX)
-                .id(modelGroupId)
-                .build();
+            GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
             sdkClient
                 .getDataObjectAsync(getModelGroupRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
@@ -391,7 +388,8 @@ public class MLModelManager {
                                 */
                                 modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
                                 modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-                                UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                    .builder()
                                     .index(ML_MODEL_GROUP_INDEX)
                                     .id(modelGroupId)
                                     // TODO need to track these for concurrency
@@ -584,7 +582,8 @@ public class MLModelManager {
                     .tenantId(registerModelInput.getTenantId())
                     .build();
 
-                PutDataObjectRequest putModelMetaRequest = new PutDataObjectRequest.Builder()
+                PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
+                    .builder()
                     .index(ML_MODEL_INDEX)
                     .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
                     .dataObject(mlModelMeta)
@@ -1647,7 +1646,8 @@ public class MLModelManager {
      * @param listener action listener
      */
     public void getModel(SdkClient sdkClient, String modelId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getRequest = GetDataObjectRequest
+            .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
             .fetchSourceContext(new FetchSourceContext(true, includes, excludes))

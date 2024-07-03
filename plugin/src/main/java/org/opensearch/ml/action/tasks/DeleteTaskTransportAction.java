@@ -81,7 +81,8 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             return;
         }
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_TASK_INDEX)
             .id(taskId)
             .fetchSourceContext(fetchSourceContext)
@@ -124,7 +125,8 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
                                         try {
                                             sdkClient
                                                 .deleteDataObjectAsync(
-                                                    new DeleteDataObjectRequest.Builder()
+                                                    DeleteDataObjectRequest
+                                                        .builder()
                                                         .index(deleteRequest.index())
                                                         .id(deleteRequest.id())
                                                         .build(),

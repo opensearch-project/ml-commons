@@ -77,7 +77,8 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by " + user.getBackendRoles());
             }
-            SearchDataObjectRequest searchDataObjecRequest = new SearchDataObjectRequest.Builder()
+            SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest
+                .builder()
                 .indices(request.indices())
                 .searchSourceBuilder(request.source())
                 .build();

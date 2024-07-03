@@ -125,7 +125,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testPutDataObject_HappyCase() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .tenantId(TENANT_ID)
@@ -160,7 +161,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .testList(Arrays.asList("123", "hello", null))
             .testObject(testDataObject)
             .build();
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .tenantId(TENANT_ID)
@@ -184,11 +186,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testPutDataObject_NullTenantId_SetsDefaultTenantId() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
-            .index(TEST_INDEX)
-            .id(TEST_ID)
-            .dataObject(testDataObject)
-            .build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
@@ -199,7 +197,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testPutDataObject_NullId_SetsDefaultTenantId() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         PutDataObjectResponse response = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -214,11 +212,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testPutDataObject_DDBException_ThrowsException() {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder()
-            .index(TEST_INDEX)
-            .id(TEST_ID)
-            .dataObject(testDataObject)
-            .build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
         CompletableFuture<PutDataObjectResponse> future = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -230,7 +224,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_HappyCase() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         GetItemResponse getItemResponse = GetItemResponse
             .builder()
             .item(Map.ofEntries(Map.entry("data", AttributeValue.builder().s("foo").build())))
@@ -261,7 +255,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_ComplexDataObject() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         GetItemResponse getItemResponse = GetItemResponse
             .builder()
             .item(
@@ -305,7 +299,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_NoExistingDoc() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         GetItemResponse getItemResponse = GetItemResponse.builder().build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
         GetDataObjectResponse response = sdkClient
@@ -319,7 +313,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_UseDefaultTenantIdIfNull() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
         GetItemResponse getItemResponse = GetItemResponse.builder().build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
         sdkClient.getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
@@ -330,7 +324,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testGetDataObject_DDBException_ThrowsOSException() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
         CompletableFuture<GetDataObjectResponse> future = sdkClient
             .getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -341,11 +335,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testDeleteDataObject_HappyCase() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder()
-            .id(TEST_ID)
-            .index(TEST_INDEX)
-            .tenantId(TENANT_ID)
-            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID).index(TEST_INDEX).tenantId(TENANT_ID).build();
         Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
         DeleteDataObjectResponse deleteResponse = sdkClient
             .deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -367,7 +357,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testDeleteDataObject_NullTenantId_UsesDefaultTenantId() {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().id(TEST_ID).index(TEST_INDEX).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID).index(TEST_INDEX).build();
         Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
         sdkClient.deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
@@ -376,7 +366,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void updateDataObjectAsync_HappyCase() {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .id(TEST_ID)
             .index(TEST_INDEX)
             .tenantId(TENANT_ID)
@@ -399,7 +390,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void updateDataObjectAsync_HappyCaseWithMap() {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .id(TEST_ID)
             .index(TEST_INDEX)
             .tenantId(TENANT_ID)
@@ -422,7 +414,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void updateDataObjectAsync_NullTenantId_UsesDefaultTenantId() {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .id(TEST_ID)
             .index(TEST_INDEX)
             .tenantId(TENANT_ID)
@@ -437,7 +430,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     @Test
     public void searchDataObjectAsync_HappyCase() {
         SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource();
-        SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+            .builder()
             .indices(TEST_INDEX, TEST_INDEX_2)
             .tenantId(TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
@@ -457,7 +451,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     @Test
     public void searchDataObjectAsync_SystemIndex() {
         SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource();
-        SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+            .builder()
             .indices(TEST_SYSTEM_INDEX)
             .tenantId(TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
