@@ -72,7 +72,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the Sagemaker model inference endpoint. Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html) and [tutorial](../aws/semantic_search_with_sagemaker_embedding_model.md)
+If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the Sagemaker model inference endpoint. Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html), [tutorial](../aws/semantic_search_with_sagemaker_embedding_model.md), [connector helper notebook](../aws/AIConnectorHelper.ipynb)
 ```json
 POST /_plugins/_ml/connectors/_create
 {
