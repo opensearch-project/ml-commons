@@ -125,7 +125,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                 sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID, tenantId));
             }
 
-            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
                 .indices(ML_MODEL_INDEX)
                 .searchSourceBuilder(sourceBuilder)
                 .build();
@@ -191,7 +192,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         try {
             sdkClient
                 .deleteDataObjectAsync(
-                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
+                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
                     client.threadPool().executor(GENERAL_THREAD_POOL)
                 )
                 .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));

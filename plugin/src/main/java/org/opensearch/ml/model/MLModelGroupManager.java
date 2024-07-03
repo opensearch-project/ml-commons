@@ -130,7 +130,8 @@ public class MLModelGroupManager {
                         mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
                             sdkClient
                                 .putDataObjectAsync(
-                                    new PutDataObjectRequest.Builder()
+                                    PutDataObjectRequest
+                                        .builder()
                                         .tenantId(mlModelGroup.getTenantId())
                                         .index(ML_MODEL_GROUP_INDEX)
                                         .dataObject(mlModelGroup)
@@ -224,7 +225,8 @@ public class MLModelGroupManager {
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
 
-            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
                 .indices(searchRequest.indices())
                 .searchSourceBuilder(searchRequest.source())
                 .build();
@@ -267,7 +269,7 @@ public class MLModelGroupManager {
      * @param listener action listener
      */
     public void getModelGroupResponse(SdkClient sdkClient, String modelGroupId, ActionListener<GetResponse> listener) {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
         sdkClient.getDataObjectAsync(getRequest, client.threadPool().executor(GENERAL_THREAD_POOL)).whenComplete((r, throwable) -> {
             if (throwable == null) {
                 try {

@@ -75,7 +75,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_TASK_INDEX)
             .id(taskId)
             .fetchSourceContext(fetchSourceContext)

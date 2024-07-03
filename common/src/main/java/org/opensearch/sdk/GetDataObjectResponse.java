@@ -57,6 +57,14 @@ public class GetDataObjectResponse {
     }
 
     /**
+     * Instantiate a builder for this object
+     * @return a builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
      * Class for constructing a Builder for this Response Object
      */
     public static class Builder {
@@ -67,7 +75,7 @@ public class GetDataObjectResponse {
         /**
          * Empty Constructor for the Builder object
          */
-        public Builder() {}
+        private Builder() {}
 
         /**
          * Add an id to this builder

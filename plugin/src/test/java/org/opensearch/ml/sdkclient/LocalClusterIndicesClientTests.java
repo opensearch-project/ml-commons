@@ -120,7 +120,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
         IndexResponse indexResponse = new IndexResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID, 1, 0, 2, true);
         @SuppressWarnings("unchecked")
@@ -144,7 +144,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject_Exception() throws IOException {
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
         when(mockedClient.index(any(IndexRequest.class))).thenThrow(new UnsupportedOperationException("test"));
 
@@ -165,7 +165,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
                 throw new IOException("test");
             }
         };
-        PutDataObjectRequest putRequest = new PutDataObjectRequest.Builder().index(TEST_INDEX).dataObject(badDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(badDataObject).build();
 
         CompletableFuture<PutDataObjectResponse> future = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -178,7 +178,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testGetDataObject() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         String json = testDataObject.toJson();
         GetResponse getResponse = new GetResponse(new GetResult(TEST_INDEX, TEST_ID, -2, 0, 1, true, new BytesArray(json), null, null));
@@ -210,7 +210,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testGetDataObject_NullResponse() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         @SuppressWarnings("unchecked")
         ActionFuture<GetResponse> future = mock(ActionFuture.class);
@@ -231,7 +231,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testGetDataObject_NotFound() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
         GetResponse getResponse = new GetResponse(new GetResult(TEST_INDEX, TEST_ID, -2, 0, 1, false, null, null, null));
 
         @SuppressWarnings("unchecked")
@@ -253,7 +253,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testGetDataObject_Exception() throws IOException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         when(mockedClient.get(getRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
@@ -269,7 +269,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObject() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -309,7 +310,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObjectWithMap() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(Map.of("foo", "bar"))
@@ -340,7 +342,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObject_NotFound() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -380,7 +383,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObject_Null() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -404,7 +408,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testUpdateDataObject_Exception() throws IOException {
-        UpdateDataObjectRequest updateRequest = new UpdateDataObjectRequest.Builder()
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
             .dataObject(testDataObject)
@@ -424,7 +429,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testDeleteDataObject() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         DeleteResponse deleteResponse = new DeleteResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID, 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -447,7 +452,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testDeleteDataObject_Exception() throws IOException {
-        DeleteDataObjectRequest deleteRequest = new DeleteDataObjectRequest.Builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
         ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         when(mockedClient.delete(deleteRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
@@ -464,7 +469,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
 
     public void testSearchDataObject() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        SearchDataObjectRequest searchRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
             .indices(TEST_INDEX)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
@@ -508,7 +514,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
 
     public void testSearchDataObject_Exception() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        SearchDataObjectRequest searchRequest = new SearchDataObjectRequest.Builder()
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
             .indices(TEST_INDEX)
             .searchSourceBuilder(searchSourceBuilder)
             .build();

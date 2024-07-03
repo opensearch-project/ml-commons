@@ -109,7 +109,8 @@ public class ConnectorAccessControlHelper {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, context::restore);
             FetchSourceContext fetchSourceContext = getFetchSourceContext(true);
-            GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+            GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+                .builder()
                 .index(ML_CONNECTOR_INDEX)
                 .tenantId(tenantId)
                 .id(connectorId)

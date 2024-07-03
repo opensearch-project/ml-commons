@@ -439,10 +439,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void testGetConnectorHappyCase() throws IOException, InterruptedException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-            .index(CommonValue.ML_CONNECTOR_INDEX)
-            .id("connectorId")
-            .build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
         GetResponse getResponse = prepareConnector();
 
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
@@ -469,10 +466,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void testGetConnectorException() throws IOException, InterruptedException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-            .index(CommonValue.ML_CONNECTOR_INDEX)
-            .id("connectorId")
-            .build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
 
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new RuntimeException("Failed to get connector"));
@@ -498,10 +492,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void testGetConnectorIndexNotFound() throws IOException, InterruptedException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-            .index(CommonValue.ML_CONNECTOR_INDEX)
-            .id("connectorId")
-            .build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
 
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new IndexNotFoundException("Index not found"));

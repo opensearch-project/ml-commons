@@ -31,7 +31,7 @@ public class UpdateDataObjectResponseTests {
 
     @Test
     public void testUpdateDataObjectResponse() {
-        UpdateDataObjectResponse response = new UpdateDataObjectResponse.Builder().id(testId).parser(testParser).build();
+        UpdateDataObjectResponse response = UpdateDataObjectResponse.builder().id(testId).parser(testParser).build();
 
         assertEquals(testId, response.id());
         assertEquals(testParser, response.parser());

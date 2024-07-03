@@ -72,7 +72,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
             return;
         }
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_CONNECTOR_INDEX)
             .id(connectorId)
             .tenantId(tenantId)

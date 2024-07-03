@@ -234,7 +234,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
 
-            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
                 .indices(searchRequest.indices())
                 .searchSourceBuilder(searchRequest.source())
                 .build();

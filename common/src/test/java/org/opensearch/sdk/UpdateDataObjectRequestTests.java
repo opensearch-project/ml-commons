@@ -40,7 +40,7 @@ public class UpdateDataObjectRequestTests {
 
     @Test
     public void testUpdateDataObjectRequest() {
-        UpdateDataObjectRequest request = new UpdateDataObjectRequest.Builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject).build();
+        UpdateDataObjectRequest request = UpdateDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject).build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());
@@ -50,7 +50,7 @@ public class UpdateDataObjectRequestTests {
 
     @Test
     public void testUpdateDataObjectMapRequest() {
-        UpdateDataObjectRequest request = new UpdateDataObjectRequest.Builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObjectMap).build();
+        UpdateDataObjectRequest request = UpdateDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObjectMap).build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());

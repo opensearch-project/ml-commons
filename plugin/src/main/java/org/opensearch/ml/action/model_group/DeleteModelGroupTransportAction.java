@@ -106,7 +106,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                     SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
                     SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
 
-                    SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                    SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                        .builder()
                         .indices(ML_MODEL_INDEX)
                         .searchSourceBuilder(searchSourceBuilder)
                         .build();
@@ -157,7 +158,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         try {
             sdkClient
                 .deleteDataObjectAsync(
-                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build(),
+                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build(),
                     client.threadPool().executor(GENERAL_THREAD_POOL)
                 )
                 .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, deleteRequest.id(), actionListener));

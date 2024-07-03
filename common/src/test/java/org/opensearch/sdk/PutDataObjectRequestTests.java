@@ -30,7 +30,7 @@ public class PutDataObjectRequestTests {
 
     @Test
     public void testPutDataObjectRequest() {
-        PutDataObjectRequest request = new PutDataObjectRequest.Builder().index(testIndex).tenantId(testTenantId).dataObject(testDataObject).build();
+        PutDataObjectRequest request = PutDataObjectRequest.builder().index(testIndex).tenantId(testTenantId).dataObject(testDataObject).build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testTenantId, request.tenantId());

@@ -83,7 +83,8 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
             .tenantId(tenantId)
