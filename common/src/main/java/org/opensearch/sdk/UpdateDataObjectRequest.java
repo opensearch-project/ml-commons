@@ -8,8 +8,6 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.OpenSearchStatusException;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;

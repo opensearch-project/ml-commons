@@ -41,6 +41,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -147,6 +148,13 @@ public class LocalClusterIndicesClient implements SdkClient {
                 }
                 log.info("Update status for id {}: {}", updateResponse.getId(), updateResponse.getResult());
                 return UpdateDataObjectResponse.builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
+            } catch (VersionConflictEngineException vcee) {
+                log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), vcee.getMessage(), vcee);
+                // Rethrow
+                throw new OpenSearchStatusException(
+                    "Document version conflict updating " + request.id() + " in index " + request.index(),
+                    RestStatus.CONFLICT
+                );
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(

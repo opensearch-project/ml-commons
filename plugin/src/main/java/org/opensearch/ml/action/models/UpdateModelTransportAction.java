@@ -625,7 +625,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 return builder.endObject();
             }
         };
-        return UpdateDataObjectRequest.builder()
+        return UpdateDataObjectRequest
+            .builder()
             .index(ML_MODEL_GROUP_INDEX)
             .id(modelGroupId)
             .ifSeqNo(seqNo)

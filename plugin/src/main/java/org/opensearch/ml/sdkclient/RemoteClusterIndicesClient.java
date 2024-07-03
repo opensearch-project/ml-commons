@@ -25,6 +25,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.json.JsonpMapper;
 import org.opensearch.client.json.JsonpSerializable;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -147,6 +148,14 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 UpdateResponse<Map<String, Object>> updateResponse = openSearchClient.update(updateRequest, MAP_DOCTYPE);
                 log.info("Update status for id {}: {}", updateResponse.id(), updateResponse.result());
                 return UpdateDataObjectResponse.builder().id(updateResponse.id()).parser(createParser(updateResponse)).build();
+            } catch (OpenSearchException ose) {
+                String errorType = ose.status() == RestStatus.CONFLICT.getStatus() ? "Document Version Conflict" : "Failed";
+                log.error("{} updating {} in {}: {}", errorType, request.id(), request.index(), ose.getMessage(), ose);
+                // Rethrow
+                throw new OpenSearchStatusException(
+                    errorType + " updating " + request.id() + " in index " + request.index(),
+                    RestStatus.fromCode(ose.status())
+                );
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException

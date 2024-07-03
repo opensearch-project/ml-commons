@@ -69,7 +69,7 @@ public class UpdateDataObjectRequestTests {
     
     @Test
     public void testUpdateDataObjectRequestConcurrency() {
-        UpdateDataObjectRequest request = new UpdateDataObjectRequest.Builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject)
+        UpdateDataObjectRequest request = UpdateDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject)
             .ifSeqNo(testSeqNo).ifPrimaryTerm(testPrimaryTerm).build();
 
         assertEquals(testIndex, request.index());
@@ -79,13 +79,13 @@ public class UpdateDataObjectRequestTests {
         assertEquals(testSeqNo, request.ifSeqNo());
         assertEquals(testPrimaryTerm, request.ifPrimaryTerm());
 
-        final Builder badSeqNoBuilder = new UpdateDataObjectRequest.Builder();
+        final Builder badSeqNoBuilder = UpdateDataObjectRequest.builder();
         assertThrows(IllegalArgumentException.class, () -> badSeqNoBuilder.ifSeqNo(-99));
-        final Builder badPrimaryTermBuilder = new UpdateDataObjectRequest.Builder();
+        final Builder badPrimaryTermBuilder = UpdateDataObjectRequest.builder();
         assertThrows(IllegalArgumentException.class, () -> badPrimaryTermBuilder.ifPrimaryTerm(-99));
-        final Builder onlySeqNoBuilder = new UpdateDataObjectRequest.Builder().ifSeqNo(testSeqNo);
+        final Builder onlySeqNoBuilder = UpdateDataObjectRequest.builder().ifSeqNo(testSeqNo);
         assertThrows(IllegalArgumentException.class, () -> onlySeqNoBuilder.build());
-        final Builder onlyPrimaryTermBuilder = new UpdateDataObjectRequest.Builder().ifPrimaryTerm(testPrimaryTerm);
+        final Builder onlyPrimaryTermBuilder = UpdateDataObjectRequest.builder().ifPrimaryTerm(testPrimaryTerm);
         assertThrows(IllegalArgumentException.class, () -> onlyPrimaryTermBuilder.build());
     }
 }

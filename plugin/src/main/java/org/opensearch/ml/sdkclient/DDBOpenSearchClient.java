@@ -111,10 +111,11 @@ public class DDBOpenSearchClient implements SdkClient {
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
                 final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
 
-                dynamoDbClient.putItem(putItemRequest);
                 // TODO need to initialize/return SEQ_NO here
                 // If document doesn't exist, return 0
                 // If document exists, overwrite and increment and return SEQ_NO
+                dynamoDbClient.putItem(putItemRequest);
+                // TODO need to pass seqNo to simulated response
                 String simulatedIndexResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),
@@ -208,14 +209,14 @@ public class DDBOpenSearchClient implements SdkClient {
                         );
                 }
                 UpdateItemRequest updateItemRequest = updateItemRequestBuilder.build();
-                dynamoDbClient.updateItem(updateItemRequest);
                 // TODO need to add an incremented seqNo here
-                // also integrate with put and delete. Can we fetch from the updateItemResponse returned on previous line?
+                dynamoDbClient.updateItem(updateItemRequest);
+                // TODO need to pass seqNo to simulated response
                 String simulatedUpdateResponse = simulateOpenSearchResponse(request.index(), request.id(), source, Map.of("found", true));
                 return UpdateDataObjectResponse.builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
             } catch (ConditionalCheckFailedException ccfe) {
                 log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), ccfe.getMessage(), ccfe);
-                // Rethrow unchecked exception on update IOException
+                // Rethrow
                 throw new OpenSearchStatusException(
                     "Document version conflict updating " + request.id() + " in index " + request.index(),
                     RestStatus.CONFLICT
@@ -251,11 +252,12 @@ public class DDBOpenSearchClient implements SdkClient {
             .build();
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
-                dynamoDbClient.deleteItem(deleteItemRequest);
                 // TODO need to return SEQ_NO here
                 // If document doesn't exist, increment and return highest seq no ever seen, but we would have to track seqNo here
                 // If document never existed, return -2 (unassigned) for seq no (probably what we have to do here)
                 // If document exists, increment and return SEQ_NO
+                dynamoDbClient.deleteItem(deleteItemRequest);
+                // TODO need to pass seqNo to simulated response
                 String simulatedDeleteResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),

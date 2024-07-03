@@ -62,6 +62,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -426,6 +427,34 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         Throwable cause = ce.getCause();
         assertEquals(UnsupportedOperationException.class, cause.getClass());
         assertEquals("test", cause.getMessage());
+    }
+
+    public void testUpdateDataObject_VersionCheck() throws IOException {
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .ifSeqNo(5)
+            .ifPrimaryTerm(2)
+            .build();
+
+        ArgumentCaptor<UpdateRequest> updateRequestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        VersionConflictEngineException conflictException = new VersionConflictEngineException(
+            new ShardId(TEST_INDEX, "_na_", 0),
+            TEST_ID,
+            "test"
+        );
+        when(mockedClient.update(updateRequestCaptor.capture())).thenThrow(conflictException);
+
+        CompletableFuture<UpdateDataObjectResponse> future = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchStatusException.class, cause.getClass());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) cause).status());
     }
 
     public void testDeleteDataObject() throws IOException {
