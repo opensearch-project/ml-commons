@@ -489,10 +489,19 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             boolean override = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, OVERRIDE, false);
             String functionName = ConfigurationUtils
                 .readStringProperty(TYPE, processorTag, config, FUNCTION_NAME, FunctionName.REMOTE.name());
-            String modelInput = ConfigurationUtils
-                .readStringProperty(TYPE, processorTag, config, MODEL_INPUT, "{ \"parameters\": ${ml_inference.parameters} }");
-            boolean defaultValue = !functionName.equalsIgnoreCase("remote");
-            boolean fullResponsePath = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, FULL_RESPONSE_PATH, defaultValue);
+
+            String modelInput = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, MODEL_INPUT);
+
+            // if model input is not provided for remote models, use default value
+            if (functionName.equalsIgnoreCase("remote")) {
+                modelInput = (modelInput != null) ? modelInput : "{ \"parameters\": ${ml_inference.parameters} }";
+            } else if (modelInput == null) {
+                // if model input is not provided for local models, throw exception since it is mandatory here
+                throw new IllegalArgumentException("Please provide model input when using a local model in ML Inference Processor");
+            }
+            boolean defaultFullResponsePath = !functionName.equalsIgnoreCase("remote");
+            boolean fullResponsePath = ConfigurationUtils
+                .readBooleanProperty(TYPE, processorTag, config, FULL_RESPONSE_PATH, defaultFullResponsePath);
 
             boolean ignoreFailure = ConfigurationUtils
                 .readBooleanProperty(TYPE, processorTag, config, ConfigurationUtils.IGNORE_FAILURE_KEY, false);
