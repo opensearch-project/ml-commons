@@ -66,7 +66,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "request_body": "{ \"inputs\": ${parameters.inputs} }",
-      "pre_process_function": "\n    String escape(def input) { \n       if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n      return input;\n    }\n\n   String query = params.query_text;\n   StringBuilder builder = new StringBuilder('[');\n    \n    for (int i=0; i<params.text_docs.length; i ++) {\n      builder.append('\"');\n      builder.append(escape(query));\n      builder.append(' . ');\n      builder.append(escape(params.text_docs[i]));\n      builder.append('\"');\n      if (i<params.text_docs.length - 1) {\n        builder.append(',');\n      }\n    }\n    builder.append(']');\n    \n    def parameters = '{ \"inputs\": ' + builder + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n     ",
+      "pre_process_function": "\n    String escape(def input) { \n       if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n      return input;\n    }\n\n   String query = params.query_text;\n   StringBuilder builder = new StringBuilder('[');\n    \n    for (int i=0; i<params.text_docs.length; i ++) {\n      builder.append('{\"text\":\"');\n      builder.append(escape(query));\n      builder.append('\", \"text_pair\":\"');\n      builder.append(escape(params.text_docs[i]));\n      builder.append('\"}');\n      if (i<params.text_docs.length - 1) {\n        builder.append(',');\n      }\n    }\n    builder.append(']');\n    \n    def parameters = '{ \"inputs\": ' + builder + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n     ",
       "post_process_function": "\n      \n      def dataType = \"FLOAT32\";\n      \n      \n      if (params.result == null)\n      {\n          return 'no result generated';\n          //return params.response;\n      }\n      def outputs = params.result;\n      \n      \n      def resultBuilder = new StringBuilder('[ ');\n      for (int i=0; i<outputs.length; i++) {\n        resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');\n        //resultBuilder.append('{\"name\": \"similarity\"}');\n        \n        resultBuilder.append('\"data\": [');\n        resultBuilder.append(outputs[i].score);\n        resultBuilder.append(']}');\n        if (i<outputs.length - 1) {\n          resultBuilder.append(',');\n        }\n      }\n      resultBuilder.append(']');\n      \n      return resultBuilder.toString();\n    "
     }
   ]
@@ -97,7 +97,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "request_body": "{ \"inputs\": ${parameters.inputs} }",
-      "pre_process_function": "\n    String escape(def input) { \n       if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n      return input;\n    }\n\n   String query = params.query_text;\n   StringBuilder builder = new StringBuilder('[');\n    \n    for (int i=0; i<params.text_docs.length; i ++) {\n      builder.append('\"');\n      builder.append(escape(query));\n      builder.append(' . ');\n      builder.append(escape(params.text_docs[i]));\n      builder.append('\"');\n      if (i<params.text_docs.length - 1) {\n        builder.append(',');\n      }\n    }\n    builder.append(']');\n    \n    def parameters = '{ \"inputs\": ' + builder + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n     ",
+      "pre_process_function": "\n    String escape(def input) { \n       if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n      return input;\n    }\n\n   String query = params.query_text;\n   StringBuilder builder = new StringBuilder('[');\n    \n    for (int i=0; i<params.text_docs.length; i ++) {\n      builder.append('{\"text\":\"');\n      builder.append(escape(query));\n      builder.append('\", \"text_pair\":\"');\n      builder.append(escape(params.text_docs[i]));\n      builder.append('\"}');\n      if (i<params.text_docs.length - 1) {\n        builder.append(',');\n      }\n    }\n    builder.append(']');\n    \n    def parameters = '{ \"inputs\": ' + builder + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n     ",
       "post_process_function": "\n      \n      def dataType = \"FLOAT32\";\n      \n      \n      if (params.result == null)\n      {\n          return 'no result generated';\n          //return params.response;\n      }\n      def outputs = params.result;\n      \n      \n      def resultBuilder = new StringBuilder('[ ');\n      for (int i=0; i<outputs.length; i++) {\n        resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');\n        //resultBuilder.append('{\"name\": \"similarity\"}');\n        \n        resultBuilder.append('\"data\": [');\n        resultBuilder.append(outputs[i].score);\n        resultBuilder.append(']}');\n        if (i<outputs.length - 1) {\n          resultBuilder.append(',');\n        }\n      }\n      resultBuilder.append(']');\n      \n      return resultBuilder.toString();\n    "
     }
   ]
@@ -120,8 +120,17 @@ Test the model by using the Predict API:
 ```json
 POST _plugins/_ml/models/your_model_id/_predict
 {
-  "parameters":  {
-    "inputs": ["I kike you . I hate you", "I kike you . I love you"]
+  "parameters": {
+    "inputs": [
+      {
+        "text": "I like you",
+        "text_pair": "I hate you"
+      },
+      {
+        "text": "I like you",
+        "text_pair": "I love you"
+      }
+    ]
   }
 }
 ```
@@ -132,7 +141,7 @@ Alternatively, you can test the model as follows:
 ```json
 POST _plugins/_ml/_predict/text_similarity/your_model_id
 {
-  "query_text": "I kike you",
+  "query_text": "I like you",
   "text_docs": ["I hate you", "I love you"]
 }
 ```
@@ -143,11 +152,11 @@ By default, the SageMaker model output has the following format:
 [
   {
     "label": "LABEL_0",
-    "score": 0.00964462198317051
+    "score": 0.054037678986787796
   },
   {
     "label": "LABEL_0",
-    "score": 0.01644575409591198
+    "score": 0.5877784490585327
   }
 ]
 ```
@@ -164,7 +173,7 @@ The connector `pre_process_function` transforms the model's output into a format
             1
           ],
           "data": [
-            0.002032809890806675
+            0.054037678986787796
           ]
         },
         {
@@ -174,7 +183,7 @@ The connector `pre_process_function` transforms the model's output into a format
             1
           ],
           "data": [
-            0.0026099851820617914
+            0.5877784490585327
           ]
         }
       ],
@@ -259,36 +268,36 @@ Response:
       "value": 4,
       "relation": "eq"
     },
-    "max_score": 0.99424136,
+    "max_score": 0.9997217,
     "hits": [
       {
         "_index": "my-test-data",
-        "_id": "tYLLdZABHToP7ahNFqmx",
-        "_score": 0.99424136,
+        "_id": "U0xye5AB9ZeWZdmDjWZn",
+        "_score": 0.9997217,
         "_source": {
           "passage_text": "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district."
         }
       },
       {
         "_index": "my-test-data",
-        "_id": "toLLdZABHToP7ahNFqmx",
-        "_score": 0.69457644,
+        "_id": "VExye5AB9ZeWZdmDjWZn",
+        "_score": 0.55655104,
         "_source": {
           "passage_text": "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states."
         }
       },
       {
         "_index": "my-test-data",
-        "_id": "s4LLdZABHToP7ahNFqmx",
-        "_score": 0.41946858,
+        "_id": "UUxye5AB9ZeWZdmDjWZn",
+        "_score": 0.115356825,
         "_source": {
           "passage_text": "Carson City is the capital city of the American state of Nevada."
         }
       },
       {
         "_index": "my-test-data",
-        "_id": "tILLdZABHToP7ahNFqmx",
-        "_score": 0.2727688,
+        "_id": "Ukxye5AB9ZeWZdmDjWZn",
+        "_score": 0.00021142483,
         "_source": {
           "passage_text": "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
         }
@@ -319,7 +328,7 @@ GET my-test-data/_search
 The first document in the response is `Carson City is the capital city of the American state of Nevada`, which is incorrect:
 ```json
 {
-  "took": 2,
+  "took": 1,
   "timed_out": false,
   "_shards": {
     "total": 1,
@@ -332,36 +341,36 @@ The first document in the response is `Carson City is the capital city of the Am
       "value": 4,
       "relation": "eq"
     },
-    "max_score": 1.0,
+    "max_score": 1,
     "hits": [
       {
         "_index": "my-test-data",
-        "_id": "s4LLdZABHToP7ahNFqmx",
-        "_score": 1.0,
+        "_id": "UUxye5AB9ZeWZdmDjWZn",
+        "_score": 1,
         "_source": {
           "passage_text": "Carson City is the capital city of the American state of Nevada."
         }
       },
       {
         "_index": "my-test-data",
-        "_id": "tILLdZABHToP7ahNFqmx",
-        "_score": 1.0,
+        "_id": "Ukxye5AB9ZeWZdmDjWZn",
+        "_score": 1,
         "_source": {
           "passage_text": "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
         }
       },
       {
         "_index": "my-test-data",
-        "_id": "tYLLdZABHToP7ahNFqmx",
-        "_score": 1.0,
+        "_id": "U0xye5AB9ZeWZdmDjWZn",
+        "_score": 1,
         "_source": {
           "passage_text": "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district."
         }
       },
       {
         "_index": "my-test-data",
-        "_id": "toLLdZABHToP7ahNFqmx",
-        "_score": 1.0,
+        "_id": "VExye5AB9ZeWZdmDjWZn",
+        "_score": 1,
         "_source": {
           "passage_text": "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states."
         }
