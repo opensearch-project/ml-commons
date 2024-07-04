@@ -10,8 +10,9 @@ Note: Replace the placeholders that start with `your_` with your own values.
 
 # Steps
 
-## 0. Deploy Model on Sagemaker
-Use this code to deploy model on Sagemaker.
+## 0. Deploy the model on Amazon Sagemaker
+Use the following code to deploy the model on Amazon Sagemaker. 
+You can find all supported instance type and price on [Amazon Sagemaker Pricing document](https://aws.amazon.com/sagemaker/pricing/). Suggest to use GPU for better performance.
 ```python
 import sagemaker
 import boto3
@@ -35,11 +36,11 @@ predictor = huggingface_model.deploy(
     instance_type='ml.m5.xlarge' # ec2 instance type
 )
 ```
-Find the model inference endpoint and note it. We will use it to create connector in next step
+Note the model inference endpoint; you'll use it to create a connector in the next step.
 
-## 1. Create Connector and Model
+## 1. Create a connector and register the model
 
-If you are using self-managed Opensearch, you should supply AWS credentials:
+To create a connector for the model, send the following request. If you are using self-managed OpenSearch, supply your AWS credentials:
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -72,7 +73,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the Sagemaker model inference endpoint. Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html), [tutorial](../aws/semantic_search_with_sagemaker_embedding_model.md), [connector helper notebook](../aws/AIConnectorHelper.ipynb)
+If you are using the AWS OpenSearch service, you can provide an IAM role ARN that allows access to the SageMaker model inference endpoint. For more information, see [AWS documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html), [this tutorial](../aws/semantic_search_with_sagemaker_embedding_model.md), and [this connector helper notebook](../aws/AIConnectorHelper.ipynb):
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -103,7 +104,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-Use the connector ID from the response to create a model:
+Use the connector ID from the response to register and deploy the model:
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
 {
@@ -113,9 +114,9 @@ POST /_plugins/_ml/models/_register?deploy=true
     "connector_id": "your_connector_id"
 }
 ```
-Note the model ID in the response; you will use it in the following steps.
+Note the model ID in the response; you'll use it in the following steps.
 
-Test the model using the Predict API:
+Test the model by using the Predict API:
 ```json
 POST _plugins/_ml/models/your_model_id/_predict
 {
@@ -125,10 +126,9 @@ POST _plugins/_ml/models/your_model_id/_predict
 }
 ```
 
-Each item in the inputs array comprises the 'query text' and a 'text doc', separated by a ` . `
+Each item in the `inputs` array comprises a `query_text` and a `text_docs` string, separated by a ` . `
 
-The API can also be tested similarly to a [local cross-encoder model](https://opensearch.org/docs/latest/ml-commons-plugin/pretrained-models/#cross-encoder-models).
-The connector `pre_process_function` transforms the input into the format required by `inputs` parameter shown above. 
+Alternatively, you can test the model as follows:
 ```json
 POST _plugins/_ml/_predict/text_similarity/your_model_id
 {
@@ -136,8 +136,9 @@ POST _plugins/_ml/_predict/text_similarity/your_model_id
   "text_docs": ["I hate you", "I love you"]
 }
 ```
+The connector `pre_process_function` transforms the input into the format required by the `inputs` parameter shown previously.
 
-By default, the Sagemaker model output is in the following format:
+By default, the SageMaker model output has the following format:
 ```json
 [
   {
@@ -184,7 +185,7 @@ The connector `pre_process_function` transforms the model's output into a format
 ```
 
 Explanation of the response:
-1. The response contains 2 `similarity` outputs. For each `similarity` output, the `data` array contains a relevance score between each document and the query.
+1. The response contains two `similarity` outputs. For each `similarity` output, the `data` array contains a relevance score of each document against the query.
 2. The `similarity` outputs are provided in the order of the input documents; the first result of similarity pertains to the first document.
 
 
@@ -202,7 +203,7 @@ POST _bulk
 { "passage_text" : "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states." }
 
 ```
-### 2.2 Create reranking pipeline
+### 2.2 Create a reranking pipeline
 ```json
 PUT /_search/pipeline/rerank_pipeline_sagemaker
 {
@@ -221,10 +222,10 @@ PUT /_search/pipeline/rerank_pipeline_sagemaker
     ]
 }
 ```
-Note: if you provide multiple filed names in `document_fields`, it will concat the value of all fields then do rerank.
+Note: if you provide multiple filed names in `document_fields`, the values of all fields are first concatenated and then reranking is performed.
 ### 2.2 Test reranking
 
-You can tune `size` if you want to return less result. For example, set `"size": 2` if you want to return top 2 documents.
+To return a different number of results, provide the `size` parameter. For example, set `size` to `4` to return the top four documents:
 
 ```json
 GET my-test-data/_search?search_pipeline=rerank_pipeline_sagemaker
@@ -299,7 +300,7 @@ Response:
   }
 }
 ```
-Test without reranking pipeline:
+Test the query without a reranking pipeline:
 ```
 GET my-test-data/_search
 {
@@ -315,7 +316,7 @@ GET my-test-data/_search
   }
 }
 ```
-The first document in the response is `Carson City is the capital city of the American state of Nevada`, which is incorrect.
+The first document in the response is `Carson City is the capital city of the American state of Nevada`, which is incorrect:
 ```json
 {
   "took": 2,
