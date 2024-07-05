@@ -113,7 +113,7 @@ public class TransportUndeployModelAction extends
                     // when undeploy a undeployed model, the entry.getvalue() is null
                     if (entry.getValue() != null
                         && (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
-                        || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length)) {
+                            || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length)) {
                         modelWorkNodesBeforeRemoval.put(entry.getKey(), entry.getValue());
                     }
                 }
@@ -202,7 +202,10 @@ public class TransportUndeployModelAction extends
             try {
                 boolean success = countDownLatch.await(1000, TimeUnit.MILLISECONDS);
                 if (!success) {
-                    log.error("Failed to update model state as undeployed in model index after waiting for 1 second, please check model status manually");
+                    log
+                        .error(
+                            "Failed to update model state as undeployed in model index after waiting for 1 second, please check model status manually"
+                        );
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
