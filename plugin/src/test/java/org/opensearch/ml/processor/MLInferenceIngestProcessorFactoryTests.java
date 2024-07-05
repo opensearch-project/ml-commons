@@ -174,4 +174,60 @@ public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
         assertEquals(mLInferenceIngestProcessor.getTag(), processorTag);
         assertEquals(mLInferenceIngestProcessor.getType(), MLInferenceIngestProcessor.TYPE);
     }
+
+    public void testLocalModel() throws Exception {
+        Map<String, Processor.Factory> registry = new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        config.put(FUNCTION_NAME, "text_embedding");
+        Map<String, Object> model_config = new HashMap<>();
+        model_config.put("return_number", true);
+        config.put(MODEL_CONFIG, model_config);
+        config.put(MODEL_INPUT, "{ \"text_docs\": ${ml_inference.text_docs} }");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put("text_docs", "chunks.*.chunk.text.*.context");
+        inputMap.add(input);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("chunks.*.chunk.text.*.embedding", "$.inference_results.*.output[2].data");
+        outputMap.add(output);
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(MAX_PREDICTION_TASKS, 5);
+        String processorTag = randomAlphaOfLength(10);
+
+        MLInferenceIngestProcessor mLInferenceIngestProcessor = factory.create(registry, processorTag, null, config);
+        assertNotNull(mLInferenceIngestProcessor);
+        assertEquals(mLInferenceIngestProcessor.getTag(), processorTag);
+        assertEquals(mLInferenceIngestProcessor.getType(), MLInferenceIngestProcessor.TYPE);
+    }
+
+    public void testModelInputIsNullForLocalModels() throws Exception {
+        Map<String, Processor.Factory> registry = new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        config.put(FUNCTION_NAME, "text_embedding");
+        Map<String, Object> model_config = new HashMap<>();
+        model_config.put("return_number", true);
+        config.put(MODEL_CONFIG, model_config);
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put("text_docs", "chunks.*.chunk.text.*.context");
+        inputMap.add(input);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("chunks.*.chunk.text.*.embedding", "$.inference_results.*.output[2].data");
+        outputMap.add(output);
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(MAX_PREDICTION_TASKS, 5);
+        String processorTag = randomAlphaOfLength(10);
+
+        try {
+            factory.create(registry, processorTag, null, config);
+        } catch (IllegalArgumentException e) {
+            assertEquals(e.getMessage(), ("Please provide model input when using a local model in ML Inference Processor"));
+        }
+    }
 }
