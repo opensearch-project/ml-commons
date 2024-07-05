@@ -1036,9 +1036,6 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MODEL_GROUP_INDEX, "ML Commons Model Group Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MODEL_INDEX, "ML Commons Model Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_TASK_INDEX, "ML Commons Task Index"));
-        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONVERSATION_META_INDEX, "ML Commons Conversation Meta Index"));
-        systemIndexDescriptors
-            .add(new SystemIndexDescriptor(ML_CONVERSATION_INTERACTIONS_INDEX, "ML Commons Conversation Interactions Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MEMORY_META_INDEX, "ML Commons Memory Meta Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MEMORY_MESSAGE_INDEX, "ML Commons Memory Message Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_STOP_WORDS_INDEX, "ML Commons Stop Words Index"));
