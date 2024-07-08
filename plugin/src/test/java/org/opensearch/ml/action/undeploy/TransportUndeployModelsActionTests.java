@@ -188,10 +188,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             .isHidden(false)
             .build();
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
     }
 
     @AfterClass
@@ -213,10 +213,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             .isHidden(true)
             .build();
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
 
         List<MLUndeployModelNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
@@ -247,10 +247,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             .isHidden(true)
             .build();
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
 
         List<MLUndeployModelNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
@@ -292,7 +292,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     public void testDoExecute_modelAccessControl_notEnabled() {
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(false);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
@@ -327,17 +327,19 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_getModel_exception() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
         MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(RuntimeException.class));
     }
 
     public void testDoExecute_validateAccess_exception() {
-        doThrow(new RuntimeException("runtime exception")).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        doThrow(new RuntimeException("runtime exception"))
+            .when(mlModelManager)
+            .getModel(any(), any(), any(), any(), isA(ActionListener.class));
         MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(RuntimeException.class));

@@ -364,13 +364,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(3);
             listener.onResponse(localModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(localModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         MLModelGroup modelGroup = MLModelGroup
             .builder()
@@ -445,7 +445,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -465,7 +465,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -485,7 +485,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -505,7 +505,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
         doReturn(true).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -526,7 +526,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
         doReturn(false).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -541,7 +541,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModelWithInternalConnector);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -559,7 +559,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
@@ -583,7 +583,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(remoteModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
@@ -712,7 +712,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(null);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -726,7 +726,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModelWithNullFunctionName);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -756,7 +756,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(localModelWithUnsupportedFunction);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -773,7 +773,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
@@ -800,7 +800,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(eq(sdkClient), eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
@@ -957,7 +957,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testDeployingModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -975,7 +975,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testDeployingModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
@@ -993,7 +993,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1022,7 +1022,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1053,7 +1053,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1085,7 +1085,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1116,7 +1116,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").build();
         MLUpdateModelRequest testUpdateModelCacheRequest = prepareRemoteRequest("REMOTE_INTERNAL");
@@ -1142,7 +1142,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1173,7 +1173,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         PlainActionFuture<UpdateResponse> future = PlainActionFuture.newFuture();
         future.onResponse(null);
@@ -1206,7 +1206,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1239,7 +1239,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1271,7 +1271,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1302,7 +1302,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> actionListener = invocation.getArgument(2);
@@ -1337,7 +1337,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1366,7 +1366,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1411,7 +1411,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1442,7 +1442,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1475,7 +1475,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1503,7 +1503,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1547,7 +1547,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1577,7 +1577,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1606,7 +1606,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1635,7 +1635,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(testUpdateModelCacheModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("test_model_id"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
@@ -1677,6 +1677,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 mlModel = MLModel
                     .builder()
                     .name("test_name")
+                    .tenantId("tenant_id")
                     .modelId("test_model_id")
                     .modelGroupId("test_model_group_id")
                     .description("test_description")
@@ -1797,7 +1798,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), anyString(), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
@@ -1822,7 +1823,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mockModel);
             return null;
-        }).when(mlModelManager).getModel(any(SdkClient.class), eq("mockId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), anyString(), any(), any(), isA(ActionListener.class));
 
         doReturn("test_model_group_id").when(mockModel).getModelGroupId();
         doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();

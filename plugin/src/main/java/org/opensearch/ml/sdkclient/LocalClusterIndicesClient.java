@@ -102,17 +102,13 @@ public class LocalClusterIndicesClient implements SdkClient {
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
-                log.info("Getting {} from {}", request.id(), request.index());
                 GetResponse getResponse = client
                     .get(new GetRequest(request.index(), request.id()).fetchSourceContext(request.fetchSourceContext()))
                     .actionGet();
                 if (getResponse == null) {
-                    log.info("Null GetResponse");
                     return GetDataObjectResponse.builder().id(request.id()).parser(null).build();
                 }
-                log.info("Retrieved data object");
-                return GetDataObjectResponse
-                    .builder()
+                return GetDataObjectResponse.builder()
                     .id(getResponse.getId())
                     .parser(createParser(getResponse))
                     .source(getResponse.getSource())

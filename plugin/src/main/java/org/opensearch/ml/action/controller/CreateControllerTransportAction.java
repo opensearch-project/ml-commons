@@ -99,7 +99,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLCreateControllerResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, null, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {

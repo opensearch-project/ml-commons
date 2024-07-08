@@ -212,10 +212,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockIndexId");
@@ -234,10 +234,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(false);
 
@@ -279,10 +279,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         when(mlModel.getIsHidden()).thenReturn(true);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockIndexId");
@@ -325,10 +325,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         when(mlModel.getIsHidden()).thenReturn(true);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockIndexId");
@@ -351,10 +351,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -373,10 +373,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
@@ -390,10 +390,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
@@ -407,10 +407,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -491,7 +491,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     public void testDoExecute_whenGetModelHasNPE_exception() {
         doThrow(NullPointerException.class)
             .when(mlModelManager)
-            .getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+            .getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
@@ -502,10 +502,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockIndexId");

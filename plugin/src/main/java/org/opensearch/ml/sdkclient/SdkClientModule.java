@@ -9,13 +9,14 @@
 package org.opensearch.ml.sdkclient;
 
 import org.apache.http.HttpHost;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.opensearch.OpenSearchException;
-import org.opensearch.client.RestClient;
-import org.opensearch.client.json.jackson.JacksonJsonpMapper;
+import org.opensearch.client.Client;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.transport.rest_client.RestClientTransport;
+import org.opensearch.client.transport.aws.AwsSdk2Transport;
+import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
 import org.opensearch.common.inject.AbstractModule;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -27,6 +28,8 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -45,12 +48,20 @@ public class SdkClientModule extends AbstractModule {
     private final String remoteMetadataType;
     private final String remoteMetadataEndpoint;
     private final String region; // not using with RestClient
+    private Client client;
+    private NamedXContentRegistry namedXContentRegistry;
 
     /**
      * Instantiate this module using environment variables
      */
-    public SdkClientModule() {
-        this(System.getenv(REMOTE_METADATA_TYPE), System.getenv(REMOTE_METADATA_ENDPOINT), System.getenv(REGION));
+    public SdkClientModule(Client client, NamedXContentRegistry namedXContentRegistry) {
+        this(
+            client,
+            namedXContentRegistry,
+            System.getenv(REMOTE_METADATA_TYPE),
+            System.getenv(REMOTE_METADATA_ENDPOINT),
+            System.getenv(REGION)
+        );
     }
 
     /**
@@ -59,7 +70,15 @@ public class SdkClientModule extends AbstractModule {
      * @param remoteMetadataEndpoint The remote endpoint
      * @param region The region
      */
-    SdkClientModule(String remoteMetadataType, String remoteMetadataEndpoint, String region) {
+    SdkClientModule(
+        Client client,
+        NamedXContentRegistry namedXContentRegistry,
+        String remoteMetadataType,
+        String remoteMetadataEndpoint,
+        String region
+    ) {
+        this.client = client;
+        this.namedXContentRegistry = namedXContentRegistry;
         this.remoteMetadataType = remoteMetadataType;
         this.remoteMetadataEndpoint = remoteMetadataEndpoint;
         this.region = region;
@@ -69,7 +88,7 @@ public class SdkClientModule extends AbstractModule {
     protected void configure() {
         if (this.remoteMetadataType == null) {
             log.info("Using local opensearch cluster as metadata store");
-            bind(SdkClient.class).to(LocalClusterIndicesClient.class);
+            bindLocalClient();
             return;
         }
 
@@ -85,7 +104,15 @@ public class SdkClientModule extends AbstractModule {
                 return;
             default:
                 log.info("Using local opensearch cluster as metadata store");
-                bind(SdkClient.class).to(LocalClusterIndicesClient.class);
+                bindLocalClient();
+        }
+    }
+
+    private void bindLocalClient() {
+        if (client == null) {
+            bind(SdkClient.class).to(LocalClusterIndicesClient.class);
+        } else {
+            bind(SdkClient.class).toInstance(new LocalClusterIndicesClient(this.client, this.namedXContentRegistry));
         }
     }
 
@@ -106,23 +133,35 @@ public class SdkClientModule extends AbstractModule {
 
     private OpenSearchClient createOpenSearchClient() {
         try {
+            BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
             // Basic http(not-s) client using RestClient.
-            RestClient restClient = RestClient
+            SdkHttpClient httpClient = ApacheHttpClient.builder().build();
+            AwsSdk2Transport awsSdk2Transport = new AwsSdk2Transport(
+                httpClient,
+                HttpHost.create(remoteMetadataEndpoint).getHostName(),
+                "aoss",
+                Region.of(region),
+                AwsSdk2TransportOptions.builder().build()
+            );
+            /*RestClient restClient = RestClient
                 // This HttpHost syntax works with export REMOTE_METADATA_ENDPOINT=http://127.0.0.1:9200
                 .builder(HttpHost.create(remoteMetadataEndpoint))
                 .setStrictDeprecationMode(true)
                 .setHttpClientConfigCallback(httpClientBuilder -> {
                     try {
-                        return httpClientBuilder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+                        return httpClientBuilder
+                                .setDefaultCredentialsProvider(credentialsProvider)
+                                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
                     } catch (Exception e) {
                         throw new OpenSearchException(e);
                     }
                 })
-                .build();
+                .build();*/
             ObjectMapper objectMapper = new ObjectMapper()
                 .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
-            return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
+            // return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
+            return new OpenSearchClient(awsSdk2Transport);
         } catch (Exception e) {
             throw new OpenSearchException(e);
         }

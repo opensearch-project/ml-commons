@@ -233,7 +233,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlTaskManager).add(any(MLTask.class));
-        verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
     }
 
@@ -243,17 +242,16 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         verify(mlTaskManager).add(any(MLTask.class));
-        verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
     }
 
     public void testExecuteTask_OnLocalNode_RemoteModelAutoDeploy() {
         setupMocks(true, false, false, false);
         doAnswer(invocation -> {
-            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
             actionListener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any());
+        }).when(mlModelManager).getModel(any(), any(), any());
         when(mlModelManager.addModelToAutoDeployCache("111", mlModel)).thenReturn(mlModel);
         taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(client).execute(any(), any(), any());
@@ -276,7 +274,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlTaskManager).add(any(MLTask.class));
         verify(mlTaskManager).remove(anyString());
-        verify(client).get(any(), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals("User: test_user does not have permissions to run predict by model: 111", argumentCaptor.getValue().getMessage());
@@ -294,7 +291,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlTaskManager).add(any(MLTask.class));
-        verify(client).get(any(), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
@@ -380,13 +376,12 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         assertEquals("runtime exception", argumentCaptor.getValue().getMessage());
     }
 
-    public void testExecuteTask_OnLocalNode_NullGetResponse() {
+    public void testExecuteTask_OnLocalNode_NullMLModel() {
         setupMocks(true, false, false, true);
 
         taskRunner.dispatchTask(FunctionName.BATCH_RCF, requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlTaskManager).add(any(MLTask.class));
-        verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -432,7 +427,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         taskRunner.validateOutputSchema("testId", modelTensorOutput);
     }
 
-    private void setupMocks(boolean runOnLocalNode, boolean failedToParseQueryInput, boolean failedToGetModel, boolean nullGetResponse) {
+    private void setupMocks(boolean runOnLocalNode, boolean failedToParseQueryInput, boolean failedToGetModel, boolean nullMlModel) {
         doAnswer(invocation -> {
             ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             if (runOnLocalNode) {
@@ -466,23 +461,16 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 return null;
             }).when(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         }
-
-        if (nullGetResponse) {
-            getResponse = null;
-        }
-
-        if (failedToGetModel) {
-            doAnswer(invocation -> {
-                ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            if (failedToGetModel) {
                 actionListener.onFailure(new RuntimeException(errorMessage));
-                return null;
-            }).when(client).get(any(), any());
-        } else {
-            doAnswer(invocation -> {
-                ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-                actionListener.onResponse(getResponse);
-                return null;
-            }).when(client).get(any(), any());
-        }
+            } else if (nullMlModel) {
+                actionListener.onResponse(null);
+            } else {
+                actionListener.onResponse(mlModel);
+            }
+            return null;
+        }).when(mlModelManager).getModel(any(), any(), any());
     }
 }

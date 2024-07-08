@@ -85,7 +85,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLController controller = MLController.parse(parser);
-                        mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                        mlModelManager.getModel(modelId, null, null, excludes, ActionListener.wrap(mlModel -> {
                             Boolean isHidden = mlModel.getIsHidden();
                             modelAccessControlHelper
                                 .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
