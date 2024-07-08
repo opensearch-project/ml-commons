@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,7 +55,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
@@ -110,12 +113,7 @@ public class DDBOpenSearchClient implements SdkClient {
                 final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
 
                 dynamoDbClient.putItem(putItemRequest);
-                String simulatedIndexResponse = simulateOpenSearchResponse(
-                    request.index(),
-                    request.id(),
-                    source,
-                    Map.of("result", "created")
-                );
+                String simulatedIndexResponse = simulateOpenSearchResponse(request.index(), id, source, Map.of("result", "created"));
                 return new PutDataObjectResponse.Builder().id(id).parser(createParser(simulatedIndexResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
@@ -185,12 +183,26 @@ public class DDBOpenSearchClient implements SdkClient {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
-                updateItem.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
-                updateItem.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
+                updateItem.remove(HASH_KEY);
+                updateItem.remove(RANGE_KEY);
+                Map<String, AttributeValueUpdate> updateAttributeValue = updateItem
+                    .entrySet()
+                    .stream()
+                    .collect(
+                        Collectors
+                            .toMap(
+                                Map.Entry::getKey,
+                                entry -> AttributeValueUpdate.builder().action(AttributeAction.PUT).value(entry.getValue()).build()
+                            )
+                    );
+                Map<String, AttributeValue> updateKey = new HashMap<>();
+                updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest updateItemRequest = UpdateItemRequest
                     .builder()
                     .tableName(getTableName(request.index()))
-                    .key(updateItem)
+                    .key(updateKey)
+                    .attributeUpdates(updateAttributeValue)
                     .build();
                 dynamoDbClient.updateItem(updateItemRequest);
 

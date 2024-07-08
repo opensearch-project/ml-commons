@@ -102,6 +102,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
         User user = RestActionUtils.getUserContext(client);

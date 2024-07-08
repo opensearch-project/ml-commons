@@ -160,10 +160,10 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLController> listener = invocation.getArgument(1);
@@ -216,10 +216,10 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
@@ -255,10 +255,10 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener
@@ -280,10 +280,10 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testDeleteControllerWithGetModelNotFoundSuccess() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(null);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
@@ -320,10 +320,10 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testDeleteControllerWithGetModelNotFoundWithGetControllerOtherException() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(null);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<MLController> listener = invocation.getArgument(1);

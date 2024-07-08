@@ -39,9 +39,7 @@ import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModel
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext_Exception;
-import static org.opensearch.ml.utils.MockHelper.mock_client_get_NotExist;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_NullResponse;
-import static org.opensearch.ml.utils.MockHelper.mock_client_get_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_update;
@@ -90,9 +88,14 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.MemoryCircuitBreaker;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
@@ -207,7 +210,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private MLTask pretrainedMLTask;
 
     @Before
-    public void setup() throws URISyntaxException {
+    public void setup() throws URISyntaxException, IOException {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
 
@@ -287,6 +290,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 clusterService,
                 scriptService,
                 client,
+                sdkClient,
                 threadPool,
                 xContentRegistry,
                 modelHelper,
@@ -337,6 +341,16 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             updateActionListener.onResponse(null);
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    public void setupGetModel(MLModel model) throws IOException {
+        XContentBuilder content = model.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
     }
 
     @AfterClass
@@ -633,9 +647,12 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
-        mock_client_get_failure(client);
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onFailure(new RuntimeException("get doc failure"));
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
         mock_client_ThreadContext(client, threadPool, threadContext);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -648,25 +665,12 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testDeployModel_NullGetModelResponse() {
+    public void testDeployModel_NullGetModelResponse() throws IOException {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
-            .build();
-        model = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYING)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .name(modelName)
-            .version(version)
-            .totalChunks(2)
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(modelConfig)
-            .modelContentHash(modelContentHashValue)
-            .modelContentSizeInBytes(modelContentSize)
             .build();
         String[] nodes = new String[] { "node1", "node2" };
         mlTask.setWorkerNodes(List.of(nodes));
@@ -676,7 +680,10 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(null);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -689,25 +696,12 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testDeployModel_GetModelResponse_NotExist() {
+    public void testDeployModel_GetModelResponse_NotExist() throws IOException {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
-            .build();
-        model = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYING)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .name(modelName)
-            .version(version)
-            .totalChunks(2)
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(modelConfig)
-            .modelContentHash(modelContentHashValue)
-            .modelContentSizeInBytes(modelContentSize)
             .build();
         String[] nodes = new String[] { "node1", "node2" };
         mlTask.setWorkerNodes(List.of(nodes));
@@ -716,8 +710,15 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
-        mock_client_get_NotExist(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        XContentBuilder content = model.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", -2, 0, 111l, false, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(future);
+
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -730,7 +731,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testDeployModel_GetModelResponse_wrong_hash_value() {
+    public void testDeployModel_GetModelResponse_wrong_hash_value() throws IOException {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
@@ -759,10 +760,10 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_threadpool(threadPool, taskExecutorService);
-        setUpMock_GetModel(model);
-        setUpMock_GetModel(modelChunk0);
-        setUpMock_GetModel(modelChunk0);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        setupGetModel(model);
+        setupGetModel(modelChunk0);
+        setupGetModel(modelChunk0);
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -781,7 +782,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testDeployModel_GetModelResponse_FailedToDeploy() {
+    public void testDeployModel_GetModelResponse_FailedToDeploy() throws IOException {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
@@ -812,7 +813,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModelChunks(model);
         // setUpMock_GetModel(modelChunk0);
         // setUpMock_GetModel(modelChunk1);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -828,7 +829,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testDeployModel_ModelAlreadyDeployed() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         ArgumentCaptor<String> response = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(response.capture());
         assertEquals("successful", response.getValue());
@@ -843,7 +844,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(models);
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+        modelManager.deployModel(modelId, null, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Exceed max local model per node limit", failure.getValue().getMessage());
@@ -878,7 +879,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
+        modelManager.deployModel(modelId, null, modelContentHashValue, functionName, true, false, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
@@ -1037,7 +1038,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, false, mlTask, listener);
+        modelManager.deployModel(modelId, null, modelContentHashValue, functionName, true, false, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
         verify(mlStats).getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT));
@@ -1067,46 +1068,46 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     private void setUpMock_GetModelChunks(MLModel model) {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(model);
             return null;
         }).doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(modelChunk0);
             return null;
         }).doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(modelChunk1);
             return null;
-        }).when(modelManager).getModel(any(), any());
+        }).when(modelManager).getModel(any(), any(), any());
     }
 
     private void setUpMock_GetModelMeta_FailedToGetFirstChunk(MLModel model) {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(model);
             return null;
         }).doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Failed to get model"));
             return null;
-        }).when(modelManager).getModel(any(), any());
+        }).when(modelManager).getModel(any(), any(), any());
     }
 
     private void setUpMock_GetModelMeta_FailedToGetLastChunk(MLModel model) {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(model);
             return null;
         }).doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(modelChunk0);
             return null;
         }).doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Failed to get model"));
             return null;
-        }).when(modelManager).getModel(any(), any());
+        }).when(modelManager).getModel(any(), any(), any());
     }
 
     private void setUpMock_DownloadModelFileFailure() {

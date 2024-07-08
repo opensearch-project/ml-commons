@@ -111,6 +111,7 @@ public class ConnectorAccessControlHelper {
             FetchSourceContext fetchSourceContext = getFetchSourceContext(true);
             GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
                 .index(ML_CONNECTOR_INDEX)
+                .tenantId(tenantId)
                 .id(connectorId)
                 .fetchSourceContext(fetchSourceContext)
                 .build();

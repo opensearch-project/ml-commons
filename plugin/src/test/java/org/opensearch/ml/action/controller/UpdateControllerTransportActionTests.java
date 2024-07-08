@@ -179,10 +179,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         when(mlModel.getModelId()).thenReturn("testModelId");
 
@@ -246,10 +246,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
@@ -285,10 +285,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new RuntimeException("Permission denied: Unable to create the model controller for the model. Details: "));
@@ -328,10 +328,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
             ActionListener<MLController> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
@@ -396,10 +396,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void tesUpdateControllerWithGetModelNotFound() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(null);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -506,10 +506,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         when(mlModel.getModelId()).thenReturn("testModelId");
         doAnswer(invocation -> {
-            ActionListener<MLModel> mllistener = invocation.getArgument(3);
+            ActionListener<MLModel> mllistener = invocation.getArgument(4);
             mllistener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         List<FailedNodeException> failures = List
             .of(new FailedNodeException("foo1", "Undeploy failed.", new RuntimeException("Exception occurred.")));
         when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
@@ -556,10 +556,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         when(mlModel.getModelId()).thenReturn("testModelId");
         doAnswer(invocation -> {
-            ActionListener<MLModel> mllistener = invocation.getArgument(3);
+            ActionListener<MLModel> mllistener = invocation.getArgument(4);
             mllistener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 
@@ -606,10 +606,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         when(mlModel.getIsHidden()).thenReturn(Boolean.TRUE);
         when(mlModel.getModelId()).thenReturn("testModelId");
         doAnswer(invocation -> {
-            ActionListener<MLModel> mllistener = invocation.getArgument(3);
+            ActionListener<MLModel> mllistener = invocation.getArgument(4);
             mllistener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        }).when(mlModelManager).getModel(anyString(), anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         when(mlModelCacheHelper.getWorkerNodes("testModelId")).thenReturn(new String[] { "foo1", "foo2" });
 

@@ -149,7 +149,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLDeployModelResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, tenantId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
                 Boolean isHidden = mlModel.getIsHidden();
                 if (!TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), listener)) {
@@ -284,7 +284,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
             String taskId = response.getId();
             mlTask.setTaskId(taskId);
-            if (algorithm == FunctionName.REMOTE) {
+            if (algorithm == FunctionName.REMOTE && !mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
                 mlTaskManager.add(mlTask, eligibleNodeIds);
                 deployRemoteModel(mlModel, mlTask, localNodeId, eligibleNodes, deployToAllNodes, listener);
                 return;

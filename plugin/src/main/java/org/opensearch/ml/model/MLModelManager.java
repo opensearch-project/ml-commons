@@ -9,11 +9,7 @@ import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
-import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
+import static org.opensearch.ml.common.CommonValue.*;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
@@ -102,7 +98,6 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
@@ -164,6 +159,7 @@ public class MLModelManager {
     public static final long MODEL_FILE_SIZE_LIMIT = 4L * 1024 * 1024 * 1024;// 4GB
 
     private final Client client;
+    private final SdkClient sdkClient;
     private final ClusterService clusterService;
     private final ScriptService scriptService;
     private final ThreadPool threadPool;
@@ -196,6 +192,7 @@ public class MLModelManager {
         ClusterService clusterService,
         ScriptService scriptService,
         Client client,
+        SdkClient sdkClient,
         ThreadPool threadPool,
         NamedXContentRegistry xContentRegistry,
         ModelHelper modelHelper,
@@ -209,6 +206,7 @@ public class MLModelManager {
         DiscoveryNodeHelper nodeHelper
     ) {
         this.client = client;
+        this.sdkClient = sdkClient;
         this.threadPool = threadPool;
         this.xContentRegistry = xContentRegistry;
         this.modelHelper = modelHelper;
@@ -369,6 +367,7 @@ public class MLModelManager {
             String modelGroupId = mlRegisterModelInput.getModelGroupId();
             GetDataObjectRequest getModelGroupRequest = new GetDataObjectRequest.Builder()
                 .index(ML_MODEL_GROUP_INDEX)
+                .tenantId(mlRegisterModelInput.getTenantId())
                 .id(modelGroupId)
                 .build();
             sdkClient
@@ -394,6 +393,7 @@ public class MLModelManager {
                                 UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
                                     .index(ML_MODEL_GROUP_INDEX)
                                     .id(modelGroupId)
+                                    .tenantId(mlRegisterModelInput.getTenantId())
                                     // TODO need to track these for concurrency
                                     // .setIfSeqNo(seqNo)
                                     // .setIfPrimaryTerm(primaryTerm)
@@ -541,7 +541,7 @@ public class MLModelManager {
     }
 
     private int incrementLatestVersion(Map<String, Object> modelGroupSourceMap) {
-        return (int) modelGroupSourceMap.get(MLModelGroup.LATEST_VERSION_FIELD) + 1;
+        return Integer.parseInt(modelGroupSourceMap.get(MLModelGroup.LATEST_VERSION_FIELD).toString()) + 1;
     }
 
     private void indexRemoteModel(
@@ -587,6 +587,7 @@ public class MLModelManager {
                 PutDataObjectRequest putModelMetaRequest = new PutDataObjectRequest.Builder()
                     .index(ML_MODEL_INDEX)
                     .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
+                    .tenantId(registerModelInput.getTenantId())
                     .dataObject(mlModelMeta)
                     .build();
 
@@ -935,7 +936,7 @@ public class MLModelManager {
     void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
-        MLDeployModelRequest request = new MLDeployModelRequest(modelId, null, modelNodeIds, false, true, true);
+        MLDeployModelRequest request = new MLDeployModelRequest(modelId, registerModelInput.getTenantId(), modelNodeIds, false, true, true);
         ActionListener<MLDeployModelResponse> listener = ActionListener
             .wrap(r -> log.debug("model deployed, response {}", r), e -> log.error("Failed to deploy model", e));
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
@@ -1009,6 +1010,7 @@ public class MLModelManager {
      */
     public void deployModel(
         String modelId,
+        String tenantId,
         String modelContentHash,
         FunctionName functionName,
         boolean deployToAllNodes,
@@ -1051,7 +1053,7 @@ public class MLModelManager {
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
-            this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
+            this.getModel(modelId, tenantId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 modelCacheHelper.setModelInfo(modelId, mlModel);
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
@@ -1176,7 +1178,7 @@ public class MLModelManager {
             return;
         }
         log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
-        getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+        getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
             mlModel.setConnector(connector);
             setupParamsAndPredictable(modelId, mlModel);
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
@@ -1253,7 +1255,7 @@ public class MLModelManager {
                         wrappedListener.onResponse("Successfully updated model cache for the remote model " + modelId);
                         log.info("Completed the model cache update for the remote model {}", modelId);
                     } else {
-                        getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                        getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
                             mlModel.setConnector(connector);
                             setupParamsAndPredictable(modelId, mlModel);
                             wrappedListener.onResponse("Successfully updated model cache for the remote model " + modelId);
@@ -1298,7 +1300,7 @@ public class MLModelManager {
                             wrappedListener.onResponse("Successfully deployed model controller for the remote model " + modelId);
                             log.info("Deployed model controller for the remote model {}", modelId);
                         } else {
-                            getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                            getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
                                 mlModel.setConnector(connector);
                                 setupParamsAndPredictable(modelId, mlModel);
                                 wrappedListener.onResponse("Successfully deployed model controller for the remote model " + modelId);
@@ -1336,7 +1338,7 @@ public class MLModelManager {
                             wrappedListener.onResponse("Successfully undeployed model controller for the remote model " + modelId);
                             log.info("Undeployed model controller for the remote model {}", modelId);
                         } else {
-                            getConnector(mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                            getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
                                 mlModel.setConnector(connector);
                                 setupParamsAndPredictable(modelId, mlModel);
                                 wrappedListener.onResponse("Successfully undeployed model controller for the remote model " + modelId);
@@ -1602,7 +1604,11 @@ public class MLModelManager {
      * @param listener action listener
      */
     public void getModel(String modelId, ActionListener<MLModel> listener) {
-        getModel(modelId, null, null, listener);
+        getModel(modelId, null, listener);
+    }
+
+    public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
+        getModel(modelId, tenantId, null, null, listener);
     }
 
     // TODO remove when all usages are migrated to SDK version
@@ -1614,42 +1620,11 @@ public class MLModelManager {
      * @param excludes fields excluded
      * @param listener action listener
      */
-    public void getModel(String modelId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
-        GetRequest getRequest = new GetRequest();
-        FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
-        getRequest.index(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchContext);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    String algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
-
-                    MLModel mlModel = MLModel.parse(parser, algorithmName);
-                    mlModel.setModelId(modelId);
-                    listener.onResponse(mlModel);
-                } catch (Exception e) {
-                    log.error("Failed to parse ml task{}", r.getId(), e);
-                    listener.onFailure(e);
-                }
-            } else {
-                listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
-            }
-        }, listener::onFailure));
-    }
-
-    /**
-     * Get model from model index with includes/excludes filter.
-     *
-     * @param sdkClient the SdkClient instance
-     * @param modelId  model id
-     * @param includes fields included
-     * @param excludes fields excluded
-     * @param listener action listener
-     */
-    public void getModel(SdkClient sdkClient, String modelId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
+    public void getModel(String modelId, String tenantId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
         GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
+            .tenantId(tenantId)
             .fetchSourceContext(new FetchSourceContext(true, includes, excludes))
             .build();
         sdkClient.getDataObjectAsync(getRequest, client.threadPool().executor(GENERAL_THREAD_POOL)).whenComplete((r, throwable) -> {
@@ -1715,28 +1690,50 @@ public class MLModelManager {
      * @param connectorId connector id
      * @param listener    action listener
      */
-    private void getConnector(String connectorId, ActionListener<Connector> listener) {
-        GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                try (
-                    XContentParser parser = MLNodeUtils
-                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
-                ) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    Connector connector = Connector.createConnector(parser);
-                    listener.onResponse(connector);
-                } catch (Exception e) {
-                    log.error("Failed to parse connector:" + connectorId);
-                    listener.onFailure(e);
+    private void getConnector(String connectorId, String tenantId, ActionListener<Connector> listener) {
+        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+            .index(ML_CONNECTOR_INDEX)
+            .id(connectorId)
+            .tenantId(tenantId)
+            .build();
+
+        sdkClient
+            .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+            .whenComplete((r, throwable) -> {
+                log.debug("Completed Get Connector Request, id:{}", connectorId);
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (cause instanceof IndexNotFoundException) {
+                        log.error("Failed to get connector index", cause);
+                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                    } else {
+                        log.error("Failed to get ML connector " + connectorId, cause);
+                        listener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        if (gr != null && gr.isExists()) {
+                            try (
+                                XContentParser parser = MLNodeUtils
+                                    .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, gr.getSourceAsBytesRef())
+                            ) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                Connector connector = Connector.createConnector(parser);
+                                listener.onResponse(connector);
+                            } catch (Exception e) {
+                                log.error("Failed to parse connector:" + connectorId);
+                                listener.onFailure(e);
+                            }
+                        } else {
+                            listener
+                                .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
                 }
-            } else {
-                listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
-            }
-        }, e -> {
-            log.error("Failed to get connector", e);
-            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
-        }));
+            });
     }
 
     /**

@@ -211,7 +211,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 modelActionListener.onResponse(cachedMlModel);
             } else {
                 // For multi-node cluster, the function name is null in cache, so should always get model first.
-                mlModelManager.getModel(modelId, modelActionListener);
+                mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
         }
     }

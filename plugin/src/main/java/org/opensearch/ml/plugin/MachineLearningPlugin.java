@@ -27,7 +27,9 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Injector;
 import org.opensearch.common.inject.Module;
+import org.opensearch.common.inject.ModulesBuilder;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.IndexScopedSettings;
 import org.opensearch.common.settings.Setting;
@@ -287,6 +289,7 @@ import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
@@ -434,7 +437,7 @@ public class MachineLearningPlugin extends Plugin
 
     @Override
     public Collection<Module> createGuiceModules() {
-        return List.of(new SdkClientModule());
+        return List.of(new SdkClientModule(null, null));
     }
 
     @SneakyThrows
@@ -461,6 +464,12 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
+        ModulesBuilder modules = new ModulesBuilder();
+        modules.add(new SdkClientModule(client, xContentRegistry));
+        Injector injector = modules.createInjector();
+
+        // Get the injected SdkClient instance from the injector
+        SdkClient sdkClient = injector.getInstance(SdkClient.class);
 
         encryptor = new EncryptorImpl(clusterService, client);
 
@@ -503,6 +512,7 @@ public class MachineLearningPlugin extends Plugin
             clusterService,
             scriptService,
             client,
+            sdkClient,
             threadPool,
             xContentRegistry,
             modelHelper,
