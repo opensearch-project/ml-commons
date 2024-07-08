@@ -470,7 +470,6 @@ public class MachineLearningPlugin extends Plugin
 
         // Get the injected SdkClient instance from the injector
         SdkClient sdkClient = injector.getInstance(SdkClient.class);
-
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
 

@@ -390,7 +390,8 @@ public class MLModelManager {
                                 */
                                 modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
                                 modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-                                UpdateDataObjectRequest updateDataObjectRequest = new UpdateDataObjectRequest.Builder()
+                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                    .builder()
                                     .index(ML_MODEL_GROUP_INDEX)
                                     .id(modelGroupId)
                                     .tenantId(mlRegisterModelInput.getTenantId())
@@ -584,7 +585,8 @@ public class MLModelManager {
                     .tenantId(registerModelInput.getTenantId())
                     .build();
 
-                PutDataObjectRequest putModelMetaRequest = new PutDataObjectRequest.Builder()
+                PutDataObjectRequest putModelMetaRequest = PutDataObjectRequest
+                    .builder()
                     .index(ML_MODEL_INDEX)
                     .id(Boolean.TRUE.equals(registerModelInput.getIsHidden()) ? modelName : null)
                     .tenantId(registerModelInput.getTenantId())
