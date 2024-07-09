@@ -40,7 +40,7 @@ public class ConversationalIndexConstants {
     /** Mappings for the conversational metadata index */
     public final static String META_MAPPING = "{\n"
         + "    \"_meta\": {\n"
-        + "        \"schema_version\": " + META_INDEX_SCHEMA_VERSION + "\n" 
+        + "        \"schema_version\": " + META_INDEX_SCHEMA_VERSION + "\n"
         + "    },\n"
         + "    \"properties\": {\n"
         + "        \""
@@ -86,7 +86,7 @@ public class ConversationalIndexConstants {
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"_meta\": {\n"
-        + "        \"schema_version\": " + INTERACTIONS_INDEX_SCHEMA_VERSION + "\n" 
+        + "        \"schema_version\": " + INTERACTIONS_INDEX_SCHEMA_VERSION + "\n"
         + "    },\n"
         + "    \"properties\": {\n"
         + "        \""
@@ -122,4 +122,6 @@ public class ConversationalIndexConstants {
     /** Feature Flag setting for conversational memory */
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final String ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE = "The Conversation Memory feature is not enabled. To enable, please update the setting " + ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey();
 }

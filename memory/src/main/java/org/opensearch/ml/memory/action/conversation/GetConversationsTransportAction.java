@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
 import java.util.List;
 
 import org.opensearch.OpenSearchException;
@@ -42,8 +44,8 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class GetConversationsTransportAction extends HandledTransportAction<GetConversationsRequest, GetConversationsResponse> {
 
-    private Client client;
-    private ConversationalMemoryHandler cmHandler;
+    private final Client client;
+    private final ConversationalMemoryHandler cmHandler;
 
     private volatile boolean featureIsEnabled;
 
@@ -75,19 +77,13 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
     @Override
     public void doExecute(Task task, GetConversationsRequest request, ActionListener<GetConversationsResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         }
         int maxResults = request.getMaxResults();
         int from = request.getFrom();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
-            ActionListener<GetConversationsResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<GetConversationsResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
             ActionListener<List<ConversationMeta>> al = ActionListener.wrap(conversations -> {
                 internalListener
                     .onResponse(new GetConversationsResponse(conversations, from + maxResults, conversations.size() == maxResults));

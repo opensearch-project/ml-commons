@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -37,8 +39,8 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class GetInteractionTransportAction extends HandledTransportAction<GetInteractionRequest, GetInteractionResponse> {
 
-    private Client client;
-    private ConversationalMemoryHandler cmHandler;
+    private final Client client;
+    private final ConversationalMemoryHandler cmHandler;
 
     private volatile boolean featureIsEnabled;
 
@@ -70,24 +72,18 @@ public class GetInteractionTransportAction extends HandledTransportAction<GetInt
     @Override
     public void doExecute(Task task, GetInteractionRequest request, ActionListener<GetInteractionResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         }
         String interactionId = request.getInteractionId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
-            ActionListener<GetInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<GetInteractionResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
             ActionListener<Interaction> al = ActionListener.wrap(interaction -> {
                 internalListener.onResponse(new GetInteractionResponse(interaction));
-            }, e -> { internalListener.onFailure(e); });
+            }, internalListener::onFailure);
             cmHandler.getInteraction(interactionId, al);
         } catch (Exception e) {
-            log.error("Failed to get message " + interactionId, e);
+            log.error("Failed to get message {}", interactionId, e);
             actionListener.onFailure(e);
         }
     }

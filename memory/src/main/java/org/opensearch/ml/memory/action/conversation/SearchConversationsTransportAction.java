@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -71,13 +73,7 @@ public class SearchConversationsTransportAction extends HandledTransportAction<S
     @Override
     public void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         } else {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
