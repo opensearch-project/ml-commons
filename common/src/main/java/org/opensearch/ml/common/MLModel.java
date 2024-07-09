@@ -16,7 +16,15 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.model.*;
+import org.opensearch.ml.common.model.Guardrails;
+import org.opensearch.ml.common.model.MLDeploySetting;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 
 import java.io.IOException;

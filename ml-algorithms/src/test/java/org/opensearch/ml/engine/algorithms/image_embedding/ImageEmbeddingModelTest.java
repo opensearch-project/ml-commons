@@ -5,15 +5,20 @@
 package org.opensearch.ml.engine.algorithms.image_embedding;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-import static org.opensearch.ml.engine.algorithms.DLModel.*;
+import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
+import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_HELPER;
+import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_ZIP_FILE;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.junit.After;
 import org.junit.Before;

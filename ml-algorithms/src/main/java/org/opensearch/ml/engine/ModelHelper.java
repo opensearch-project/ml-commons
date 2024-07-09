@@ -27,7 +27,12 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.*;
+import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
+import org.opensearch.ml.common.model.MLDeploySetting;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import com.google.gson.stream.JsonReader;
