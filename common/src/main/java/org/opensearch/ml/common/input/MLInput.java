@@ -16,15 +16,10 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
-import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
+import org.opensearch.ml.common.dataset.*;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -69,6 +64,9 @@ public class MLInput implements Input {
 
     // Input context in question answering model
     public static final String CONTEXT_FIELD = "context";
+
+    // Input image in base64 format for image embedding model
+    public static final String IMAGE_FIELD = "image";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -197,6 +195,11 @@ public class MLInput implements Input {
                     Map<String, String> parameters = remoteInferenceInputDataSet.getParameters();
                     builder.field(PARAMETERS_FIELD, parameters);
                     break;
+                case IMAGE_EMBEDDING:
+                    ImageEmbeddingInputDataSet imageInputDataset = (ImageEmbeddingInputDataSet) this.inputDataset;
+                    String base64Image = imageInputDataset.getBase64Image();
+                    builder.field(IMAGE_FIELD, base64Image);
+                    break;
                 default:
                     break;
             }
@@ -229,6 +232,7 @@ public class MLInput implements Input {
         String queryText = null;
         String question = null;
         String context = null;
+        String base64Image = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -285,6 +289,9 @@ public class MLInput implements Input {
                 case CONTEXT_FIELD:
                     context = parser.text();
                     break;
+                case IMAGE_FIELD:
+                    base64Image = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -298,6 +305,8 @@ public class MLInput implements Input {
             inputDataSet = new TextSimilarityInputDataSet(queryText, textDocs);
         } else if (algorithm == FunctionName.QUESTION_ANSWERING) {
             inputDataSet = new QuestionAnsweringInputDataSet(question, context);
+        } else if (algorithm == FunctionName.IMAGE_EMBEDDING) {
+            inputDataSet = new ImageEmbeddingInputDataSet(base64Image);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }

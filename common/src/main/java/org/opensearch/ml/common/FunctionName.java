@@ -31,7 +31,8 @@ public enum FunctionName {
     TEXT_SIMILARITY,
     QUESTION_ANSWERING,
     AGENT,
-    CONNECTOR;
+    CONNECTOR,
+    IMAGE_EMBEDDING;
 
     public static FunctionName from(String value) {
         try {
@@ -46,7 +47,8 @@ public enum FunctionName {
         TEXT_SIMILARITY,
         SPARSE_ENCODING,
         SPARSE_TOKENIZE,
-        QUESTION_ANSWERING
+        QUESTION_ANSWERING,
+        IMAGE_EMBEDDING
     ));
 
     /**

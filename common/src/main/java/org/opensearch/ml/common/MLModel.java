@@ -16,21 +16,13 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.model.Guardrails;
-import org.opensearch.ml.common.model.MLDeploySetting;
-import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.*;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -268,7 +260,9 @@ public class MLModel implements ToXContentObject {
                     modelConfig = new MetricsCorrelationModelConfig(input);
                 } else if (algorithm.equals(FunctionName.QUESTION_ANSWERING)) {
                     modelConfig = new QuestionAnsweringModelConfig(input);
-                } else {
+                } else if (algorithm.equals(FunctionName.IMAGE_EMBEDDING)) {
+                    modelConfig = new ImageEmbeddingModelConfig(input);
+                }else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
             }
@@ -604,6 +598,8 @@ public class MLModel implements ToXContentObject {
                         modelConfig = MetricsCorrelationModelConfig.parse(parser);
                     } else if (FunctionName.QUESTION_ANSWERING.name().equals(algorithmName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else if (FunctionName.IMAGE_EMBEDDING.name().equals(algorithmName)) {
+                        modelConfig = ImageEmbeddingModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }

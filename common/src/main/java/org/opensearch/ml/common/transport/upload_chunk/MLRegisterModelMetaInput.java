@@ -18,13 +18,8 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.model.MLDeploySetting;
-import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.*;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.IOException;
@@ -156,6 +151,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             if (this.functionName.equals(FunctionName.QUESTION_ANSWERING)) {
                 this.modelConfig = new QuestionAnsweringModelConfig(in);
+            } else if(this.functionName.equals(FunctionName.IMAGE_EMBEDDING)) {
+                this.modelConfig = new ImageEmbeddingModelConfig(in);
             } else {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
             }
@@ -379,6 +376,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else if(FunctionName.IMAGE_EMBEDDING.equals(functionName)) {
+                        modelConfig = ImageEmbeddingModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
