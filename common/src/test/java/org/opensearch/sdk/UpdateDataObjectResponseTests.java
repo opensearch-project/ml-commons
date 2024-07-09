@@ -10,9 +10,6 @@ package org.opensearch.sdk;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
-import org.opensearch.core.common.Strings;
-import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.XContentParser;
 
 import static org.junit.Assert.assertEquals;

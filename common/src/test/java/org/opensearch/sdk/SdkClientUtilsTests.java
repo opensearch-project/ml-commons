@@ -10,7 +10,6 @@ package org.opensearch.sdk;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.core.rest.RestStatus;
