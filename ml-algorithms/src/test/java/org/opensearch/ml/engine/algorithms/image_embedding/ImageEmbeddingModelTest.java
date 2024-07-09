@@ -4,7 +4,8 @@
  */
 package org.opensearch.ml.engine.algorithms.image_embedding;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_ZIP_FILE;

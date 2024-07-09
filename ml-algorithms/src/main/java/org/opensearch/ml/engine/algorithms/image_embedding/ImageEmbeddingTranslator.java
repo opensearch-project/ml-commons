@@ -12,7 +12,10 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 
 import org.json.JSONObject;
 import org.opensearch.ml.common.output.model.MLResultDataType;
