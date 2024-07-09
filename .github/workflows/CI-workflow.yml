@@ -24,6 +24,8 @@ jobs:
     strategy:
       matrix:
         java: [11, 17, 21]
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
