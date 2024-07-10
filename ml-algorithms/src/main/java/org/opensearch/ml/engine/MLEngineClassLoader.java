@@ -20,6 +20,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.annotation.Ingester;
 import org.reflections.Reflections;
 
 @SuppressWarnings("removal")
@@ -31,6 +32,7 @@ public class MLEngineClassLoader {
      */
     private static Map<Enum<?>, Class<?>> mlAlgoClassMap = new HashMap<>();
     private static Map<String, Class<?>> connectorExecutorMap = new HashMap<>();
+    private static Map<String, Class<?>> ingesterMap = new HashMap<>();
 
     /**
      * This map contains pre-created thread-safe ML objects.
@@ -41,6 +43,7 @@ public class MLEngineClassLoader {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 loadClassMapping();
+                loadIngestClassMapping();
                 return null;
             });
         } catch (PrivilegedActionException e) {
@@ -69,7 +72,7 @@ public class MLEngineClassLoader {
         return mlObjects.remove(functionName);
     }
 
-    public static void loadClassMapping() {
+    private static void loadClassMapping() {
         Reflections reflections = new Reflections("org.opensearch.ml.engine.algorithms");
 
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(Function.class);
@@ -89,6 +92,19 @@ public class MLEngineClassLoader {
             String connectorName = connectorExecutor.value();
             if (connectorName != null) {
                 connectorExecutorMap.put(connectorName, clazz);
+            }
+        }
+    }
+
+    private static void loadIngestClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.engine.ingest");
+        Set<Class<?>> ingesterClasses = reflections.getTypesAnnotatedWith(Ingester.class);
+        // Load ingester class
+        for (Class<?> clazz : ingesterClasses) {
+            Ingester ingester = clazz.getAnnotation(Ingester.class);
+            String ingesterSource = ingester.value();
+            if (ingesterSource != null) {
+                ingesterMap.put(ingesterSource, clazz);
             }
         }
     }
@@ -119,6 +135,9 @@ public class MLEngineClassLoader {
         Class<?> clazz = mlAlgoClassMap.get(type);
         if (clazz == null) {
             clazz = connectorExecutorMap.get(type);
+        }
+        if (clazz == null) {
+            clazz = ingesterMap.get(type);
         }
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
