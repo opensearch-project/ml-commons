@@ -24,7 +24,7 @@ import org.opensearch.common.settings.Setting.Property;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
-import org.opensearch.sdk.SdkClientImpl;
+import org.opensearch.sdk.SdkClientDelegate;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -92,8 +92,8 @@ public class SdkClientFactory {
     }
 
     // Package private for testing
-    static SdkClient wrapSdkClientImpl(SdkClientImpl impl) {
-        return new SdkClient(impl);
+    static SdkClient wrapSdkClientDelegate(SdkClientDelegate delegate) {
+        return new SdkClient(delegate);
     }
 
     private static DynamoDbClient createDynamoDbClient(String region) {

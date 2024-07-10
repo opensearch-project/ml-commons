@@ -19,9 +19,9 @@ import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
 public class SdkClient {
     
-    private final SdkClientImpl delegate;
+    private final SdkClientDelegate delegate;
     
-    public SdkClient(SdkClientImpl delegate) {
+    public SdkClient(SdkClientDelegate delegate) {
         this.delegate = delegate;
     }
 
@@ -197,7 +197,7 @@ public class SdkClient {
      * Get the delegate client implementation. 
      * @return the delegate implementation
      */
-    public SdkClientImpl getDelegate() {
+    public SdkClientDelegate getDelegate() {
         return delegate;
     }
 }

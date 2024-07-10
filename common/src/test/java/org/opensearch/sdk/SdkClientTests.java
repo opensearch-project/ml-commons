@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 public class SdkClientTests {
 
     private SdkClient sdkClient;
-    private SdkClientImpl sdkClientImpl;
+    private SdkClientDelegate sdkClientImpl;
 
     @Mock
     private PutDataObjectRequest putRequest;
@@ -61,7 +61,7 @@ public class SdkClientTests {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        sdkClientImpl = spy(new SdkClientImpl() {
+        sdkClientImpl = spy(new SdkClientDelegate() {
             @Override
             public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
                 return CompletableFuture.completedFuture(putResponse);
@@ -85,11 +85,6 @@ public class SdkClientTests {
             @Override
             public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
                 return CompletableFuture.completedFuture(searchResponse);
-            }
-
-            @Override
-            public Object getImplementation() {
-                return null;
             }
         });
         sdkClient = new SdkClient(sdkClientImpl);

@@ -119,7 +119,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
                         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
                 )
             );
-        sdkClient = SdkClientFactory.wrapSdkClientImpl(new RemoteClusterIndicesClient(mockedOpenSearchClient));
+        sdkClient = SdkClientFactory.wrapSdkClientDelegate(new RemoteClusterIndicesClient(mockedOpenSearchClient));
         testDataObject = new TestDataObject("foo");
     }
 

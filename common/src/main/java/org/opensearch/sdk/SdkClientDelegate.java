@@ -11,7 +11,7 @@ package org.opensearch.sdk;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
-public abstract class SdkClientImpl {
+public interface SdkClientDelegate {
 
     /**
      * Create/Put/Index a data object/document into a table/index.
@@ -19,7 +19,7 @@ public abstract class SdkClientImpl {
      * @param executor the executor to use for asynchronous execution
      * @return A completion stage encapsulating the response or exception
      */
-    public abstract CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor);
+    CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor);
 
     /**
      * Read/Get a data object/document from a table/index.
@@ -28,7 +28,7 @@ public abstract class SdkClientImpl {
      * @param executor the executor to use for asynchronous execution
      * @return A completion stage encapsulating the response or exception
      */
-    public abstract CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor);
+    CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor);
 
     /**
      * Update a data object/document in a table/index.
@@ -37,7 +37,7 @@ public abstract class SdkClientImpl {
      * @param executor the executor to use for asynchronous execution
      * @return A completion stage encapsulating the response or exception
      */
-    public abstract CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor);
+    CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor);
 
     /**
      * Delete a data object/document from a table/index.
@@ -46,7 +46,7 @@ public abstract class SdkClientImpl {
      * @param executor the executor to use for asynchronous execution
      * @return A completion stage encapsulating the response or exception
      */
-    public abstract CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor);
+    CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor);
 
     /**
      * Search for data objects/documents in a table/index.
@@ -55,11 +55,5 @@ public abstract class SdkClientImpl {
      * @param executor the executor to use for asynchronous execution
      * @return A completion stage encapsulating the response or exception
      */
-    public abstract CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor);
-    
-    /**
-     * Get the underlying client implementation
-     * @return the client implementation
-     */
-    public abstract Object getImplementation();
+    CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor);
 }

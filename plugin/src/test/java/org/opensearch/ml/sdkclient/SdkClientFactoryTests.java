@@ -17,15 +17,12 @@ import static org.opensearch.ml.sdkclient.SdkClientFactory.REMOTE_METADATA_TYPE;
 import static org.opensearch.ml.sdkclient.SdkClientFactory.REMOTE_OPENSEARCH;
 
 import org.opensearch.client.Client;
-import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
-
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE) // remote http client is never closed
 public class SdkClientFactoryTests extends OpenSearchTestCase {
@@ -34,7 +31,6 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof LocalClusterIndicesClient);
-        assertTrue(sdkClient.getDelegate().getImplementation() instanceof Client);
     }
 
     public void testRemoteOpenSearchBinding() {
@@ -46,7 +42,6 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof RemoteClusterIndicesClient);
-        assertTrue(sdkClient.getDelegate().getImplementation() instanceof OpenSearchClient);
     }
 
     public void testAwsOpenSearchServiceBinding() {
@@ -58,7 +53,6 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof RemoteClusterIndicesClient);
-        assertTrue(sdkClient.getDelegate().getImplementation() instanceof OpenSearchClient);
     }
 
     public void testDDBBinding() {
@@ -70,6 +64,5 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof DDBOpenSearchClient);
-        assertTrue(sdkClient.getDelegate().getImplementation() instanceof DynamoDbClient);
     }
 }

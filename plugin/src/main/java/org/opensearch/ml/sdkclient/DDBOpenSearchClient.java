@@ -43,7 +43,8 @@ import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
-import org.opensearch.sdk.SdkClientImpl;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientDelegate;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -70,7 +71,7 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
  *
  */
 @Log4j2
-public class DDBOpenSearchClient extends SdkClientImpl {
+public class DDBOpenSearchClient implements SdkClientDelegate {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
@@ -99,6 +100,7 @@ public class DDBOpenSearchClient extends SdkClientImpl {
      * be used as range key. If tenant ID is not defined a default tenant ID will be used. If document ID is not defined
      * a random UUID will be generated. Data object will be written as a nested DDB attribute.
      *
+     * {@inheritDoc}
      */
     @Override
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
@@ -131,6 +133,7 @@ public class DDBOpenSearchClient extends SdkClientImpl {
     /**
      * Fetches data document from DDB. Default tenant ID will be used if tenant ID is not specified.
      *
+     * {@inheritDoc}
      */
     @Override
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
@@ -181,6 +184,7 @@ public class DDBOpenSearchClient extends SdkClientImpl {
     /**
      * Makes use of DDB update request to update data object.
      *
+     * {@inheritDoc}
      */
     @Override
     public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
@@ -246,6 +250,7 @@ public class DDBOpenSearchClient extends SdkClientImpl {
     /**
      * Deletes data document from DDB. Default tenant ID will be used if tenant ID is not specified.
      *
+     * {@inheritDoc}
      */
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
@@ -287,9 +292,7 @@ public class DDBOpenSearchClient extends SdkClientImpl {
      * DDB data needs to be synced with opensearch cluster. {@link RemoteClusterIndicesClient} will then be used to
      * search data in opensearch cluster.
      *
-     * @param request
-     * @param executor
-     * @return Search data object response
+     * {@inheritDoc}
      */
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
@@ -337,10 +340,5 @@ public class DDBOpenSearchClient extends SdkClientImpl {
             );
         sb.append("\"_source\":").append(source).append("}");
         return sb.toString();
-    }
-
-    @Override
-    public Object getImplementation() {
-        return this.dynamoDbClient;
     }
 }
