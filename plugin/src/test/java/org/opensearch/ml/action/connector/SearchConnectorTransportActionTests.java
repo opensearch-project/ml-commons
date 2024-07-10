@@ -37,7 +37,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -105,7 +105,8 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         searchConnectorTransportAction = new SearchConnectorTransportAction(
             transportService,
             actionFilters,
@@ -114,7 +115,6 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
             connectorAccessControlHelper
         );
 
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);

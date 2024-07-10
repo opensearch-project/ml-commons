@@ -58,7 +58,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
@@ -110,7 +110,8 @@ public class DeleteAgentTransportActionTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         deleteAgentTransportAction = spy(
             new DeleteAgentTransportAction(
                 transportService,
@@ -122,7 +123,6 @@ public class DeleteAgentTransportActionTests {
                 mlFeatureEnabledSetting
             )
         );
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(clusterService.getSettings()).thenReturn(settings);

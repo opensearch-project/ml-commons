@@ -43,7 +43,7 @@ import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
-import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientImpl;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -70,7 +70,7 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
  *
  */
 @Log4j2
-public class DDBOpenSearchClient implements SdkClient {
+public class DDBOpenSearchClient extends SdkClientImpl {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
@@ -337,5 +337,10 @@ public class DDBOpenSearchClient implements SdkClient {
             );
         sb.append("\"_source\":").append(source).append("}");
         return sb.toString();
+    }
+
+    @Override
+    public Object getImplementation() {
+        return this.dynamoDbClient;
     }
 }

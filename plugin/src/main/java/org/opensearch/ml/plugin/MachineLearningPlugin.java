@@ -27,9 +27,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.inject.Injector;
-import org.opensearch.common.inject.Module;
-import org.opensearch.common.inject.ModulesBuilder;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.IndexScopedSettings;
 import org.opensearch.common.settings.Setting;
@@ -258,8 +255,7 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
-import org.opensearch.ml.sdkclient.SdkClientModule;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -435,13 +431,6 @@ public class MachineLearningPlugin extends Plugin
             );
     }
 
-    @Override
-    public Collection<Module> createGuiceModules() {
-        // TODO: SDKClientModule is initialized both in createGuiceModules and createComponents. Unify these
-        // approaches to prevent multiple instances of SDKClient.
-        return List.of(new SdkClientModule(null, null));
-    }
-
     @SneakyThrows
     @Override
     public Collection<Object> createComponents(
@@ -466,13 +455,8 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
-        // TODO: Rather than recreating SDKClientModule reuse module created as part of createGuiceModules
-        ModulesBuilder modules = new ModulesBuilder();
-        modules.add(new SdkClientModule(client, xContentRegistry));
-        Injector injector = modules.createInjector();
 
         // Get the injected SdkClient instance from the injector
-        SdkClient sdkClient = injector.getInstance(SdkClient.class);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
@@ -667,7 +651,7 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
-        LocalClusterIndicesClient localClusterIndicesClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        SdkClient sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
 
         return List
             .of(
@@ -696,7 +680,7 @@ public class MachineLearningPlugin extends Plugin
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
                 cmHandler,
-                localClusterIndicesClient
+                sdkClient
             );
     }
 

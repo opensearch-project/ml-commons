@@ -61,7 +61,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
@@ -121,7 +121,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build();
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         threadContext = new ThreadContext(settings);
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);

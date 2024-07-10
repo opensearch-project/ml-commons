@@ -52,7 +52,7 @@ import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
-import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientImpl;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -66,7 +66,7 @@ import lombok.extern.log4j.Log4j2;
  * An implementation of {@link SdkClient} that stores data in a remote OpenSearch cluster using the OpenSearch Java Client.
  */
 @Log4j2
-public class RemoteClusterIndicesClient implements SdkClient {
+public class RemoteClusterIndicesClient extends SdkClientImpl {
 
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
@@ -215,5 +215,10 @@ public class RemoteClusterIndicesClient implements SdkClient {
             mapper.serialize(obj, generator);
         }
         return jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, stringWriter.toString());
+    }
+
+    @Override
+    public Object getImplementation() {
+        return this.openSearchClient;
     }
 }

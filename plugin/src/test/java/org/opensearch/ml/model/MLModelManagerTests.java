@@ -121,7 +121,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -229,7 +229,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
 
         modelName = "model_name1";
         modelId = randomAlphaOfLength(10);

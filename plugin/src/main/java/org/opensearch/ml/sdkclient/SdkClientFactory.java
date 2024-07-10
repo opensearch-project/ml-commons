@@ -16,10 +16,15 @@ import org.opensearch.client.Client;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.transport.aws.AwsSdk2Transport;
+import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
 import org.opensearch.client.transport.rest_client.RestClientTransport;
-import org.opensearch.common.inject.AbstractModule;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Setting.Property;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientImpl;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,94 +35,69 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 /**
- * A module for binding this plugin's desired implementation of {@link SdkClient}.
+ * A class to create a {@link SdkClient} with implementation based on settings
  */
 @Log4j2
-public class SdkClientModule extends AbstractModule {
+public class SdkClientFactory {
 
+    // TODO Move these settings keys to plugin getSettings implementation with proper prefixes
     public static final String REMOTE_METADATA_TYPE = "REMOTE_METADATA_TYPE";
     public static final String REMOTE_METADATA_ENDPOINT = "REMOTE_METADATA_ENDPOINT";
     public static final String REGION = "REGION";
     public static final String REMOTE_OPENSEARCH = "RemoteOpenSearch";
     public static final String AWS_DYNAMO_DB = "AWSDynamoDB";
+    public static final String AWS_OPENSEARCH_SERVICE = "AWSOpenSearchService";
 
-    private final String remoteMetadataType;
-    private final String remoteMetadataEndpoint;
-    private final String region; // not using with RestClient
-    private Client client;
-    private NamedXContentRegistry namedXContentRegistry;
-
-    /**
-     * Instantiate this module using environment variables
-     */
-    public SdkClientModule(Client client, NamedXContentRegistry namedXContentRegistry) {
-        this(
-            client,
-            namedXContentRegistry,
-            System.getenv(REMOTE_METADATA_TYPE),
-            System.getenv(REMOTE_METADATA_ENDPOINT),
-            System.getenv(REGION)
-        );
-    }
+    private static final Setting<String> REMOTE_METADATA_TYPE_SETTING = Setting.simpleString(REMOTE_METADATA_TYPE, Property.Final);
+    private static final Setting<String> REMOTE_METADATA_ENDPOINT_SETTING = Setting.simpleString(REMOTE_METADATA_ENDPOINT, Property.Final);
+    private static final Setting<String> REGION_SETTING = Setting.simpleString(REGION, Property.Final);
 
     /**
-     * Instantiate this module specifying the endpoint and region. Package private for testing.
-     * @param remoteMetadataType Type of remote metadata store
-     * @param remoteMetadataEndpoint The remote endpoint
-     * @param region The region
+     * Create a new SdkClient with implementation determined by the value of the Remote Metadata Type setting
+     * @param client The OpenSearch node client used as the default implementation
+     * @param xContentRegistry The OpenSearch XContentRegistry
+     * @param settings OpenSearch cluster settings.
+     * @return An instance of SdkClient which delegates to an implementation based on Remote Metadata Type
      */
-    SdkClientModule(
-        Client client,
-        NamedXContentRegistry namedXContentRegistry,
-        String remoteMetadataType,
-        String remoteMetadataEndpoint,
-        String region
-    ) {
-        this.client = client;
-        this.namedXContentRegistry = namedXContentRegistry;
-        this.remoteMetadataType = remoteMetadataType;
-        this.remoteMetadataEndpoint = remoteMetadataEndpoint;
-        this.region = region;
-    }
+    public static SdkClient createSdkClient(Client client, NamedXContentRegistry xContentRegistry, Settings settings) {
+        String remoteMetadataType = REMOTE_METADATA_TYPE_SETTING.get(settings);
+        String remoteMetadataEndpoint = REMOTE_METADATA_ENDPOINT_SETTING.get(settings);
+        String region = REGION_SETTING.get(settings);
 
-    @Override
-    protected void configure() {
-        if (this.remoteMetadataType == null) {
-            log.info("Using local opensearch cluster as metadata store");
-            bindLocalClient();
-            return;
-        }
-
-        switch (this.remoteMetadataType) {
+        switch (remoteMetadataType) {
             case REMOTE_OPENSEARCH:
                 log.info("Using remote opensearch cluster as metadata store");
-                bind(SdkClient.class).toInstance(new RemoteClusterIndicesClient(createOpenSearchClient()));
-                return;
+                return new SdkClient(new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint)));
+            case AWS_OPENSEARCH_SERVICE:
+                log.info("Using remote AWS Opensearch Service cluster as metadata store");
+                return new SdkClient(new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region)));
             case AWS_DYNAMO_DB:
                 log.info("Using dynamo DB as metadata store");
-                bind(SdkClient.class)
-                    .toInstance(new DDBOpenSearchClient(createDynamoDbClient(), new RemoteClusterIndicesClient(createOpenSearchClient())));
-                return;
+                return new SdkClient(
+                    new DDBOpenSearchClient(
+                        createDynamoDbClient(region),
+                        new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint))
+                    )
+                );
             default:
                 log.info("Using local opensearch cluster as metadata store");
-                bindLocalClient();
+                return new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry));
         }
     }
 
-    private void bindLocalClient() {
-        if (client == null) {
-            bind(SdkClient.class).to(LocalClusterIndicesClient.class);
-        } else {
-            bind(SdkClient.class).toInstance(new LocalClusterIndicesClient(this.client, this.namedXContentRegistry));
-        }
+    // Package private for testing
+    static SdkClient wrapSdkClientImpl(SdkClientImpl impl) {
+        return new SdkClient(impl);
     }
 
-    private DynamoDbClient createDynamoDbClient() {
-        if (this.region == null) {
+    private static DynamoDbClient createDynamoDbClient(String region) {
+        if (region == null) {
             throw new IllegalStateException("REGION environment variable needs to be set!");
         }
 
@@ -128,10 +108,10 @@ public class SdkClientModule extends AbstractModule {
             .addCredentialsProvider(InstanceProfileCredentialsProvider.create())
             .build();
 
-        return DynamoDbClient.builder().region(Region.of(this.region)).credentialsProvider(credentialsProviderChain).build();
+        return DynamoDbClient.builder().region(Region.of(region)).credentialsProvider(credentialsProviderChain).build();
     }
 
-    private OpenSearchClient createOpenSearchClient() {
+    private static OpenSearchClient createOpenSearchClient(String remoteMetadataEndpoint) {
         try {
             BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
             // Basic http(not-s) client using RestClient.
@@ -156,5 +136,20 @@ public class SdkClientModule extends AbstractModule {
         } catch (Exception e) {
             throw new OpenSearchException(e);
         }
+    }
+
+    private static OpenSearchClient createAwsOpenSearchServiceClient(String remoteMetadataEndpoint, String region) {
+        // https://github.com/opensearch-project/opensearch-java/blob/main/guides/auth.md
+        SdkHttpClient httpClient = ApacheHttpClient.builder().build();
+
+        return new OpenSearchClient(
+            new AwsSdk2Transport(
+                httpClient,
+                remoteMetadataEndpoint, // OpenSearch endpoint, without https://
+                "es", // signing service name, use "aoss" for OpenSearch Serverless
+                Region.of(region), // signing service region
+                AwsSdk2TransportOptions.builder().build()
+            )
+        );
     }
 }

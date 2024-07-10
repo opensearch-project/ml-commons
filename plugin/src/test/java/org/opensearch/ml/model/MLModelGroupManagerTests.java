@@ -62,7 +62,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.sdk.PutDataObjectRequest;
@@ -137,8 +137,8 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = Mockito.spy(new LocalClusterIndicesClient(client, xContentRegistry));
         Settings settings = Settings.builder().build();
+        sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, xContentRegistry, settings));
         threadContext = new ThreadContext(settings);
         mlModelGroupManager = new MLModelGroupManager(
             mlIndicesHandler,

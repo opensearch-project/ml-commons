@@ -50,7 +50,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
@@ -98,8 +98,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         Settings settings = Settings.builder().put(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.getKey(), true).build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         threadContext = new ThreadContext(settings);
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);

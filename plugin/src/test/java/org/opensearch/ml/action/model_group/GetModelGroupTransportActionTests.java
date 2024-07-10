@@ -48,7 +48,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -108,9 +108,9 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
-        mlModelGroupGetRequest = MLModelGroupGetRequest.builder().modelGroupId("test_id").build();
         Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
+        mlModelGroupGetRequest = MLModelGroupGetRequest.builder().modelGroupId("test_id").build();
 
         getModelGroupTransportAction = spy(
             new GetModelGroupTransportAction(

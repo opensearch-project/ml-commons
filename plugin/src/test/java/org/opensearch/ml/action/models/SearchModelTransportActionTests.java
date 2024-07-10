@@ -7,7 +7,6 @@ package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -53,7 +52,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
@@ -125,11 +124,11 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, namedXContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, namedXContentRegistry, settings);
         mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper, clusterService));
         searchModelTransportAction = new SearchModelTransportAction(transportService, actionFilters, sdkClient, mlSearchHandler);
 
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
