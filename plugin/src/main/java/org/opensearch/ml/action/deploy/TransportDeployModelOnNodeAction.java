@@ -51,7 +51,7 @@ import org.opensearch.transport.TransportService;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class TransportDeployModelOnNodeAction extends
+public class  TransportDeployModelOnNodeAction extends
     TransportNodesAction<MLDeployModelNodesRequest, MLDeployModelNodesResponse, MLDeployModelNodeRequest, MLDeployModelNodeResponse> {
     TransportService transportService;
     ModelHelper modelHelper;
