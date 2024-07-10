@@ -22,7 +22,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
-import org.opensearch.action.index.IndexRequest;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -49,6 +48,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     private String name;
     @Getter
     private String user;
+    @Getter
+    private String applicationType;
 
     /**
      * Creates a conversationMeta object from a SearchHit object
@@ -71,7 +72,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_UPDATED_TIME_FIELD));
         String name = (String) docFields.get(ConversationalIndexConstants.META_NAME_FIELD);
         String user = (String) docFields.get(ConversationalIndexConstants.USER_FIELD);
-        return new ConversationMeta(id, created, updated, name, user);
+        String applicationType = (String) docFields.get(ConversationalIndexConstants.APPLICATION_TYPE_FIELD);
+        return new ConversationMeta(id, created, updated, name, user, applicationType);
     }
 
     /**
@@ -87,7 +89,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = in.readInstant();
         String name = in.readString();
         String user = in.readOptionalString();
-        return new ConversationMeta(id, created, updated, name, user);
+        String applicationType = in.readOptionalString();
+        return new ConversationMeta(id, created, updated, name, user, applicationType);
     }
 
     @Override
@@ -97,6 +100,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         out.writeInstant(updatedTime);
         out.writeString(name);
         out.writeOptionalString(user);
+        out.writeOptionalString(applicationType);
     }
 
     @Override
@@ -106,6 +110,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
             + ", created=" + createdTime.toString()
             + ", updated=" + updatedTime.toString()
             + ", user=" + user
+            + ", applicationType=" + applicationType
             + "}";
     }
 
@@ -116,8 +121,11 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.META_CREATED_TIME_FIELD, this.createdTime);
         builder.field(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, this.updatedTime);
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
-        if(this.user != null) {
+        if (this.user != null) {
             builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
+        }
+        if (this.applicationType != null) {
+            builder.field(ConversationalIndexConstants.APPLICATION_TYPE_FIELD, this.applicationType);
         }
         builder.endObject();
         return builder;
@@ -131,6 +139,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         ConversationMeta otherConversation = (ConversationMeta) other;
         return Objects.equals(this.id, otherConversation.id) &&
             Objects.equals(this.user, otherConversation.user) &&
+            Objects.equals(this.applicationType, otherConversation.applicationType) &&
             Objects.equals(this.createdTime, otherConversation.createdTime) &&
             Objects.equals(this.updatedTime, otherConversation.updatedTime) &&
             Objects.equals(this.name, otherConversation.name);

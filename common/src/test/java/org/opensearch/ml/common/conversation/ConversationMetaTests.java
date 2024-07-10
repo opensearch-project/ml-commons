@@ -30,7 +30,7 @@ public class ConversationMetaTests {
     @Before
     public void setUp() {
         time = Instant.now();
-        conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin");
+        conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin", "testApp");
     }
 
     @Test
@@ -41,6 +41,7 @@ public class ConversationMetaTests {
         content.field(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, time);
         content.field(ConversationalIndexConstants.META_NAME_FIELD, "meta name");
         content.field(ConversationalIndexConstants.USER_FIELD, "admin");
+        content.field(ConversationalIndexConstants.APPLICATION_TYPE_FIELD, "testApp");
         content.endObject();
 
         SearchHit[] hits = new SearchHit[1];
@@ -50,6 +51,7 @@ public class ConversationMetaTests {
         assertEquals(conversationMeta.getId(), "cId");
         assertEquals(conversationMeta.getName(), "meta name");
         assertEquals(conversationMeta.getUser(), "admin");
+        assertEquals(conversationMeta.getApplicationType(), "testApp");
     }
 
     @Test
@@ -63,12 +65,15 @@ public class ConversationMetaTests {
                         ConversationalIndexConstants.META_NAME_FIELD,
                         "meta name",
                         ConversationalIndexConstants.USER_FIELD,
-                        "admin"
+                        "admin",
+                        ConversationalIndexConstants.APPLICATION_TYPE_FIELD,
+                        "testApp"
                 );
         ConversationMeta conversationMeta = ConversationMeta.fromMap("test-conversation-meta", params);
         assertEquals(conversationMeta.getId(), "test-conversation-meta");
         assertEquals(conversationMeta.getName(), "meta name");
         assertEquals(conversationMeta.getUser(), "admin");
+        assertEquals(conversationMeta.getApplicationType(), "testApp");
     }
 
     @Test
@@ -81,26 +86,27 @@ public class ConversationMetaTests {
         assertEquals(meta.getId(), conversationMeta.getId());
         assertEquals(meta.getName(), conversationMeta.getName());
         assertEquals(meta.getUser(), conversationMeta.getUser());
+        assertEquals(meta.getApplicationType(), conversationMeta.getApplicationType());
     }
 
     @Test
     public void test_ToXContent() throws IOException {
-        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin");
+        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin", "testApp");
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         conversationMeta.toXContent(builder, EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        assertEquals(content, "{\"memory_id\":\"test_id\",\"create_time\":\"1970-01-01T00:00:00.123Z\",\"updated_time\":\"1970-01-01T00:00:00.123Z\",\"name\":\"test meta\",\"user\":\"admin\"}");
+        assertEquals(content, "{\"memory_id\":\"test_id\",\"create_time\":\"1970-01-01T00:00:00.123Z\",\"updated_time\":\"1970-01-01T00:00:00.123Z\",\"name\":\"test meta\",\"user\":\"admin\",\"application_type\":\"testApp\"}");
     }
 
     @Test
     public void test_toString() {
-        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin");
-        assertEquals("{id=test_id, name=test meta, created=1970-01-01T00:00:00.123Z, updated=1970-01-01T00:00:00.123Z, user=admin}", conversationMeta.toString());
+        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin", "testApp");
+        assertEquals("{id=test_id, name=test meta, created=1970-01-01T00:00:00.123Z, updated=1970-01-01T00:00:00.123Z, user=admin, applicationType=testApp}", conversationMeta.toString());
     }
 
     @Test
     public void test_equal() {
-        ConversationMeta meta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin");
+        ConversationMeta meta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin", "testApp");
         assertEquals(meta.equals(conversationMeta), false);
     }
 }

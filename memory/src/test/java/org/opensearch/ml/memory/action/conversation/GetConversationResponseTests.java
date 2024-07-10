@@ -36,7 +36,7 @@ import org.opensearch.test.OpenSearchTestCase;
 public class GetConversationResponseTests extends OpenSearchTestCase {
 
     public void testGetConversationResponseStreaming() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null);
         GetConversationResponse response = new GetConversationResponse(convo);
         assert (response.getConversation().equals(convo));
 
@@ -49,7 +49,7 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
     }
 
     public void testToXContent() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null);
         GetConversationResponse response = new GetConversationResponse(convo);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
