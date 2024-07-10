@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -193,6 +194,8 @@ public class MLSyncUpCron implements Runnable {
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
 
+    // TODO I need to come back to sync up cron job later to set the right tenant id. For now I'm just assigning null in the tenant id
+    // to unblock myself.
     private void undeployExpiredModels(
         Set<String> expiredModels,
         Map<String, Set<String>> modelWorkerNodes,
@@ -201,13 +204,14 @@ public class MLSyncUpCron implements Runnable {
         String[] targetNodeIds = getAllNodes(clusterService);
         MLUndeployModelsRequest mlUndeployModelsRequest = new MLUndeployModelsRequest(
             expiredModels.toArray(new String[expiredModels.size()]),
-            targetNodeIds
+            targetNodeIds,
+            null
         );
 
         client.execute(MLUndeployModelsAction.INSTANCE, mlUndeployModelsRequest, ActionListener.wrap(r -> {
             MLUndeployModelNodesResponse mlUndeployModelNodesResponse = r.getResponse();
-            if (mlUndeployModelNodesResponse.failures() != null && mlUndeployModelNodesResponse.failures().size() != 0) {
-                log.debug("Received failures in undeploying expired models", mlUndeployModelNodesResponse.failures());
+            if (mlUndeployModelNodesResponse.failures() != null && !mlUndeployModelNodesResponse.failures().isEmpty()) {
+                log.debug("Received failures in undeploying expired models {}", mlUndeployModelNodesResponse.failures());
             }
 
             mlIndicesHandler
@@ -231,6 +235,7 @@ public class MLSyncUpCron implements Runnable {
                         final String masterKey = encryptor.generateMasterKey();
                         indexRequest.source(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
                         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                        indexRequest.opType(DocWriteRequest.OpType.CREATE);
                         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
                             log.info("ML configuration initialized successfully");
                             encryptor.setMasterKey(masterKey);

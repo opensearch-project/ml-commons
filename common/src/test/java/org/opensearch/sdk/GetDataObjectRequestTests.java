@@ -19,25 +19,29 @@ public class GetDataObjectRequestTests {
 
     private String testIndex;
     private String testId;
+    private String testTenantId;    
     private FetchSourceContext testFetchSourceContext;
 
     @Before
     public void setUp() {
         testIndex = "test-index";
         testId = "test-id";
+        testTenantId = "test-tenant-id";
         testFetchSourceContext = mock(FetchSourceContext.class);
     }
 
     @Test
     public void testGetDataObjectRequest() {
-        GetDataObjectRequest request = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest request = GetDataObjectRequest.builder()
             .index(testIndex)
             .id(testId)
+            .tenantId(testTenantId)
             .fetchSourceContext(testFetchSourceContext)
             .build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());
+        assertEquals(testTenantId, request.tenantId());
         assertEquals(testFetchSourceContext, request.fetchSourceContext());
     }
 }

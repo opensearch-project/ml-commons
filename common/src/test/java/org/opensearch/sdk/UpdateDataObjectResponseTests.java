@@ -15,7 +15,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 
-public class DeleteDataObjectResponseTests {
+public class UpdateDataObjectResponseTests {
 
     private String testId;
     private XContentParser testParser;
@@ -27,8 +27,8 @@ public class DeleteDataObjectResponseTests {
     }
 
     @Test
-    public void testDeleteDataObjectResponse() {
-        DeleteDataObjectResponse response = DeleteDataObjectResponse.builder().id(testId).parser(testParser).build();
+    public void testUpdateDataObjectResponse() {
+        UpdateDataObjectResponse response = UpdateDataObjectResponse.builder().id(testId).parser(testParser).build();
 
         assertEquals(testId, response.id());
         assertEquals(testParser, response.parser());

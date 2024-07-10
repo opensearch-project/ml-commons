@@ -11,7 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.action.DocWriteResponse.Result.CREATED;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
@@ -26,9 +26,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.LatchedActionListener;
@@ -46,6 +49,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -59,6 +63,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -73,6 +78,7 @@ import com.google.common.collect.ImmutableMap;
 public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private static final String CONNECTOR_ID = "connector_id";
+    private static final String TENANT_ID = "tenant_id";
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
         TransportCreateConnectorActionTests.class.getName(),
@@ -114,7 +120,6 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     ActionListener<MLCreateConnectorResponse> actionListener;
 
-    @Mock
     IndexResponse indexResponse;
 
     @Mock
@@ -133,6 +138,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Captor
+    private ArgumentCaptor<PutDataObjectRequest> putDataObjectRequestArgumentCaptor;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
@@ -140,8 +148,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
-        when(indexResponse.getId()).thenReturn(CONNECTOR_ID);
+        sdkClient = Mockito.spy(new LocalClusterIndicesClient(client, xContentRegistry));
+        indexResponse = new IndexResponse(new ShardId(ML_CONNECTOR_INDEX, "_na_", 0), CONNECTOR_ID, 1, 0, 2, true);
 
         settings = Settings
             .builder()
@@ -218,16 +226,14 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
 
-        when(indexResponse.getResult()).thenReturn(CREATED);
-
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
@@ -244,16 +250,14 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
 
-        when(indexResponse.getResult()).thenReturn(CREATED);
-
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -281,7 +285,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -303,15 +307,18 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
 
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        request.getMlCreateConnectorInput().setTenantId(TENANT_ID);
         action.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+        verify(sdkClient).putDataObjectAsync(putDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Assert.assertEquals(TENANT_ID, putDataObjectRequestArgumentCaptor.getValue().tenantId());
     }
 
     public void test_execute_connectorAccessControlEnabled_missingPermissionInfo_defaultToPrivate() throws InterruptedException {
@@ -326,13 +333,13 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
 
         PlainActionFuture<IndexResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(mock(IndexResponse.class));
+        future.onResponse(indexResponse);
         when(client.index(any(IndexRequest.class))).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLCreateConnectorResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         action.doExecute(task, request, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }

@@ -12,6 +12,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.RestActionUtils.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -77,6 +78,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         String algorithm = request.param(PARAMETER_ALGORITHM);
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
+
         Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
 
         if (algorithm == null && functionName.isPresent()) {
@@ -120,6 +122,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
         } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase())) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
@@ -128,7 +131,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm);
-        return new MLPredictionTaskRequest(modelId, mlInput, null);
+        return new MLPredictionTaskRequest(modelId, mlInput, null, tenantId);
     }
 
 }

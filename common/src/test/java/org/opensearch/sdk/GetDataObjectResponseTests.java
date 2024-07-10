@@ -13,8 +13,6 @@ import org.junit.Test;
 import org.opensearch.core.xcontent.XContentParser;
 
 import java.util.Map;
-import java.util.Optional;
-
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 
@@ -33,10 +31,10 @@ public class GetDataObjectResponseTests {
 
     @Test
     public void testGetDataObjectResponse() {
-        GetDataObjectResponse response = new GetDataObjectResponse.Builder().id(testId).parser(Optional.of(testParser)).source(testSource).build();
+        GetDataObjectResponse response = GetDataObjectResponse.builder().id(testId).parser(testParser).source(testSource).build();
 
         assertEquals(testId, response.id());
-        assertEquals(testParser, response.parser().get());
+        assertEquals(testParser, response.parser());
         assertEquals(testSource, response.source());
     }
 }

@@ -39,7 +39,7 @@ import java.util.Objects;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
-import static org.opensearch.ml.common.input.Constants.TENANT_ID;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 

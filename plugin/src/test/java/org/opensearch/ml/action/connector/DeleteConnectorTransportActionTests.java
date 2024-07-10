@@ -8,12 +8,12 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
 import static org.opensearch.action.DocWriteResponse.Result.NOT_FOUND;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -39,7 +39,6 @@ import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
@@ -103,9 +102,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     ActionListener<DeleteResponse> actionListener;
 
     @Mock
-    DeleteResponse deleteResponse;
-
-    @Mock
     NamedXContentRegistry xContentRegistry;
 
     DeleteConnectorTransportAction deleteConnectorTransportAction;
@@ -125,9 +121,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
         sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
         mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(CONNECTOR_ID).build();
-        when(deleteResponse.getId()).thenReturn(CONNECTOR_ID);
-        when(deleteResponse.getShardId()).thenReturn(mock(ShardId.class));
-        when(deleteResponse.getShardInfo()).thenReturn(mock(ShardInfo.class));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
 
         Settings settings = Settings.builder().build();
@@ -161,7 +154,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteConnector_Success() throws InterruptedException {
-        when(deleteResponse.getResult()).thenReturn(DELETED);
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_CONNECTOR_INDEX, "_na_", 0), CONNECTOR_ID, 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -180,7 +173,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -189,7 +182,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteConnector_ModelIndexNotFoundSuccess() throws IOException, InterruptedException {
-        when(deleteResponse.getResult()).thenReturn(DELETED);
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_CONNECTOR_INDEX, "_na_", 0), CONNECTOR_ID, 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -207,7 +200,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -217,7 +210,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
     // TODO need to check if it has any value in it or not.
     public void testDeleteConnector_ConnectorNotFound() throws IOException, InterruptedException {
-        when(deleteResponse.getResult()).thenReturn(NOT_FOUND);
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_CONNECTOR_INDEX, "_na_", 0), CONNECTOR_ID, 1, 0, 2, false);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(future);
@@ -236,7 +229,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -245,10 +238,6 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteConnector_BlockedByModel() throws IOException, InterruptedException {
-        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(deleteResponse);
-        when(client.delete(any(DeleteRequest.class))).thenReturn(future);
-
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
@@ -263,7 +252,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -301,7 +290,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -341,7 +330,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -371,7 +360,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteConnectorTransportAction.doExecute(null, requestWithoutTenant, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

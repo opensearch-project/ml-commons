@@ -10,6 +10,8 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
+import java.io.IOException;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -104,7 +106,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                     SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
                     SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
 
-                    SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+                    SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                        .builder()
                         .indices(ML_MODEL_INDEX)
                         .searchSourceBuilder(searchSourceBuilder)
                         .build();
@@ -155,7 +158,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         try {
             sdkClient
                 .deleteDataObjectAsync(
-                    new DeleteDataObjectRequest.Builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build(),
+                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build(),
                     client.threadPool().executor(GENERAL_THREAD_POOL)
                 )
                 .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, deleteRequest.id(), actionListener));
@@ -176,10 +179,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             log.error("Failed to delete ML Model Group {}", modelGroupId, cause);
             actionListener.onFailure(cause);
         } else {
-            log.debug("Completed Delete Model Group Request, model group id:{} deleted", response.id());
-            DeleteResponse deleteResponse = new DeleteResponse(response.shardId(), response.id(), 0, 0, 0, response.deleted());
-            deleteResponse.setShardInfo(response.shardInfo());
-            actionListener.onResponse(deleteResponse);
+            try {
+                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                log.debug("Completed Delete Model Group Request, model group id:{} deleted", response.id());
+                actionListener.onResponse(deleteResponse);
+            } catch (IOException e) {
+                actionListener.onFailure(e);
+            }
         }
     }
 

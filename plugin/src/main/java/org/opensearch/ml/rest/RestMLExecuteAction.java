@@ -107,8 +107,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 
         String uri = request.getHttpRequest().uri();
-        FunctionName functionName = null;
-        Input input = null;
+        FunctionName functionName;
+        Input input;
         if (uri.startsWith(ML_BASE_URI + "/agents/")) {
             if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
                 throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);

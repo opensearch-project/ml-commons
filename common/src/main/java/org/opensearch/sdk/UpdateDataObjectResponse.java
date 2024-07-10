@@ -8,30 +8,22 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
-import org.opensearch.core.common.Strings;
-import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.XContentParser;
 
 public class UpdateDataObjectResponse {
     private final String id;
-    private final ShardId shardId;
-    private final ShardInfo shardInfo;
-    private final boolean updated;
+    private final XContentParser parser;
 
     /**
-     * Instantiate this request with an id and update status.
+     * Instantiate this request with an id and parser representing an UpdateResponse
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
      * @param id the document id
-     * @param shardId the shard id
-     * @param shardInfo the shard info
-     * @param updated Whether the object was updated.
+     * @param parser a parser that can be used to create an UpdateResponse
      */
-    public UpdateDataObjectResponse(String id, ShardId shardId, ShardInfo shardInfo, boolean updated) {
+    public UpdateDataObjectResponse(String id, XContentParser parser) {
         this.id = id;
-        this.shardId = shardId;
-        this.shardInfo = shardInfo;
-        this.updated = updated;
+        this.parser = parser;
     }
 
     /**
@@ -39,31 +31,23 @@ public class UpdateDataObjectResponse {
      * @return the id
      */
     public String id() {
-        return id;
+        return this.id;
     }
-
+    
     /**
-     * Returns the shard id.
-     * @return the shard id, or a generated id if shards are not applicable
+     * Returns the parser that can be used to create an UpdateResponse
+     * @return the parser
      */
-    public ShardId shardId() {
-        return shardId;
+    public XContentParser parser() {
+        return this.parser;
     }
-
+    
     /**
-     * Returns the shard info.
-     * @return the shard info, or generated info if shards are not applicable
+     * Instantiate a builder for this object
+     * @return a builder instance
      */
-    public ShardInfo shardInfo() {
-        return shardInfo;
-    }
-
-    /**
-     * Returns whether update was successful
-     * @return true if update was successful
-     */
-    public boolean updated() {
-        return updated;
+    public static Builder builder() {
+        return new Builder();
     }
 
     /**
@@ -71,14 +55,12 @@ public class UpdateDataObjectResponse {
      */
     public static class Builder {
         private String id = null;
-        private ShardId shardId = null;
-        private ShardInfo shardInfo = null;
-        private boolean updated = false;
+        private XContentParser parser = null;
 
         /**
          * Empty Constructor for the Builder object
          */
-        public Builder() {}
+        private Builder() {}
 
         /**
          * Add an id to this builder
@@ -89,52 +71,23 @@ public class UpdateDataObjectResponse {
             this.id = id;
             return this;
         }
-
+        
         /**
-         * Adds a shard id to this builder
-         * @param shardId the shard id to add
+         * Add a parser to this builder
+         * @param parser a parser that can be used to create an UpdateResponse
          * @return the updated builder
          */
-        public Builder shardId(ShardId shardId) {
-            this.shardId = shardId;
+        public Builder parser(XContentParser parser) {
+            this.parser = parser;
             return this;
         }
-
+        
         /**
-         * Adds a generated shard id to this builder
-         * @param indexName the index name to generate a shard id
-         * @return the updated builder
-         */
-        public Builder shardId(String indexName) {
-            this.shardId = new ShardId(indexName, Strings.UNKNOWN_UUID_VALUE, 0);
-            return this;
-        }
-
-        /**
-         * Adds shard information (statistics) to this builder
-         * @param shardInfo the shard info to add
-         * @return the updated builder
-         */
-        public Builder shardInfo(ShardInfo shardInfo) {
-            this.shardInfo = shardInfo;
-            return this;
-        }
-        /**
-         * Add a updated status to this builder
-         * @param updated the updated status to add
-         * @return the updated builder
-         */
-        public Builder updated(boolean updated) {
-            this.updated = updated;
-            return this;
-        }
-
-        /**
-         * Builds the object
+         * Builds the response
          * @return A {@link UpdateDataObjectResponse}
          */
         public UpdateDataObjectResponse build() {
-            return new UpdateDataObjectResponse(this.id, this.shardId, this.shardInfo, this.updated);
+            return new UpdateDataObjectResponse(this.id, this.parser);
         }
     }
 }

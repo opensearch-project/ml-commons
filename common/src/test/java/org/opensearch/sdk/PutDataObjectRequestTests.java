@@ -18,19 +18,22 @@ import static org.mockito.Mockito.mock;
 public class PutDataObjectRequestTests {
 
     private String testIndex;
+    private String testTenantId;
     private ToXContentObject testDataObject;
 
     @Before
     public void setUp() {
         testIndex = "test-index";
+        testTenantId = "test-tenant-id";
         testDataObject = mock(ToXContentObject.class);
     }
 
     @Test
     public void testPutDataObjectRequest() {
-        PutDataObjectRequest request = new PutDataObjectRequest.Builder().index(testIndex).dataObject(testDataObject).build();
+        PutDataObjectRequest request = PutDataObjectRequest.builder().index(testIndex).tenantId(testTenantId).dataObject(testDataObject).build();
 
         assertEquals(testIndex, request.index());
+        assertEquals(testTenantId, request.tenantId());
         assertEquals(testDataObject, request.dataObject());
     }
 }

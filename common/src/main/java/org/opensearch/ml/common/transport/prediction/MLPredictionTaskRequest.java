@@ -34,23 +34,26 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
 
     String modelId;
     MLInput mlInput;
+    String tenantId;
     @Setter
     User user;
 
     @Builder
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask, User user) {
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask, User user, String tenantId) {
         super(dispatchTask);
         this.mlInput = mlInput;
         this.modelId = modelId;
         this.user = user;
+        this.tenantId = tenantId;
     }
 
     public MLPredictionTaskRequest(String modelId, MLInput mlInput) {
-        this(modelId, mlInput, true, null);
+        // TODO: this is invoked in chat agent runner. I'll refactor this when work on agents.
+        this(modelId, mlInput, true, null, null);
     }
 
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput, User user) {
-        this(modelId, mlInput, true, user);
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, User user, String tenantId) {
+        this(modelId, mlInput, true, user, tenantId);
     }
 
     public MLPredictionTaskRequest(StreamInput in) throws IOException {
@@ -60,6 +63,7 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         if (in.readBoolean()) {
             this.user = new User(in);
         }
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -73,6 +77,7 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(this.tenantId);
     }
 
     @Override
@@ -102,6 +107,5 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
         }
-
     }
 }

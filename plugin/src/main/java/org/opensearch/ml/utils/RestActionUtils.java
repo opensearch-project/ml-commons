@@ -315,8 +315,8 @@ public class RestActionUtils {
         if (isMultiTenancyEnabled) {
             Map<String, List<String>> headers = restRequest.getHeaders();
             if (headers != null) {
-                if (headers.containsKey(Constants.TENANT_ID)) {
-                    List<String> tenantIdList = headers.get(Constants.TENANT_ID);
+                if (headers.containsKey(Constants.TENANT_ID_HEADER)) {
+                    List<String> tenantIdList = headers.get(Constants.TENANT_ID_HEADER);
                     if (tenantIdList != null && !tenantIdList.isEmpty()) {
                         String tenantId = tenantIdList.get(0);
                         if (tenantId != null) {

@@ -8,11 +8,11 @@ package org.opensearch.ml.action.model_group;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -39,7 +39,6 @@ import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.action.support.replication.ReplicationResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -83,9 +82,6 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     ActionListener<DeleteResponse> actionListener;
-
-    @Mock
-    DeleteResponse deleteResponse;
 
     @Mock
     ClusterService clusterService;
@@ -147,10 +143,6 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
-
-        when(deleteResponse.getId()).thenReturn("test_id");
-        when(deleteResponse.getShardId()).thenReturn(mock(ShardId.class));
-        when(deleteResponse.getShardInfo()).thenReturn(mock(ReplicationResponse.ShardInfo.class));
     }
 
     @AfterClass
@@ -167,7 +159,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         future.onResponse(searchResponse);
         when(client.search(any(SearchRequest.class))).thenReturn(future);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0), "test_id", 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> deleteFuture = PlainActionFuture.newFuture();
         deleteFuture.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(deleteFuture);
@@ -175,7 +167,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
         assertEquals("test_id", captor.getValue().getId());
@@ -193,7 +185,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Cannot delete the model group when it has associated model versions", argumentCaptor.getValue().getMessage());
@@ -206,7 +198,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         future.onFailure(new IndexNotFoundException("index_not_found"));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0), "test_id", 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> deleteFuture = PlainActionFuture.newFuture();
         deleteFuture.onResponse(deleteResponse);
         when(client.delete(any(DeleteRequest.class))).thenReturn(deleteFuture);
@@ -214,7 +206,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(captor.capture());
@@ -232,7 +224,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -253,7 +245,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -295,7 +287,6 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         future.onResponse(searchResponse);
         when(client.search(any(SearchRequest.class))).thenReturn(future);
 
-        when(deleteResponse.getResult()).thenReturn(DELETED);
         PlainActionFuture<DeleteResponse> deleteFuture = PlainActionFuture.newFuture();
         deleteFuture.onFailure(new Exception("errorMessage"));
         when(client.delete(any(DeleteRequest.class))).thenReturn(deleteFuture);
@@ -303,7 +294,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<DeleteResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

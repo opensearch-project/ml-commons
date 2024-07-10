@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.model;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
@@ -12,18 +13,23 @@ import java.time.Instant;
 import java.util.HashSet;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
@@ -35,6 +41,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
@@ -123,7 +130,12 @@ public class MLModelGroupManager {
                         mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
                             sdkClient
                                 .putDataObjectAsync(
-                                    new PutDataObjectRequest.Builder().index(ML_MODEL_GROUP_INDEX).dataObject(mlModelGroup).build(),
+                                    PutDataObjectRequest
+                                        .builder()
+                                        .tenantId(mlModelGroup.getTenantId())
+                                        .index(ML_MODEL_GROUP_INDEX)
+                                        .dataObject(mlModelGroup)
+                                        .build(),
                                     client.threadPool().executor(GENERAL_THREAD_POOL)
                                 )
                                 .whenComplete((r, throwable) -> {
@@ -132,8 +144,18 @@ public class MLModelGroupManager {
                                         log.error("Failed to index model group", cause);
                                         wrappedListener.onFailure(cause);
                                     } else {
-                                        log.info("Model group creation result: {}, model group id: {}", r.created(), r.id());
-                                        wrappedListener.onResponse(r.id());
+                                        try {
+                                            IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                            log
+                                                .info(
+                                                    "Model group creation result: {}, model group id: {}",
+                                                    indexResponse.getResult(),
+                                                    indexResponse.getId()
+                                                );
+                                            wrappedListener.onResponse(r.id());
+                                        } catch (Exception e) {
+                                            wrappedListener.onFailure(e);
+                                        }
                                     }
                                 });
 
@@ -203,7 +225,8 @@ public class MLModelGroupManager {
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
 
-            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
                 .indices(searchRequest.indices())
                 .searchSourceBuilder(searchRequest.source())
                 .build();
@@ -245,16 +268,37 @@ public class MLModelGroupManager {
      * @param modelGroupId  model group id
      * @param listener action listener
      */
-    public void getModelGroupResponse(String modelGroupId, ActionListener<GetResponse> listener) {
-        GetRequest getRequest = new GetRequest();
-        getRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                listener.onResponse(r);
+    public void getModelGroupResponse(SdkClient sdkClient, String modelGroupId, ActionListener<GetResponse> listener) {
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
+        sdkClient.getDataObjectAsync(getRequest, client.threadPool().executor(GENERAL_THREAD_POOL)).whenComplete((r, throwable) -> {
+            if (throwable == null) {
+                try {
+                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    if (gr != null && gr.isExists()) {
+                        try (
+                            XContentParser parser = jsonXContent
+                                .createParser(
+                                    NamedXContentRegistry.EMPTY,
+                                    LoggingDeprecationHandler.INSTANCE,
+                                    Strings.toString(MediaTypeRegistry.JSON, gr)
+                                )
+                        ) {
+                            listener.onResponse(GetResponse.fromXContent(parser));
+                        } catch (Exception e) {
+                            log.error("Failed to parse model group response: {}", r.id(), e);
+                            listener.onFailure(e);
+                        }
+                    } else {
+                        listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
+                    }
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
             } else {
-                listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
+                Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                listener.onFailure(e);
             }
-        }, listener::onFailure));
+        });
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {

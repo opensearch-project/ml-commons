@@ -152,7 +152,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLModelGroupGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
         ArgumentCaptor<MLModelGroupGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLModelGroupGetResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -172,7 +172,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLModelGroupGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -194,7 +194,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLModelGroupGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -209,7 +209,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLModelGroupGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -225,7 +225,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLModelGroupGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -241,7 +241,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLModelGroupGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

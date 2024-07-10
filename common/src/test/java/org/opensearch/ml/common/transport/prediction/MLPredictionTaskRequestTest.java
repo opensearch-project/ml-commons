@@ -42,7 +42,7 @@ public class MLPredictionTaskRequestTest {
 
     @Before
     public void setUp() {
-        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<>() {{
             put("key1", 2.0D);
         }}));
         mlInput = MLInput.builder()
@@ -161,7 +161,7 @@ public class MLPredictionTaskRequestTest {
         assertNotSame(result, request);
         assertEquals(request.getMlInput().getAlgorithm(), result.getMlInput().getAlgorithm());
         assertEquals(request.getMlInput().getInputDataset().getInputDataType(), result.getMlInput().getInputDataset().getInputDataType());
-        assertEquals(request.getUser().getName(), request.getUser().getName());
+        assertEquals(request.getUser().getName(), result.getUser().getName());
     }
 
     @Test(expected = UncheckedIOException.class)

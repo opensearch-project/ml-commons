@@ -8,9 +8,6 @@
  */
 package org.opensearch.ml.sdkclient;
 
-import static org.opensearch.action.DocWriteResponse.Result.CREATED;
-import static org.opensearch.action.DocWriteResponse.Result.DELETED;
-import static org.opensearch.action.DocWriteResponse.Result.UPDATED;
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
@@ -19,7 +16,6 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -36,12 +32,16 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.DeprecationHandler;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -88,7 +88,7 @@ public class LocalClusterIndicesClient implements SdkClient {
                     )
                     .actionGet();
                 log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
-                return new PutDataObjectResponse.Builder().id(indexResponse.getId()).created(indexResponse.getResult() == CREATED).build();
+                return PutDataObjectResponse.builder().id(indexResponse.getId()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -107,15 +107,15 @@ public class LocalClusterIndicesClient implements SdkClient {
                 GetResponse getResponse = client
                     .get(new GetRequest(request.index(), request.id()).fetchSourceContext(request.fetchSourceContext()))
                     .actionGet();
-                if (getResponse == null || !getResponse.isExists()) {
-                    return new GetDataObjectResponse.Builder().id(request.id()).build();
+                if (getResponse == null) {
+                    log.info("Null GetResponse");
+                    return GetDataObjectResponse.builder().id(request.id()).parser(null).build();
                 }
-                XContentParser parser = jsonXContent
-                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
                 log.info("Retrieved data object");
-                return new GetDataObjectResponse.Builder()
+                return GetDataObjectResponse
+                    .builder()
                     .id(getResponse.getId())
-                    .parser(Optional.of(parser))
+                    .parser(createParser(getResponse))
                     .source(getResponse.getSource())
                     .build();
             } catch (IOException e) {
@@ -133,18 +133,28 @@ public class LocalClusterIndicesClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Updating {} from {}", request.id(), request.index());
-                UpdateResponse updateResponse = client
-                    .update(
-                        new UpdateRequest(request.index(), request.id()).doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS))
-                    )
-                    .actionGet();
+                UpdateRequest updateRequest = new UpdateRequest(request.index(), request.id())
+                    .doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+                if (request.ifSeqNo() != null) {
+                    updateRequest.setIfSeqNo(request.ifSeqNo());
+                }
+                if (request.ifPrimaryTerm() != null) {
+                    updateRequest.setIfPrimaryTerm(request.ifPrimaryTerm());
+                }
+                UpdateResponse updateResponse = client.update(updateRequest).actionGet();
+                if (updateResponse == null) {
+                    log.info("Null UpdateResponse");
+                    return UpdateDataObjectResponse.builder().id(request.id()).parser(null).build();
+                }
                 log.info("Update status for id {}: {}", updateResponse.getId(), updateResponse.getResult());
-                return new UpdateDataObjectResponse.Builder()
-                    .id(updateResponse.getId())
-                    .shardId(updateResponse.getShardId())
-                    .shardInfo(updateResponse.getShardInfo())
-                    .updated(updateResponse.getResult() == UPDATED)
-                    .build();
+                return UpdateDataObjectResponse.builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
+            } catch (VersionConflictEngineException vcee) {
+                log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), vcee.getMessage(), vcee);
+                // Rethrow
+                throw new OpenSearchStatusException(
+                    "Document version conflict updating " + request.id() + " in index " + request.index(),
+                    RestStatus.CONFLICT
+                );
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -158,15 +168,18 @@ public class LocalClusterIndicesClient implements SdkClient {
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
-            log.info("Deleting {} from {}", request.id(), request.index());
-            DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
-            log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
-            return new DeleteDataObjectResponse.Builder()
-                .id(deleteResponse.getId())
-                .shardId(deleteResponse.getShardId())
-                .shardInfo(deleteResponse.getShardInfo())
-                .deleted(deleteResponse.getResult() == DELETED)
-                .build();
+            try {
+                log.info("Deleting {} from {}", request.id(), request.index());
+                DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id())).actionGet();
+                log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
+                return DeleteDataObjectResponse.builder().id(deleteResponse.getId()).parser(createParser(deleteResponse)).build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to parse data object to deletion response in index " + request.index(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+            }
         }), executor);
     }
 
@@ -177,9 +190,7 @@ public class LocalClusterIndicesClient implements SdkClient {
             SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
             try {
-                return new SearchDataObjectResponse.Builder()
-                    .parser(jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchResponse.toString()))
-                    .build();
+                return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
@@ -188,5 +199,10 @@ public class LocalClusterIndicesClient implements SdkClient {
                 );
             }
         }), executor);
+    }
+
+    private XContentParser createParser(ToXContent obj) throws IOException {
+        return jsonXContent
+            .createParser(xContentRegistry, DeprecationHandler.IGNORE_DEPRECATIONS, Strings.toString(MediaTypeRegistry.JSON, obj));
     }
 }

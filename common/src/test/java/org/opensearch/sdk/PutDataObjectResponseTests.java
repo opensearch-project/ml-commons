@@ -10,25 +10,27 @@ package org.opensearch.sdk;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.core.xcontent.XContentParser;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
 
 public class PutDataObjectResponseTests {
 
     private String testId;
-    private boolean testCreated;
+    private XContentParser testParser;
 
     @Before
     public void setUp() {
         testId = "test-id";
-        testCreated = true;
+        testParser = mock(XContentParser.class);
     }
 
     @Test
     public void testPutDataObjectResponse() {
-        PutDataObjectResponse response = new PutDataObjectResponse.Builder().id(testId).created(testCreated).build();
+        PutDataObjectResponse response = PutDataObjectResponse.builder().id(testId).parser(testParser).build();
 
         assertEquals(testId, response.id());
-        assertEquals(testCreated, response.created());
+        assertEquals(testParser, response.parser());
     }
 }

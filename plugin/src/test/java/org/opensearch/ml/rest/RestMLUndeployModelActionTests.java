@@ -13,12 +13,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -37,6 +39,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -58,19 +61,29 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     ClusterState testState;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
-    private final Settings settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true).build();
+    private final Settings settings = Settings
+        .builder()
+        .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true)
+        .put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false)
+        .build();
 
     private final ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN);
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         testState = setupTestClusterState();
         when(clusterService.state()).thenReturn(testState);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
+        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -88,7 +101,7 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings);
+        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings, mlFeatureEnabledSetting);
         assertNotNull(undeployModel);
     }
 
@@ -155,15 +168,14 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
         RestRequest.Method method = RestRequest.Method.POST;
         String[] nodeIds = { "nodeId1", "nodeId2", "nodeId3" };
         final Map<String, Object> model = Map.of("node_ids", nodeIds);
-        String requestContent = new Gson().toJson(model).toString();
+        String requestContent = new Gson().toJson(model);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "testTargetModel");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequest_NullModelId() {
@@ -171,14 +183,13 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
         String[] modelIds = { "modelId1", "modelId2", "modelId3" };
         String[] nodeIds = { "nodeId1", "nodeId2", "nodeId3" };
         final Map<String, Object> model = Map.of("model_ids", modelIds, "node_ids", nodeIds);
-        String requestContent = new Gson().toJson(model).toString();
+        String requestContent = new Gson().toJson(model);
         Map<String, String> params = new HashMap<>();
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
 }

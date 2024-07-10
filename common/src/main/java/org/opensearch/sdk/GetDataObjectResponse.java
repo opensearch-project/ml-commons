@@ -12,11 +12,10 @@ import org.opensearch.core.xcontent.XContentParser;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 
 public class GetDataObjectResponse {
     private final String id;
-    private final Optional<XContentParser> parser;
+    private final XContentParser parser;
     private final Map<String, Object> source;
 
     /**
@@ -24,10 +23,10 @@ public class GetDataObjectResponse {
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
      * @param id the document id
-     * @param parser an optional XContentParser that can be used to create the data object if present.
+     * @param parser a parser that can be used to create a GetResponse
      * @param source the data object as a map
      */
-    public GetDataObjectResponse(String id, Optional<XContentParser> parser, Map<String, Object> source) {
+    public GetDataObjectResponse(String id, XContentParser parser, Map<String, Object> source) {
         this.id = id;
         this.parser = parser;
         this.source = source;
@@ -42,10 +41,10 @@ public class GetDataObjectResponse {
     }
     
     /**
-     * Returns the parser optional. If present, is a representation of the data object that may be parsed.
-     * @return the parser optional
+     * Returns the parser that can be used to create a GetResponse
+     * @return the parser
      */
-    public Optional<XContentParser> parser() {
+    public XContentParser parser() {
         return this.parser;
     }
     
@@ -58,17 +57,25 @@ public class GetDataObjectResponse {
     }
 
     /**
+     * Instantiate a builder for this object
+     * @return a builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
      * Class for constructing a Builder for this Response Object
      */
     public static class Builder {
         private String id = null;
-        private Optional<XContentParser> parser = Optional.empty();
+        private XContentParser parser = null;
         private Map<String, Object> source = Collections.emptyMap();
 
         /**
          * Empty Constructor for the Builder object
          */
-        public Builder() {}
+        private Builder() {}
 
         /**
          * Add an id to this builder
@@ -81,11 +88,11 @@ public class GetDataObjectResponse {
         }
         
         /**
-         * Add an optional parser to this builder
-         * @param parser an {@link Optional} which may contain the data object parser
+         * Add a parser to this builder
+         * @param parser a parser that can be used to create a GetResponse
          * @return the updated builder
          */
-        public Builder parser(Optional<XContentParser> parser) {
+        public Builder parser(XContentParser parser) {
             this.parser = parser;
             return this;
         }
@@ -96,7 +103,7 @@ public class GetDataObjectResponse {
          * @return the updated builder
          */
         public Builder source(Map<String, Object> source) {
-            this.source = source;
+            this.source = source == null ? Collections.emptyMap() : source;
             return this;
         }
         

@@ -103,7 +103,8 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 request.source(sourceBuilder);
             }
-            SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest.Builder()
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
                 .indices(request.indices())
                 .searchSourceBuilder(request.source())
                 .build();

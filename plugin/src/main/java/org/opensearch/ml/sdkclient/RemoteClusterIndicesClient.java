@@ -8,9 +8,6 @@
  */
 package org.opensearch.ml.sdkclient;
 
-import static org.opensearch.client.opensearch._types.Result.Created;
-import static org.opensearch.client.opensearch._types.Result.Deleted;
-import static org.opensearch.client.opensearch._types.Result.Updated;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 
 import java.io.IOException;
@@ -20,16 +17,15 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.opensearch.client.json.JsonpMapper;
 import org.opensearch.client.json.JsonpSerializable;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -39,11 +35,13 @@ import org.opensearch.client.opensearch.core.IndexResponse;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.UpdateRequest;
+import org.opensearch.client.opensearch.core.UpdateRequest.Builder;
 import org.opensearch.client.opensearch.core.UpdateResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -60,9 +58,6 @@ import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import jakarta.json.stream.JsonGenerator;
 import jakarta.json.stream.JsonParser;
 import lombok.extern.log4j.Log4j2;
@@ -73,10 +68,11 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RemoteClusterIndicesClient implements SdkClient {
 
-    private OpenSearchClient openSearchClient;
-
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
+
+    private OpenSearchClient openSearchClient;
+    private JsonpMapper mapper;
 
     /**
      * Instantiate this object with an OpenSearch Java client.
@@ -84,6 +80,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
      */
     public RemoteClusterIndicesClient(OpenSearchClient openSearchClient) {
         this.openSearchClient = openSearchClient;
+        this.mapper = openSearchClient._transport().jsonpMapper();
     }
 
     @Override
@@ -94,7 +91,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Indexing data object in {}", request.index());
                 IndexResponse indexResponse = openSearchClient.index(indexRequest);
                 log.info("Creation status for id {}: {}", indexResponse.id(), indexResponse.result());
-                return new PutDataObjectResponse.Builder().id(indexResponse.id()).created(indexResponse.result() == Created).build();
+                return PutDataObjectResponse.builder().id(indexResponse.id()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {
                 log.error("Error putting data object in {}: {}", request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on XContent parsing error
@@ -112,18 +109,10 @@ public class RemoteClusterIndicesClient implements SdkClient {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
                 log.info("Getting {} from {}", request.id(), request.index());
-                @SuppressWarnings("rawtypes")
-                GetResponse<Map> getResponse = openSearchClient.get(getRequest, Map.class);
-                if (!getResponse.found()) {
-                    return new GetDataObjectResponse.Builder().id(getResponse.id()).build();
-                }
-                // Since we use the JacksonJsonBMapper we know this is String-Object map
-                @SuppressWarnings("unchecked")
+                GetResponse<Map<String, Object>> getResponse = openSearchClient.get(getRequest, MAP_DOCTYPE);
+                log.info("Get found status for id {}: {}", getResponse.id(), getResponse.found());
                 Map<String, Object> source = getResponse.source();
-                String json = new ObjectMapper().setSerializationInclusion(Include.NON_NULL).writeValueAsString(source);
-                XContentParser parser = JsonXContent.jsonXContent
-                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
-                return new GetDataObjectResponse.Builder().id(getResponse.id()).parser(Optional.of(parser)).source(source).build();
+                return GetDataObjectResponse.builder().id(getResponse.id()).parser(createParser(getResponse)).source(source).build();
             } catch (IOException e) {
                 log.error("Error getting data object {} from {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on XContent parser creation error
@@ -143,24 +132,30 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 Map<String, Object> docMap = JsonXContent.jsonXContent
                     .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString())
                     .map();
-                UpdateRequest<Map<String, Object>, ?> updateRequest = new UpdateRequest.Builder<Map<String, Object>, Map<String, Object>>()
-                    .index(request.index())
-                    .id(request.id())
-                    .doc(docMap)
-                    .build();
+                Builder<Map<String, Object>, Map<String, Object>> updateRequestBuilder =
+                    new UpdateRequest.Builder<Map<String, Object>, Map<String, Object>>()
+                        .index(request.index())
+                        .id(request.id())
+                        .doc(docMap);
+                if (request.ifSeqNo() != null) {
+                    updateRequestBuilder.ifSeqNo(request.ifSeqNo());
+                }
+                if (request.ifPrimaryTerm() != null) {
+                    updateRequestBuilder.ifPrimaryTerm(request.ifPrimaryTerm());
+                }
+                UpdateRequest<Map<String, Object>, ?> updateRequest = updateRequestBuilder.build();
                 log.info("Updating {} in {}", request.id(), request.index());
                 UpdateResponse<Map<String, Object>> updateResponse = openSearchClient.update(updateRequest, MAP_DOCTYPE);
                 log.info("Update status for id {}: {}", updateResponse.id(), updateResponse.result());
-                ShardInfo shardInfo = new ShardInfo(
-                    updateResponse.shards().total().intValue(),
-                    updateResponse.shards().successful().intValue()
+                return UpdateDataObjectResponse.builder().id(updateResponse.id()).parser(createParser(updateResponse)).build();
+            } catch (OpenSearchException ose) {
+                String errorType = ose.status() == RestStatus.CONFLICT.getStatus() ? "Document Version Conflict" : "Failed";
+                log.error("{} updating {} in {}: {}", errorType, request.id(), request.index(), ose.getMessage(), ose);
+                // Rethrow
+                throw new OpenSearchStatusException(
+                    errorType + " updating " + request.id() + " in index " + request.index(),
+                    RestStatus.fromCode(ose.status())
                 );
-                return new UpdateDataObjectResponse.Builder()
-                    .id(updateResponse.id())
-                    .shardId(updateResponse.index())
-                    .shardInfo(shardInfo)
-                    .updated(updateResponse.result() == Updated)
-                    .build();
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -180,16 +175,7 @@ public class RemoteClusterIndicesClient implements SdkClient {
                 log.info("Deleting {} from {}", request.id(), request.index());
                 DeleteResponse deleteResponse = openSearchClient.delete(deleteRequest);
                 log.info("Deletion status for id {}: {}", deleteResponse.id(), deleteResponse.result());
-                ShardInfo shardInfo = new ShardInfo(
-                    deleteResponse.shards().total().intValue(),
-                    deleteResponse.shards().successful().intValue()
-                );
-                return new DeleteDataObjectResponse.Builder()
-                    .id(deleteResponse.id())
-                    .shardId(deleteResponse.index())
-                    .shardInfo(shardInfo)
-                    .deleted(deleteResponse.result() == Deleted)
-                    .build();
+                return DeleteDataObjectResponse.builder().id(deleteResponse.id()).parser(createParser(deleteResponse)).build();
             } catch (IOException e) {
                 log.error("Error deleting {} from {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on deletion IOException
@@ -206,19 +192,12 @@ public class RemoteClusterIndicesClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
-                JsonpMapper mapper = openSearchClient._transport().jsonpMapper();
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
                 searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).build();
-
                 SearchResponse<?> searchResponse = openSearchClient.search(searchRequest, MAP_DOCTYPE);
                 log.info("Search returned {} hits", searchResponse.hits().total().value());
-                return new SearchDataObjectResponse.Builder()
-                    .parser(
-                        jsonXContent
-                            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, toJson(searchResponse, mapper))
-                    )
-                    .build();
+                return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
             } catch (IOException e) {
                 log.error("Error searching {}: {}", Arrays.toString(request.indices()), e.getMessage(), e);
                 // Rethrow unchecked exception on exception
@@ -230,11 +209,11 @@ public class RemoteClusterIndicesClient implements SdkClient {
         }), executor);
     }
 
-    private String toJson(JsonpSerializable obj, JsonpMapper mapper) {
+    private XContentParser createParser(JsonpSerializable obj) throws IOException {
         StringWriter stringWriter = new StringWriter();
         try (JsonGenerator generator = mapper.jsonProvider().createGenerator(stringWriter)) {
             mapper.serialize(obj, generator);
         }
-        return stringWriter.toString();
+        return jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, stringWriter.toString());
     }
 }

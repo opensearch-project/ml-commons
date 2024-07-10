@@ -439,10 +439,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void testGetConnectorHappyCase() throws IOException, InterruptedException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-            .index(CommonValue.ML_CONNECTOR_INDEX)
-            .id("connectorId")
-            .build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
         GetResponse getResponse = prepareConnector();
 
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
@@ -460,7 +457,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 "connectorId",
                 latchedActionListener
             );
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         verify(client, times(1)).get(requestCaptor.capture());
@@ -469,10 +466,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void testGetConnectorException() throws IOException, InterruptedException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-            .index(CommonValue.ML_CONNECTOR_INDEX)
-            .id("connectorId")
-            .build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
 
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new RuntimeException("Failed to get connector"));
@@ -489,7 +483,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 "connectorId",
                 latchedActionListener
             );
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConnectorActionListener).onFailure(argumentCaptor.capture());
@@ -498,10 +492,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
     @Test
     public void testGetConnectorIndexNotFound() throws IOException, InterruptedException {
-        GetDataObjectRequest getRequest = new GetDataObjectRequest.Builder()
-            .index(CommonValue.ML_CONNECTOR_INDEX)
-            .id("connectorId")
-            .build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
 
         PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new IndexNotFoundException("Index not found"));
@@ -518,7 +509,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 "connectorId",
                 latchedActionListener
             );
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(getConnectorActionListener).onFailure(argumentCaptor.capture());

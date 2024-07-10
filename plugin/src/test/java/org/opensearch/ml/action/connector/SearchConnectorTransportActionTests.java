@@ -168,7 +168,7 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         searchConnectorTransportAction.doExecute(task, searchRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
@@ -183,7 +183,7 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);        
         searchConnectorTransportAction.doExecute(task, searchRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
@@ -196,7 +196,7 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         searchConnectorTransportAction.doExecute(task, searchRequest, latchedActionListener);
-        latch.await();
+        latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(actionListener).onFailure(any(RuntimeException.class));
     }

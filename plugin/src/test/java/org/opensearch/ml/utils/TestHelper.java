@@ -75,6 +75,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -220,7 +221,7 @@ public class TestHelper {
     public static RestRequest getCreateConnectorRestRequest(String tenantId) {
         Map<String, List<String>> headers = new HashMap<>();
         if (tenantId != null) {
-            headers.put("tenant_id", Collections.singletonList(tenantId));
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         }
         final String requestContent = "{\n"
             + "    \"name\": \"OpenAI Connector\",\n"

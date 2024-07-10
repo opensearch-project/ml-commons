@@ -51,6 +51,14 @@ public class DeleteDataObjectRequest {
     public String tenantId() {
         return this.tenantId;
     }
+    
+    /**
+     * Instantiate a builder for this object
+     * @return a builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
 
     /**
      * Class for constructing a Builder for this Request Object
@@ -63,7 +71,7 @@ public class DeleteDataObjectRequest {
         /**
          * Empty Constructor for the Builder object
          */
-        public Builder() {}
+        private Builder() {}
 
         /**
          * Add an index to this builder

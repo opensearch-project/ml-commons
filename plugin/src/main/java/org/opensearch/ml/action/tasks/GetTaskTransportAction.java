@@ -5,17 +5,20 @@
 
 package org.opensearch.ml.action.tasks;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
@@ -72,7 +75,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = new GetDataObjectRequest.Builder()
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
             .index(ML_TASK_INDEX)
             .id(taskId)
             .fetchSourceContext(fetchSourceContext)
@@ -95,22 +99,29 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             actionListener.onFailure(cause);
                         }
                     } else {
-                        if (r != null && r.parser().isPresent()) {
-                            try {
-                                XContentParser parser = r.parser().get();
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLTask mlTask = MLTask.parse(parser);
-                                if (!TenantAwareHelper
-                                    .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlTask.getTenantId(), actionListener)) {
-                                    return;
+                        try {
+                            GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                            if (gr != null && gr.isExists()) {
+                                try (
+                                    XContentParser parser = jsonXContent
+                                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    MLTask mlTask = MLTask.parse(parser);
+                                    if (!TenantAwareHelper
+                                        .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlTask.getTenantId(), actionListener)) {
+                                        return;
+                                    }
+                                    actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
+                                } catch (Exception e) {
+                                    log.error("Failed to parse ml task {}", r.id(), e);
+                                    actionListener.onFailure(e);
                                 }
-                                actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
-                            } catch (Exception e) {
-                                log.error("Failed to parse ml task {}", r.id(), e);
-                                actionListener.onFailure(e);
+                            } else {
+                                actionListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
                             }
-                        } else {
-                            actionListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
+                        } catch (Exception e) {
+                            actionListener.onFailure(e);
                         }
                     }
                 });

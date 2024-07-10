@@ -8,30 +8,22 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
-import org.opensearch.core.common.Strings;
-import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.XContentParser;
 
 public class DeleteDataObjectResponse {
     private final String id;
-    private final ShardId shardId;
-    private final ShardInfo shardInfo;
-    private final boolean deleted;
+    private final XContentParser parser;
 
     /**
-     * Instantiate this request.
+     * Instantiate this request with an id and parser representing a DeleteResponse
      * <p>
-     * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
+     * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
      * @param id the document id
-     * @param shardId the shard id
-     * @param shardInfo the shard info
-     * @param deleted Whether the object was deleted. Use {@code false} if the object was not found.
+     * @param parser a parser that can be used to create a DeleteResponse
      */
-    public DeleteDataObjectResponse(String id, ShardId shardId, ShardInfo shardInfo, boolean deleted) {
+    public DeleteDataObjectResponse(String id, XContentParser parser) {
         this.id = id;
-        this.shardId = shardId;
-        this.shardInfo = shardInfo;
-        this.deleted = deleted;
+        this.parser = parser;
     }
 
     /**
@@ -39,31 +31,23 @@ public class DeleteDataObjectResponse {
      * @return the id
      */
     public String id() {
-        return id;
+        return this.id;
     }
-
+    
     /**
-     * Returns the shard id.
-     * @return the shard id, or a generated id if shards are not applicable
+     * Returns the parser that can be used to create a DeleteResponse
+     * @return the parser
      */
-    public ShardId shardId() {
-        return shardId;
+    public XContentParser parser() {
+        return this.parser;
     }
-
+    
     /**
-     * Returns the shard info.
-     * @return the shard info, or generated info if shards are not applicable
+     * Instantiate a builder for this object
+     * @return a builder instance
      */
-    public ShardInfo shardInfo() {
-        return shardInfo;
-    }
-
-    /**
-     * Returns whether deletion was successful
-     * @return true if deletion was successful, false if the object was not found
-     */
-    public boolean deleted() {
-        return deleted;
+    public static Builder builder() {
+        return new Builder();
     }
 
     /**
@@ -71,14 +55,12 @@ public class DeleteDataObjectResponse {
      */
     public static class Builder {
         private String id = null;
-        private ShardId shardId = null;
-        private ShardInfo shardInfo = null;
-        private boolean deleted = false;
+        private XContentParser parser = null;
 
         /**
          * Empty Constructor for the Builder object
          */
-        public Builder() {}
+        private Builder() {}
 
         /**
          * Add an id to this builder
@@ -89,53 +71,23 @@ public class DeleteDataObjectResponse {
             this.id = id;
             return this;
         }
-
+        
         /**
-         * Adds a shard id to this builder
-         * @param shardId the shard id to add
+         * Add a parser to this builder
+         * @param parser a parser that can be used to create a DeleteResponse
          * @return the updated builder
          */
-        public Builder shardId(ShardId shardId) {
-            this.shardId = shardId;
+        public Builder parser(XContentParser parser) {
+            this.parser = parser;
             return this;
         }
-
+        
         /**
-         * Adds a generated shard id to this builder
-         * @param indexName the index name to generate a shard id
-         * @return the updated builder
-         */
-        public Builder shardId(String indexName) {
-            this.shardId = new ShardId(indexName, Strings.UNKNOWN_UUID_VALUE, 0);
-            return this;
-        }
-
-        /**
-         * Adds shard information (statistics) to this builder
-         * @param shardInfo the shard info to add
-         * @return the updated builder
-         */
-        public Builder shardInfo(ShardInfo shardInfo) {
-            this.shardInfo = shardInfo;
-            return this;
-        }
-
-        /**
-         * Add a deleted status to this builder
-         * @param deleted the deleted status to add
-         * @return the updated builder
-         */
-        public Builder deleted(boolean deleted) {
-            this.deleted = deleted;
-            return this;
-        }
-
-        /**
-         * Builds the object
+         * Builds the response
          * @return A {@link DeleteDataObjectResponse}
          */
         public DeleteDataObjectResponse build() {
-            return new DeleteDataObjectResponse(this.id, this.shardId, this.shardInfo, this.deleted);
+            return new DeleteDataObjectResponse(this.id, this.parser);
         }
     }
 }
