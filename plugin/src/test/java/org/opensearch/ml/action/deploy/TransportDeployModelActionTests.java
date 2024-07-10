@@ -386,6 +386,32 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
     }
 
+    public void testDoExecuteRemoteInference_MultiNodeEnabled() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getTenantId()).thenReturn("test_tenant");
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("mockIndexId");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        when(mlDeployModelRequest.getTenantId()).thenReturn("test_tenant");
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<MLDeployModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLDeployModelResponse.class);
+        verify(deployModelResponseListener).onResponse(argumentCaptor.capture());
+        assertEquals("CREATED", argumentCaptor.getValue().getStatus());
+    }
+
     public void testDoExecuteLocalInferenceDisabled() {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);

@@ -437,6 +437,8 @@ public class MachineLearningPlugin extends Plugin
 
     @Override
     public Collection<Module> createGuiceModules() {
+        // TODO: SDKClientModule is initialized both in createGuiceModules and createComponents. Unify these
+        // approaches to prevent multiple instances of SDKClient.
         return List.of(new SdkClientModule(null, null));
     }
 
@@ -464,6 +466,7 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
+        // TODO: Rather than recreating SDKClientModule reuse module created as part of createGuiceModules
         ModulesBuilder modules = new ModulesBuilder();
         modules.add(new SdkClientModule(client, xContentRegistry));
         Injector injector = modules.createInjector();

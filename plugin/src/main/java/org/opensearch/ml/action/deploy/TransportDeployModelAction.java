@@ -285,7 +285,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             String taskId = response.getId();
             mlTask.setTaskId(taskId);
             if (algorithm == FunctionName.REMOTE) {
-                if (!mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+                if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+                    listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.CREATED.name()));
                     return;
                 }
                 mlTaskManager.add(mlTask, eligibleNodeIds);
