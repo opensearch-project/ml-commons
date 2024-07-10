@@ -615,16 +615,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
         modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-        /* Old code here. TODO investigate if we need to add seqNo and primaryTerm to data object request
-        UpdateRequest updateModelGroupRequest = new UpdateRequest();        
-        updateModelGroupRequest
-            .index(ML_MODEL_GROUP_INDEX)
-            .id(modelGroupId)
-            .setIfSeqNo(seqNo)
-            .setIfPrimaryTerm(primaryTerm)
-            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-            .doc(modelGroupSourceMap);
-        */
         ToXContentObject dataObject = new ToXContentObject() {
             @Override
             public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
@@ -635,7 +625,14 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 return builder.endObject();
             }
         };
-        return UpdateDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).dataObject(dataObject).build();
+        return UpdateDataObjectRequest
+            .builder()
+            .index(ML_MODEL_GROUP_INDEX)
+            .id(modelGroupId)
+            .ifSeqNo(seqNo)
+            .ifPrimaryTerm(primaryTerm)
+            .dataObject(dataObject)
+            .build();
     }
 
     private Boolean isModelDeployed(MLModelState mlModelState) {

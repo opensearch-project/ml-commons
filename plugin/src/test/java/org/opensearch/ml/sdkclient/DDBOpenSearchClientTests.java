@@ -9,6 +9,7 @@
 
 package org.opensearch.ml.sdkclient;
 
+import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
@@ -30,6 +31,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
@@ -41,6 +43,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -65,6 +68,7 @@ import com.google.common.collect.ImmutableMap;
 
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
@@ -75,6 +79,9 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 
 public class DDBOpenSearchClientTests extends OpenSearchTestCase {
+
+    private static final String HASH_KEY = "_tenant_id";
+    private static final String RANGE_KEY = "_id";
 
     private static final String TEST_ID = "123";
     private static final String TENANT_ID = "TEST_TENANT_ID";
@@ -146,8 +153,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, putItemRequest.tableName());
-        Assert.assertEquals(TEST_ID, putItemRequest.item().get("id").s());
-        Assert.assertEquals(TENANT_ID, putItemRequest.item().get("tenant_id").s());
+        Assert.assertEquals(TEST_ID, putItemRequest.item().get(RANGE_KEY).s());
+        Assert.assertEquals(TENANT_ID, putItemRequest.item().get(HASH_KEY).s());
         Assert.assertEquals("foo", putItemRequest.item().get("data").s());
     }
 
@@ -192,7 +199,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
-        Assert.assertEquals("DEFAULT_TENANT", putItemRequest.item().get("tenant_id").s());
+        Assert.assertEquals("DEFAULT_TENANT", putItemRequest.item().get(HASH_KEY).s());
     }
 
     @Test
@@ -206,7 +213,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
-        Assert.assertNotNull(putItemRequest.item().get("id").s());
+        Assert.assertNotNull(putItemRequest.item().get(RANGE_KEY).s());
         Assert.assertNotNull(response.id());
     }
 
@@ -237,8 +244,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
         GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, getItemRequest.tableName());
-        Assert.assertEquals(TENANT_ID, getItemRequest.key().get("tenant_id").s());
-        Assert.assertEquals(TEST_ID, getItemRequest.key().get("id").s());
+        Assert.assertEquals(TENANT_ID, getItemRequest.key().get(HASH_KEY).s());
+        Assert.assertEquals(TEST_ID, getItemRequest.key().get(RANGE_KEY).s());
         Assert.assertEquals(TEST_ID, response.id());
         Assert.assertEquals("foo", response.source().get("data"));
         XContentParser parser = response.parser();
@@ -319,7 +326,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         sdkClient.getDataObjectAsync(getRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
         GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
-        Assert.assertEquals("DEFAULT_TENANT", getItemRequest.key().get("tenant_id").s());
+        Assert.assertEquals("DEFAULT_TENANT", getItemRequest.key().get(HASH_KEY).s());
     }
 
     @Test
@@ -343,8 +350,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .join();
         DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, deleteItemRequest.tableName());
-        Assert.assertEquals(TENANT_ID, deleteItemRequest.key().get("tenant_id").s());
-        Assert.assertEquals(TEST_ID, deleteItemRequest.key().get("id").s());
+        Assert.assertEquals(TENANT_ID, deleteItemRequest.key().get(HASH_KEY).s());
+        Assert.assertEquals(TEST_ID, deleteItemRequest.key().get(RANGE_KEY).s());
         Assert.assertEquals(TEST_ID, deleteResponse.id());
 
         DeleteResponse deleteActionResponse = DeleteResponse.fromXContent(deleteResponse.parser());
@@ -361,7 +368,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
         sdkClient.deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
-        Assert.assertEquals("DEFAULT_TENANT", deleteItemRequest.key().get("tenant_id").s());
+        Assert.assertEquals("DEFAULT_TENANT", deleteItemRequest.key().get(HASH_KEY).s());
     }
 
     @Test
@@ -382,8 +389,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         UpdateItemRequest updateItemRequest = updateItemRequestArgumentCaptor.getValue();
         assertEquals(TEST_ID, updateRequest.id());
         assertEquals(TEST_INDEX, updateItemRequest.tableName());
-        assertEquals(TEST_ID, updateItemRequest.key().get("id").s());
-        assertEquals(TENANT_ID, updateItemRequest.key().get("tenant_id").s());
+        assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
+        assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
         assertEquals("foo", updateItemRequest.attributeUpdates().get("data").value().s());
 
     }
@@ -406,10 +413,9 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         UpdateItemRequest updateItemRequest = updateItemRequestArgumentCaptor.getValue();
         assertEquals(TEST_ID, updateRequest.id());
         assertEquals(TEST_INDEX, updateItemRequest.tableName());
-        assertEquals(TEST_ID, updateItemRequest.key().get("id").s());
-        assertEquals(TENANT_ID, updateItemRequest.key().get("tenant_id").s());
+        assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
+        assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
         assertEquals("bar", updateItemRequest.attributeUpdates().get("foo").value().s());
-
     }
 
     @Test
@@ -424,7 +430,30 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Mockito.when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture())).thenReturn(UpdateItemResponse.builder().build());
         sdkClient.updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         UpdateItemRequest updateItemRequest = updateItemRequestArgumentCaptor.getValue();
-        assertEquals(TENANT_ID, updateItemRequest.key().get("tenant_id").s());
+        assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
+    }
+
+    public void testUpdateDataObject_VersionCheck() throws IOException {
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .ifSeqNo(5)
+            .ifPrimaryTerm(2)
+            .build();
+
+        ConditionalCheckFailedException conflictException = ConditionalCheckFailedException.builder().build();
+        when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture())).thenThrow(conflictException);
+
+        CompletableFuture<UpdateDataObjectResponse> future = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchStatusException.class, cause.getClass());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) cause).status());
     }
 
     @Test

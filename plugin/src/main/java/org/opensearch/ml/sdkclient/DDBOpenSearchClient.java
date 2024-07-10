@@ -58,6 +58,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
@@ -74,8 +75,9 @@ public class DDBOpenSearchClient implements SdkClient {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
-    private static final String HASH_KEY = "tenant_id";
-    private static final String RANGE_KEY = "id";
+    private static final String HASH_KEY = "_tenant_id";
+    private static final String RANGE_KEY = "_id";
+    private static final String SEQ_NO_KEY = "_seq_no";
 
     private DynamoDbClient dynamoDbClient;
     private RemoteClusterIndicesClient remoteClusterIndicesClient;
@@ -112,7 +114,11 @@ public class DDBOpenSearchClient implements SdkClient {
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
                 final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
 
+                // TODO need to initialize/return SEQ_NO here
+                // If document doesn't exist, return 0
+                // If document exists, overwrite and increment and return SEQ_NO
                 dynamoDbClient.putItem(putItemRequest);
+                // TODO need to pass seqNo to simulated response
                 String simulatedIndexResponse = simulateOpenSearchResponse(request.index(), id, source, Map.of("result", "created"));
                 return PutDataObjectResponse.builder().id(id).parser(createParser(simulatedIndexResponse)).build();
             } catch (IOException e) {
@@ -137,6 +143,7 @@ public class DDBOpenSearchClient implements SdkClient {
                     .ofEntries(
                         Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(request.id()).build())
+                        // TODO need to fetch SEQ_NO_KEY
                     )
             )
             .build();
@@ -198,16 +205,33 @@ public class DDBOpenSearchClient implements SdkClient {
                 Map<String, AttributeValue> updateKey = new HashMap<>();
                 updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
-                UpdateItemRequest updateItemRequest = UpdateItemRequest
+                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest
                     .builder()
                     .tableName(getTableName(request.index()))
                     .key(updateKey)
-                    .attributeUpdates(updateAttributeValue)
-                    .build();
+                    .attributeUpdates(updateAttributeValue);
+                if (request.ifSeqNo() != null) {
+                    // Get current document version and put in attribute map. Ignore primary term on DDB.
+                    int currentSeqNo = jsonNode.has(SEQ_NO_KEY) ? jsonNode.get(SEQ_NO_KEY).asInt() : 0;
+                    updateItemRequestBuilder
+                        .conditionExpression("#seqNo = :currentSeqNo")
+                        .expressionAttributeNames(Map.of("#seqNo", SEQ_NO_KEY))
+                        .expressionAttributeValues(
+                            Map.of(":currentSeqNo", AttributeValue.builder().n(Integer.toString(currentSeqNo)).build())
+                        );
+                }
+                UpdateItemRequest updateItemRequest = updateItemRequestBuilder.build();
                 dynamoDbClient.updateItem(updateItemRequest);
-
+                // TODO need to pass seqNo to simulated response
                 String simulatedUpdateResponse = simulateOpenSearchResponse(request.index(), request.id(), source, Map.of("found", true));
                 return UpdateDataObjectResponse.builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
+            } catch (ConditionalCheckFailedException ccfe) {
+                log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), ccfe.getMessage(), ccfe);
+                // Rethrow
+                throw new OpenSearchStatusException(
+                    "Document version conflict updating " + request.id() + " in index " + request.index(),
+                    RestStatus.CONFLICT
+                );
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -239,7 +263,12 @@ public class DDBOpenSearchClient implements SdkClient {
             .build();
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
+                // TODO need to return SEQ_NO here
+                // If document doesn't exist, increment and return highest seq no ever seen, but we would have to track seqNo here
+                // If document never existed, return -2 (unassigned) for seq no (probably what we have to do here)
+                // If document exists, increment and return SEQ_NO
                 dynamoDbClient.deleteItem(deleteItemRequest);
+                // TODO need to pass seqNo to simulated response
                 String simulatedDeleteResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),
