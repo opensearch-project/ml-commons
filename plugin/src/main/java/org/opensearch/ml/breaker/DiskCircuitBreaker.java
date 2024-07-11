@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.breaker;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_MIN_VALUE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_THRESHOLD;
 
 import java.io.File;
 import java.security.AccessController;
@@ -27,8 +27,8 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Integer> {
     private final File diskDir;
 
     public DiskCircuitBreaker(Settings settings, ClusterService clusterService, File diskDir) {
-        super(Optional.ofNullable(ML_COMMONS_DISK_FREE_SPACE_MIN_VALUE.get(settings)).orElse(DEFAULT_DISK_SHORTAGE_THRESHOLD));
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_DISK_FREE_SPACE_MIN_VALUE, super::setThreshold);
+        super(Optional.ofNullable(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.get(settings)).orElse(DEFAULT_DISK_SHORTAGE_THRESHOLD));
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD, super::setThreshold);
         this.diskDir = diskDir;
     }
 
