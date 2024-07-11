@@ -179,7 +179,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             + "  \"persistent\" : {\n"
             + "    \"plugins.ml_commons.jvm_heap_memory_threshold\" : 100, \n"
             + "    \"plugins.ml_commons.native_memory_threshold\" : 100, \n"
-            + "    \"plugins.ml_commons.disk_free_space_min_value\" : 0 \n"
+            + "    \"plugins.ml_commons.disk_free_space_threshold\" : 0 \n"
             + "  }\n"
             + "}";
         response = TestHelper
