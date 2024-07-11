@@ -457,7 +457,7 @@ public class MachineLearningPlugin extends Plugin
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
 
-        // Get the injected SdkClient instance from the injector
+        SdkClient sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
@@ -651,8 +651,6 @@ public class MachineLearningPlugin extends Plugin
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
-
-        SdkClient sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
 
         return List
             .of(

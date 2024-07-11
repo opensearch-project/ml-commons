@@ -10,6 +10,7 @@ package org.opensearch.ml.sdkclient;
 
 import static org.mockito.Mockito.mock;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -59,5 +60,32 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof DDBOpenSearchClient);
+    }
+
+    public void testRemoteOpenSearchBindingException() {
+        Settings settings = Settings.builder().put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.REMOTE_OPENSEARCH).build();
+        assertThrows(
+            OpenSearchException.class,
+            () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings)
+        );
+    }
+
+    public void testAwsOpenSearchServiceBindingException() {
+        Settings settings = Settings
+            .builder()
+            .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_OPENSEARCH_SERVICE)
+            .build();
+        assertThrows(
+            OpenSearchException.class,
+            () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings)
+        );
+    }
+
+    public void testDDBBindingException() {
+        Settings settings = Settings.builder().put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_DYNAMO_DB).build();
+        assertThrows(
+            OpenSearchException.class,
+            () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings)
+        );
     }
 }
