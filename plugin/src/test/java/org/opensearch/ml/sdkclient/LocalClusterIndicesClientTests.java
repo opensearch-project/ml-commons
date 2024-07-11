@@ -111,7 +111,8 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(mockedClient, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(mockedClient, xContentRegistry, settings);
         testDataObject = new TestDataObject("foo");
     }
 

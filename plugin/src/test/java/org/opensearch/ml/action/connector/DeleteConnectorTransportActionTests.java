@@ -57,7 +57,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.sdk.SdkClient;
@@ -119,11 +119,11 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(CONNECTOR_ID).build();
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
 
-        Settings settings = Settings.builder().build();
         deleteConnectorTransportAction = spy(
             new DeleteConnectorTransportAction(
                 transportService,

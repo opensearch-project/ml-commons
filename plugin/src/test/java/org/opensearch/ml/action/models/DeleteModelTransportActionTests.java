@@ -69,7 +69,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -140,12 +140,12 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
 
         deleteResponse = new DeleteResponse(new ShardId(new Index(ML_MODEL_INDEX, "_na_"), 1), "taskId", 1, 1, 1, true);
 
-        Settings settings = Settings.builder().build();
         deleteModelTransportAction = spy(
             new DeleteModelTransportAction(
                 transportService,

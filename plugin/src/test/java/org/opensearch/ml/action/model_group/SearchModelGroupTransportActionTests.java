@@ -7,7 +7,6 @@ package org.opensearch.ml.action.model_group;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,7 +39,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -108,7 +107,8 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, namedXContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, namedXContentRegistry, settings);
         searchModelGroupTransportAction = new SearchModelGroupTransportAction(
             transportService,
             actionFilters,
@@ -118,7 +118,6 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
             modelAccessControlHelper
         );
 
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(client.threadPool()).thenReturn(threadPool);

@@ -49,6 +49,7 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientDelegate;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -60,7 +61,7 @@ import lombok.extern.log4j.Log4j2;
  * An implementation of {@link SdkClient} that stores data in a local OpenSearch cluster using the Node Client.
  */
 @Log4j2
-public class LocalClusterIndicesClient implements SdkClient {
+public class LocalClusterIndicesClient implements SdkClientDelegate {
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;

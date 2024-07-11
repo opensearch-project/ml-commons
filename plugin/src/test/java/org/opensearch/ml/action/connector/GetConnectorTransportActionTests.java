@@ -50,7 +50,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
@@ -116,12 +116,12 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         mlConnectorGetRequest = MLConnectorGetRequest.builder().connectorId(CONNECTOR_ID).tenantId(TENANT_ID).build();
         when(getResponse.getId()).thenReturn(CONNECTOR_ID);
         when(getResponse.getSourceAsString()).thenReturn("{}");
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        Settings settings = Settings.builder().build();
 
         getConnectorTransportAction = spy(
             new GetConnectorTransportAction(

@@ -51,7 +51,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -116,7 +116,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").build();
         settings = Settings.builder().build();
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
 
         getModelTransportAction = spy(

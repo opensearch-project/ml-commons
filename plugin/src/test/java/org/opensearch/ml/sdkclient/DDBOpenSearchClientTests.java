@@ -126,7 +126,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new DDBOpenSearchClient(dynamoDbClient, remoteClusterIndicesClient);
+        sdkClient = SdkClientFactory.wrapSdkClientDelegate(new DDBOpenSearchClient(dynamoDbClient, remoteClusterIndicesClient));
         testDataObject = new TestDataObject("foo");
     }
 
@@ -176,10 +176,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .dataObject(complexDataObject)
             .build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
-        PutDataObjectResponse response = sdkClient
-            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-            .toCompletableFuture()
-            .join();
+        sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
         Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
         Assert.assertEquals("testString", putItemRequest.item().get("testString").s());
@@ -290,7 +287,6 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .toCompletableFuture()
             .join();
         Mockito.verify(dynamoDbClient).getItem(getItemRequestArgumentCaptor.capture());
-        GetItemRequest getItemRequest = getItemRequestArgumentCaptor.getValue();
 
         GetResponse getResponse = GetResponse.fromXContent(response.parser());
         XContentParser parser = JsonXContent.jsonXContent

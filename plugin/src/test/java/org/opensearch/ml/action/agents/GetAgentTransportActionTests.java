@@ -55,7 +55,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
 import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
-import org.opensearch.ml.sdkclient.LocalClusterIndicesClient;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
@@ -114,7 +114,8 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        sdkClient = new LocalClusterIndicesClient(client, xContentRegistry);
+        Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
         getAgentTransportAction = spy(
             new GetAgentTransportAction(
                 transportService,
@@ -126,7 +127,6 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
                 mlFeatureEnabledSetting
             )
         );
-        Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
