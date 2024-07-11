@@ -286,6 +286,7 @@ import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientSettings;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
@@ -935,7 +936,11 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
-                MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED
+                MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                // Settings for SdkClient
+                SdkClientSettings.REMOTE_METADATA_TYPE,
+                SdkClientSettings.REMOTE_METADATA_ENDPOINT,
+                SdkClientSettings.REMOTE_METADATA_REGION
             );
         return settings;
     }

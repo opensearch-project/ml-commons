@@ -9,17 +9,12 @@
 package org.opensearch.ml.sdkclient;
 
 import static org.mockito.Mockito.mock;
-import static org.opensearch.ml.sdkclient.SdkClientFactory.AWS_DYNAMO_DB;
-import static org.opensearch.ml.sdkclient.SdkClientFactory.AWS_OPENSEARCH_SERVICE;
-import static org.opensearch.ml.sdkclient.SdkClientFactory.REGION;
-import static org.opensearch.ml.sdkclient.SdkClientFactory.REMOTE_METADATA_ENDPOINT;
-import static org.opensearch.ml.sdkclient.SdkClientFactory.REMOTE_METADATA_TYPE;
-import static org.opensearch.ml.sdkclient.SdkClientFactory.REMOTE_OPENSEARCH;
 
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientSettings;
 import org.opensearch.test.OpenSearchTestCase;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -36,9 +31,9 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
     public void testRemoteOpenSearchBinding() {
         Settings settings = Settings
             .builder()
-            .put(REMOTE_METADATA_TYPE, REMOTE_OPENSEARCH)
-            .put(REMOTE_METADATA_ENDPOINT, "http://example.org")
-            .put(REGION, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.REMOTE_OPENSEARCH)
+            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "http://example.org")
+            .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof RemoteClusterIndicesClient);
@@ -47,9 +42,9 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
     public void testAwsOpenSearchServiceBinding() {
         Settings settings = Settings
             .builder()
-            .put(REMOTE_METADATA_TYPE, AWS_OPENSEARCH_SERVICE)
-            .put(REMOTE_METADATA_ENDPOINT, "example.org")
-            .put(REGION, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_OPENSEARCH_SERVICE)
+            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "example.org")
+            .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof RemoteClusterIndicesClient);
@@ -58,9 +53,9 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
     public void testDDBBinding() {
         Settings settings = Settings
             .builder()
-            .put(REMOTE_METADATA_TYPE, AWS_DYNAMO_DB)
-            .put(REMOTE_METADATA_ENDPOINT, "http://example.org")
-            .put(REGION, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_DYNAMO_DB)
+            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "http://example.org")
+            .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof DDBOpenSearchClient);

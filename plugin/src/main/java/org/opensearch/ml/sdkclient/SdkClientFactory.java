@@ -19,12 +19,11 @@ import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.aws.AwsSdk2Transport;
 import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
 import org.opensearch.client.transport.rest_client.RestClientTransport;
-import org.opensearch.common.settings.Setting;
-import org.opensearch.common.settings.Setting.Property;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientDelegate;
+import org.opensearch.sdk.SdkClientSettings;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,18 +45,6 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 @Log4j2
 public class SdkClientFactory {
 
-    // TODO Move these settings keys to plugin getSettings implementation with proper prefixes
-    public static final String REMOTE_METADATA_TYPE = "REMOTE_METADATA_TYPE";
-    public static final String REMOTE_METADATA_ENDPOINT = "REMOTE_METADATA_ENDPOINT";
-    public static final String REGION = "REGION";
-    public static final String REMOTE_OPENSEARCH = "RemoteOpenSearch";
-    public static final String AWS_DYNAMO_DB = "AWSDynamoDB";
-    public static final String AWS_OPENSEARCH_SERVICE = "AWSOpenSearchService";
-
-    private static final Setting<String> REMOTE_METADATA_TYPE_SETTING = Setting.simpleString(REMOTE_METADATA_TYPE, Property.Final);
-    private static final Setting<String> REMOTE_METADATA_ENDPOINT_SETTING = Setting.simpleString(REMOTE_METADATA_ENDPOINT, Property.Final);
-    private static final Setting<String> REGION_SETTING = Setting.simpleString(REGION, Property.Final);
-
     /**
      * Create a new SdkClient with implementation determined by the value of the Remote Metadata Type setting
      * @param client The OpenSearch node client used as the default implementation
@@ -66,18 +53,18 @@ public class SdkClientFactory {
      * @return An instance of SdkClient which delegates to an implementation based on Remote Metadata Type
      */
     public static SdkClient createSdkClient(Client client, NamedXContentRegistry xContentRegistry, Settings settings) {
-        String remoteMetadataType = REMOTE_METADATA_TYPE_SETTING.get(settings);
-        String remoteMetadataEndpoint = REMOTE_METADATA_ENDPOINT_SETTING.get(settings);
-        String region = REGION_SETTING.get(settings);
+        String remoteMetadataType = SdkClientSettings.REMOTE_METADATA_TYPE.get(settings);
+        String remoteMetadataEndpoint = SdkClientSettings.REMOTE_METADATA_ENDPOINT.get(settings);
+        String region = SdkClientSettings.REMOTE_METADATA_REGION.get(settings);
 
         switch (remoteMetadataType) {
-            case REMOTE_OPENSEARCH:
+            case SdkClientSettings.REMOTE_OPENSEARCH:
                 log.info("Using remote opensearch cluster as metadata store");
                 return new SdkClient(new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint)));
-            case AWS_OPENSEARCH_SERVICE:
+            case SdkClientSettings.AWS_OPENSEARCH_SERVICE:
                 log.info("Using remote AWS Opensearch Service cluster as metadata store");
                 return new SdkClient(new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region)));
-            case AWS_DYNAMO_DB:
+            case SdkClientSettings.AWS_DYNAMO_DB:
                 log.info("Using dynamo DB as metadata store");
                 return new SdkClient(
                     new DDBOpenSearchClient(
