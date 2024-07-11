@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.opensearch.common.settings.Setting;
+import org.opensearch.core.common.unit.ByteSizeUnit;
+import org.opensearch.core.common.unit.ByteSizeValue;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
@@ -77,12 +79,10 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_JVM_HEAP_MEM_THRESHOLD = Setting
         .intSetting("plugins.ml_commons.jvm_heap_memory_threshold", 85, 0, 100, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Integer> ML_COMMONS_DISK_FREE_SPACE_THRESHOLD = Setting
-        .intSetting(
+    public static final Setting<ByteSizeValue> ML_COMMONS_DISK_FREE_SPACE_THRESHOLD = Setting
+        .byteSizeSetting(
             "plugins.ml_commons.disk_free_space_threshold",
-            5,
-            0,
-            Integer.MAX_VALUE,
+            new ByteSizeValue(5L, ByteSizeUnit.GB),
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

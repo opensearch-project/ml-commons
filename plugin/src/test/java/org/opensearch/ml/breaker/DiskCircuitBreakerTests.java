@@ -1,8 +1,6 @@
 /*
- *
- *  * Copyright OpenSearch Contributors
- *  * SPDX-License-Identifier: Apache-2.0
- *
+ *  Copyright OpenSearch Contributors
+ *  SPDX-License-Identifier: Apache-2.0
  */
 
 package org.opensearch.ml.breaker;
@@ -22,6 +20,8 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.unit.ByteSizeUnit;
+import org.opensearch.core.common.unit.ByteSizeValue;
 
 public class DiskCircuitBreakerTests {
     @Mock
@@ -40,7 +40,7 @@ public class DiskCircuitBreakerTests {
     @Test
     public void test_isOpen_whenDiskFreeSpaceIsHigherThanMinValue_breakerIsNotOpen() {
         CircuitBreaker breaker = new DiskCircuitBreaker(
-            Settings.builder().put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), 5).build(),
+            Settings.builder().put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), new ByteSizeValue(4L, ByteSizeUnit.GB)).build(),
             clusterService,
             file
         );
@@ -51,7 +51,7 @@ public class DiskCircuitBreakerTests {
     @Test
     public void test_isOpen_whenDiskFreeSpaceIsLessThanMinValue_breakerIsOpen() {
         CircuitBreaker breaker = new DiskCircuitBreaker(
-            Settings.builder().put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), 5).build(),
+            Settings.builder().put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), new ByteSizeValue(5L, ByteSizeUnit.GB)).build(),
             clusterService,
             file
         );
@@ -62,7 +62,7 @@ public class DiskCircuitBreakerTests {
     @Test
     public void test_isOpen_whenDiskFreeSpaceConfiguredToZero_breakerIsNotOpen() {
         CircuitBreaker breaker = new DiskCircuitBreaker(
-            Settings.builder().put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), 5).build(),
+            Settings.builder().put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), new ByteSizeValue(0L, ByteSizeUnit.KB)).build(),
             clusterService,
             file
         );

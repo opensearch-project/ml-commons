@@ -14,7 +14,7 @@ import lombok.Data;
 @Data
 public abstract class ThresholdCircuitBreaker<T> implements CircuitBreaker {
 
-    private T threshold;
+    private volatile T threshold;
 
     public ThresholdCircuitBreaker(T threshold) {
         this.threshold = threshold;

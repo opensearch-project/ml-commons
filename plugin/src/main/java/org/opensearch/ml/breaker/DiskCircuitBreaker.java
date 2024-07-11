@@ -15,15 +15,16 @@ import java.util.Optional;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.unit.ByteSizeUnit;
+import org.opensearch.core.common.unit.ByteSizeValue;
 import org.opensearch.ml.common.exception.MLException;
 
 /**
  * A circuit breaker for disk usage.
  */
-public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Integer> {
+public class DiskCircuitBreaker extends ThresholdCircuitBreaker<ByteSizeValue> {
     private static final String ML_DISK_CB = "Disk Circuit Breaker";
-    public static final int DEFAULT_DISK_SHORTAGE_THRESHOLD = 5;
-    private static final long GB = 1024 * 1024 * 1024;
+    public static final ByteSizeValue DEFAULT_DISK_SHORTAGE_THRESHOLD = new ByteSizeValue(5, ByteSizeUnit.GB);
     private final File diskDir;
 
     public DiskCircuitBreaker(Settings settings, ClusterService clusterService, File diskDir) {
@@ -42,7 +43,7 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Integer> {
     public boolean isOpen() {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
-                return diskDir.getFreeSpace() / GB < getThreshold();  // in GB
+                return new ByteSizeValue(diskDir.getFreeSpace(), ByteSizeUnit.BYTES).compareTo(getThreshold()) < 0;  // in GB
             });
         } catch (PrivilegedActionException e) {
             throw new MLException("Failed to run disk circuit breaker");
