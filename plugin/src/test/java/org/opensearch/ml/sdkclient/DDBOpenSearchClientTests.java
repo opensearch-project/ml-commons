@@ -391,7 +391,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         assertEquals(TEST_INDEX, updateItemRequest.tableName());
         assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
         assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
-        assertEquals("foo", updateItemRequest.key().get("data").s());
+        assertEquals("foo", updateItemRequest.attributeUpdates().get("data").value().s());
 
     }
 
@@ -415,8 +415,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         assertEquals(TEST_INDEX, updateItemRequest.tableName());
         assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
         assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
-        assertEquals("bar", updateItemRequest.key().get("foo").s());
-
+        assertEquals("bar", updateItemRequest.attributeUpdates().get("foo").value().s());
     }
 
     @Test

@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
@@ -23,23 +20,18 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListenerResponseHandler;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -154,7 +146,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             if (workerNodes == null || workerNodes.length == 0) {
                 if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                        mlModelManager.getModel(modelId, ActionListener.runBefore(ActionListener.wrap(model -> {
+                        mlModelManager.getModel(modelId, request.getTenantId(), ActionListener.runBefore(ActionListener.wrap(model -> {
                             Boolean isHidden = model.getIsHidden();
                             if (!checkModelAutoDeployEnabled(model)) {
                                 final String errorMsg = getErrorMessage(
@@ -245,7 +237,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             case SEARCH_QUERY:
                 ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
                     MLInput newInput = mlInput.toBuilder().inputDataset(dataSet).build();
-                    predict(modelId, mlTask, newInput, listener);
+                    predict(modelId, request.getTenantId(), mlTask, newInput, listener);
                 }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
                     handleAsyncMLTaskFailure(mlTask, e);
@@ -258,7 +250,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             case TEXT_DOCS:
             default:
                 String threadPoolName = getPredictThreadPool(functionName);
-                threadPool.executor(threadPoolName).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
+                threadPool.executor(threadPoolName).execute(() -> { predict(modelId, request.getTenantId(), mlTask, mlInput, listener); });
                 break;
         }
     }
@@ -274,7 +266,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return functionName == FunctionName.REMOTE ? REMOTE_PREDICT_THREAD_POOL : PREDICT_THREAD_POOL;
     }
 
-    private void predict(String modelId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
+    private void predict(String modelId, String tenantId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
         mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
@@ -305,8 +297,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 .state(MLTaskState.RUNNING)
                 .workerNodes(Arrays.asList(clusterService.localNode().getId()))
                 .build();
-            mlModelManager.deployModel(modelId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
-                runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+            mlModelManager.deployModel(modelId, tenantId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
+                runPredict(modelId, tenantId, mlTask, mlInput, functionName, internalListener);
             }, e -> {
                 log.error("Failed to auto deploy model " + modelId, e);
                 internalListener.onFailure(e);
@@ -314,11 +306,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             return;
         }
 
-        runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+        runPredict(modelId, tenantId, mlTask, mlInput, functionName, internalListener);
     }
 
     private void runPredict(
         String modelId,
+        String tenantId,
         MLTask mlTask,
         MLInput mlInput,
         FunctionName algorithm,
@@ -367,21 +360,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
             // search model by model id.
             try (ThreadContext.StoredContext context = threadPool.getThreadContext().stashContext()) {
-                ActionListener<GetResponse> getModelListener = ActionListener.wrap(r -> {
-                    if (r == null || !r.isExists()) {
+                ActionListener<MLModel> getModelListener = ActionListener.wrap(mlModel -> {
+                    if (mlModel == null) {
                         internalListener.onFailure(new ResourceNotFoundException("No model found, please check the modelId."));
                         return;
                     }
-                    try (
-                        XContentParser xContentParser = XContentType.JSON
-                            .xContent()
-                            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString())
-                    ) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, xContentParser.nextToken(), xContentParser);
-                        GetResponse getResponse = r;
-                        String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
-                        MLModel mlModel = MLModel.parse(xContentParser, algorithmName);
-                        mlModel.setModelId(modelId);
+                    try {
                         User resourceUser = mlModel.getUser();
                         User requestUser = getUserContext(client);
                         if (!checkUserPermissions(requestUser, resourceUser, modelId)) {
@@ -416,10 +400,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
                     handlePredictFailure(mlTask, internalListener, e, true, modelId);
                 });
-                GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
-                client
-                    .get(
-                        getRequest,
+                mlModelManager
+                    .getModel(
+                        mlTask.getModelId(),
+                        tenantId,
                         threadedActionListener(
                             mlTask.getFunctionName(),
                             ActionListener.runBefore(getModelListener, () -> context.restore())

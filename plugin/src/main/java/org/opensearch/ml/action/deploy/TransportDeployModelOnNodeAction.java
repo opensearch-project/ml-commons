@@ -224,6 +224,7 @@ public class TransportDeployModelOnNodeAction extends
             mlModelManager
                 .deployModel(
                     modelId,
+                    null,
                     modelContentHash,
                     functionName,
                     deployToAllNodes,

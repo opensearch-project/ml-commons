@@ -112,6 +112,7 @@ public class ConnectorAccessControlHelper {
             GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
                 .builder()
                 .index(ML_CONNECTOR_INDEX)
+                .tenantId(tenantId)
                 .id(connectorId)
                 .fetchSourceContext(fetchSourceContext)
                 .build();

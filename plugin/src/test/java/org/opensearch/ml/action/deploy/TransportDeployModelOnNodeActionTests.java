@@ -207,7 +207,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             ActionListener<String> listener = invocation.getArgument(5);
             listener.onResponse("successful");
             return null;
-        }).when(mlModelManager).deployModel(any(), any(), any(), any(Boolean.class), any(), any(), any());
+        }).when(mlModelManager).deployModel(any(), any(), any(), any(), any(Boolean.class), any(), any(), any());
         MLForwardResponse forwardResponse = Mockito.mock(MLForwardResponse.class);
         doAnswer(invocation -> {
             ActionListenerResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
@@ -313,7 +313,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             ActionListener<String> listener = invocation.getArgument(4);
             listener.onResponse("ok");
             return null;
-        }).when(mlModelManager).deployModel(any(), any(), any(), any(Boolean.class), any(), any(), any());
+        }).when(mlModelManager).deployModel(any(), any(), any(), any(), any(Boolean.class), any(), any(), any());
         doAnswer(invocation -> {
             TransportResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
             handler.handleException(new TransportException("error"));
@@ -331,7 +331,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             ActionListener<String> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Something went wrong"));
             return null;
-        }).when(mlModelManager).deployModel(any(), any(), any(), any(Boolean.class), any(), any(), any());
+        }).when(mlModelManager).deployModel(any(), any(), any(), any(), any(Boolean.class), any(), any(), any());
         final MLDeployModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final MLDeployModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final MLDeployModelNodeResponse response = action.nodeOperation(request);
@@ -342,7 +342,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
     public void testNodeOperation_DeployModelRuntimeException() {
         doThrow(new RuntimeException("error"))
             .when(mlModelManager)
-            .deployModel(any(), any(), any(), any(Boolean.class), any(), any(), any());
+            .deployModel(any(), any(), any(), any(), any(Boolean.class), any(), any(), any());
         final MLDeployModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final MLDeployModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final MLDeployModelNodeResponse response = action.nodeOperation(request);
@@ -355,7 +355,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             ActionListener<String> listener = invocation.getArgument(4);
             listener.onFailure(new MLLimitExceededException("Limit exceeded exception"));
             return null;
-        }).when(mlModelManager).deployModel(any(), any(), any(), any(Boolean.class), any(), any(), any());
+        }).when(mlModelManager).deployModel(any(), any(), any(), any(), any(Boolean.class), any(), any(), any());
         final MLDeployModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final MLDeployModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final MLDeployModelNodeResponse response = action.nodeOperation(request);

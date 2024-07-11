@@ -103,6 +103,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
             .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
         User user = RestActionUtils.getUserContext(client);

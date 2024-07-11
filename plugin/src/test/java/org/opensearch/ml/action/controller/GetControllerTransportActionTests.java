@@ -107,10 +107,10 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         mlControllerGetRequest = MLControllerGetRequest.builder().modelId("testModelId").build();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -170,10 +170,10 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testGetControllerWithGetModelNotFound() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(null);
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -187,10 +187,10 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testGetControllerWithGetModelOtherException() {
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), any(), isA(ActionListener.class));
 
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

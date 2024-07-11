@@ -138,7 +138,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            mlModelManager.getModel(sdkClient, modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, tenantId, null, excludes, ActionListener.wrap(mlModel -> {
                 if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
                     if (!isModelDeploying(mlModel.getModelState())) {
                         FunctionName functionName = mlModel.getAlgorithm();
