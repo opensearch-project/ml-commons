@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.breaker;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_MIN_VALUE;
+
 import java.io.File;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -14,8 +16,6 @@ import java.util.Optional;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.exception.MLException;
-
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_MIN_VALUE;
 
 /**
  * A circuit breaker for disk usage.

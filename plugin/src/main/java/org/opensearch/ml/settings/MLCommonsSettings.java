@@ -78,7 +78,14 @@ public final class MLCommonsSettings {
         .intSetting("plugins.ml_commons.jvm_heap_memory_threshold", 85, 0, 100, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Integer> ML_COMMONS_DISK_FREE_SPACE_MIN_VALUE = Setting
-        .intSetting("plugins.ml_commons.disk_free_space_min_value", 5, 0, Integer.MAX_VALUE, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .intSetting(
+            "plugins.ml_commons.disk_free_space_min_value",
+            5,
+            0,
+            Integer.MAX_VALUE,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     public static final Setting<String> ML_COMMONS_EXCLUDE_NODE_NAMES = Setting
         .simpleString("plugins.ml_commons.exclude_nodes._name", Setting.Property.NodeScope, Setting.Property.Dynamic);
