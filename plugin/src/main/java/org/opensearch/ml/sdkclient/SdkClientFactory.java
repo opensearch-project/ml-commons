@@ -28,6 +28,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientDelegate;
 import org.opensearch.sdk.SdkClientSettings;
+import org.opensearch.sdk.client.LocalClusterIndicesClient;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -6,7 +6,7 @@
  * this file be licensed under the Apache-2.0 license or a
  * compatible open source license.
  */
-package org.opensearch.ml.sdkclient;
+package org.opensearch.sdk.client;
 
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;

@@ -6,17 +6,19 @@
  * this file be licensed under the Apache-2.0 license or a
  * compatible open source license.
  */
-package org.opensearch.ml.sdkclient;
+package org.opensearch.sdk.client;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
-
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.Map;
@@ -78,13 +80,16 @@ import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.internal.InternalSearchResponse;
-import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
+public class LocalClusterIndicesClientTests {
 
+    // Copied constants from MachineLearningPlugin.java
+    private static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
+    private static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
+    
     private static final String TEST_ID = "123";
     private static final String TEST_INDEX = "test_index";
 
@@ -112,8 +117,7 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        Settings settings = Settings.builder().build();
-        sdkClient = SdkClientFactory.createSdkClient(mockedClient, xContentRegistry, settings);
+        sdkClient = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry));
         testDataObject = new TestDataObject("foo");
     }
 
