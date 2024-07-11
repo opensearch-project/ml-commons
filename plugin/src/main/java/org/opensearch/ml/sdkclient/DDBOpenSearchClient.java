@@ -64,6 +64,7 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest.Builder;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 
 /**
@@ -114,7 +115,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 Map<String, AttributeValue> item = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
-                final PutItemRequest putItemRequest = PutItemRequest.builder().tableName(tableName).item(item).build();
+                Builder builder = PutItemRequest.builder().tableName(tableName).item(item);
+                if (!request.overwriteIfExists()) {
+                    builder.conditionExpression("attribute_not_exists(" + HASH_KEY + ") AND attribute_not_exists(" + RANGE_KEY + ")");
+                }
+                final PutItemRequest putItemRequest = builder.build();
 
                 // TODO need to initialize/return SEQ_NO here
                 // If document doesn't exist, return 0

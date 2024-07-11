@@ -34,6 +34,7 @@ import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.ErrorCause;
 import org.opensearch.client.opensearch._types.ErrorResponse;
+import org.opensearch.client.opensearch._types.OpType;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch._types.ShardStatistics;
@@ -162,7 +163,13 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject_Updated() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .overwriteIfExists(false)
+            .dataObject(testDataObject)
+            .build();
 
         IndexResponse indexResponse = new IndexResponse.Builder()
             .id(TEST_ID)
@@ -183,6 +190,8 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .join();
 
         assertEquals(TEST_INDEX, indexRequestCaptor.getValue().index());
+        assertEquals(TEST_ID, indexRequestCaptor.getValue().id());
+        assertEquals(OpType.Create, indexRequestCaptor.getValue().opType());
         assertEquals(TEST_ID, response.id());
 
         org.opensearch.action.index.IndexResponse indexActionResponse = org.opensearch.action.index.IndexResponse

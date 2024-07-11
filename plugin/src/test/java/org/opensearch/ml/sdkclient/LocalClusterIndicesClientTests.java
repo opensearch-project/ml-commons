@@ -31,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest.OpType;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.DocWriteResponse.Result;
 import org.opensearch.action.delete.DeleteRequest;
@@ -122,7 +123,13 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testPutDataObject() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .overwriteIfExists(false)
+            .dataObject(testDataObject)
+            .build();
 
         IndexResponse indexResponse = new IndexResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID, 1, 0, 2, true);
         @SuppressWarnings("unchecked")
@@ -138,6 +145,9 @@ public class LocalClusterIndicesClientTests extends OpenSearchTestCase {
         ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(mockedClient, times(1)).index(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
+        assertEquals(TEST_ID, requestCaptor.getValue().id());
+        assertEquals(OpType.CREATE, requestCaptor.getValue().opType());
+
         assertEquals(TEST_ID, response.id());
 
         IndexResponse indexActionResponse = IndexResponse.fromXContent(response.parser());
