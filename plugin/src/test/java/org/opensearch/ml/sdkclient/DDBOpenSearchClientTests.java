@@ -136,6 +136,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
+            .overwriteIfExists(false)
             .tenantId(TENANT_ID)
             .dataObject(testDataObject)
             .build();
@@ -155,6 +156,11 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Assert.assertEquals(TEST_INDEX, putItemRequest.tableName());
         Assert.assertEquals(TEST_ID, putItemRequest.item().get(RANGE_KEY).s());
         Assert.assertEquals(TENANT_ID, putItemRequest.item().get(HASH_KEY).s());
+        Assert
+            .assertEquals(
+                "attribute_not_exists(" + HASH_KEY + ") AND attribute_not_exists(" + RANGE_KEY + ")",
+                putItemRequest.conditionExpression()
+            );
         Assert.assertEquals("foo", putItemRequest.item().get("data").s());
     }
 

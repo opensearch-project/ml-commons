@@ -21,6 +21,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest.OpType;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -80,13 +81,14 @@ public class LocalClusterIndicesClient implements SdkClient {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Indexing data object in {}", request.index());
-                IndexResponse indexResponse = client
-                    .index(
-                        new IndexRequest(request.index())
-                            .setRefreshPolicy(IMMEDIATE)
-                            .source(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS))
-                    )
-                    .actionGet();
+                IndexRequest indexRequest = new IndexRequest(request.index())
+                    .opType(request.overwriteIfExists() ? OpType.INDEX : OpType.CREATE)
+                    .setRefreshPolicy(IMMEDIATE)
+                    .source(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+                if (!Strings.isNullOrEmpty(request.id())) {
+                    indexRequest.id(request.id());
+                }
+                IndexResponse indexResponse = client.index(indexRequest).actionGet();
                 log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
                 return PutDataObjectResponse.builder().id(indexResponse.getId()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {

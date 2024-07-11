@@ -15,6 +15,7 @@ public class PutDataObjectRequest {
     private final String index;
     private final String id;
     private final String tenantId;
+    private final boolean overwriteIfExists;
     private final ToXContentObject dataObject;
 
     /**
@@ -24,10 +25,11 @@ public class PutDataObjectRequest {
      * @param index the index location to put the object
      * @param dataObject the data object
      */
-    public PutDataObjectRequest(String index, String id, String tenantId, ToXContentObject dataObject) {
+    public PutDataObjectRequest(String index, String id, String tenantId, boolean overwriteIfExists, ToXContentObject dataObject) {
         this.index = index;
         this.id = id;
         this.tenantId = tenantId;
+        this.overwriteIfExists = overwriteIfExists;
         this.dataObject = dataObject;
     }
 
@@ -54,6 +56,14 @@ public class PutDataObjectRequest {
     public String tenantId() {
         return this.tenantId;
     }
+    
+    /**
+     * Returns whether to overwrite an existing document (upsert)
+     * @return true if this request should overwrite
+     */
+    public boolean overwriteIfExists() {
+        return this.overwriteIfExists;
+    }
 
     /**
      * Returns the data object
@@ -78,6 +88,7 @@ public class PutDataObjectRequest {
         private String index = null;
         private String id = null;
         private String tenantId = null;
+        private boolean overwriteIfExists = true;
         private ToXContentObject dataObject = null;
 
         /**
@@ -116,6 +127,15 @@ public class PutDataObjectRequest {
         }
 
         /**
+         * Specify whether to overwrite an existing document/item (upsert). True by default. 
+         * @param overwriteIfExists whether to overwrite an existing document/item
+         * @return the updated builder
+         */
+        public Builder overwriteIfExists(boolean overwriteIfExists) {
+            this.overwriteIfExists = overwriteIfExists;
+            return this;
+        }
+        /**
          * Add a data object to this builder
          * @param dataObject the data object
          * @return the updated builder
@@ -130,7 +150,7 @@ public class PutDataObjectRequest {
          * @return A {@link PutDataObjectRequest}
          */
         public PutDataObjectRequest build() {
-            return new PutDataObjectRequest(this.index, this.id, this.tenantId, this.dataObject);
+            return new PutDataObjectRequest(this.index, this.id, this.tenantId, this.overwriteIfExists, this.dataObject);
         }
     }
 }

@@ -25,6 +25,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.json.JsonpMapper;
 import org.opensearch.client.json.JsonpSerializable;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.OpType;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
@@ -40,6 +41,7 @@ import org.opensearch.client.opensearch.core.UpdateResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -87,7 +89,14 @@ public class RemoteClusterIndicesClient implements SdkClient {
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try {
-                IndexRequest<?> indexRequest = new IndexRequest.Builder<>().index(request.index()).document(request.dataObject()).build();
+                IndexRequest.Builder<?> builder = new IndexRequest.Builder<>()
+                    .index(request.index())
+                    .opType(request.overwriteIfExists() ? OpType.Index : OpType.Create)
+                    .document(request.dataObject());
+                if (!Strings.isNullOrEmpty(request.id())) {
+                    builder.id(request.id());
+                }
+                IndexRequest<?> indexRequest = builder.build();
                 log.info("Indexing data object in {}", request.index());
                 IndexResponse indexResponse = openSearchClient.index(indexRequest);
                 log.info("Creation status for id {}: {}", indexResponse.id(), indexResponse.result());
