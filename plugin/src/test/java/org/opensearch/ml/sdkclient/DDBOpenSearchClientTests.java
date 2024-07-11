@@ -107,7 +107,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     private TestDataObject testDataObject;
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
-        LocalClusterIndicesClientTests.class.getName(),
+        DDBOpenSearchClientTests.class.getName(),
         new ScalingExecutorBuilder(
             GENERAL_THREAD_POOL,
             1,
