@@ -618,14 +618,21 @@ public class AgentUtilsTest {
         verifyConstructToolParams(question, actionInput, Collections.emptyMap(), false, verify);
     }
 
-    private void verifyConstructToolParams(String question, String actionInput, Map<String, String> params, boolean needHistory, Consumer<Map<String, String>> verify) {
+    private void verifyConstructToolParams(
+        String question,
+        String actionInput,
+        Map<String, String> params,
+        boolean needHistory,
+        Consumer<Map<String, String>> verify
+    ) {
         Map<String, Tool> tools = Map.of("tool1", tool1);
         when(tool1.needHistory()).thenReturn(needHistory);
         Map<String, MLToolSpec> toolSpecMap = Map
             .of("tool1", MLToolSpec.builder().type("tool1").parameters(Map.of("key1", "value1")).build());
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         String action = "tool1";
-        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput, params);
+        Map<String, String> toolParams = AgentUtils
+            .constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput, params);
         verify.accept(toolParams);
     }
 }
