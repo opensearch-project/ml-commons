@@ -6,6 +6,7 @@
 package org.opensearch.ml.breaker;
 
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_THRESHOLD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_JVM_HEAP_MEM_THRESHOLD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
 
@@ -103,7 +104,9 @@ public class MLCircuitBreakerServiceTests {
             .build();
         ClusterSettings clusterSettings = new ClusterSettings(
             settings,
-            new HashSet<>(Arrays.asList(ML_COMMONS_NATIVE_MEM_THRESHOLD, ML_COMMONS_JVM_HEAP_MEM_THRESHOLD))
+            new HashSet<>(
+                Arrays.asList(ML_COMMONS_NATIVE_MEM_THRESHOLD, ML_COMMONS_JVM_HEAP_MEM_THRESHOLD, ML_COMMONS_DISK_FREE_SPACE_THRESHOLD)
+            )
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         mlCircuitBreakerService = new MLCircuitBreakerService(jvmService, osService, settings, clusterService);
