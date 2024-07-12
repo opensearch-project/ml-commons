@@ -5,20 +5,19 @@
 
 package org.opensearch.ml.breaker;
 
+import lombok.Data;
+
 /**
  * An abstract class for all breakers with threshold.
  * @param <T> data type of threshold
  */
+@Data
 public abstract class ThresholdCircuitBreaker<T> implements CircuitBreaker {
 
-    private T threshold;
+    private volatile T threshold;
 
     public ThresholdCircuitBreaker(T threshold) {
         this.threshold = threshold;
-    }
-
-    public T getThreshold() {
-        return threshold;
     }
 
     @Override
