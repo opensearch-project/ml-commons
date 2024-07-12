@@ -290,7 +290,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             question,
                             lastActionInput,
                             action,
-                            actionInput
+                            actionInput,
+                            parameters
                         );
                         runTool(
                             tools,

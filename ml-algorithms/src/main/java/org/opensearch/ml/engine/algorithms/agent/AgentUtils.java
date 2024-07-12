@@ -461,7 +461,8 @@ public class AgentUtils {
         String question,
         AtomicReference<String> lastActionInput,
         String action,
-        String actionInput
+        String actionInput,
+        Map<String, String> parameters
     ) {
         Map<String, String> toolParams = new HashMap<>();
         Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
@@ -477,6 +478,9 @@ public class AgentUtils {
                 Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
                 toolParams.putAll(params);
             }
+        }
+        if (tools.get(action).needHistory()) {
+            toolParams.put(CHAT_HISTORY, parameters.getOrDefault(CHAT_HISTORY, ""));
         }
         return toolParams;
     }

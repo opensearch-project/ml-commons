@@ -98,6 +98,14 @@ public interface Tool {
     }
 
     /**
+     * Whether the tool needs the history of the conversation.
+     * @return if true, agent runner should pass history information as input parameter to this tool
+     */
+    default boolean needHistory() {
+        return false;
+    }
+
+    /**
      * Tool factory which can create instance of {@link Tool}.
      * @param <T> The subclass this factory produces
      */
