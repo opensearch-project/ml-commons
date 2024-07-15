@@ -35,7 +35,6 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.sdk.GetDataObjectRequest;
 import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
-import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -206,8 +205,8 @@ public class EncryptorImpl implements Encryptor {
         ThreadContext.StoredContext context
     ) {
         try {
-            GetResponse gr = response.parser() == null ? null : GetResponse.fromXContent(response.parser());
-            if (gr != null && gr.isExists()) {
+            GetResponse getMasterKeyResponse = response.parser() == null ? null : GetResponse.fromXContent(response.parser());
+            if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
                 this.tenantMasterKeys
                     .put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), (String) response.source().get(MASTER_KEY));
                 log.info("ML encryption master key already initialized, no action needed");
@@ -238,7 +237,6 @@ public class EncryptorImpl implements Encryptor {
                 (putDataObjectResponse, throwable1) -> handlePutDataObjectResponse(
                     tenantId,
                     context,
-                    putDataObjectResponse,
                     throwable1,
                     exceptionRef,
                     latch,
@@ -261,7 +259,6 @@ public class EncryptorImpl implements Encryptor {
     private void handlePutDataObjectResponse(
         String tenantId,
         ThreadContext.StoredContext context,
-        PutDataObjectResponse putDataObjectResponse,
         Throwable throwable,
         AtomicReference<Exception> exceptionRef,
         CountDownLatch latch,
