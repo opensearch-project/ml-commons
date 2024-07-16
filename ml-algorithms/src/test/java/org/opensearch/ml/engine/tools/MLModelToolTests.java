@@ -124,7 +124,7 @@ public class MLModelToolTests {
         tool.run(null, listener);
 
         future.join();
-        assertEquals(null, future.get());
+        assertEquals("{\"response\":\"response 1\",\"action\":\"action1\"}", future.get());
     }
 
     @Test

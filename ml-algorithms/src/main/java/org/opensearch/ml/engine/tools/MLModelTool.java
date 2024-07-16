@@ -69,7 +69,8 @@ public class MLModelTool implements Tool {
         outputParser = o -> {
             List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
             Map<String, ?> dataAsMap = mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap();
-            if (dataAsMap.size() == 1 && dataAsMap.containsKey(responseField)) {
+            // Return the response field if it exists, otherwise return the whole response a json string.
+            if (dataAsMap.containsKey(responseField)) {
                 return dataAsMap.get(responseField);
             } else {
                 return StringUtils.toJson(dataAsMap);
