@@ -1018,13 +1018,13 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     private MLRegisterModelInput mockRemoteModelInput(boolean isHidden) {
         return MLRegisterModelInput
-                .builder()
-                .modelName(modelName)
-                .version(version)
-                .modelGroupId("modelGroupId")
-                .modelFormat(modelFormat)
-                .functionName(FunctionName.REMOTE)
-                .deployModel(true)
-                .build();
+            .builder()
+            .modelName(modelName)
+            .version(version)
+            .modelGroupId("modelGroupId")
+            .modelFormat(modelFormat)
+            .functionName(FunctionName.REMOTE)
+            .deployModel(true)
+            .build();
     }
 }
