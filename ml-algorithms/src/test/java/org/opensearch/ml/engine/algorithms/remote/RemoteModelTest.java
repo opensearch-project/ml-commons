@@ -55,7 +55,7 @@ public class RemoteModelTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         remoteModel = new RemoteModel();
-        encryptor = spy(new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+        encryptor = spy(new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
     }
 
     @Test
@@ -104,7 +104,7 @@ public class RemoteModelTest {
         exceptionRule.expectMessage("Tag mismatch!");
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        doThrow(new IllegalArgumentException("Tag mismatch!")).when(encryptor).decrypt(any());
+        doThrow(new IllegalArgumentException("Tag mismatch!")).when(encryptor).decrypt(any(), any());
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
     }
 
@@ -148,7 +148,7 @@ public class RemoteModelTest {
             .name("test connector")
             .protocol(ConnectorProtocols.HTTP)
             .version("1")
-            .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key")))
+            .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key", null)))
             .actions(Arrays.asList(predictAction))
             .build();
         return connector;

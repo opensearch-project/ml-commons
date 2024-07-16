@@ -60,4 +60,5 @@ public class TextEmbeddingDenseModel extends TextEmbeddingModel {
         }
         return null;
     }
+
 }

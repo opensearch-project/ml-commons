@@ -18,11 +18,12 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 
 public class MLConfigGetRequestTest {
     String configId;
+    String tenantId = null;
 
     @Test
     public void constructor_configId() {
         configId = "test-abc";
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
         assertEquals(mlConfigGetRequest.getConfigId(),configId);
     }
 
@@ -30,7 +31,7 @@ public class MLConfigGetRequestTest {
     public void writeTo() throws IOException {
         configId = "test-hij";
 
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
         BytesStreamOutput output = new BytesStreamOutput();
         mlConfigGetRequest.writeTo(output);
 
@@ -43,7 +44,7 @@ public class MLConfigGetRequestTest {
     @Test
     public void validate_Success() {
         configId = "not-null";
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
 
         assertEquals(null, mlConfigGetRequest.validate());
     }
@@ -51,7 +52,7 @@ public class MLConfigGetRequestTest {
     @Test
     public void validate_Failure() {
         configId = null;
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
         assertEquals(null,mlConfigGetRequest.configId);
 
         ActionRequestValidationException exception = addValidationError("ML config id can't be null", null);
@@ -60,14 +61,14 @@ public class MLConfigGetRequestTest {
     @Test
     public void fromActionRequest_Success()  throws IOException {
         configId = "test-lmn";
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
         assertEquals(mlConfigGetRequest.fromActionRequest(mlConfigGetRequest), mlConfigGetRequest);
     }
 
     @Test
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
         configId = "test-opq";
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
 
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -86,7 +87,7 @@ public class MLConfigGetRequestTest {
     @Test(expected = UncheckedIOException.class)
     public void fromActionRequest_IOException() {
         configId = "test-rst";
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId, tenantId);
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

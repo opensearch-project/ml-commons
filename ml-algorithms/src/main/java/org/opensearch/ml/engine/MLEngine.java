@@ -197,8 +197,8 @@ public class MLEngine {
         }
     }
 
-    public String encrypt(String credential) {
-        return encryptor.encrypt(credential);
+    public String encrypt(String credential, String tenantId) {
+        return encryptor.encrypt(credential, tenantId);
     }
 
 }

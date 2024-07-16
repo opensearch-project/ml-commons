@@ -25,21 +25,28 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLConfigGetRequest extends ActionRequest {
 
     String configId;
+    String tenantId;
 
     @Builder
-    public MLConfigGetRequest(String configId) {
+    public MLConfigGetRequest(String configId, String tenantId) {
         this.configId = configId;
+        this.tenantId = tenantId;
     }
 
     public MLConfigGetRequest(StreamInput in) throws IOException {
         super(in);
         this.configId = in.readString();
+        // check BWC later
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.configId);
+        // check BWC later
+        out.writeOptionalString(this.tenantId);
+
     }
 
     @Override

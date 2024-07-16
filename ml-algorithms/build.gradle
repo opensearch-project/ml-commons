@@ -91,7 +91,7 @@ jacocoTestReport {
 
 List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
-        'org.opensearch.ml.engine.algorithms.agent.MLConversationalFlowAgentRunner'
+        'org.opensearch.ml.engine.algorithms.agent.MLConversationalFlowAgentRunner',
 ]
 
 jacocoTestCoverageVerification {
