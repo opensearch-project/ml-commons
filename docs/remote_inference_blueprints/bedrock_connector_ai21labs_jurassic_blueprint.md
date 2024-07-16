@@ -33,7 +33,7 @@ POST /_plugins/_ml/connectors/_create
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
         "service_name": "bedrock",
-        "model_name": "ai21.j2-mid-v1"
+        "model": "ai21.j2-mid-v1"
     },
     "actions": [
         {
