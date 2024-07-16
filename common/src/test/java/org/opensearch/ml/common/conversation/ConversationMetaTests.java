@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class ConversationMetaTests {
@@ -87,6 +88,21 @@ public class ConversationMetaTests {
         assertEquals(meta.getName(), conversationMeta.getName());
         assertEquals(meta.getUser(), conversationMeta.getUser());
         assertEquals(meta.getApplicationType(), conversationMeta.getApplicationType());
+    }
+
+    @Test
+    public void test_fromStream_empty_applicationType() throws IOException {
+        ConversationMeta conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin", null);
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+
+        conversationMeta.writeTo(bytesStreamOutput);
+
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        ConversationMeta meta = ConversationMeta.fromStream(streamInput);
+        assertEquals(meta.getId(), conversationMeta.getId());
+        assertEquals(meta.getName(), conversationMeta.getName());
+        assertEquals(meta.getUser(), conversationMeta.getUser());
+        assertNull(meta.getApplicationType());
     }
 
     @Test

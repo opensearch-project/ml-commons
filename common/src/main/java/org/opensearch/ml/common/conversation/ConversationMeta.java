@@ -22,11 +22,13 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.search.SearchHit;
 
 import lombok.AllArgsConstructor;
@@ -37,6 +39,7 @@ import lombok.Getter;
  */
 @AllArgsConstructor
 public class ConversationMeta implements Writeable, ToXContentObject {
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_APPLICATION_TYPE = CommonValue.VERSION_2_16_0;
 
     @Getter
     private String id;
@@ -89,7 +92,11 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = in.readInstant();
         String name = in.readString();
         String user = in.readOptionalString();
-        String applicationType = in.readOptionalString();
+        Version streamInputVersion = in.getVersion();
+        String applicationType =  null;
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_APPLICATION_TYPE)) {
+            applicationType = in.readOptionalString();
+        }
         return new ConversationMeta(id, created, updated, name, user, applicationType);
     }
 
@@ -100,7 +107,10 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         out.writeInstant(updatedTime);
         out.writeString(name);
         out.writeOptionalString(user);
-        out.writeOptionalString(applicationType);
+        Version streamInputVersion = out.getVersion();
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_APPLICATION_TYPE)) {
+            out.writeOptionalString(applicationType);
+        }
     }
 
     @Override
