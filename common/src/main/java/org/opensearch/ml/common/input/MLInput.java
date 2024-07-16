@@ -197,7 +197,7 @@ public class MLInput implements Input {
                     RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) this.inputDataset;
                     Map<String, String> parameters = remoteInferenceInputDataSet.getParameters();
                     builder.field(PARAMETERS_FIELD, parameters);
-                    builder.field(PREDICT_MODE_FIELD, remoteInferenceInputDataSet.getPredictMode());
+                    builder.field(PREDICT_MODE_FIELD, remoteInferenceInputDataSet.getActionType());
                     break;
                 default:
                     break;

@@ -9,7 +9,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.PredictMode;
+import org.opensearch.ml.common.ActionType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -37,7 +37,7 @@ public class RemoteInferenceMLInput extends MLInput {
         super();
         this.algorithm = functionName;
         Map<String, String> parameters = null;
-        PredictMode predictMode = null;
+        ActionType actionType = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -48,14 +48,15 @@ public class RemoteInferenceMLInput extends MLInput {
                     parameters = StringUtils.getParameterMap(parser.map());
                     break;
                 case PREDICT_MODE_FIELD:
-                    predictMode = PredictMode.from(parser.text());
+                    actionType = ActionType.from(parser.text());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        predictMode = predictMode == null? PredictMode.PREDICT:predictMode;
-        inputDataset = new RemoteInferenceInputDataSet(parameters, predictMode);
+        actionType = actionType == null? ActionType.PREDICT:actionType;
+        inputDataset = new RemoteInferenceInputDataSet(parameters, actionType);
     }
 
 }

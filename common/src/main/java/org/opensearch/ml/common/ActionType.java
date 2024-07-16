@@ -2,15 +2,13 @@ package org.opensearch.ml.common;
 
 import java.util.Locale;
 
-public enum PredictMode {
+public enum ActionType {
     PREDICT,
     BATCH;
-    // ASYNC,
-    // STREAMING;
 
-    public static PredictMode from(String value) {
+    public static ActionType from(String value) {
         try {
-            return PredictMode.valueOf(value.toUpperCase(Locale.ROOT));
+            return ActionType.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (Exception e) {
             throw new IllegalArgumentException("Wrong Predict mode");
         }
