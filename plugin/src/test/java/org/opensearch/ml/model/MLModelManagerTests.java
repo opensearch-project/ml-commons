@@ -80,6 +80,8 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.breaker.CircuitBreaker;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
@@ -98,6 +100,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
@@ -318,7 +321,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
         when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
-        expectedEx.expect(MLException.class);
+        expectedEx.expect(CircuitBreakingException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
@@ -407,6 +410,55 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 eq((long) TIMEOUT_IN_MILLIS),
                 eq(false)
             );
+    }
+
+    public void testRegisterMLRemoteModel() throws PrivilegedActionException {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    public void testRegisterMLRemoteModel_SkipMemoryCBOpen() {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB())
+            .thenThrow(
+                new CircuitBreakingException(
+                    "Memory Circuit Breaker is open, please check your resources!",
+                    CircuitBreaker.Durability.TRANSIENT
+                )
+            );
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     @Ignore
@@ -962,5 +1014,17 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .modelFormat(modelFormat)
             .functionName(FunctionName.SPARSE_ENCODING)
             .build();
+    }
+
+    private MLRegisterModelInput mockRemoteModelInput(boolean isHidden) {
+        return MLRegisterModelInput
+                .builder()
+                .modelName(modelName)
+                .version(version)
+                .modelGroupId("modelGroupId")
+                .modelFormat(modelFormat)
+                .functionName(FunctionName.REMOTE)
+                .deployModel(true)
+                .build();
     }
 }

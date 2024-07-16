@@ -53,6 +53,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -781,7 +782,9 @@ public class MLModelManager {
      * @param runningTaskLimit limit
      */
     public void checkAndAddRunningTask(MLTask mlTask, Integer runningTaskLimit) {
-        checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
+        if (Objects.nonNull(mlTask) && mlTask.getFunctionName() != FunctionName.REMOTE) {
+            checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
+        }
         mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
     }
 

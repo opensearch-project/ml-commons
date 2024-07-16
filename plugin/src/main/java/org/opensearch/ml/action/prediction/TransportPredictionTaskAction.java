@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -14,9 +15,12 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -108,7 +112,27 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             }
                         }, e -> {
                             log.error("Failed to Validate Access for ModelId " + modelId, e);
-                            wrappedListener.onFailure(e);
+                            if (e instanceof OpenSearchStatusException) {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            e.getMessage(),
+                                            RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
+                                        )
+                                    );
+                            } else if (e instanceof MLResourceNotFoundException) {
+                                wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                            } else if (e instanceof CircuitBreakingException) {
+                                wrappedListener.onFailure(e);
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Failed to Validate Access for ModelId " + modelId,
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            }
                         }));
                 }
 
