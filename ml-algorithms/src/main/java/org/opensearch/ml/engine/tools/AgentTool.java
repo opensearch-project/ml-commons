@@ -17,6 +17,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -32,7 +33,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(AgentTool.TYPE)
-public class AgentTool implements Tool {
+public class AgentTool extends AbstractTool {
     public static final String TYPE = "AgentTool";
     private final Client client;
 
@@ -55,9 +56,11 @@ public class AgentTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         Map<String, String> extractedParameters = extractInputParameters(parameters);
+        String tenantId = getTenantId();
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
+            .tenantId(tenantId)
             .functionName(FunctionName.AGENT)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
             .build();

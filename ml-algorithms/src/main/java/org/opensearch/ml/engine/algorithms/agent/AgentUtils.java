@@ -435,7 +435,6 @@ public class AgentUtils {
         Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
-
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());
         }

@@ -175,7 +175,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
         createTools(toolFactories, params, toolSpecs, tools, toolSpecMap);
 
-        runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, listener);
+        runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener);
     }
 
     private void runReAct(
@@ -185,6 +185,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> parameters,
         Memory memory,
         String sessionId,
+        String tenantId,
         ActionListener<Object> listener
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
@@ -371,7 +372,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .builder()
                                 .algorithm(FunctionName.REMOTE)
                                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                                .build()
+                                .build(),
+                            null,
+                            tenantId
                         );
                         client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
                     }
@@ -391,7 +394,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 .builder()
                 .algorithm(FunctionName.REMOTE)
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                .build()
+                .build(),
+            null,
+            tenantId
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
     }

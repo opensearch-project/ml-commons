@@ -80,6 +80,9 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
         MLAgentDeleteRequest mlAgentDeleteRequest = MLAgentDeleteRequest.fromActionRequest(request);
         String agentId = mlAgentDeleteRequest.getAgentId();
         String tenantId = mlAgentDeleteRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);

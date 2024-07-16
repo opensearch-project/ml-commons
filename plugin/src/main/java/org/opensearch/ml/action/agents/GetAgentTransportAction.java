@@ -80,6 +80,9 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
         MLAgentGetRequest mlAgentGetRequest = MLAgentGetRequest.fromActionRequest(request);
         String agentId = mlAgentGetRequest.getAgentId();
         String tenantId = mlAgentGetRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);

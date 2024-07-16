@@ -77,13 +77,18 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
+        if (toolSpecs != null && !toolSpecs.isEmpty()) {
+            for (MLToolSpec toolSpec : toolSpecs) {
+                toolSpec.setTenantId(mlAgent.getTenantId());
+            }
+        }
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        if (toolSpecs == null || toolSpecs.size() == 0) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
@@ -130,8 +135,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                         if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
                             listener.onResponse(flowAgentOutput);
                         } else {
-                            ActionListener updateListener = ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                                log.info("Updated additional info for interaction ID: " + updateResponse.getId() + " in the flow agent.");
+                            ActionListener<UpdateResponse> updateListener = ActionListener.<UpdateResponse>wrap(updateResponse -> {
+                                log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
                                 listener.onResponse(flowAgentOutput);
                             }, e -> {
                                 log.error("Failed to update root interaction", e);
@@ -175,7 +180,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> updateInteraction(additionalInfo, interactionId, memory),
-                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                        e -> log.error("Failed create memory from id: {}", memoryId, e)
                     )
             );
     }
@@ -199,7 +204,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> updateInteractionWithListener(additionalInfo, interactionId, memory, listener),
-                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                        e -> log.error("Failed create memory from id: {}", memoryId, e)
                     )
             );
     }
@@ -212,7 +217,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 interactionId,
                 ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
                 ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                    log.info("Updated additional info for interaction ID: " + interactionId);
+                    log.info("Updated additional info for interaction ID: {}", interactionId);
                 }, e -> { log.error("Failed to update root interaction", e); })
             );
     }
@@ -231,8 +236,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     String parseResponse(Object output) throws IOException {
-        if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
-            ModelTensors tensors = (ModelTensors) ((List) output).get(0);
+        if (output instanceof List && !((List<?>) output).isEmpty() && ((List<?>) output).get(0) instanceof ModelTensors) {
+            ModelTensors tensors = (ModelTensors) ((List<?>) output).get(0);
             return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
         } else if (output instanceof ModelTensor) {
             return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
@@ -260,6 +265,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         if (toolSpec.getName() != null) {
             tool.setName(toolSpec.getName());
         }
+        tool.setTenantId(toolSpec.getTenantId());
 
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());

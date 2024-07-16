@@ -23,6 +23,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -43,7 +44,7 @@ import lombok.extern.log4j.Log4j2;
 @Setter
 @Log4j2
 @ToolAnnotation(SearchIndexTool.TYPE)
-public class SearchIndexTool implements Tool {
+public class SearchIndexTool extends AbstractTool {
 
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";

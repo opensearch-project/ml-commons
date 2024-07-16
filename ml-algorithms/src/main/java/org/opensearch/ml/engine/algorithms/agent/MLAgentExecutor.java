@@ -5,29 +5,31 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
-import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
-import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.XContentHelper;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -48,6 +50,10 @@ import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
+import org.opensearch.sdk.GetDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
@@ -69,26 +75,32 @@ public class MLAgentExecutor implements Executable {
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
 
     private Client client;
+    private SdkClient sdkClient;
     private Settings settings;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
+    private volatile Boolean isMultiTenancyEnabled;
 
     public MLAgentExecutor(
         Client client,
+        SdkClient sdkClient,
         Settings settings,
         ClusterService clusterService,
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
-        Map<String, Memory.Factory> memoryFactoryMap
+        Map<String, Memory.Factory> memoryFactoryMap,
+        Boolean isMultiTenancyEnabled
     ) {
         this.client = client;
+        this.sdkClient = sdkClient;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
+        this.isMultiTenancyEnabled = isMultiTenancyEnabled;
     }
 
     @Override
@@ -98,6 +110,8 @@ public class MLAgentExecutor implements Executable {
         }
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
+        String tenantId = agentMLInput.getTenantId();
+
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         if (inputDataSet == null || inputDataSet.getParameters() == null) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
@@ -107,70 +121,137 @@ public class MLAgentExecutor implements Executable {
         List<ModelTensor> modelTensors = new ArrayList<>();
         outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
 
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_AGENT_INDEX)
+            .id(agentId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
+
         if (clusterService.state().metadata().hasIndex(ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                GetRequest getRequest = new GetRequest(ML_AGENT_INDEX).id(agentId);
-                client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
-                    if (r.isExists()) {
-                        try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            MLAgent mlAgent = MLAgent.parse(parser);
-                            MLMemorySpec memorySpec = mlAgent.getMemory();
-                            String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
-                            String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
-                            String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
-                            String appType = mlAgent.getAppType();
-                            String question = inputDataSet.getParameters().get(QUESTION);
-
-                            if (memoryId == null && regenerateInteractionId != null) {
-                                throw new IllegalArgumentException("A memory ID must be provided to regenerate.");
-                            }
-
-                            if (memorySpec != null
-                                && memorySpec.getType() != null
-                                && memoryFactoryMap.containsKey(memorySpec.getType())
-                                && (memoryId == null || parentInteractionId == null)) {
-                                ConversationIndexMemory.Factory conversationIndexMemoryFactory =
-                                    (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
-                                conversationIndexMemoryFactory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
-                                    inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
-                                    ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
-                                    // get question for regenerate
-                                    if (regenerateInteractionId != null) {
-                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                                        client
-                                            .execute(
-                                                GetInteractionAction.INSTANCE,
-                                                new GetInteractionRequest(regenerateInteractionId),
-                                                ActionListener.wrap(interactionRes -> {
-                                                    inputDataSet
-                                                        .getParameters()
-                                                        .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
-                                                    saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
-                                                }, e -> {
-                                                    log.error("Failed to get existing interaction for regeneration", e);
-                                                    listener.onFailure(e);
-                                                })
-                                            );
-                                    } else {
-                                        saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
-                                    }
-                                }, ex -> {
-                                    log.error("Failed to read conversation memory", ex);
-                                    listener.onFailure(ex);
-                                }));
+                sdkClient
+                    .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))
+                    .whenComplete((response, throwable) -> {
+                        context.restore();
+                        log.debug("Completed Get Agent Request, Agent id:{}", agentId);
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            if (cause instanceof IndexNotFoundException) {
+                                log.error("Failed to get Agent index", cause);
+                                listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                             } else {
-                                ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
-                                executeAgent(inputDataSet, mlAgent, agentActionListener);
+                                log.error("Failed to get ML Agent {}", agentId, cause);
+                                listener.onFailure(cause);
+                            }
+                        } else {
+                            try {
+                                GetResponse getAgentResponse = response.parser() == null
+                                    ? null
+                                    : GetResponse.fromXContent(response.parser());
+                                if (getAgentResponse != null && getAgentResponse.isExists()) {
+                                    try (
+                                        XContentParser parser = jsonXContent
+                                            .createParser(
+                                                xContentRegistry,
+                                                LoggingDeprecationHandler.INSTANCE,
+                                                getAgentResponse.getSourceAsString()
+                                            )
+                                    ) {
+                                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                        MLAgent mlAgent = MLAgent.parse(parser);
+                                        if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
+                                            listener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        "You don't have permission to access this resource",
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+                                        }
+                                        MLMemorySpec memorySpec = mlAgent.getMemory();
+                                        String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
+                                        String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
+                                        String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
+                                        String appType = mlAgent.getAppType();
+                                        String question = inputDataSet.getParameters().get(QUESTION);
+
+                                        if (memoryId == null && regenerateInteractionId != null) {
+                                            throw new IllegalArgumentException("A memory ID must be provided to regenerate.");
+                                        }
+                                        if (memorySpec != null
+                                            && memorySpec.getType() != null
+                                            && memoryFactoryMap.containsKey(memorySpec.getType())
+                                            && (memoryId == null || parentInteractionId == null)) {
+                                            ConversationIndexMemory.Factory conversationIndexMemoryFactory =
+                                                (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
+                                            conversationIndexMemoryFactory
+                                                .create(question, memoryId, appType, ActionListener.wrap(memory -> {
+                                                    inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
+                                                    ActionListener<Object> agentActionListener = createAgentActionListener(
+                                                        listener,
+                                                        outputs,
+                                                        modelTensors
+                                                    );
+                                                    // get question for regenerate
+                                                    if (regenerateInteractionId != null) {
+                                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
+                                                        client
+                                                            .execute(
+                                                                GetInteractionAction.INSTANCE,
+                                                                new GetInteractionRequest(regenerateInteractionId),
+                                                                ActionListener.wrap(interactionRes -> {
+                                                                    inputDataSet
+                                                                        .getParameters()
+                                                                        .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
+                                                                    saveRootInteractionAndExecute(
+                                                                        agentActionListener,
+                                                                        memory,
+                                                                        inputDataSet,
+                                                                        mlAgent
+                                                                    );
+                                                                }, e -> {
+                                                                    log.error("Failed to get existing interaction for regeneration", e);
+                                                                    listener.onFailure(e);
+                                                                })
+                                                            );
+                                                    } else {
+                                                        saveRootInteractionAndExecute(agentActionListener, memory, inputDataSet, mlAgent);
+                                                    }
+                                                }, ex -> {
+                                                    log.error("Failed to read conversation memory", ex);
+                                                    listener.onFailure(ex);
+                                                }));
+                                        } else {
+                                            ActionListener<Object> agentActionListener = createAgentActionListener(
+                                                listener,
+                                                outputs,
+                                                modelTensors
+                                            );
+                                            executeAgent(inputDataSet, mlAgent, agentActionListener);
+                                        }
+
+                                    } catch (Exception e) {
+                                        log.error("Failed to parse ml agent {}", agentId, e);
+                                        listener.onFailure(e);
+                                    }
+                                } else {
+                                    listener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to find agent with the provided agent id: " + agentId,
+                                                RestStatus.NOT_FOUND
+                                            )
+                                        );
+                                }
+                            } catch (Exception e) {
+                                log.error("Failed to get agent", e);
+                                listener.onFailure(e);
                             }
                         }
-                    } else {
-                        listener.onFailure(new ResourceNotFoundException("Agent not found"));
-                    }
-                }, e -> {
-                    log.error("Failed to get agent", e);
-                    listener.onFailure(e);
-                }), context::restore));
+                    });
             }
         } else {
             listener.onFailure(new ResourceNotFoundException("Agent index not found"));
@@ -203,7 +284,7 @@ public class MLAgentExecutor implements Executable {
             .sessionId(memory.getConversationId())
             .build();
         memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
-            log.info("Created parent interaction ID: " + interaction.getId());
+            log.info("Created parent interaction ID: {}", interaction.getId());
             inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
             // only delete previous interaction when new interaction created
             if (regenerateInteractionId != null) {
@@ -241,17 +322,13 @@ public class MLAgentExecutor implements Executable {
                 Gson gson = new Gson();
                 if (output instanceof ModelTensorOutput) {
                     ModelTensorOutput modelTensorOutput = (ModelTensorOutput) output;
-                    modelTensorOutput.getMlModelOutputs().forEach(outs -> {
-                        for (ModelTensor mlModelTensor : outs.getMlModelTensors()) {
-                            modelTensors.add(mlModelTensor);
-                        }
-                    });
+                    modelTensorOutput.getMlModelOutputs().forEach(outs -> { modelTensors.addAll(outs.getMlModelTensors()); });
                 } else if (output instanceof ModelTensor) {
                     modelTensors.add((ModelTensor) output);
                 } else if (output instanceof List) {
-                    if (((List) output).get(0) instanceof ModelTensor) {
+                    if (((List<?>) output).get(0) instanceof ModelTensor) {
                         modelTensors.addAll(((List<ModelTensor>) output));
-                    } else if (((List) output).get(0) instanceof ModelTensors) {
+                    } else if (((List<?>) output).get(0) instanceof ModelTensors) {
                         ((List<ModelTensors>) output).forEach(outs -> { modelTensors.addAll(outs.getMlModelTensors()); });
                     } else {
                         String result = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
@@ -295,8 +372,4 @@ public class MLAgentExecutor implements Executable {
         }
     }
 
-    public XContentParser createXContentParserFromRegistry(NamedXContentRegistry xContentRegistry, BytesReference bytesReference)
-        throws IOException {
-        return XContentHelper.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, bytesReference, XContentType.JSON);
-    }
 }

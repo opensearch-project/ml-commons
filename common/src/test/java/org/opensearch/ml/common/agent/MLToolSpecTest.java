@@ -20,9 +20,10 @@ import static org.junit.Assert.*;
 
 public class MLToolSpecTest {
 
+    MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
+
     @Test
     public void writeTo() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -36,7 +37,6 @@ public class MLToolSpecTest {
 
     @Test
     public void toXContent() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
@@ -61,7 +61,6 @@ public class MLToolSpecTest {
 
     @Test
     public void fromStream() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());

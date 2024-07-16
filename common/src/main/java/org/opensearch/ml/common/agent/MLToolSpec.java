@@ -8,6 +8,7 @@ package org.opensearch.ml.common.agent;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @EqualsAndHashCode
@@ -34,6 +36,8 @@ public class MLToolSpec implements ToXContentObject {
     private String description;
     private Map<String, String> parameters;
     private boolean includeOutputInAgentResponse;
+    @Setter
+    private String tenantId;
 
 
     @Builder(toBuilder = true)
@@ -41,7 +45,8 @@ public class MLToolSpec implements ToXContentObject {
                       String name,
                       String description,
                       Map<String, String> parameters,
-                      boolean includeOutputInAgentResponse) {
+                      boolean includeOutputInAgentResponse,
+                      String tenantId) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
         }
@@ -50,6 +55,7 @@ public class MLToolSpec implements ToXContentObject {
         this.description = description;
         this.parameters = parameters;
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
+        this.tenantId = tenantId;
     }
 
     public MLToolSpec(StreamInput input) throws IOException{
@@ -60,19 +66,23 @@ public class MLToolSpec implements ToXContentObject {
             parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         includeOutputInAgentResponse = input.readBoolean();
+        //TODO: add bwc later
+        tenantId = input.readOptionalString();
     }
 
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(type);
         out.writeOptionalString(name);
         out.writeOptionalString(description);
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeOptionalString);
         } else {
             out.writeBoolean(false);
         }
         out.writeBoolean(includeOutputInAgentResponse);
+        //TODO: add BWC later
+        out.writeOptionalString(tenantId);
     }
 
     @Override
@@ -87,10 +97,13 @@ public class MLToolSpec implements ToXContentObject {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             builder.field(PARAMETERS_FIELD, parameters);
         }
         builder.field(INCLUDE_OUTPUT_IN_AGENT_RESPONSE, includeOutputInAgentResponse);
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -101,6 +114,7 @@ public class MLToolSpec implements ToXContentObject {
         String description = null;
         Map<String, String> parameters = null;
         boolean includeOutputInAgentResponse = false;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -123,6 +137,9 @@ public class MLToolSpec implements ToXContentObject {
                 case INCLUDE_OUTPUT_IN_AGENT_RESPONSE:
                     includeOutputInAgentResponse = parser.booleanValue();
                     break;
+                case TENANT_ID:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -134,6 +151,7 @@ public class MLToolSpec implements ToXContentObject {
                 .description(description)
                 .parameters(parameters)
                 .includeOutputInAgentResponse(includeOutputInAgentResponse)
+                .tenantId(tenantId)
                 .build();
     }
 

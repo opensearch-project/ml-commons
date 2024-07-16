@@ -59,7 +59,8 @@ public class EncryptorImpl implements Encryptor {
     private MLIndicesHandler mlIndicesHandler;
 
     // concurrent map can't have null as a key. This is to support single tenancy
-    public static final String DEFAULT_TENANT_ID = "default_tenant_id";
+    // assigning some random string so that it can't be duplicate
+    public static final String DEFAULT_TENANT_ID = "03000200-0400-0500-0006-000700080009";
 
     public EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
         this.tenantMasterKeys = new ConcurrentHashMap<>();
@@ -303,7 +304,7 @@ public class EncryptorImpl implements Encryptor {
                 createGetDataObjectRequest(tenantId, new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY)),
                 client.threadPool().executor("opensearch_ml_general")
             )
-            .whenComplete((response1, throwable2) -> handleVersionConflictResponse(context, response1, throwable2, exceptionRef, latch));
+            .whenComplete((response, throwable) -> handleVersionConflictResponse(context, response, throwable, exceptionRef, latch));
     }
 
     private void handleVersionConflictResponse(
