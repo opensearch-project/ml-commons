@@ -21,6 +21,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
@@ -54,6 +55,7 @@ public class MLModelTool implements Tool {
     private Parser inputParser;
     @Setter
     @Getter
+    @VisibleForTesting
     private Parser outputParser;
     @Setter
     @Getter
@@ -66,7 +68,12 @@ public class MLModelTool implements Tool {
 
         outputParser = o -> {
             List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get(responseField);
+            Map<String, ?> dataAsMap = mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap();
+            if (dataAsMap.size() == 1 && dataAsMap.containsKey(responseField)) {
+                return dataAsMap.get(responseField);
+            } else {
+                return StringUtils.toJson(dataAsMap);
+            }
         };
     }
 

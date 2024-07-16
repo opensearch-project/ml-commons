@@ -171,6 +171,26 @@ public class MLModelToolTests {
     }
 
     @Test
+    public void testOutputParserWithJsonResponse() {
+        Parser outputParser = new MLModelTool(client, "modelId", "response").getOutputParser();
+        String expectedJson = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+
+        // Create a mock ModelTensors with json object
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("key1", "value1", "key2", "value2")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        Object result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        assertEquals(expectedJson, result);
+
+        // Create a mock ModelTensors with response string
+        modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"key1\":\"value1\",\"key2\":\"value2\"}")).build();
+        modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        assertEquals(expectedJson, result);
+    }
+
+    @Test
     public void testRunWithError() {
         // Mocking the client.execute to simulate an error
         doAnswer(invocation -> {
