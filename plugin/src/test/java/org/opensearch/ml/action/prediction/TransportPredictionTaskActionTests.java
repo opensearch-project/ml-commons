@@ -34,6 +34,8 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.breaker.CircuitBreaker;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
@@ -231,6 +233,28 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Testing MLResourceNotFoundException", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testPrediction_MLLimitExceededException() {
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
+            return null;
+        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+
+        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(CircuitBreakingException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Memory Circuit Breaker is open, please check your resources!", argumentCaptor.getValue().getMessage());
     }
 
 }
