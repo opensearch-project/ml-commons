@@ -5,12 +5,13 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 
-import java.util.Map;
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Getter

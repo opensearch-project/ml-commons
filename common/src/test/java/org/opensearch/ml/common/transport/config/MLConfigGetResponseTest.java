@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.common.transport.config;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.Instant;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -16,18 +24,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.MLConfig;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-
 public class MLConfigGetResponseTest {
 
     MLConfig mlConfig;
@@ -35,10 +31,7 @@ public class MLConfigGetResponseTest {
     @Before
     public void setUp() {
         Configuration configuration = Configuration.builder().agentId("agent_id").build();
-        mlConfig = MLConfig.builder()
-                .type("olly_agent")
-                .configuration(configuration)
-                .build();
+        mlConfig = MLConfig.builder().type("olly_agent").configuration(configuration).build();
     }
 
     @Test
@@ -59,20 +52,17 @@ public class MLConfigGetResponseTest {
     @Test
     public void MLConfigGetResponse_Builder() throws IOException {
 
-        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
-                .mlConfig(mlConfig)
-                .build();
+        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
 
         assertEquals(mlConfigGetResponse.mlConfig, mlConfig);
     }
+
     @Test
     public void writeTo() throws IOException {
-        //create ml agent using mlConfig and mlConfigGetResponse
-        mlConfig = new MLConfig("olly_agent",new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH);
-        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
-                .mlConfig(mlConfig)
-                .build();
-        //use write out for both agents
+        // create ml agent using mlConfig and mlConfigGetResponse
+        mlConfig = new MLConfig("olly_agent", new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH);
+        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
+        // use write out for both agents
         BytesStreamOutput output = new BytesStreamOutput();
         mlConfig.writeTo(output);
         mlConfigGetResponse.writeTo(output);
@@ -87,9 +77,7 @@ public class MLConfigGetResponseTest {
     @Test
     public void toXContent() throws IOException {
         mlConfig = new MLConfig(null, null, null, null);
-        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
-                .mlConfig(mlConfig)
-                .build();
+        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         ToXContent.Params params = EMPTY_PARAMS;
         XContentBuilder getResponseXContentBuilder = mlConfigGetResponse.toXContent(builder, params);
@@ -98,17 +86,14 @@ public class MLConfigGetResponseTest {
 
     @Test
     public void fromActionResponse_Success() throws IOException {
-        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
-                .mlConfig(mlConfig)
-                .build();
+        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
         assertEquals(mlConfigGetResponse.fromActionResponse(mlConfigGetResponse), mlConfigGetResponse);
 
-        }
+    }
+
     @Test
     public void fromActionResponse_Success_fromActionResponse() throws IOException {
-        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
-                .mlConfig(mlConfig)
-                .build();
+        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
 
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -122,9 +107,7 @@ public class MLConfigGetResponseTest {
 
     @Test(expected = UncheckedIOException.class)
     public void fromActionResponse_IOException() {
-        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder()
-                .mlConfig(mlConfig)
-                .build();
+        MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
         ActionResponse actionResponse = new ActionResponse() {
             @Override
             public void writeTo(StreamOutput out) throws IOException {
@@ -133,4 +116,4 @@ public class MLConfigGetResponseTest {
         };
         mlConfigGetResponse.fromActionResponse(actionResponse);
     }
-    }
+}

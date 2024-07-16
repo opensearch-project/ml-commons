@@ -41,13 +41,9 @@ public enum FunctionName {
         }
     }
 
-    private static final HashSet<FunctionName> DL_MODELS = new HashSet<>(Set.of(
-        TEXT_EMBEDDING,
-        TEXT_SIMILARITY,
-        SPARSE_ENCODING,
-        SPARSE_TOKENIZE,
-        QUESTION_ANSWERING
-    ));
+    private static final HashSet<FunctionName> DL_MODELS = new HashSet<>(
+        Set.of(TEXT_EMBEDDING, TEXT_SIMILARITY, SPARSE_ENCODING, SPARSE_TOKENIZE, QUESTION_ANSWERING)
+    );
 
     /**
      * Check if model is deep learning model.

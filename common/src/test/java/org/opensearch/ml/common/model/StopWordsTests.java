@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.common.model;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -16,10 +20,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 
 public class StopWordsTests {
 
@@ -47,8 +47,13 @@ public class StopWordsTests {
     @Test
     public void parse() throws IOException {
         String jsonStr = "{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         StopWords stopWords = StopWords.parse(parser);
 

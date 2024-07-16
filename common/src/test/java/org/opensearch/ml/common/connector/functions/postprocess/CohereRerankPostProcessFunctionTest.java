@@ -5,17 +5,17 @@
 
 package org.opensearch.ml.common.connector.functions.postprocess;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.output.model.ModelTensor;
+import static org.junit.Assert.assertEquals;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class CohereRerankPostProcessFunctionTest {
     @Rule
@@ -51,10 +51,12 @@ public class CohereRerankPostProcessFunctionTest {
 
     @Test
     public void process_CorrectInput() {
-        List<Map<String, Object>> rerankResults = List.of(
+        List<Map<String, Object>> rerankResults = List
+            .of(
                 Map.of("index", 2, "relevance_score", 0.5),
                 Map.of("index", 1, "relevance_score", 0.4),
-                Map.of("index", 0, "relevance_score", 0.3));
+                Map.of("index", 0, "relevance_score", 0.3)
+            );
         List<ModelTensor> result = function.apply(rerankResults);
         assertEquals(3, result.size());
         assertEquals(1, result.get(0).getData().length);

@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.common.annotation;
 
-import org.opensearch.ml.common.dataset.MLInputDataType;
-
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+
+import org.opensearch.ml.common.dataset.MLInputDataType;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

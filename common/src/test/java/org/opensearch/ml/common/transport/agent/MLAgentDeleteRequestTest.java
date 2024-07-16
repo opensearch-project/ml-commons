@@ -4,17 +4,17 @@
  */
 package org.opensearch.ml.common.transport.agent;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.action.ValidateActions.addValidationError;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 public class MLAgentDeleteRequestTest {
     String agentId;
@@ -23,7 +23,7 @@ public class MLAgentDeleteRequestTest {
     public void constructor_AgentId() {
         agentId = "test-abc";
         MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
-        assertEquals(mLAgentDeleteRequest.agentId,agentId);
+        assertEquals(mLAgentDeleteRequest.agentId, agentId);
     }
 
     @Test
@@ -52,10 +52,10 @@ public class MLAgentDeleteRequestTest {
     public void validate_Failure() {
         agentId = null;
         MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
-        assertEquals(null,mLAgentDeleteRequest.agentId);
+        assertEquals(null, mLAgentDeleteRequest.agentId);
 
         ActionRequestValidationException exception = addValidationError("ML agent id can't be null", null);
-        mLAgentDeleteRequest.validate().equals(exception) ;
+        mLAgentDeleteRequest.validate().equals(exception);
     }
 
     @Test
@@ -65,6 +65,7 @@ public class MLAgentDeleteRequestTest {
         assertEquals(mLAgentDeleteRequest.fromActionRequest(mLAgentDeleteRequest), mLAgentDeleteRequest);
 
     }
+
     @Test
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
         agentId = "test-opq";
@@ -75,6 +76,7 @@ public class MLAgentDeleteRequestTest {
             public ActionRequestValidationException validate() {
                 return null;
             }
+
             @Override
             public void writeTo(StreamOutput out) throws IOException {
                 mLAgentDeleteRequest.writeTo(out);

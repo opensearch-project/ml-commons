@@ -12,5 +12,7 @@ public class MLUpdateConnectorAction extends ActionType<UpdateResponse> {
     public static final MLUpdateConnectorAction INSTANCE = new MLUpdateConnectorAction();
     public static final String NAME = "cluster:admin/opensearch/ml/connectors/update";
 
-    private MLUpdateConnectorAction() { super(NAME, UpdateResponse::new);}
+    private MLUpdateConnectorAction() {
+        super(NAME, UpdateResponse::new);
+    }
 }

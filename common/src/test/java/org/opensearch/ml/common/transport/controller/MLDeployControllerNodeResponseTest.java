@@ -39,12 +39,13 @@ public class MLDeployControllerNodeResponseTest {
     @Before
     public void setUp() throws Exception {
         localNode = new DiscoveryNode(
-                "foo0",
-                "foo0",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT);
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
     }
 
     @Test
@@ -71,8 +72,7 @@ public class MLDeployControllerNodeResponseTest {
         MLDeployControllerNodeResponse response = new MLDeployControllerNodeResponse(localNode, new HashMap<>());
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLDeployControllerNodeResponse newResponse = MLDeployControllerNodeResponse
-                .readStats(output.bytes().streamInput());
+        MLDeployControllerNodeResponse newResponse = MLDeployControllerNodeResponse.readStats(output.bytes().streamInput());
         assertNotEquals(newResponse, response);
     }
 }

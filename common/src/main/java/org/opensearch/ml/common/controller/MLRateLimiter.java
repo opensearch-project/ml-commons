@@ -5,23 +5,24 @@
 
 package org.opensearch.ml.common.controller;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.OpenSearchParseException;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.OpenSearchParseException;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Setter
 @Getter
@@ -137,10 +138,8 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
         } else if (updateContent.isEmpty()) {
             return false;
         } else
-            return (!Objects.equals(updateContent.getLimit(), rateLimiter.getLimit())
-                    && updateContent.getLimit() != null)
-                    || (!Objects.equals(updateContent.getUnit(), rateLimiter.getUnit())
-                            && updateContent.getUnit() != null);
+            return (!Objects.equals(updateContent.getLimit(), rateLimiter.getLimit()) && updateContent.getLimit() != null)
+                || (!Objects.equals(updateContent.getUnit(), rateLimiter.getUnit()) && updateContent.getUnit() != null);
     }
 
     /**
@@ -156,8 +155,8 @@ public class MLRateLimiter implements ToXContentObject, Writeable {
             return false;
         } else {
             return updateContent.isValid()
-                    || (rateLimiter.getUnit() != null && updateContent.getLimit() != null)
-                    || (rateLimiter.getLimit() != null && updateContent.getUnit() != null);
+                || (rateLimiter.getUnit() != null && updateContent.getLimit() != null)
+                || (rateLimiter.getLimit() != null && updateContent.getUnit() != null);
         }
     }
 

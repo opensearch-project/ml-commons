@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.common.transport.update_cache;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,22 +25,10 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodeResponse;
-import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
-
-import java.io.IOException;
-import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLUpdateModelCacheNodesResponseTest {
@@ -44,20 +42,20 @@ public class MLUpdateModelCacheNodesResponseTest {
     public void setUp() throws Exception {
         clusterName = new ClusterName("clusterName");
         node1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
+            "foo1",
+            "foo1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
         node2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
+            "foo2",
+            "foo2",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
     }
 
@@ -87,10 +85,7 @@ public class MLUpdateModelCacheNodesResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals(
-                "{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}",
-                jsonStr
-        );
+        assertEquals("{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}", jsonStr);
     }
 
     @Test
@@ -102,6 +97,6 @@ public class MLUpdateModelCacheNodesResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals("{}",jsonStr);
+        assertEquals("{}", jsonStr);
     }
 }

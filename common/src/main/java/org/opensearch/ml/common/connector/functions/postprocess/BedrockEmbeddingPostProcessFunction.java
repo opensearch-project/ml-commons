@@ -5,11 +5,11 @@
 
 package org.opensearch.ml.common.connector.functions.postprocess;
 
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class BedrockEmbeddingPostProcessFunction extends ConnectorPostProcessFunction<List<Float>> {
 
@@ -21,7 +21,7 @@ public class BedrockEmbeddingPostProcessFunction extends ConnectorPostProcessFun
 
         List<?> outerList = (List<?>) input;
 
-        if (!outerList.isEmpty() && !(((List<?>)input).get(0) instanceof Number)) {
+        if (!outerList.isEmpty() && !(((List<?>) input).get(0) instanceof Number)) {
             throw new IllegalArgumentException("The embedding should be a non-empty List containing Float values.");
         }
     }
@@ -29,14 +29,16 @@ public class BedrockEmbeddingPostProcessFunction extends ConnectorPostProcessFun
     @Override
     public List<ModelTensor> process(List<Float> embedding) {
         List<ModelTensor> modelTensors = new ArrayList<>();
-        modelTensors.add(
+        modelTensors
+            .add(
                 ModelTensor
-                        .builder()
-                        .name("sentence_embedding")
-                        .dataType(MLResultDataType.FLOAT32)
-                        .shape(new long[]{embedding.size()})
-                        .data(embedding.toArray(new Number[0]))
-                        .build());
+                    .builder()
+                    .name("sentence_embedding")
+                    .dataType(MLResultDataType.FLOAT32)
+                    .shape(new long[] { embedding.size() })
+                    .data(embedding.toArray(new Number[0]))
+                    .build()
+            );
         return modelTensors;
     }
 }

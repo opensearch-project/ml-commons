@@ -5,11 +5,14 @@
 
 package org.opensearch.ml.common.input.parameter.regression;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Locale;
+
+import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -17,20 +20,18 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 
-import java.io.IOException;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
-@MLAlgoParameter(algorithms={FunctionName.LOGISTIC_REGRESSION})
+@MLAlgoParameter(algorithms = { FunctionName.LOGISTIC_REGRESSION })
 public class LogisticRegressionParams implements MLAlgoParams {
 
     public static final String PARSE_FIELD_NAME = FunctionName.LOGISTIC_REGRESSION.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            MLAlgoParams.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        MLAlgoParams.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String OBJECTIVE_FIELD = "objective";
@@ -188,7 +189,22 @@ public class LogisticRegressionParams implements MLAlgoParams {
                     break;
             }
         }
-        return new LogisticRegressionParams(objective, optimizerType, momentumType, learningRate, epsilon, momentumFactor, beta1, beta2, decayRate, epochs, batchSize, loggingInterval, seed, target);
+        return new LogisticRegressionParams(
+            objective,
+            optimizerType,
+            momentumType,
+            learningRate,
+            epsilon,
+            momentumFactor,
+            beta1,
+            beta2,
+            decayRate,
+            epochs,
+            batchSize,
+            loggingInterval,
+            seed,
+            target
+        );
     }
 
     @Override
@@ -286,8 +302,9 @@ public class LogisticRegressionParams implements MLAlgoParams {
     public enum ObjectiveType {
         HINGE,
         LOGMULTICLASS;
+
         public static ObjectiveType from(String value) {
-            try{
+            try {
                 return ObjectiveType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong objective type");
@@ -300,7 +317,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         NESTEROV;
 
         public static MomentumType from(String value) {
-            try{
+            try {
                 return MomentumType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong momentum type");
@@ -318,7 +335,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         RMS_PROP;
 
         public static OptimizerType from(String value) {
-            try{
+            try {
                 return OptimizerType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong optimizer type");

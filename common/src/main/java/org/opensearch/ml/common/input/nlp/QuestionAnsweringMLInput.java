@@ -4,6 +4,10 @@
  */
 package org.opensearch.ml.common.input.nlp;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -13,16 +17,11 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
-
 /**
  * MLInput which supports a question answering algorithm
  * Inputs are question and context. Output is the answer
  */
-@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.QUESTION_ANSWERING})
+@org.opensearch.ml.common.annotation.MLInput(functionNames = { FunctionName.QUESTION_ANSWERING })
 public class QuestionAnsweringMLInput extends MLInput {
 
     public QuestionAnsweringMLInput(FunctionName algorithm, MLInputDataset dataset) {
@@ -42,10 +41,10 @@ public class QuestionAnsweringMLInput extends MLInput {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(ALGORITHM_FIELD, algorithm.name());
-        if(parameters != null) {
+        if (parameters != null) {
             builder.field(ML_PARAMETERS_FIELD, parameters);
         }
-        if(inputDataset != null) {
+        if (inputDataset != null) {
             QuestionAnsweringInputDataSet ds = (QuestionAnsweringInputDataSet) this.inputDataset;
             String question = ds.getQuestion();
             String context = ds.getContext();
@@ -78,11 +77,11 @@ public class QuestionAnsweringMLInput extends MLInput {
                     parser.skipChildren();
                     break;
             }
-        }        
-        if(question == null) {
+        }
+        if (question == null) {
             throw new IllegalArgumentException("Question is not provided");
         }
-        if(context == null) {
+        if (context == null) {
             throw new IllegalArgumentException("Context is not provided");
         }
         inputDataset = new QuestionAnsweringInputDataSet(question, context);

@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.common.input.parameter.sample;
 
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.util.function.Function;
 
 public class SampleAlgoParamsTest {
 
@@ -19,7 +19,7 @@ public class SampleAlgoParamsTest {
 
     private Function<XContentParser, SampleAlgoParams> function = parser -> {
         try {
-            return (SampleAlgoParams)SampleAlgoParams.parse(parser);
+            return (SampleAlgoParams) SampleAlgoParams.parse(parser);
         } catch (IOException e) {
             throw new RuntimeException("failed to parse SampleAlgoParams", e);
         }
@@ -27,9 +27,7 @@ public class SampleAlgoParamsTest {
 
     @Before
     public void setUp() {
-        params = SampleAlgoParams.builder()
-                .sampleParam(2)
-                .build();
+        params = SampleAlgoParams.builder().sampleParam(2).build();
     }
 
     @Test

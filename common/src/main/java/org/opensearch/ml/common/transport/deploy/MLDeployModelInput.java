@@ -5,15 +5,15 @@
 
 package org.opensearch.ml.common.transport.deploy;
 
-import lombok.Builder;
-import lombok.Data;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.ml.common.MLTask;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MLDeployModelInput implements Writeable {
@@ -36,7 +36,15 @@ public class MLDeployModelInput implements Writeable {
     }
 
     @Builder
-    public MLDeployModelInput(String modelId, String taskId, String modelContentHash, Integer nodeCount, String coordinatingNodeId, Boolean isDeployToAllNodes, MLTask mlTask) {
+    public MLDeployModelInput(
+        String modelId,
+        String taskId,
+        String modelContentHash,
+        Integer nodeCount,
+        String coordinatingNodeId,
+        Boolean isDeployToAllNodes,
+        MLTask mlTask
+    ) {
         this.modelId = modelId;
         this.taskId = taskId;
         this.modelContentHash = modelContentHash;
@@ -46,8 +54,7 @@ public class MLDeployModelInput implements Writeable {
         this.mlTask = mlTask;
     }
 
-    public MLDeployModelInput() {
-    }
+    public MLDeployModelInput() {}
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {

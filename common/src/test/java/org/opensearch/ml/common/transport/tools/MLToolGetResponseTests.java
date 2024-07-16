@@ -4,25 +4,21 @@
  */
 package org.opensearch.ml.common.transport.tools;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.core.action.ActionResponse;
-import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.common.Strings;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.ToolMetadata;
-import org.opensearch.ml.common.transport.model.MLModelGetResponse;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.*;
 
 public class MLToolGetResponseTests {
     ToolMetadata toolMetadata;
@@ -31,12 +27,13 @@ public class MLToolGetResponseTests {
 
     @Before
     public void setUp() {
-        toolMetadata = ToolMetadata.builder()
-                .name("MathTool")
-                .description("Use this tool to calculate any math problem.")
-                .type("MathTool")
-                .version(null)
-                .build();
+        toolMetadata = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to calculate any math problem.")
+            .type("MathTool")
+            .version(null)
+            .build();
 
         mlToolGetResponse = MLToolGetResponse.builder().toolMetadata(toolMetadata).build();
     }
@@ -57,7 +54,10 @@ public class MLToolGetResponseTests {
         mlToolGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"undefined\"}", jsonStr);
+        assertEquals(
+            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"undefined\"}",
+            jsonStr
+        );
     }
 
     @Test

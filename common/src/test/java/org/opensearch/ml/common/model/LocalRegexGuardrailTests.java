@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.common.model;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+
 import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
 import org.junit.Before;
@@ -35,16 +45,6 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 import org.opensearch.threadpool.ThreadPool;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 public class LocalRegexGuardrailTests {
     NamedXContentRegistry xContentRegistry;
@@ -114,14 +114,24 @@ public class LocalRegexGuardrailTests {
         localRegexGuardrail.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
-        Assert.assertEquals("{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"(.|\\n)*stop words(.|\\n)*\"]}", content);
+        Assert
+            .assertEquals(
+                "{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"(.|\\n)*stop words(.|\\n)*\"]}",
+                content
+            );
     }
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = "{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"(.|\\n)*stop words(.|\\n)*\"]}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        String jsonStr =
+            "{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"(.|\\n)*stop words(.|\\n)*\"]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         LocalRegexGuardrail localRegexGuardrail = LocalRegexGuardrail.parse(parser);
 
@@ -217,22 +227,22 @@ public class LocalRegexGuardrailTests {
             hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
         }
         return new SearchResponse(
-                new InternalSearchResponse(
-                        new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
-                        InternalAggregations.EMPTY,
-                        new Suggest(Collections.emptyList()),
-                        new SearchProfileShardResults(Collections.emptyMap()),
-                        false,
-                        false,
-                        1
-                ),
-                "",
-                5,
-                5,
-                0,
-                100,
-                ShardSearchFailure.EMPTY_ARRAY,
-                SearchResponse.Clusters.EMPTY
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            5,
+            5,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
         );
     }
 

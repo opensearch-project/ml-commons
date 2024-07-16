@@ -22,11 +22,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -40,21 +40,17 @@ public class MLControllerTest {
 
     private MLController controllerNull;
 
-    private final String expectedInputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":" +
-            "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
+    private final String expectedInputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":"
+        + "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
-        rateLimiter = MLRateLimiter.builder()
-                .limit("1")
-                .unit(TimeUnit.MILLISECONDS)
-                .build();
+        rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
 
-        controllerNull = MLController.builder()
-                .modelId("testModelId").build();
+        controllerNull = MLController.builder().modelId("testModelId").build();
 
         controller = MLControllerGenerator("testUser", rateLimiter);
 
@@ -64,17 +60,17 @@ public class MLControllerTest {
     public void readInputStreamSuccess() throws IOException {
         readInputStream(controller, parsedInput -> {
             assertEquals("testModelId", parsedInput.getModelId());
-            assertEquals(controller.getUserRateLimiter().get("testUser").getLimit(),
-                    parsedInput.getUserRateLimiter().get("testUser").getLimit());
+            assertEquals(
+                controller.getUserRateLimiter().get("testUser").getLimit(),
+                parsedInput.getUserRateLimiter().get("testUser").getLimit()
+            );
         });
     }
 
     @Test
     public void readInputStreamSuccessWithNullFields() throws IOException {
         controller.setUserRateLimiter(null);
-        readInputStream(controller, parsedInput -> {
-            assertNull(parsedInput.getUserRateLimiter());
-        });
+        readInputStream(controller, parsedInput -> { assertNull(parsedInput.getUserRateLimiter()); });
     }
 
     @Test
@@ -97,14 +93,15 @@ public class MLControllerTest {
         // parseWithNullMLRateLimiterInUserRateLimiterFieldWithException test
         // below.
         final String expectedOutputStrWithNullField = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":null}}";
-        MLController controllerWithTestUserAndEmptyRateLimiter = MLController.builder()
-                .modelId("testModelId")
-                .userRateLimiter(new HashMap<>() {
-                    {
-                        put("testUser", null);
-                    }
-                })
-                .build();
+        MLController controllerWithTestUserAndEmptyRateLimiter = MLController
+            .builder()
+            .modelId("testModelId")
+            .userRateLimiter(new HashMap<>() {
+                {
+                    put("testUser", null);
+                }
+            })
+            .build();
         String jsonStr = serializationWithToXContent(controllerWithTestUserAndEmptyRateLimiter);
         assertEquals(expectedOutputStrWithNullField, jsonStr);
     }
@@ -150,10 +147,8 @@ public class MLControllerTest {
     // Notice that this won't throw an IllegalStateException, which is pretty
     // different from usual
     public void parseWithTestUserAndEmptyRateLimiterFieldWithNoException() throws Exception {
-        final String expectedInputStrWithEmptyField = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":" +
-                "{\"testUser\":{}}}";
-        final String expectedOutputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":" +
-                "{}}";
+        final String expectedInputStrWithEmptyField = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":" + "{\"testUser\":{}}}";
+        final String expectedOutputStr = "{\"model_id\":\"testModelId\",\"user_rate_limiter\":" + "{}}";
         testParseFromJsonString(expectedInputStrWithEmptyField, parsedInput -> {
             try {
                 assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
@@ -166,8 +161,8 @@ public class MLControllerTest {
     @Test
     public void parseWithNullField() throws Exception {
         exceptionRule.expect(IllegalStateException.class);
-        final String expectedInputStrWithNullField = "{\"model_id\":null,\"user_rate_limiter\":" +
-                "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
+        final String expectedInputStrWithNullField = "{\"model_id\":null,\"user_rate_limiter\":"
+            + "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
 
         testParseFromJsonString(expectedInputStrWithNullField, parsedInput -> {
             try {
@@ -180,9 +175,9 @@ public class MLControllerTest {
 
     @Test
     public void parseWithIllegalField() throws Exception {
-        final String expectedInputStrWithIllegalField = "{\"model_id\":\"testModelId\",\"illegal_field\":\"This field need to be skipped.\",\"user_rate_limiter\":"
-                +
-                "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
+        final String expectedInputStrWithIllegalField =
+            "{\"model_id\":\"testModelId\",\"illegal_field\":\"This field need to be skipped.\",\"user_rate_limiter\":"
+                + "{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}";
 
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
@@ -213,9 +208,9 @@ public class MLControllerTest {
     @Test
     public void parseWithIllegalRateLimiterFieldWithException() throws Exception {
         exceptionRule.expect(RuntimeException.class);
-        final String expectedInputStrWithIllegalField = "{\"model_id\":\"testModelId\",\"illegal_field\":\"This field need to be skipped.\",\"user_rate_limiter\":"
-                +
-                "{\"testUser\":\"Some illegal content that MLRateLimiter parser cannot parse.\"}}";
+        final String expectedInputStrWithIllegalField =
+            "{\"model_id\":\"testModelId\",\"illegal_field\":\"This field need to be skipped.\",\"user_rate_limiter\":"
+                + "{\"testUser\":\"Some illegal content that MLRateLimiter parser cannot parse.\"}}";
 
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
@@ -231,8 +226,7 @@ public class MLControllerTest {
         MLRateLimiter rateLimiterWithNumber = MLRateLimiter.builder().limit("1").build();
 
         MLController controllerWithEmptyUserRateLimiter = MLControllerGenerator();
-        MLController controllerWithTestUserAndRateLimiterWithNumber = MLControllerGenerator("testUser",
-                rateLimiterWithNumber);
+        MLController controllerWithTestUserAndRateLimiterWithNumber = MLControllerGenerator("testUser", rateLimiterWithNumber);
         MLController controllerWithNewUserAndEmptyRateLimiter = MLControllerGenerator("newUser");
 
         controllerWithEmptyUserRateLimiter.update(controllerNull);
@@ -242,16 +236,12 @@ public class MLControllerTest {
         assertTrue(controllerWithEmptyUserRateLimiter.getUserRateLimiter().isEmpty());
 
         controllerWithEmptyUserRateLimiter.update(controllerWithTestUserAndRateLimiterWithNumber);
-        assertEquals("1", controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser")
-                .getLimit());
-        assertNull(controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser")
-                .getUnit());
+        assertEquals("1", controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser").getLimit());
+        assertNull(controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser").getUnit());
 
         controllerWithEmptyUserRateLimiter.update(controller);
-        assertEquals("1", controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser")
-                .getLimit());
-        assertEquals(TimeUnit.MILLISECONDS, controllerWithEmptyUserRateLimiter.getUserRateLimiter()
-                .get("testUser").getUnit());
+        assertEquals("1", controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser").getLimit());
+        assertEquals(TimeUnit.MILLISECONDS, controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("testUser").getUnit());
 
         controllerWithEmptyUserRateLimiter.update(controllerWithNewUserAndEmptyRateLimiter);
         assertTrue(controllerWithEmptyUserRateLimiter.getUserRateLimiter().get("newUser").isEmpty());
@@ -262,38 +252,37 @@ public class MLControllerTest {
         MLRateLimiter rateLimiterWithNumber = MLRateLimiter.builder().limit("1").build();
 
         MLController controllerWithEmptyUserRateLimiter = MLControllerGenerator();
-        MLController controllerWithTestUserAndRateLimiterWithNumber = MLControllerGenerator("testUser",
-                rateLimiterWithNumber);
-        MLController controllerWithNewUserAndRateLimiterWithNumber = MLControllerGenerator("newUser",
-                rateLimiterWithNumber);
+        MLController controllerWithTestUserAndRateLimiterWithNumber = MLControllerGenerator("testUser", rateLimiterWithNumber);
+        MLController controllerWithNewUserAndRateLimiterWithNumber = MLControllerGenerator("newUser", rateLimiterWithNumber);
         MLController controllerWithNewUserAndEmptyRateLimiter = MLControllerGenerator("newUser");
         MLController controllerWithNewUserAndRateLimiter = MLControllerGenerator("newUser", rateLimiter);
 
         assertFalse(controllerWithEmptyUserRateLimiter.isDeployRequiredAfterUpdate(null));
         assertFalse(controllerWithEmptyUserRateLimiter.isDeployRequiredAfterUpdate(controllerNull));
-        assertFalse(controllerWithEmptyUserRateLimiter
-                .isDeployRequiredAfterUpdate(controllerWithEmptyUserRateLimiter));
-        assertFalse(controllerWithEmptyUserRateLimiter
-                .isDeployRequiredAfterUpdate(controllerWithNewUserAndEmptyRateLimiter));
+        assertFalse(controllerWithEmptyUserRateLimiter.isDeployRequiredAfterUpdate(controllerWithEmptyUserRateLimiter));
+        assertFalse(controllerWithEmptyUserRateLimiter.isDeployRequiredAfterUpdate(controllerWithNewUserAndEmptyRateLimiter));
 
-        assertFalse(controllerWithEmptyUserRateLimiter
-                .isDeployRequiredAfterUpdate(controllerWithTestUserAndRateLimiterWithNumber));
-        assertFalse(controllerWithTestUserAndRateLimiterWithNumber
-                .isDeployRequiredAfterUpdate(controllerWithTestUserAndRateLimiterWithNumber));
+        assertFalse(controllerWithEmptyUserRateLimiter.isDeployRequiredAfterUpdate(controllerWithTestUserAndRateLimiterWithNumber));
+        assertFalse(
+            controllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(controllerWithTestUserAndRateLimiterWithNumber)
+        );
         assertTrue(controllerWithEmptyUserRateLimiter.isDeployRequiredAfterUpdate(controller));
         assertTrue(controllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(controller));
 
-        assertFalse(controllerWithTestUserAndRateLimiterWithNumber
-                .isDeployRequiredAfterUpdate(controllerWithNewUserAndRateLimiterWithNumber));
-        assertTrue(controllerWithTestUserAndRateLimiterWithNumber
-                .isDeployRequiredAfterUpdate(controllerWithNewUserAndRateLimiter));
+        assertFalse(
+            controllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(controllerWithNewUserAndRateLimiterWithNumber)
+        );
+        assertTrue(controllerWithTestUserAndRateLimiterWithNumber.isDeployRequiredAfterUpdate(controllerWithNewUserAndRateLimiter));
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLController> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE,
-                        expectedInputStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                expectedInputStr
+            );
         parser.nextToken();
         MLController parsedInput = MLController.parse(parser);
         verify.accept(parsedInput);
@@ -315,48 +304,40 @@ public class MLControllerTest {
     }
 
     private MLController MLControllerGenerator(String user, MLRateLimiter rateLimiter) {
-        return MLController.builder()
-                .modelId("testModelId")
-                .userRateLimiter(new HashMap<>() {
-                    {
-                        put(user, rateLimiter);
-                    }
-                })
-                .build();
+        return MLController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
+            {
+                put(user, rateLimiter);
+            }
+        }).build();
 
     }
 
     private MLController MLControllerGenerator(String user) {
-        return MLController.builder()
-                .modelId("testModelId")
-                .userRateLimiter(new HashMap<>() {
-                    {
-                        put(user, MLRateLimiter.builder().build());
-                    }
-                })
-                .build();
+        return MLController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
+            {
+                put(user, MLRateLimiter.builder().build());
+            }
+        }).build();
 
     }
 
     private MLController MLControllerGenerator() {
-        return MLController.builder()
-                .modelId("testModelId")
-                .userRateLimiter(new HashMap<>())
-                .build();
+        return MLController.builder().modelId("testModelId").userRateLimiter(new HashMap<>()).build();
 
     }
 
     @Ignore
     @Test
     public void testRateLimiterRemove() {
-        MLController controllerWithTestUserAndEmptyRateLimiter = MLController.builder()
-                .modelId("testModelId")
-                .userRateLimiter(new HashMap<>() {
-                    {
-                        put("testUser", MLRateLimiter.builder().build());
-                    }
-                })
-                .build();
+        MLController controllerWithTestUserAndEmptyRateLimiter = MLController
+            .builder()
+            .modelId("testModelId")
+            .userRateLimiter(new HashMap<>() {
+                {
+                    put("testUser", MLRateLimiter.builder().build());
+                }
+            })
+            .build();
 
         controller.update(controllerWithTestUserAndEmptyRateLimiter);
         assertNull(controller.getUserRateLimiter().get("testUser"));

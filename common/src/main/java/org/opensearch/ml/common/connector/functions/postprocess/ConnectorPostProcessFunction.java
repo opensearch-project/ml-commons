@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.common.connector.functions.postprocess;
 
-import org.opensearch.ml.common.output.model.ModelTensor;
-
 import java.util.List;
 import java.util.function.Function;
+
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public abstract class ConnectorPostProcessFunction<T> implements Function<Object, List<ModelTensor>> {
 
@@ -18,7 +18,7 @@ public abstract class ConnectorPostProcessFunction<T> implements Function<Object
             throw new IllegalArgumentException("Can't run post process function as model output is null");
         }
         validate(input);
-        return process((T)input);
+        return process((T) input);
     }
 
     public abstract void validate(Object input);

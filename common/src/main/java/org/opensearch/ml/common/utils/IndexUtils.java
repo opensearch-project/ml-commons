@@ -5,8 +5,9 @@
 
 package org.opensearch.ml.common.utils;
 
-import lombok.extern.log4j.Log4j2;
 import java.util.Map;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class IndexUtils {
