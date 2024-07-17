@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import java.util.List;
 import java.util.Map;
 
+import java.util.NoSuchElementException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
@@ -67,13 +68,18 @@ public class MLModelTool implements Tool {
         this.responseField = responseField;
 
         outputParser = o -> {
-            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-            Map<String, ?> dataAsMap = mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap();
-            // Return the response field if it exists, otherwise return the whole response a json string.
-            if (dataAsMap.containsKey(responseField)) {
-                return dataAsMap.get(responseField);
-            } else {
-                return StringUtils.toJson(dataAsMap);
+            try {
+                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+                Map<String, ?> dataAsMap = mlModelOutputs.getFirst().getMlModelTensors().getFirst()
+                    .getDataAsMap();
+                // Return the response field if it exists, otherwise return the whole response as json string.
+                if (dataAsMap.containsKey(responseField)) {
+                    return dataAsMap.get(responseField);
+                } else {
+                    return StringUtils.toJson(dataAsMap);
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException("LLM returns wrong or empty tensors", e);
             }
         };
     }
