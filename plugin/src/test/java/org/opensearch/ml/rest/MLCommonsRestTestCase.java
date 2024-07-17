@@ -52,6 +52,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
 import org.opensearch.common.io.PathUtils;
@@ -96,6 +97,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
     public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
@@ -899,8 +903,14 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public Map predictTextEmbeddingModel(String modelId, MLInput input) throws IOException {
         String requestBody = TestHelper.toJsonString(input);
-        Response response = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        Response response = null;
+        try {
+            response = TestHelper
+                .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        } catch (ResponseException e) {
+            log.error(e.getMessage(), e);
+            response = e.getResponse();
+        }
         return parseResponseToMap(response);
     }
 
