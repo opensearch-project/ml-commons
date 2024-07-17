@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.tools;
 import java.util.List;
 import java.util.Map;
 
-import java.util.NoSuchElementException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
@@ -70,8 +69,7 @@ public class MLModelTool implements Tool {
         outputParser = o -> {
             try {
                 List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                Map<String, ?> dataAsMap = mlModelOutputs.getFirst().getMlModelTensors().getFirst()
-                    .getDataAsMap();
+                Map<String, ?> dataAsMap = mlModelOutputs.getFirst().getMlModelTensors().getFirst().getDataAsMap();
                 // Return the response field if it exists, otherwise return the whole response as json string.
                 if (dataAsMap.containsKey(responseField)) {
                     return dataAsMap.get(responseField);
