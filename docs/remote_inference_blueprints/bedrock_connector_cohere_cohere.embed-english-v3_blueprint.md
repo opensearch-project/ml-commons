@@ -149,6 +149,15 @@ POST /_plugins/_ml/models/rcormY8B8aiZvtEZIe89/_predict
   }
 }
 ```
+or
+```json
+POST /_plugins/_ml/_predict/text_embedding/rcormY8B8aiZvtEZIe89
+{
+    "text_docs":[ "today is sunny", "today is sunny"],
+    "return_number": true,
+    "target_response": ["sentence_embedding"]
+}
+```
 
 Sample response:
 ```json

@@ -149,6 +149,15 @@ POST /_plugins/_ml/models/KSj-wZABNrAVdFa937iS/_predict
   }
 }
 ```
+or 
+```json
+POST /_plugins/_ml/_predict/text_embedding/KSj-wZABNrAVdFa937iS
+{
+    "text_docs":[ "上海", "today is sunny"],
+    "return_number": true,
+    "target_response": ["sentence_embedding"]
+}
+```
 
 Sample response:
 ```json
