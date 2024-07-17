@@ -1,14 +1,17 @@
 ---
 teardown:
   - do:
-      search.delete_pipeline:
+      search_pipeline.delete:
         id: "my_pipeline"
         ignore: 404
 
 ---
-"Test ML Inference Processor":
+"Test ML Inference Search Request Processor":
+  - skip:
+      version: " - 2.15.99"
+      reason: "Added in 2.16.0"
   - do:
-      search.put_pipeline:
+      search_pipeline.put:
         id: "my_pipeline"
         body:  >
          {

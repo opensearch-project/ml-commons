@@ -159,6 +159,10 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
      * @throws Exception if any error occurs during the test
      */
     public void testMLInferenceProcessorRemoteModelRewriteQueryString() throws Exception {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
         String createPipelineRequestBody = "{\n"
             + "  \"request_processors\": [\n"
             + "    {\n"
