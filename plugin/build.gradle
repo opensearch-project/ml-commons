@@ -24,6 +24,7 @@ ext {
 apply plugin: 'opensearch.opensearchplugin'
 apply plugin: 'opensearch.testclusters'
 apply plugin: 'opensearch.pluginzip'
+apply plugin: 'opensearch.yaml-rest-test'
 ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
