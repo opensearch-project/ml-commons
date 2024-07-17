@@ -10,7 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.ActionType;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -24,6 +24,7 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
 
     @Setter
     private Map<String, String> parameters;
+    @Setter
     private ActionType actionType;
 
     @Builder(toBuilder = true)
@@ -42,6 +43,11 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
         if (streamInput.readBoolean()) {
             parameters = streamInput.readMap(s -> s.readString(), s-> s.readString());
         }
+        if (streamInput.readBoolean()) {
+            actionType = streamInput.readEnum(ActionType.class);
+        } else {
+            this.actionType = null;
+        }
     }
 
     @Override
@@ -50,6 +56,12 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
         if (parameters !=  null) {
             streamOutput.writeBoolean(true);
             streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            streamOutput.writeBoolean(false);
+        }
+        if (actionType != null) {
+            streamOutput.writeBoolean(true);
+            streamOutput.writeEnum(actionType);
         } else {
             streamOutput.writeBoolean(false);
         }

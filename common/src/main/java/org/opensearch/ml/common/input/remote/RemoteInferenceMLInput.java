@@ -9,7 +9,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.ActionType;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -22,7 +22,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.REMOTE})
 public class RemoteInferenceMLInput extends MLInput {
     public static final String PARAMETERS_FIELD = "parameters";
-    public static final String PREDICT_MODE_FIELD = "mode";
+    public static final String ACTION_TYPE_FIELD = "action_type";
 
     public RemoteInferenceMLInput(StreamInput in) throws IOException {
         super(in);
@@ -47,7 +47,7 @@ public class RemoteInferenceMLInput extends MLInput {
                 case PARAMETERS_FIELD:
                     parameters = StringUtils.getParameterMap(parser.map());
                     break;
-                case PREDICT_MODE_FIELD:
+                case ACTION_TYPE_FIELD:
                     actionType = ActionType.from(parser.text());
                     break;
                 default:
@@ -55,7 +55,6 @@ public class RemoteInferenceMLInput extends MLInput {
                     break;
             }
         }
-        actionType = actionType == null? ActionType.PREDICT:actionType;
         inputDataset = new RemoteInferenceInputDataSet(parameters, actionType);
     }
 
