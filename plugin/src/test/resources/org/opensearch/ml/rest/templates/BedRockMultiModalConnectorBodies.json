@@ -24,7 +24,7 @@
           "x-amz-content-sha256": "required"
         },
         "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage:-null}\" }",
-        "pre_process_function": "connector.pre_process.multimodal.embedding",
+        "pre_process_function": "connector.pre_process.bedrock.multimodal_embedding",
         "post_process_function": "connector.post_process.bedrock.embedding"
       }
     ]
@@ -55,7 +55,7 @@
           "x-amz-content-sha256": "required"
         },
         "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage:-null}\" }",
-        "pre_process_function": "connector.pre_process.multimodal.embedding",
+        "pre_process_function": "connector.pre_process.bedrock.multimodal_embedding",
         "post_process_function": "connector.post_process.bedrock.embedding"
       }
     ]
