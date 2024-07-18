@@ -61,8 +61,8 @@ Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/de
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-    "name": "Amazon Bedrock",
-    "description": "Test connector for Amazon Bedrock",
+    "name": "Amazon Bedrock Connector: Cohere embed-multilingual-v3",
+    "description": "Test connector for Amazon Bedrock Cohere embed-multilingual-v3 model",
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
@@ -98,14 +98,15 @@ Sample response:
   "connector_id": "ISj-wZABNrAVdFa9cLju"
 }
 ```
+For more information of the model inference parameters in the connector, please refer to this [AWS doc](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
 
 ## 3. Create model group:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
 {
-    "name": "remote_model_group_claude3",
-    "description": "This is an example description"
+    "name": "remote_model_group_cohere",
+    "description": "model group for cohere models"
 }
 ```
 
