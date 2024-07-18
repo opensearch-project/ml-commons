@@ -44,7 +44,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -53,7 +52,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @ToolAnnotation(CatIndexTool.TYPE)
-public class CatIndexTool extends AbstractTool {
+public class CatIndexTool implements Tool {
     public static final String TYPE = "CatIndexTool";
     private static final String DEFAULT_DESCRIPTION = String
         .join(

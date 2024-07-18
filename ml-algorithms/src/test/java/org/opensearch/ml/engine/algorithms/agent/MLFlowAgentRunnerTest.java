@@ -338,7 +338,7 @@ public class MLFlowAgentRunnerTest {
     @Test
     public void testCreateTool() {
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).description("description").type(FIRST_TOOL).build();
-        Tool result = mlFlowAgentRunner.createTool(firstToolSpec);
+        Tool result = mlFlowAgentRunner.createTool(firstToolSpec, null);
 
         assertNotNull(result);
         assertEquals(FIRST_TOOL, result.getName());

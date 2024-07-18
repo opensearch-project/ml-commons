@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+
 import java.util.List;
 import java.util.Map;
-
-import javax.swing.*;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.client.Client;
@@ -18,7 +18,6 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -36,7 +35,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(MLModelTool.TYPE)
-public class MLModelTool extends AbstractTool {
+public class MLModelTool implements Tool {
     public static final String TYPE = "MLModelTool";
     public static final String RESPONSE_FIELD = "response_field";
     public static final String MODEL_ID_FIELD = "model_id";
@@ -88,7 +87,10 @@ public class MLModelTool extends AbstractTool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        String tenantId = getTenantId();
+        String tenantId = null;
+        if (parameters != null) {
+            tenantId = parameters.get(TENANT_ID);
+        }
         ActionRequest request = MLPredictionTaskRequest
             .builder()
             .modelId(modelId)

@@ -160,7 +160,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
-        if (toolSpecs == null || toolSpecs.size() == 0) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
@@ -174,7 +174,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolFactories, params, toolSpec);
+                Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -198,6 +198,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         previousToolSpec,
                         finalI,
                         output,
+                        mlAgent.getTenantId(),
                         nextStepListener
                     );
                 }, e -> {
@@ -224,6 +225,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     toolSpec,
                     1,
                     output,
+                    mlAgent.getTenantId(),
                     null
                 );
             }, e -> { listener.onFailure(e); }));
@@ -247,6 +249,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         MLToolSpec previousToolSpec,
         int finalI,
         Object output,
+        String tenantId,
         StepListener<Object> nextStepListener
     ) throws IOException,
         PrivilegedActionException {
@@ -274,7 +277,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
         if (finalI == toolSpecs.size()) {
             ActionListener updateListener = ActionListener.<UpdateResponse>wrap(r -> {
-                log.info("Updated additional info for interaction " + r.getId() + " of flow agent.");
+                log.info("Updated additional info for interaction {} of flow agent.", r.getId());
                 listener.onResponse(flowAgentOutput);
             }, e -> {
                 log.error("Failed to update root interaction", e);
@@ -309,7 +312,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             }
         } else {
             if (memory == null) {
-                runNextStep(params, toolSpecs, finalI, nextStepListener);
+                runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
             } else {
                 saveMessage(
                     params,
@@ -321,7 +324,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     traceNumber,
                     traceDisabled,
                     ActionListener.wrap(r -> {
-                        runNextStep(params, toolSpecs, finalI, nextStepListener);
+                        runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
                     }, e -> {
                         log.error("Failed to update root interaction ", e);
                         listener.onFailure(e);
@@ -331,9 +334,15 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
     }
 
-    private void runNextStep(Map<String, String> params, List<MLToolSpec> toolSpecs, int finalI, StepListener<Object> nextStepListener) {
+    private void runNextStep(
+        Map<String, String> params,
+        List<MLToolSpec> toolSpecs,
+        int finalI,
+        String tenantId,
+        StepListener<Object> nextStepListener
+    ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
-        Tool tool = createTool(toolFactories, params, toolSpec);
+        Tool tool = createTool(toolFactories, params, toolSpec, tenantId);
         if (finalI < toolSpecs.size()) {
             tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
         }

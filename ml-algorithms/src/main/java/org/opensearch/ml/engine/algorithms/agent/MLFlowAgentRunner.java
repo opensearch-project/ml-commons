@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 
@@ -100,7 +101,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolSpec);
+                Tool tool = createTool(toolSpec, mlAgent.getTenantId());
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -148,7 +149,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
-                    Tool tool = createTool(toolSpec);
+                    Tool tool = createTool(toolSpec, mlAgent.getTenantId());
                     if (finalI < toolSpecs.size()) {
                         tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
                     }
@@ -218,7 +219,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
                 ActionListener.<UpdateResponse>wrap(updateResponse -> {
                     log.info("Updated additional info for interaction ID: {}", interactionId);
-                }, e -> { log.error("Failed to update root interaction", e); })
+                }, e -> log.error("Failed to update root interaction", e))
             );
     }
 
@@ -253,11 +254,12 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    Tool createTool(MLToolSpec toolSpec) {
+    Tool createTool(MLToolSpec toolSpec, String tenantId) {
         Map<String, String> toolParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
         }
+        toolParams.put(TENANT_ID, tenantId);
         if (!toolFactories.containsKey(toolSpec.getType())) {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
@@ -265,7 +267,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         if (toolSpec.getName() != null) {
             tool.setName(toolSpec.getName());
         }
-        tool.setTenantId(toolSpec.getTenantId());
 
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());
@@ -293,6 +294,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 executeParams.put(key, params.get(key));
             }
         }
+
+        executeParams.put(TENANT_ID, toolSpec.getTenantId());
 
         if (executeParams.containsKey("input")) {
             String input = executeParams.get("input");

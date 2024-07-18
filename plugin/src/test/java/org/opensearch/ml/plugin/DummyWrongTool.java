@@ -8,13 +8,12 @@ package org.opensearch.ml.plugin;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class DummyWrongTool extends AbstractTool {
+public class DummyWrongTool implements Tool {
     public static final String TYPE = "DummyWrongTool";
 
     private String name = TYPE;

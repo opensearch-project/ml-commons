@@ -104,17 +104,21 @@ public class MLAgentExecutor implements Executable {
     }
 
     @Override
-    public void execute(Input input, ActionListener<Output> listener) {
+    public void execute(Input input, String tenantId, ActionListener<Output> listener) {
         if (!(input instanceof AgentMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
-        String tenantId = agentMLInput.getTenantId();
+        String agentTenantId = agentMLInput.getTenantId();
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         if (inputDataSet == null || inputDataSet.getParameters() == null) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
+        }
+
+        if (isMultiTenancyEnabled && !Objects.equals(tenantId, agentTenantId)) {
+            throw new OpenSearchStatusException("You don't have permission to access this resource", RestStatus.FORBIDDEN);
         }
 
         List<ModelTensors> outputs = new ArrayList<>();

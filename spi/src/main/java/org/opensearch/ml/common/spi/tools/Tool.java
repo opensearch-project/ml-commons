@@ -98,18 +98,6 @@ public interface Tool {
     }
 
     /**
-     * Get the tenant ID.
-     * @return the tenant ID
-     */
-    String getTenantId();
-
-    /**
-     * Set the tenant ID.
-     * @param tenantId the tenant ID to set
-     */
-    void setTenantId(String tenantId);
-
-    /**
      * Tool factory which can create instance of {@link Tool}.
      * @param <T> The subclass this factory produces
      */

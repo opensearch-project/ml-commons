@@ -152,7 +152,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
 
                 StringBuilder chatHistoryBuilder = new StringBuilder();
-                if (messageList.size() > 0) {
+                if (!messageList.isEmpty()) {
                     String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
                     chatHistoryBuilder.append(chatHistoryPrefix);
                     for (Message message : messageList) {
@@ -173,7 +173,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-        createTools(toolFactories, params, toolSpecs, tools, toolSpecMap);
+        createTools(toolFactories, params, toolSpecs, tools, toolSpecMap, mlAgent);
 
         runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener);
     }

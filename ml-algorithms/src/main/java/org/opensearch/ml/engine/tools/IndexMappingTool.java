@@ -23,7 +23,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -32,7 +31,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @ToolAnnotation(IndexMappingTool.TYPE)
-public class IndexMappingTool extends AbstractTool {
+public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
     private static final String DEFAULT_DESCRIPTION = String
         .join(

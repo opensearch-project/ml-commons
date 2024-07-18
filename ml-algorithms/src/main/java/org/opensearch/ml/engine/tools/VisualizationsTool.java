@@ -20,7 +20,6 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.search.SearchHits;
@@ -33,7 +32,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ToolAnnotation(VisualizationsTool.TYPE)
-public class VisualizationsTool extends AbstractTool {
+public class VisualizationsTool implements Tool {
     public static final String NAME = "FindVisualizations";
     public static final String TYPE = "VisualizationTool";
     public static final String VERSION = "v1.0";

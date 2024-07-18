@@ -114,7 +114,7 @@ public class MetricsCorrelation extends DLModelExecute {
      *  algorithm is a list of objects. Each object contains 3 properties  event_window, event_pattern and suspected_metrics
      */
     @Override
-    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) {
+    public void execute(Input input, String tenantId, ActionListener<org.opensearch.ml.common.output.Output> listener) {
         if (!(input instanceof MetricsCorrelationInput)) {
             throw new ExecuteException("wrong input");
         }
