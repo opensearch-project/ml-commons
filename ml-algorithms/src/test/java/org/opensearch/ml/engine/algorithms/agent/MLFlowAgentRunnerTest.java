@@ -292,7 +292,7 @@ public class MLFlowAgentRunnerTest {
 
         Map<String, String> params = Map.of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -322,7 +322,7 @@ public class MLFlowAgentRunnerTest {
             );
 
         // Execute the method
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         // Assertions
         assertEquals("value1", result.get("param1"));

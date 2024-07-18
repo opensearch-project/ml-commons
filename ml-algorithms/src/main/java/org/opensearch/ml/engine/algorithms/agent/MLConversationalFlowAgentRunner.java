@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
@@ -127,7 +128,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 }
 
                 StringBuilder chatHistoryBuilder = new StringBuilder();
-                if (messageList.size() > 0) {
+                if (!messageList.isEmpty()) {
                     chatHistoryBuilder.append("Below is Chat History between Human and AI which sorted by time with asc order:\n");
                     for (Message message : messageList) {
                         chatHistoryBuilder.append(message.toString()).append("\n");
@@ -178,7 +179,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
-                firstToolExecuteParams = getToolExecuteParams(toolSpec, params);
+                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
             } else {
                 MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
@@ -344,7 +345,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
         Tool tool = createTool(toolFactories, params, toolSpec, tenantId);
         if (finalI < toolSpecs.size()) {
-            tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
+            tool.run(getToolExecuteParams(toolSpec, params, tenantId), nextStepListener);
         }
     }
 
@@ -417,11 +418,12 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
+    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params, String tenantId) {
         Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
+        executeParams.put(TENANT_ID, tenantId);
         for (String key : params.keySet()) {
             String toBeReplaced = null;
             if (key.startsWith(toolSpec.getType() + ".")) {

@@ -170,7 +170,7 @@ public class AgentUtils {
         Map<String, String> contextMap = new HashMap<>();
         contextMap.put(CONTEXT, parameters.getOrDefault(CONTEXT, ""));
         parameters.put(CONTEXT, contextMap.get(CONTEXT));
-        if (contextMap.size() > 0) {
+        if (!contextMap.isEmpty()) {
             StringSubstitutor substitutor = new StringSubstitutor(contextMap, "${parameters.", "}");
             return substitutor.replace(prompt);
         }

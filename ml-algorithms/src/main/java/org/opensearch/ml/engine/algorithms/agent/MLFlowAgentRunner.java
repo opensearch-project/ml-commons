@@ -78,11 +78,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
-        if (toolSpecs != null && !toolSpecs.isEmpty()) {
-            for (MLToolSpec toolSpec : toolSpecs) {
-                toolSpec.setTenantId(mlAgent.getTenantId());
-            }
-        }
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();
@@ -105,7 +100,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
-                firstToolExecuteParams = getToolExecuteParams(toolSpec, params);
+                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
             } else {
                 MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
@@ -151,7 +146,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
                     Tool tool = createTool(toolSpec, mlAgent.getTenantId());
                     if (finalI < toolSpecs.size()) {
-                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
+                        tool.run(getToolExecuteParams(toolSpec, params, mlAgent.getTenantId()), nextStepListener);
                     }
 
                 }, e -> {
@@ -275,7 +270,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
+    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params, String tenantId) {
         Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
@@ -295,7 +290,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             }
         }
 
-        executeParams.put(TENANT_ID, toolSpec.getTenantId());
+        executeParams.put(TENANT_ID, tenantId);
 
         if (executeParams.containsKey("input")) {
             String input = executeParams.get("input");
