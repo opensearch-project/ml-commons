@@ -40,6 +40,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
+import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -83,7 +84,7 @@ public class SdkClientFactory {
                 return new SdkClient(
                     new DDBOpenSearchClient(
                         createDynamoDbClient(region),
-                        new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint))
+                        new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region))
                     )
                 );
             default:
@@ -136,6 +137,7 @@ public class SdkClientFactory {
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL)
                 .registerModule(new JavaTimeModule());
             return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
+
         } catch (Exception e) {
             throw new OpenSearchException(e);
         }
@@ -143,13 +145,19 @@ public class SdkClientFactory {
 
     private static OpenSearchClient createAwsOpenSearchServiceClient(String remoteMetadataEndpoint, String region) {
         // https://github.com/opensearch-project/opensearch-java/blob/main/guides/auth.md
+        AwsCredentialsProviderChain credentialsProviderChain = AwsCredentialsProviderChain
+                .builder()
+                .addCredentialsProvider(EnvironmentVariableCredentialsProvider.create())
+                .addCredentialsProvider(ContainerCredentialsProvider.builder().build())
+                .addCredentialsProvider(InstanceProfileCredentialsProvider.create())
+                .build();
         return new OpenSearchClient(
             new AwsSdk2Transport(
                 ApacheHttpClient.builder().build(),
                 remoteMetadataEndpoint.replaceAll("^https?://", ""), // OpenSearch endpoint, without https://
-                "es", // signing service name, use "aoss" for OpenSearch Serverless
+                "aoss", // signing service name, use "aoss" for OpenSearch Serverless
                 Region.of(region), // signing service region
-                AwsSdk2TransportOptions.builder().build()
+                AwsSdk2TransportOptions.builder().setCredentials(credentialsProviderChain).build()
             )
         );
     }
