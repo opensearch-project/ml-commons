@@ -39,10 +39,11 @@ public class RemoteInferenceMLInputTest {
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet)input.getInputDataset();
         Assert.assertEquals(1, inputDataSet.getParameters().size());
         Assert.assertEquals("hello world", inputDataSet.getParameters().get("prompt"));
+        Assert.assertEquals("BATCH", inputDataSet.getActionType().toString());
     }
 
     private static RemoteInferenceMLInput createRemoteInferenceMLInput() throws IOException {
-        String jsonStr = "{ \"parameters\": { \"prompt\": \"hello world\" } }";
+        String jsonStr = "{ \"parameters\": { \"prompt\": \"hello world\" }, \"action_type\": \"BATCH\" }";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
