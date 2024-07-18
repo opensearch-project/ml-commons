@@ -21,6 +21,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
@@ -54,6 +55,7 @@ public class MLModelTool implements Tool {
     private Parser inputParser;
     @Setter
     @Getter
+    @VisibleForTesting
     private Parser outputParser;
     @Setter
     @Getter
@@ -65,8 +67,18 @@ public class MLModelTool implements Tool {
         this.responseField = responseField;
 
         outputParser = o -> {
-            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get(responseField);
+            try {
+                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+                Map<String, ?> dataAsMap = mlModelOutputs.getFirst().getMlModelTensors().getFirst().getDataAsMap();
+                // Return the response field if it exists, otherwise return the whole response as json string.
+                if (dataAsMap.containsKey(responseField)) {
+                    return dataAsMap.get(responseField);
+                } else {
+                    return StringUtils.toJson(dataAsMap);
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException("LLM returns wrong or empty tensors", e);
+            }
         };
     }
 
