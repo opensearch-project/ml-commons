@@ -24,6 +24,8 @@ public interface Executable {
     /**
      * Execute algorithm with given input data.
      * @param input input data
+     * @param tenantId id of the tenant for multi-tenancy.
+     *                 For single tenant, it will be null
      * @return execution result
      */
     void execute(Input input, String tenantId, ActionListener<Output> listener) throws ExecuteException;
