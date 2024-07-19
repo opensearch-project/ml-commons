@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+
 import java.util.List;
 import java.util.Map;
 
@@ -69,7 +71,7 @@ public class MLModelTool implements Tool {
         outputParser = o -> {
             try {
                 List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                Map<String, ?> dataAsMap = mlModelOutputs.getFirst().getMlModelTensors().getFirst().getDataAsMap();
+                Map<String, ?> dataAsMap = mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap();
                 // Return the response field if it exists, otherwise return the whole response as json string.
                 if (dataAsMap.containsKey(responseField)) {
                     return dataAsMap.get(responseField);
@@ -85,16 +87,23 @@ public class MLModelTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        ActionRequest request = new MLPredictionTaskRequest(
-            modelId,
-            MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build()
-        );
+        String tenantId = null;
+        if (parameters != null) {
+            tenantId = parameters.get(TENANT_ID);
+        }
+        ActionRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId(modelId)
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build())
+            .tenantId(tenantId)
+            .build();
+
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
             listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
         }, e -> {
-            log.error("Failed to run model " + modelId, e);
+            log.error("Failed to run model {}", modelId, e);
             listener.onFailure(e);
         }));
     }

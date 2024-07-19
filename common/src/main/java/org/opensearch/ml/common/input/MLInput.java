@@ -156,18 +156,18 @@ public class MLInput implements Input {
                     TextDocsInputDataSet textInputDataSet = (TextDocsInputDataSet) this.inputDataset;
                     List<String> docs = textInputDataSet.getDocs();
                     ModelResultFilter resultFilter = textInputDataSet.getResultFilter();
-                    if (docs != null && docs.size() > 0) {
+                    if (docs != null && !docs.isEmpty()) {
                         builder.field(TEXT_DOCS_FIELD, docs.toArray(new String[0]));
                     }
                     if (resultFilter != null) {
                         builder.field(RETURN_BYTES_FIELD, resultFilter.isReturnBytes());
                         builder.field(RETURN_NUMBER_FIELD, resultFilter.isReturnNumber());
                         List<String> targetResponse = resultFilter.getTargetResponse();
-                        if (targetResponse != null && targetResponse.size() > 0) {
+                        if (targetResponse != null && !targetResponse.isEmpty()) {
                             builder.field(TARGET_RESPONSE_FIELD, targetResponse.toArray(new String[0]));
                         }
                         List<Integer> targetPositions = resultFilter.getTargetResponsePositions();
-                        if (targetPositions != null && targetPositions.size() > 0) {
+                        if (targetPositions != null && !targetPositions.isEmpty()) {
                             builder.field(TARGET_RESPONSE_POSITIONS_FIELD, targetPositions.toArray(new Integer[0]));
                         }
                     }

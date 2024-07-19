@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.AGENT})
@@ -31,9 +32,14 @@ public class AgentMLInput extends MLInput {
     @Getter @Setter
     private String agentId;
 
+    @Getter @Setter
+    private String tenantId;
+
+
     @Builder(builderMethodName = "AgentMLInputBuilder")
-    public AgentMLInput(String agentId, FunctionName functionName, MLInputDataset inputDataset) {
+    public AgentMLInput(String agentId, String tenantId, FunctionName functionName, MLInputDataset inputDataset) {
         this.agentId = agentId;
+        this.tenantId = tenantId;
         this.algorithm = functionName;
         this.inputDataset = inputDataset;
     }
@@ -42,11 +48,15 @@ public class AgentMLInput extends MLInput {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(agentId);
+        // TODO: need to check BWC later
+        out.writeOptionalString(tenantId);
     }
 
     public AgentMLInput(StreamInput in) throws IOException {
         super(in);
         this.agentId = in.readString();
+        //TODO: need to check BWC later
+        this.tenantId = in.readOptionalString();
     }
 
     public AgentMLInput(XContentParser parser, FunctionName functionName) throws IOException {
@@ -60,6 +70,9 @@ public class AgentMLInput extends MLInput {
             switch (fieldName) {
                 case AGENT_ID_FIELD:
                     agentId = parser.text();
+                    break;
+                case TENANT_ID:
+                    tenantId = parser.textOrNull();
                     break;
                 case PARAMETERS_FIELD:
                     Map<String, String> parameters = StringUtils.getParameterMap(parser.map());

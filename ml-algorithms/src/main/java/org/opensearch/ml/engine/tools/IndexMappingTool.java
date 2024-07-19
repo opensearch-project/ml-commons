@@ -163,7 +163,7 @@ public class IndexMappingTool implements Tool {
 
         private static Factory INSTANCE;
 
-        /** 
+        /**
          * Create or return the singleton factory instance
          */
         public static Factory getInstance() {

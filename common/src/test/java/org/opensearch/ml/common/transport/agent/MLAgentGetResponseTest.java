@@ -69,7 +69,7 @@ public class MLAgentGetResponseTest {
     @Test
     public void writeTo() throws IOException {
         //create ml agent using MLAgent and mlAgentGetResponse
-        mlAgent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        mlAgent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false, null)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
                 .mlAgent(mlAgent)
                 .build();

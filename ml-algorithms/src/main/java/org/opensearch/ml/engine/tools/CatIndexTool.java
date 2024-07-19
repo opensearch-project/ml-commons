@@ -315,7 +315,7 @@ public class CatIndexTool implements Tool {
 
         private static Factory INSTANCE;
 
-        /** 
+        /**
          * Create or return the singleton factory instance
          */
         public static Factory getInstance() {

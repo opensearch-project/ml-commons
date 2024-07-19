@@ -122,6 +122,8 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
+        // The lambda function (c, tenantId) -> encryptor.decrypt(c, null) is used to adapt the encryptor.decrypt
+        // method to the BiFunction<String, String, String> interface required by connector.decrypt.
         connector.decrypt((c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.HashMap;
@@ -55,9 +56,11 @@ public class AgentTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         Map<String, String> extractedParameters = extractInputParameters(parameters);
+        String tenantId = parameters.get(TENANT_ID);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
+            .tenantId(tenantId)
             .functionName(FunctionName.AGENT)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
             .build();

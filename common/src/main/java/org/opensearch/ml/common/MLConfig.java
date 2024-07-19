@@ -63,7 +63,7 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         createTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
-        //Check BWC later
+        //TODO: Check BWC later
         tenantId = input.readOptionalString();
     }
 
@@ -78,7 +78,7 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         out.writeOptionalInstant(createTime);
         out.writeOptionalInstant(lastUpdateTime);
-        // check BWC later
+        //TODO: check BWC later
         out.writeOptionalString(tenantId);
     }
 
