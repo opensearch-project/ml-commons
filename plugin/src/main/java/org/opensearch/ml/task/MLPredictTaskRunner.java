@@ -19,8 +19,6 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
 
-import javax.swing.*;
-
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;

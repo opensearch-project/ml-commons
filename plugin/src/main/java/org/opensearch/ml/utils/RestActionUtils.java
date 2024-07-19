@@ -39,6 +39,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -313,8 +314,12 @@ public class RestActionUtils {
         String path = request.path();
         String[] segments = path.split("/");
         String methodName = segments[segments.length - 1];
-        if (methodName.contains("_")) {
-            methodName = methodName.split("_")[1];
+        methodName = methodName.contains("_") ? methodName.split("_")[1] : methodName;
+
+        // find the action type for "/_plugins/_ml/_predict/<algorithm>/<model_id>"
+        if (!ActionType.isValidAction(methodName) && segments.length > 3) {
+            methodName = segments[3];
+            methodName = methodName.contains("_") ? methodName.split("_")[1] : methodName;
         }
         return methodName;
     }

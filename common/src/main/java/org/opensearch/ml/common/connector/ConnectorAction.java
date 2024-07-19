@@ -193,7 +193,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             try {
                 return ActionType.valueOf(value.toUpperCase(Locale.ROOT));
             } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong Action Type");
+                throw new IllegalArgumentException("Wrong Action Type of " + value);
             }
         }
 
@@ -204,6 +204,15 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
         public static boolean isValidActionInModelPrediction(ActionType actionType) {
             return MODEL_SUPPORT_ACTIONS.contains(actionType);
+        }
+
+        public static boolean isValidAction(String action) {
+            try {
+                ActionType.valueOf(action.toUpperCase());
+                return true;
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
         }
     }
 }

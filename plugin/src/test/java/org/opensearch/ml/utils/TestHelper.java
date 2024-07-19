@@ -212,6 +212,7 @@ public class TestHelper {
             + "\"COSINE\"},\"input_query\":{\"_source\":[\"petal_length_in_cm\",\"petal_width_in_cm\"],"
             + "\"size\":10000},\"input_index\":[\"iris_data\"]}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withPath("/_plugins/_ml/models/{model_id}}/_predict")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
