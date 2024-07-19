@@ -6,7 +6,9 @@
 package org.opensearch.ml.action.agents;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -15,11 +17,15 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
+import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -28,11 +34,13 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class TransportSearchAgentAction extends HandledTransportAction<SearchRequest, SearchResponse> {
     private final Client client;
+    private final SdkClient sdkClient;
 
     @Inject
-    public TransportSearchAgentAction(TransportService transportService, ActionFilters actionFilters, Client client) {
+    public TransportSearchAgentAction(TransportService transportService, ActionFilters actionFilters, Client client, SdkClient sdkClient) {
         super(MLSearchAgentAction.NAME, transportService, actionFilters, SearchRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
     }
 
     @Override
@@ -67,7 +75,34 @@ public class TransportSearchAgentAction extends HandledTransportAction<SearchReq
             queryBuilder.filter(shouldQuery);
 
             request.source().query(queryBuilder);
-            client.search(request, wrappedListener);
+
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
+                .indices(request.indices())
+                .searchSourceBuilder(request.source())
+                .build();
+
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to search agent", cause);
+                        wrappedListener.onFailure(cause);
+                    } else {
+                        try {
+                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                            log.info("Agent search complete: {}", searchResponse.getHits().getTotalHits());
+                            wrappedListener.onResponse(searchResponse);
+                        } catch (Exception e) {
+                            log.error("Failed to parse model search response", e);
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException("Failed to parse model search response", RestStatus.INTERNAL_SERVER_ERROR)
+                                );
+                        }
+                    }
+                });
         } catch (Exception e) {
             log.error("failed to search the agent index", e);
             actionListener.onFailure(e);

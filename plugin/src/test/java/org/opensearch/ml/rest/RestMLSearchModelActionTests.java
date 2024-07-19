@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.TestHelper.getSearchAllRestRequest;
 
@@ -36,6 +37,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -52,6 +54,9 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
 
     private RestMLSearchModelAction restMLSearchModelAction;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     NodeClient client;
     private ThreadPool threadPool;
     @Mock
@@ -60,7 +65,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        restMLSearchModelAction = new RestMLSearchModelAction();
+        restMLSearchModelAction = new RestMLSearchModelAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
@@ -106,7 +111,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchModelAction mlSearchModelAction = new RestMLSearchModelAction();
+        RestMLSearchModelAction mlSearchModelAction = new RestMLSearchModelAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchModelAction);
     }
 
@@ -140,6 +145,26 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             searchRequest.source().toString()
+        );
+        RestResponse restResponse = responseCaptor.getValue();
+        assertNotEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
+    }
+
+    public void testPrepareRequest_multiTenancy() throws Exception {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        RestRequest request = getSearchAllRestRequest();
+        restMLSearchModelAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(client, times(1)).execute(eq(MLModelSearchAction.INSTANCE), argumentCaptor.capture(), any());
+        verify(channel, times(1)).sendResponse(responseCaptor.capture());
+        SearchRequest searchRequest = argumentCaptor.getValue();
+        String[] indices = searchRequest.indices();
+        assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
+        assertEquals(
+                "{\"query\":{\"term\":{\"tenant_id\":{\"value\":\"test-tenant\",\"boost\":1.0}}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+                searchRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
         assertNotEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());

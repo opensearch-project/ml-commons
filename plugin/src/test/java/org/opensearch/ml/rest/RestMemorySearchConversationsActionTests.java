@@ -27,11 +27,14 @@ import java.util.List;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler.Route;
@@ -44,13 +47,17 @@ public class RestMemorySearchConversationsActionTests extends OpenSearchTestCase
 
     Gson gson;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
+        MockitoAnnotations.openMocks(this);
         gson = new Gson();
     }
 
     public void testBasics() {
-        RestMemorySearchConversationsAction action = new RestMemorySearchConversationsAction();
+        RestMemorySearchConversationsAction action = new RestMemorySearchConversationsAction(mlFeatureEnabledSetting);
         assert (action.getName().equals("conversation_memory_search_conversations"));
         List<Route> routes = action.routes();
         assert (routes.size() == 2);
@@ -59,7 +66,7 @@ public class RestMemorySearchConversationsActionTests extends OpenSearchTestCase
     }
 
     public void testPreprareRequest() throws Exception {
-        RestMemorySearchConversationsAction action = new RestMemorySearchConversationsAction();
+        RestMemorySearchConversationsAction action = new RestMemorySearchConversationsAction(mlFeatureEnabledSetting);
         RestRequest request = TestHelper.getSearchAllRestRequest();
 
         NodeClient client = mock(NodeClient.class);

@@ -706,7 +706,7 @@ public class MLAgentExecutorTest {
     }
 
     @Test
-    public void test_AgentRunnerFailure_ReturnsResult() throws IOException, InterruptedException {
+    public void test_AgentRunnerFailure_ReturnsResult() throws InterruptedException {
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException());
