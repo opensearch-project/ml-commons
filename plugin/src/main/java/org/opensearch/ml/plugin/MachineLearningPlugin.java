@@ -842,8 +842,8 @@ public class MachineLearningPlugin extends Plugin
         FixedExecutorBuilder executeThreadPool = new FixedExecutorBuilder(
             settings,
             EXECUTE_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
             ML_THREAD_POOL_PREFIX + EXECUTE_THREAD_POOL,
             false
         );
