@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -17,15 +18,22 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Getter
 @EqualsAndHashCode
@@ -44,6 +52,8 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
     public static final String ERROR_FIELD = "error";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
+    public static final String TRANSFORM_JOB_FIELD = "transform_job";
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB = CommonValue.VERSION_2_16_0;
 
     @Setter
     private String taskId;
@@ -65,6 +75,8 @@ public class MLTask implements ToXContentObject, Writeable {
     private String error;
     private User user; // TODO: support document level access control later
     private boolean async;
+    @Setter
+    private Map<String, Object> transformJob;
 
     @Builder(toBuilder = true)
     public MLTask(
@@ -81,7 +93,8 @@ public class MLTask implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String error,
         User user,
-        boolean async
+        boolean async,
+        Map<String, Object> transformJob
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -97,9 +110,11 @@ public class MLTask implements ToXContentObject, Writeable {
         this.error = error;
         this.user = user;
         this.async = async;
+        this.transformJob = transformJob;
     }
 
     public MLTask(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         this.taskId = input.readOptionalString();
         this.modelId = input.readOptionalString();
         this.taskType = input.readEnum(MLTaskType.class);
@@ -122,10 +137,17 @@ public class MLTask implements ToXContentObject, Writeable {
             this.user = null;
         }
         this.async = input.readBoolean();
+        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB)) {
+            if (input.readBoolean()) {
+                String mapStr = input.readString();
+                this.transformJob = gson.fromJson(mapStr, Map.class);
+            }
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(taskId);
         out.writeOptionalString(modelId);
         out.writeEnum(taskType);
@@ -149,6 +171,21 @@ public class MLTask implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeBoolean(async);
+        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB)) {
+            if (transformJob != null) {
+                out.writeBoolean(true);
+                try {
+                    AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                        out.writeString(gson.toJson(transformJob));
+                        return null;
+                    });
+                } catch (PrivilegedActionException e) {
+                    throw new RuntimeException(e);
+                }
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -194,6 +231,9 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(USER, user);
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
+        if (transformJob != null) {
+            builder.field(TRANSFORM_JOB_FIELD, transformJob);
+        }
         return builder.endObject();
     }
 
@@ -217,6 +257,7 @@ public class MLTask implements ToXContentObject, Writeable {
         String error = null;
         User user = null;
         boolean async = false;
+        Map<String, Object> transformJob = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -274,6 +315,9 @@ public class MLTask implements ToXContentObject, Writeable {
                 case IS_ASYNC_TASK_FIELD:
                     async = parser.booleanValue();
                     break;
+                case TRANSFORM_JOB_FIELD:
+                    transformJob = parser.map();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -294,6 +338,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 .error(error)
                 .user(user)
                 .async(async)
+                .transformJob(transformJob)
                 .build();
     }
 }

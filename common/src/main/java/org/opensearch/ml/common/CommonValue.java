@@ -62,7 +62,7 @@ public class CommonValue {
         public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
         public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 11;
         public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
-        public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
+        public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 3;
         public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
         public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
         public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
@@ -359,6 +359,10 @@ public class CommonValue {
                         + "\" : {\"type\" : \"boolean\"}, \n"
                         + USER_FIELD_MAPPING
                         + "    }\n"
+                        + "}"
+                        + MLTask.TRANSFORM_JOB_FIELD
+                        + "\" : {\"type\": \"flat_object\"}\n"
+                        + "    }\n"
                         + "}";
 
         public static final String ML_CONNECTOR_INDEX_MAPPING = "{\n"
@@ -537,4 +541,5 @@ public class CommonValue {
         public static final Version VERSION_2_12_0 = Version.fromString("2.12.0");
         public static final Version VERSION_2_13_0 = Version.fromString("2.13.0");
         public static final Version VERSION_2_14_0 = Version.fromString("2.14.0");
+        public static final Version VERSION_2_16_0 = Version.fromString("2.16.0");
 }

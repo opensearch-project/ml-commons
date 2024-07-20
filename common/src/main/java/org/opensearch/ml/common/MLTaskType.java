@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 public enum MLTaskType {
     TRAINING,
     PREDICTION,
+    BATCH_PREDICTION,
     TRAINING_AND_PREDICTION,
     EXECUTION,
     @Deprecated

@@ -22,6 +22,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -29,6 +30,11 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -47,10 +53,25 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     TransportService transportService;
 
     @Mock
+    private ClusterService clusterService;
+    @Mock
+    private ScriptService scriptService;
+
+    @Mock
     ActionFilters actionFilters;
+    @Mock
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
+
+    @Mock
+    private EncryptorImpl encryptor;
 
     @Mock
     ActionListener<MLTaskGetResponse> actionListener;
+    @Mock
+    private MLModelManager mlModelManager;
+
+    @Mock
+    private MLTaskManager mlTaskManager;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -64,7 +85,20 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlTaskGetRequest = MLTaskGetRequest.builder().taskId("test_id").build();
 
-        getTaskTransportAction = spy(new GetTaskTransportAction(transportService, actionFilters, client, xContentRegistry));
+        getTaskTransportAction = spy(
+            new GetTaskTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                xContentRegistry,
+                clusterService,
+                scriptService,
+                connectorAccessControlHelper,
+                encryptor,
+                mlTaskManager,
+                mlModelManager
+            )
+        );
 
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
