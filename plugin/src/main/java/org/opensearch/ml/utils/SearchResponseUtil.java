@@ -14,9 +14,7 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 
 public class SearchResponseUtil {
-    private SearchResponseUtil() {
-
-    }
+    private SearchResponseUtil() {}
 
     /**
      * Construct a new {@link SearchResponse} based on an existing one, replacing just the {@link SearchHits}.

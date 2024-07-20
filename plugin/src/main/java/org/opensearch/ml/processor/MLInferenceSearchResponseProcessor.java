@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.processor;
 
+import static java.lang.Math.max;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -17,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,7 +42,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.utils.StringUtils;
-import org.opensearch.ml.utils.VersionedMapUtils;
+import org.opensearch.ml.utils.MapUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.PipelineProcessingContext;
@@ -118,6 +118,14 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         throw new RuntimeException("ML inference search response processor make asynchronous calls and does not call processRequest");
     }
 
+    /**
+     * Processes the search response asynchronously by rewriting the documents with the inference results.
+     *
+     * @param request         the search request
+     * @param response        the search response
+     * @param responseContext the pipeline processing context
+     * @param responseListener the listener to be notified when the response is processed
+     */
     @Override
     public void processResponseAsync(
         SearchRequest request,
@@ -134,27 +142,36 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             }
             rewriteResponseDocuments(response, hits, responseListener);
         } catch (Exception e) {
-            responseListener.onFailure(e);
+            if (ignoreFailure) {
+                responseListener.onResponse(response);
+            } else {
+                responseListener.onFailure(e);
+            }
         }
     }
 
+    /**
+     * Rewrite the documents in the search response with the inference results.
+     *
+     * @param response        the search response
+     * @param hits            the search hits
+     * @param responseListener the listener to be notified when the response is processed
+     * @throws IOException if an I/O error occurs during the rewriting process
+     */
     private void rewriteResponseDocuments(SearchResponse response, SearchHit[] hits, ActionListener<SearchResponse> responseListener)
         throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
-        int inputMapSize = (processInputMap != null) ? processInputMap.size() : 0;
+        int inputMapSize = (processInputMap == null) ? 0 : processInputMap.size();
 
-        // TODO decide the default mapping
-        if (inputMapSize == 0) {
-            responseListener.onResponse(response);
-            return;
-        }
-
-        ActionListener<Map<Integer, MLOutput>> rewriteResponseListener = createRewriteRequestListener(
+        // hitCountInPredictions keeps track of the count of hit that have the required input fields for each round of prediction
+        Map<Integer, Integer> hitCountInPredictions = new HashMap<>();
+        ActionListener<Map<Integer, MLOutput>> rewriteResponseListener = createRewriteResponseListener(
             response,
             responseListener,
             processInputMap,
-            processOutputMap
+            processOutputMap,
+            hitCountInPredictions
         );
 
         GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListener(
@@ -162,17 +179,29 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             inputMapSize
         );
 
-        for (int inputMapIndex = 0; inputMapIndex < inputMapSize; inputMapIndex++) {
-            processPredictions(response, hits, processInputMap, inputMapIndex, batchPredictionListener);
+        for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
+            processPredictions(response, hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
         }
     }
 
+    /**
+     * Processes the predictions for the given input map index.
+     *
+     * @param response                the search response
+     * @param hits                    the search hits
+     * @param processInputMap         the list of input mappings
+     * @param inputMapIndex           the index of the input mapping to process
+     * @param batchPredictionListener the listener to be notified when the predictions are processed
+     * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
+     * @throws IOException if an I/O error occurs during the prediction process
+     */
     private void processPredictions(
         SearchResponse response,
         SearchHit[] hits,
         List<Map<String, String>> processInputMap,
         int inputMapIndex,
-        GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener
+        GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener,
+        Map<Integer, Integer> hitCountInPredictions
     ) throws IOException {
 
         Map<String, String> modelParameters = new HashMap<>();
@@ -188,91 +217,125 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, String> inputMapping;
         if (processInputMap != null) {
             inputMapping = processInputMap.get(inputMapIndex);
+
             for (SearchHit hit : hits) {
-                for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
-                    // model field as key, document field name as value
-                    String modelInputFieldName = entry.getKey();
-                    String documentFieldName = entry.getValue();
+                Map<String, Object> document = hit.getSourceAsMap();
+                boolean isModelInputMissing = checkIsModelInputMissing(document, inputMapping);
+                if (!isModelInputMissing) {
+                    MapUtils.incrementCounter(hitCountInPredictions, inputMapIndex);
+                    for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
+                        // model field as key, document field name as value
+                        String modelInputFieldName = entry.getKey();
+                        String documentFieldName = entry.getValue();
 
-                    Map<String, Object> document = hit.getSourceAsMap();
-                    Object documentJson = JsonPath.parse(document).read("$");
-                    Configuration configuration = Configuration
-                        .builder()
-                        .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
-                        .build();
+                        Object documentJson = JsonPath.parse(document).read("$");
+                        Configuration configuration = Configuration
+                            .builder()
+                            .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
+                            .build();
 
-                    Object documentValue = JsonPath.using(configuration).parse(documentJson).read(documentFieldName);
-                    if (documentValue != null) {
-                        // when not existed in the map, add into the modelInputParameters map
-                        if (!modelInputParameters.containsKey(modelInputFieldName)) {
-                            modelInputParameters.put(modelInputFieldName, documentValue);
-                        } else {
-                            if (modelInputParameters.get(modelInputFieldName) instanceof List) {
-                                List<Object> valueList = ((List) modelInputParameters.get(modelInputFieldName));
-                                valueList.add(documentValue);
+                        Object documentValue = JsonPath.using(configuration).parse(documentJson).read(documentFieldName);
+                        if (documentValue != null) {
+
+                            // when not existed in the map, add into the modelInputParameters map
+                            if (!modelInputParameters.containsKey(modelInputFieldName)) {
+                                modelInputParameters.put(modelInputFieldName, documentValue);
                             } else {
-                                Object firstValue = modelInputParameters.remove(modelInputFieldName);
-                                List<Object> documentValueList = new ArrayList<>();
-                                documentValueList.add(firstValue);
-                                documentValueList.add(documentValue);
-                                modelInputParameters.put(modelInputFieldName, documentValueList);
+                                if (modelInputParameters.get(modelInputFieldName) instanceof List) {
+                                    List<Object> valueList = ((List) modelInputParameters.get(modelInputFieldName));
+                                    valueList.add(documentValue);
+                                } else {
+                                    Object firstValue = modelInputParameters.remove(modelInputFieldName);
+                                    List<Object> documentValueList = new ArrayList<>();
+                                    documentValueList.add(firstValue);
+                                    documentValueList.add(documentValue);
+                                    modelInputParameters.put(modelInputFieldName, documentValueList);
+                                }
                             }
                         }
 
                     }
-                    // when document does not contain the documentFieldName, skip when ignoreMissing
-                    else {
-                        if (!ignoreMissing) {
-                            throw new IllegalArgumentException("cannot find field name: " + documentFieldName + " in hit:" + hit);
-                        }
-
+                } else { // when document does not contain the documentFieldName, skip when ignoreMissing
+                    if (!ignoreMissing) {
+                        throw new IllegalArgumentException(
+                            "cannot find all required input fields: " + inputMapping.values() + " in hit:" + hit
+                        );
                     }
                 }
             }
-            for (Map.Entry<String, Object> entry : modelInputParameters.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                modelParameters.put(key, StringUtils.toJson(value));
-            }
+        } else {
+            for (SearchHit hit : hits) {
+                Map<String, Object> document = hit.getSourceAsMap();
+                MapUtils.incrementCounter(hitCountInPredictions, inputMapIndex);
+                for (Map.Entry<String, Object> entry : document.entrySet()) {
+                    // model field as key, document field name as value
+                    String modelInputFieldName = entry.getKey();
+                    Object documentValue = entry.getValue();
 
-            Set<String> inputMapKeys = new HashSet<>(modelParameters.keySet());
-            inputMapKeys.removeAll(modelConfigs.keySet());
+                    // when not existed in the map, add into the modelInputParameters map
+                    if (!modelInputParameters.containsKey(modelInputFieldName)) {
+                        modelInputParameters.put(modelInputFieldName, documentValue);
+                    } else {
+                        if (modelInputParameters.get(modelInputFieldName) instanceof List) {
+                            List<Object> valueList = ((List) modelInputParameters.get(modelInputFieldName));
+                            valueList.add(documentValue);
+                        } else {
+                            Object firstValue = modelInputParameters.remove(modelInputFieldName);
+                            List<Object> documentValueList = new ArrayList<>();
+                            documentValueList.add(firstValue);
+                            documentValueList.add(documentValue);
+                            modelInputParameters.put(modelInputFieldName, documentValueList);
+                        }
+                    }
 
-            Map<String, String> inputMappings = new HashMap<>();
-            for (String k : inputMapKeys) {
-                inputMappings.put(k, modelParameters.get(k));
-            }
-
-            ActionRequest request = getMLModelInferenceRequest(
-                xContentRegistry,
-                modelParameters,
-                modelConfigs,
-                inputMappings,
-                inferenceProcessorAttributes.getModelId(),
-                functionName,
-                modelInput
-            );
-
-            client.execute(MLPredictionTaskAction.INSTANCE, request, new ActionListener<>() {
-
-                @Override
-                public void onResponse(MLTaskResponse mlTaskResponse) {
-                    MLOutput mlOutput = mlTaskResponse.getOutput();
-                    Map<Integer, MLOutput> mlOutputMap = new HashMap<>();
-                    mlOutputMap.put(inputMapIndex, mlOutput);
-                    batchPredictionListener.onResponse(mlOutputMap);
                 }
-
-                @Override
-                public void onFailure(Exception e) {
-                    batchPredictionListener.onFailure(e);
-                }
-            });
-
+            }
         }
 
+        modelParameters = StringUtils.getParameterMap(modelInputParameters);
+
+        Set<String> inputMapKeys = new HashSet<>(modelParameters.keySet());
+        inputMapKeys.removeAll(modelConfigs.keySet());
+
+        Map<String, String> inputMappings = new HashMap<>();
+        for (String k : inputMapKeys) {
+            inputMappings.put(k, modelParameters.get(k));
+        }
+
+        ActionRequest request = getMLModelInferenceRequest(
+            xContentRegistry,
+            modelParameters,
+            modelConfigs,
+            inputMappings,
+            inferenceProcessorAttributes.getModelId(),
+            functionName,
+            modelInput
+        );
+
+        client.execute(MLPredictionTaskAction.INSTANCE, request, new ActionListener<>() {
+
+            @Override
+            public void onResponse(MLTaskResponse mlTaskResponse) {
+                MLOutput mlOutput = mlTaskResponse.getOutput();
+                Map<Integer, MLOutput> mlOutputMap = new HashMap<>();
+                mlOutputMap.put(inputMapIndex, mlOutput);
+                batchPredictionListener.onResponse(mlOutputMap);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                batchPredictionListener.onFailure(e);
+            }
+        });
     }
 
+    /**
+     * Creates a grouped action listener for batch predictions.
+     *
+     * @param rewriteResponseListener the listener to be notified when the response is rewritten
+     * @param inputMapSize            the size of the input map
+     * @return a grouped action listener for batch predictions
+     */
     private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListener(
         ActionListener<Map<Integer, MLOutput>> rewriteResponseListener,
         int inputMapSize
@@ -292,21 +355,31 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 logger.error("Prediction Failed:", e);
                 rewriteResponseListener.onFailure(e);
             }
-        }, Math.max(inputMapSize, 1));
+        }, max(inputMapSize, 1));
     }
 
-    private ActionListener<Map<Integer, MLOutput>> createRewriteRequestListener(
+    /**
+     * Creates an action listener for rewriting the response with the inference results.
+     *
+     * @param response                the search response
+     * @param responseListener        the listener to be notified when the response is processed
+     * @param processInputMap         the list of input mappings
+     * @param processOutputMap        the list of output mappings
+     * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
+     * @return an action listener for rewriting the response with the inference results
+     */
+    private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListener(
         SearchResponse response,
         ActionListener<SearchResponse> responseListener,
         List<Map<String, String>> processInputMap,
-        List<Map<String, String>> processOutputMap
+        List<Map<String, String>> processOutputMap,
+        Map<Integer, Integer> hitCountInPredictions
     ) {
         return new ActionListener<>() {
             @Override
             public void onResponse(Map<Integer, MLOutput> multipleMLOutputs) {
                 try {
-
-                    Map<Integer, Map<String, Integer>> hasInputMapFieldDocCounter = new HashMap<>();
+                    Map<Integer, Map<String, Integer>> writeOutputMapDocCounter = new HashMap<>();
 
                     for (SearchHit hit : response.getHits().getHits()) {
                         Map<String, Object> sourceAsMapWithInference = new HashMap<>();
@@ -317,30 +390,28 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
                             Map<String, Object> sourceAsMap = typeAndSourceMap.v2();
                             sourceAsMapWithInference.putAll(sourceAsMap);
+                            Map<String, Object> document = hit.getSourceAsMap();
+
                             for (Map.Entry<Integer, MLOutput> entry : multipleMLOutputs.entrySet()) {
                                 Integer mappingIndex = entry.getKey();
                                 MLOutput mlOutput = entry.getValue();
-                                Map<String, String> outputMapping = processOutputMap.get(mappingIndex);
-                                Map<String, String> inputMapping = processInputMap.get(mappingIndex);
 
-                                // TODO deal with no inputMapping and no outputMapping edge case.
-                                Iterator<Map.Entry<String, String>> inputIterator = inputMapping.entrySet().iterator();
-                                Iterator<Map.Entry<String, String>> outputIterator = outputMapping.entrySet().iterator();
+                                Map<String, String> inputMapping = getDefaultInputMapping(sourceAsMap, mappingIndex, processInputMap);
+                                Map<String, String> outputMapping = getDefaultOutputMapping(mappingIndex, processOutputMap);
 
-                                // Iterate over both maps simultaneously
-                                while (inputIterator.hasNext() || outputIterator.hasNext()) {
-                                    Map.Entry<String, String> inputMapEntry = inputIterator.hasNext() ? inputIterator.next() : null;
-                                    Map.Entry<String, String> outputMapEntry = outputIterator.hasNext() ? outputIterator.next() : null;
-                                    String modelInputFieldName = inputMapEntry.getKey();
-                                    String oldDocumentFieldName = inputMapEntry.getValue();
+                                boolean isModelInputMissing = false;
+                                if (processInputMap != null) {
+                                    isModelInputMissing = checkIsModelInputMissing(document, inputMapping);
+                                }
+                                if (!isModelInputMissing) {
+                                    // Iterate over outputMapping
+                                    for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
 
-                                    Map<String, Object> document = hit.getSourceAsMap();
-                                    if (hasField(document, oldDocumentFieldName)) {
+                                        String newDocumentFieldName = outputMapEntry.getKey(); // text_embedding
+                                        String modelOutputFieldName = outputMapEntry.getValue(); // response
 
-                                        VersionedMapUtils.incrementCounter(hasInputMapFieldDocCounter, mappingIndex, modelInputFieldName);
+                                        MapUtils.incrementCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName);
 
-                                        String newDocumentFieldName = outputMapEntry.getKey();
-                                        String modelOutputFieldName = outputMapEntry.getValue();
                                         Object modelOutputValue = getModelOutputValue(
                                             mlOutput,
                                             modelOutputFieldName,
@@ -348,12 +419,10 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                             fullResponsePath
                                         );
                                         Object modelOutputValuePerDoc;
-                                        if (modelOutputValue instanceof List && ((List) modelOutputValue).size() > 1) {
+                                        if (modelOutputValue instanceof List
+                                            && ((List) modelOutputValue).size() == hitCountInPredictions.get(mappingIndex)) {
                                             Object valuePerDoc = ((List) modelOutputValue)
-                                                .get(
-                                                    VersionedMapUtils
-                                                        .getCounter(hasInputMapFieldDocCounter, mappingIndex, modelInputFieldName)
-                                                );
+                                                .get(MapUtils.getCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName));
                                             modelOutputValuePerDoc = valuePerDoc;
                                         } else {
                                             modelOutputValuePerDoc = modelOutputValue;
@@ -363,27 +432,26 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                             if (override) {
                                                 sourceAsMapWithInference.remove(newDocumentFieldName);
                                                 sourceAsMapWithInference.put(newDocumentFieldName, modelOutputValuePerDoc);
+                                            } else {
+                                                logger
+                                                    .debug(
+                                                        "{} already exists in the search response hit. Skip processing this field.",
+                                                        newDocumentFieldName
+                                                    );
+                                                // TODO when the response has the same field name, should it throw exception? currently,
+                                                // ingest processor quietly skip it
                                             }
                                         } else {
                                             sourceAsMapWithInference.put(newDocumentFieldName, modelOutputValuePerDoc);
                                         }
-                                    } else {
-                                        if (!ignoreMissing) {
-                                            throw new IllegalArgumentException(
-                                                "cannot find field name: " + oldDocumentFieldName + " in hit:" + hit
-                                            );
-                                        }
                                     }
-
                                 }
                             }
-
                             XContentBuilder builder = XContentBuilder.builder(typeAndSourceMap.v1().xContent());
                             builder.map(sourceAsMapWithInference);
                             hit.sourceRef(BytesReference.bytes(builder));
 
                         }
-
                     }
                 } catch (Exception e) {
                     if (ignoreFailure) {
@@ -393,14 +461,13 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                         responseListener.onFailure(e);
                     }
                 }
-
                 responseListener.onResponse(response);
             }
 
             @Override
             public void onFailure(Exception e) {
                 if (ignoreFailure) {
-                    logger.error("Failed in writing prediction outcomes to new query", e);
+                    logger.error("Failed in writing prediction outcomes to search response", e);
                     responseListener.onResponse(response);
 
                 } else {
@@ -408,6 +475,84 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 }
             }
         };
+    }
+
+    /**
+     * Checks if the document is missing any of the required input fields specified in the input mapping.
+     *
+     * @param document     the document map
+     * @param inputMapping the input mapping
+     * @return true if the document is missing any of the required input fields, false otherwise
+     */
+    private boolean checkIsModelInputMissing(Map<String, Object> document, Map<String, String> inputMapping) {
+        boolean isModelInputMissing = false;
+
+        for (Map.Entry<String, String> inputMapEntry : inputMapping.entrySet()) {
+            String oldDocumentFieldName = inputMapEntry.getValue();
+            boolean checkSingleModelInputPresent = hasField(document, oldDocumentFieldName);
+            if (!checkSingleModelInputPresent) {
+                isModelInputMissing = true;
+                break;
+            }
+        }
+        return isModelInputMissing;
+    }
+
+    /**
+     * Retrieves the default output mapping for a given mapping index.
+     *
+     * <p>If the provided processOutputMap is null or empty, a new HashMap is created with a default
+     * output field name mapped to a JsonPath expression representing the root object ($) followed by
+     * the default output field name.
+     *
+     * <p>If the processOutputMap is not null and not empty, the mapping at the specified mappingIndex
+     * is returned.
+     *
+     * @param mappingIndex the index of the mapping to retrieve from the processOutputMap
+     * @param processOutputMap the list of output mappings, can be null or empty
+     * @return a Map containing the output mapping, either the default mapping or the mapping at the
+     *         specified index
+     */
+    private static Map<String, String> getDefaultOutputMapping(Integer mappingIndex, List<Map<String, String>> processOutputMap) {
+        Map<String, String> outputMapping;
+        if (processOutputMap == null || processOutputMap.size() == 0) {
+            outputMapping = new HashMap<>();
+            outputMapping.put(DEFAULT_OUTPUT_FIELD_NAME, "$." + DEFAULT_OUTPUT_FIELD_NAME);
+        } else {
+            outputMapping = processOutputMap.get(mappingIndex);
+        }
+        return outputMapping;
+    }
+
+    /**
+     * Retrieves the default input mapping for a given mapping index and source map.
+     *
+     * <p>If the provided processInputMap is null or empty, a new HashMap is created by extracting
+     * key-value pairs from the sourceAsMap using StringUtils.getParameterMap().
+     *
+     * <p>If the processInputMap is not null and not empty, the mapping at the specified mappingIndex
+     * is returned.
+     *
+     * @param sourceAsMap the source map containing the input data
+     * @param mappingIndex the index of the mapping to retrieve from the processInputMap
+     * @param processInputMap the list of input mappings, can be null or empty
+     * @return a Map containing the input mapping, either the mapping extracted from sourceAsMap or
+     *         the mapping at the specified index
+     */
+    private static Map<String, String> getDefaultInputMapping(
+        Map<String, Object> sourceAsMap,
+        Integer mappingIndex,
+        List<Map<String, String>> processInputMap
+    ) {
+        Map<String, String> inputMapping;
+
+        if (processInputMap == null || processInputMap.size() == 0) {
+            inputMapping = new HashMap<>();
+            inputMapping.putAll(StringUtils.getParameterMap(sourceAsMap));
+        } else {
+            inputMapping = processInputMap.get(mappingIndex);
+        }
+        return inputMapping;
     }
 
     /**
@@ -462,8 +607,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             String modelId = ConfigurationUtils.readStringProperty(TYPE, processorTag, config, MODEL_ID);
             Map<String, Object> modelConfigInput = ConfigurationUtils.readOptionalMap(TYPE, processorTag, config, MODEL_CONFIG);
 
-            List<Map<String, String>> inputMaps = ConfigurationUtils.readList(TYPE, processorTag, config, INPUT_MAP);
-            List<Map<String, String>> outputMaps = ConfigurationUtils.readList(TYPE, processorTag, config, OUTPUT_MAP);
+            List<Map<String, String>> inputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, INPUT_MAP);
+            List<Map<String, String>> outputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, OUTPUT_MAP);
             int maxPredictionTask = ConfigurationUtils
                 .readIntProperty(TYPE, processorTag, config, MAX_PREDICTION_TASKS, DEFAULT_MAX_PREDICTION_TASKS);
             boolean ignoreMissing = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, IGNORE_MISSING, false);
@@ -504,9 +649,9 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             }
             if (outputMaps != null && inputMaps != null && outputMaps.size() != inputMaps.size()) {
                 throw new IllegalArgumentException(
-                    "when output_maps and input_maps are provided, their length needs to match. The input_maps is in length of"
+                    "when output_maps and input_maps are provided, their length needs to match. The input_maps is in length of "
                         + inputMaps.size()
-                        + ", while output_maps is in the length of"
+                        + ", while output_maps is in the length of "
                         + outputMaps.size()
                         + ". Please adjust mappings."
                 );

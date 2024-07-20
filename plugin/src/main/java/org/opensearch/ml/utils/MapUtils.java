@@ -8,7 +8,7 @@ package org.opensearch.ml.utils;
 import java.util.HashMap;
 import java.util.Map;
 
-public class VersionedMapUtils {
+public class MapUtils {
 
     /**
      * Increments the counter for the given key in the specified version.
@@ -33,6 +33,21 @@ public class VersionedMapUtils {
     public static int getCounter(Map<Integer, Map<String, Integer>> versionedCounters, int version, String key) {
         Map<String, Integer> counters = versionedCounters.get(version);
         return counters != null ? counters.getOrDefault(key, -1) : 0;
+    }
+
+    /**
+     * Increments the counter value for the given key in the provided counters map.
+     * If the key does not exist in the map, it is added with an initial counter value of 0.
+     *
+     * @param counters A map that stores integer counters for each integer key.
+     * @param key The integer key for which the counter needs to be incremented.
+     */
+    public static void incrementCounter(Map<Integer, Integer> counters, int key) {
+        counters.put(key, counters.getOrDefault(key, 0) + 1);
+    }
+
+    public static int getCounter(Map<Integer, Integer> counters, int key) {
+        return counters.getOrDefault(key, 0);
     }
 
 }

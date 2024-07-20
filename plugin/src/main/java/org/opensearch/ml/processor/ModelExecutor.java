@@ -331,16 +331,16 @@ public interface ModelExecutor {
      * @param list the list to be checked
      * @return true if the list contains all null elements or is empty, false otherwise
      */
-    default boolean isEmptyOrNullList(List list) {
+    static boolean isEmptyOrNullList(List list) {
         if (list == null || list.isEmpty()) {
-            return true; // An empty list is considered to contain all null elements
+            return true;
         }
 
         for (Object obj : list) {
             if (obj != null) {
-                return false; // If any element is not null, return false
+                return false;
             }
         }
-        return true; // If all elements are null, return true
+        return true;
     }
 }
