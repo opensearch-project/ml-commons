@@ -201,7 +201,11 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
             + "    \"description\": \"test model\",\n"
             + "    \"connector_id\": \""
             + connectorId
-            + "\"\n"
+            + "\",\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {},\n"
+            + "    \"output\": {}\n"
+            + "    }\n"
             + "}";
 
         registerModel(client(), input, response -> {
