@@ -556,16 +556,16 @@ public class ModelInterfaceUtils {
 
     private static Map<String, String> createPresetModelInterfaceByConnector(Connector connector) {
         if (connector.getParameters() != null) {
-            switch (connector.getParameters().get("service_name")) {
+            switch ((connector.getParameters().get("service_name") != null) ? connector.getParameters().get("service_name") : "null") {
                 case "bedrock":
                 log.info("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
-                switch (connector.getParameters().get("model")) {
+                switch ((connector.getParameters().get("model") != null) ? connector.getParameters().get("model") : "null") {
                     case "ai21.j2-mid-v1":
                         return BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE;
                     case "anthropic.claude-3-sonnet-20240229-v1:0":
                         return BEDROCK_ANTHROPIC_CLAUDE_V3_SONNET_MODEL_INTERFACE;
                     case "anthropic.claude-v2":
-                        return  BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE;
+                        return BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE;
                     case "cohere.embed.english-v3":
                         return BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
                     case "cohere.embed.multilingual-v3":
@@ -579,7 +579,7 @@ public class ModelInterfaceUtils {
                 }
                 case "comprehend":
                     log.info("Creating preset model interface for Amazon Comprehend DetectDominantLanguage API");
-                    switch (connector.getParameters().get("api_name")) {
+                    switch ((connector.getParameters().get("api_name") != null) ? connector.getParameters().get("api_name") : "null"){
                         case "DetectDominantLanguage":
                             return AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE;
                         default:
