@@ -9,6 +9,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 
 public class RemoteInferenceInputDataSetTest {
@@ -43,5 +44,25 @@ public class RemoteInferenceInputDataSetTest {
         Assert.assertEquals(2, inputDataSet2.getParameters().size());
         Assert.assertEquals("test value1", inputDataSet2.getParameters().get("key1"));
         Assert.assertEquals("test value2", inputDataSet2.getParameters().get("key2"));
+    }
+
+    @Test
+    public void writeTo_withActionType() throws IOException {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("key1", "test value1");
+        parameters.put("key2", "test value2");
+        ActionType actionType = ActionType.from("predict");
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).actionType(actionType).build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        inputDataSet.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+
+        RemoteInferenceInputDataSet inputDataSet2 = (RemoteInferenceInputDataSet) MLInputDataset.fromStream(streamInput);
+        Assert.assertEquals(REMOTE, inputDataSet2.getInputDataType());
+        Assert.assertEquals(2, inputDataSet2.getParameters().size());
+        Assert.assertEquals("test value1", inputDataSet2.getParameters().get("key1"));
+        Assert.assertEquals("test value2", inputDataSet2.getParameters().get("key2"));
+        Assert.assertEquals("PREDICT", inputDataSet2.getActionType().toString());
     }
 }
