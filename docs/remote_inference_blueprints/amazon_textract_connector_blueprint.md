@@ -42,7 +42,9 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "region": "<PLEASE ADD YOUR AWS REGION like us-west-2>",
-    "service_name": "textract"
+    "service_name": "textract",
+    "api_name": "DetectDocumentText",
+    "api": "Textract.${parameters.api_name}"
   },
   "actions": [
     {
@@ -50,7 +52,7 @@ POST /_plugins/_ml/connectors/_create
       "method": "POST",
       "headers": {
         "content-type": "application/x-amz-json-1.1",
-        "X-Amz-Target": "Textract.DetectDocumentText"
+        "X-Amz-Target": "${parameters.api}"
       },
       "url": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
       "request_body": "{  \"Document\": { \"Bytes\": \"${parameters.bytes}\" }  } "
@@ -77,7 +79,9 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "region": "<PLEASE ADD YOUR AWS REGION like us-west-2>",
-    "service_name": "textract"
+    "service_name": "textract",
+    "api_name": "DetectDocumentText",
+    "api": "Textract.${parameters.api_name}"
   },
   "actions": [
     {
@@ -85,7 +89,7 @@ POST /_plugins/_ml/connectors/_create
       "method": "POST",
       "headers": {
         "content-type": "application/x-amz-json-1.1",
-        "X-Amz-Target": "Textract.DetectDocumentText"
+        "X-Amz-Target": "${parameters.api}"
       },
       "url": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
       "request_body": "{  \"Document\": { \"Bytes\": \"${parameters.bytes}\" }  } "

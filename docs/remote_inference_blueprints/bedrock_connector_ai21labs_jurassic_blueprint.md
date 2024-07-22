@@ -28,7 +28,8 @@ POST /_plugins/_ml/connectors/_create
     "protocol": "aws_sigv4",
     "credential": {
         "access_key": "<PLEASE ADD YOUR AWS ACCESS KEY HERE>",
-        "secret_key": "<PLEASE ADD YOUR AWS SECRET KEY HERE>"
+        "secret_key": "<PLEASE ADD YOUR AWS SECRET KEY HERE>",
+        "session_token": "<PLEASE ADD YOUR AWS SECURITY TOKEN HERE>"
     },
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
@@ -42,7 +43,7 @@ POST /_plugins/_ml/connectors/_create
             "headers": {
                 "content-type": "application/json"
             },
-            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
            "request_body": "{\"prompt\":\"${parameters.inputs}\",\"maxTokens\":200,\"temperature\":0.7,\"topP\":1,\"stopSequences\":[],\"countPenalty\":{\"scale\":0},\"presencePenalty\":{\"scale\":0},\"frequencyPenalty\":{\"scale\":0}}",
            "post_process_function": "\n  return params['completions'][0].data.text; \n"
         }
@@ -66,7 +67,7 @@ POST /_plugins/_ml/connectors/_create
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
         "service_name": "bedrock",
-        "model_name": "ai21.j2-mid-v1"
+        "model": "ai21.j2-mid-v1"
     },
     "actions": [
         {
@@ -75,7 +76,7 @@ POST /_plugins/_ml/connectors/_create
             "headers": {
                 "content-type": "application/json"
             },
-            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
            "request_body": "{\"prompt\":\"${parameters.inputs}\",\"maxTokens\":200,\"temperature\":0.7,\"topP\":1,\"stopSequences\":[],\"countPenalty\":{\"scale\":0},\"presencePenalty\":{\"scale\":0},\"frequencyPenalty\":{\"scale\":0}}",
            "post_process_function": "\n  return params['completions'][0].data.text; \n"
         }

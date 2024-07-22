@@ -47,7 +47,6 @@ POST /_plugins/_ml/connectors/_create
   "parameters": {
     "service_name": "comprehend",
     "region": "us-east-1",
-    "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
     "api_version": "20171127",
     "api_name": "DetectDominantLanguage",
     "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
@@ -57,7 +56,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "${parameters.endpoint}",
+      "url": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
       "headers": {
         "X-Amz-Target": "${parameters.api}",
         "content-type": "application/x-amz-json-1.1"
@@ -87,7 +86,6 @@ POST /_plugins/_ml/connectors/_create
   "parameters": {
     "service_name": "comprehend",
     "region": "us-east-1",
-    "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
     "api_version": "20171127",
     "api_name": "DetectDominantLanguage",
     "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
@@ -97,7 +95,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "${parameters.endpoint}",
+      "url": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
       "headers": {
         "X-Amz-Target": "${parameters.api}",
         "content-type": "application/x-amz-json-1.1"
@@ -400,7 +398,6 @@ POST /_plugins/_ml/connectors/_create
   "parameters": {
     "service_name": "comprehend",
     "region": "us-east-1",
-    "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
     "api_version": "20171127",
     "api_name": "DetectEntities",
     "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
@@ -410,7 +407,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "${parameters.endpoint}",
+      "url": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
       "headers": {
         "X-Amz-Target": "${parameters.api}",
         "content-type": "application/x-amz-json-1.1"
@@ -440,7 +437,6 @@ POST /_plugins/_ml/connectors/_create
   "parameters": {
     "service_name": "comprehend",
     "region": "us-east-1",
-    "endpoint": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
     "api_version": "20171127",
     "api_name": "DetectEntities",
     "api": "Comprehend_${parameters.api_version}.${parameters.api_name}",
@@ -450,7 +446,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "${parameters.endpoint}",
+      "url": "https://${parameters.service_name}.${parameters.region}.amazonaws.com",
       "headers": {
         "X-Amz-Target": "${parameters.api}",
         "content-type": "application/x-amz-json-1.1"
