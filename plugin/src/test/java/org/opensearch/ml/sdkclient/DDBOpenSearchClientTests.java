@@ -494,7 +494,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
         assertEquals(searchDataObjectResponse, searchResponse);
         Mockito.verify(remoteClusterIndicesClient).searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any());
-        Assert.assertEquals("test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
+        Assert.assertEquals(".test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
     }
 
 }
