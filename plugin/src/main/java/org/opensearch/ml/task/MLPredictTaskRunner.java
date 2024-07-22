@@ -464,11 +464,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
             actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
         }
-        if (actionType == null) {
-            return ActionName.PREDICT;
-        } else {
-            return ActionName.from(actionType.toString());
-        }
+        return (actionType == null) ? ActionName.PREDICT : ActionName.from(actionType.toString());
     }
 
     public void validateOutputSchema(String modelId, ModelTensorOutput output) {

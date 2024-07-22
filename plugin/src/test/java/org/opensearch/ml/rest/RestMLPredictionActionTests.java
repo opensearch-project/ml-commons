@@ -116,7 +116,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(2);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/models/{model_id}/_batch", route.getPath());
+        assertEquals("/_plugins/_ml/models/{model_id}/_batch_predict", route.getPath());
     }
 
     public void testGetRequest() throws IOException {

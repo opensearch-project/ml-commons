@@ -187,7 +187,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public enum ActionType {
         PREDICT,
         EXECUTE,
-        BATCH;
+        BATCH_PREDICT;
 
         public static ActionType from(String value) {
             try {
@@ -199,7 +199,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
         private static final HashSet<ActionType> MODEL_SUPPORT_ACTIONS = new HashSet<>(Set.of(
                 PREDICT,
-                BATCH
+                BATCH_PREDICT
         ));
 
         public static boolean isValidActionInModelPrediction(ActionType actionType) {

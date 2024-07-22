@@ -186,15 +186,15 @@ public class MLInputTest {
         Map<String, String> parameters = Map.of("TransformJobName", "new name");
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder()
                 .parameters(parameters)
-                .actionType(ConnectorAction.ActionType.BATCH)
+                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
                 .build();
 
-        String expectedInputStr = "{\"algorithm\":\"REMOTE\",\"parameters\":{\"TransformJobName\":\"new name\"},\"action_type\":\"BATCH\"}";
+        String expectedInputStr = "{\"algorithm\":\"REMOTE\",\"parameters\":{\"TransformJobName\":\"new name\"},\"action_type\":\"BATCH_PREDICT\"}";
 
-        testParseWithActionType(FunctionName.REMOTE, remoteInferenceInputDataSet, ConnectorAction.ActionType.BATCH, expectedInputStr, parsedInput -> {
+        testParseWithActionType(FunctionName.REMOTE, remoteInferenceInputDataSet, ConnectorAction.ActionType.BATCH_PREDICT, expectedInputStr, parsedInput -> {
             assertNotNull(parsedInput.getInputDataset());
             RemoteInferenceInputDataSet parsedInputDataSet = (RemoteInferenceInputDataSet) parsedInput.getInputDataset();
-            assertEquals(ConnectorAction.ActionType.BATCH, parsedInputDataSet.getActionType());
+            assertEquals(ConnectorAction.ActionType.BATCH_PREDICT, parsedInputDataSet.getActionType());
         });
     }
 

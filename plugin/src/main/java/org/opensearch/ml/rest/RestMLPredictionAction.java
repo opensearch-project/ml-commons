@@ -72,7 +72,10 @@ public class RestMLPredictionAction extends BaseRestHandler {
                     String.format(Locale.ROOT, "%s/_predict/{%s}/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM, PARAMETER_MODEL_ID)
                 ),
                 new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_predict", ML_BASE_URI, PARAMETER_MODEL_ID)),
-                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_batch", ML_BASE_URI, PARAMETER_MODEL_ID))
+                new Route(
+                    RestRequest.Method.POST,
+                    String.format(Locale.ROOT, "%s/models/{%s}/_batch_predict", ML_BASE_URI, PARAMETER_MODEL_ID)
+                )
             );
     }
 
@@ -124,11 +127,13 @@ public class RestMLPredictionAction extends BaseRestHandler {
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
+        System.out.println("actionType is " + actionType);
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
         } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase())) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         } else if (!ActionType.isValidActionInModelPrediction(actionType)) {
+            System.out.println(actionType.toString());
             throw new IllegalArgumentException("Wrong action type in the rest request path!");
         }
 

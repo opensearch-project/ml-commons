@@ -225,7 +225,7 @@ public class TestHelper {
         params.put(PARAMETER_ALGORITHM, "remote");
         final String requestContent = "{\"parameters\":{\"TransformJobName\":\"SM-offline-batch-transform-07-17-14-30\"}}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
-            .withPath("/_plugins/_ml/models/{model_id}}/_batch")
+            .withPath("/_plugins/_ml/models/{model_id}/_batch_predict")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -388,7 +388,7 @@ public class TestHelper {
         assertEquals(FunctionName.REMOTE, mlInput.getAlgorithm());
         assertEquals(MLInputDataType.REMOTE, mlInput.getInputDataset().getInputDataType());
         RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
-        assertEquals(ConnectorAction.ActionType.BATCH, inputDataset.getActionType());
+        assertEquals(ConnectorAction.ActionType.BATCH_PREDICT, inputDataset.getActionType());
     }
 
     private static NamedXContentRegistry getXContentRegistry() {

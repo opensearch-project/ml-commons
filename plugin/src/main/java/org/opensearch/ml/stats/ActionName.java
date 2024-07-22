@@ -13,7 +13,7 @@ public enum ActionName {
     REGISTER,
     DEPLOY,
     UNDEPLOY,
-    BATCH;
+    BATCH_PREDICT;
 
     public static ActionName from(String value) {
         try {
