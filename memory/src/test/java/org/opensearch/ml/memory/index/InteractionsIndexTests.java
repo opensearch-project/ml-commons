@@ -750,7 +750,6 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getInteraction("iid", getListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getListener, times(1)).onFailure(argCaptor.capture());
-        System.out.println(argCaptor.getValue().getMessage());
         assert (argCaptor
             .getValue()
             .getMessage()

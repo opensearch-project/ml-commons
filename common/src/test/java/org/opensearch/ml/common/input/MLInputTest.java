@@ -27,12 +27,14 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.DoubleValue;
 import org.opensearch.ml.common.dataframe.Row;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.nlp.TextSimilarityMLInput;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -44,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -168,6 +171,40 @@ public class MLInputTest {
         parse_NLPModel_NullResultFilter(FunctionName.SPARSE_ENCODING);
     }
 
+    @Test
+    public void parse_Remote_Model() throws IOException {
+        Map<String, String> parameters = Map.of("TransformJobName", "new name");
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder()
+                .parameters(parameters)
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .build();
+
+        String expectedInputStr = "{\"algorithm\":\"REMOTE\",\"parameters\":{\"TransformJobName\":\"new name\"},\"action_type\":\"PREDICT\"}";
+
+        testParse(FunctionName.REMOTE, remoteInferenceInputDataSet, expectedInputStr, parsedInput -> {
+            assertNotNull(parsedInput.getInputDataset());
+            RemoteInferenceInputDataSet parsedInputDataSet = (RemoteInferenceInputDataSet) parsedInput.getInputDataset();
+            assertEquals(ConnectorAction.ActionType.PREDICT, parsedInputDataSet.getActionType());
+        });
+    }
+
+    @Test
+    public void parse_Remote_Model_With_ActionType() throws IOException {
+        Map<String, String> parameters = Map.of("TransformJobName", "new name");
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder()
+                .parameters(parameters)
+                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                .build();
+
+        String expectedInputStr = "{\"algorithm\":\"REMOTE\",\"parameters\":{\"TransformJobName\":\"new name\"},\"action_type\":\"BATCH_PREDICT\"}";
+
+        testParseWithActionType(FunctionName.REMOTE, remoteInferenceInputDataSet, ConnectorAction.ActionType.BATCH_PREDICT, expectedInputStr, parsedInput -> {
+            assertNotNull(parsedInput.getInputDataset());
+            RemoteInferenceInputDataSet parsedInputDataSet = (RemoteInferenceInputDataSet) parsedInput.getInputDataset();
+            assertEquals(ConnectorAction.ActionType.BATCH_PREDICT, parsedInputDataSet.getActionType());
+        });
+    }
+
     private void testParse(FunctionName algorithm, MLInputDataset inputDataset, String expectedInputStr, Consumer<MLInput> verify) throws IOException {
         MLInput input = MLInput.builder().inputDataset(inputDataset).algorithm(algorithm).build();
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
@@ -181,6 +218,24 @@ public class MLInputTest {
                         Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
         MLInput parsedInput = MLInput.parse(parser, algorithm.name());
+        assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
+        assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
+        verify.accept(parsedInput);
+    }
+
+    private void testParseWithActionType(FunctionName algorithm, MLInputDataset inputDataset, ConnectorAction.ActionType actionType, String expectedInputStr, Consumer<MLInput> verify) throws IOException {
+        MLInput input = MLInput.builder().inputDataset(inputDataset).algorithm(algorithm).build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = builder.toString();
+        assertEquals(expectedInputStr, jsonStr);
+
+        XContentParser parser = XContentType.JSON.xContent()
+                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
+        MLInput parsedInput = MLInput.parse(parser, algorithm.name(), actionType);
         assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
         assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
         verify.accept(parsedInput);
