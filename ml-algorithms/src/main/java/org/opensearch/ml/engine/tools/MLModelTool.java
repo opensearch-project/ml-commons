@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +23,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
@@ -54,6 +57,7 @@ public class MLModelTool implements Tool {
     private Parser inputParser;
     @Setter
     @Getter
+    @VisibleForTesting
     private Parser outputParser;
     @Setter
     @Getter
@@ -65,24 +69,41 @@ public class MLModelTool implements Tool {
         this.responseField = responseField;
 
         outputParser = o -> {
-            List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-            return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get(responseField);
+            try {
+                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+                Map<String, ?> dataAsMap = mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap();
+                // Return the response field if it exists, otherwise return the whole response as json string.
+                if (dataAsMap.containsKey(responseField)) {
+                    return dataAsMap.get(responseField);
+                } else {
+                    return StringUtils.toJson(dataAsMap);
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException("LLM returns wrong or empty tensors", e);
+            }
         };
     }
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        ActionRequest request = new MLPredictionTaskRequest(
-            modelId,
-            MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build()
-        );
+        String tenantId = null;
+        if (parameters != null) {
+            tenantId = parameters.get(TENANT_ID);
+        }
+        ActionRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId(modelId)
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build())
+            .tenantId(tenantId)
+            .build();
+
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
             listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
         }, e -> {
-            log.error("Failed to run model " + modelId, e);
+            log.error("Failed to run model {}", modelId, e);
             listener.onFailure(e);
         }));
     }

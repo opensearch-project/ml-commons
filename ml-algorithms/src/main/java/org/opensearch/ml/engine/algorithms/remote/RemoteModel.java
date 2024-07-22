@@ -90,7 +90,7 @@ public class RemoteModel implements Predictable {
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
             Connector connector = model.getConnector().cloneConnector();
-            connector.decrypt((credential) -> encryptor.decrypt(credential));
+            connector.decrypt((credential, tenantId) -> encryptor.decrypt(credential, model.getTenantId()), model.getTenantId());
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));

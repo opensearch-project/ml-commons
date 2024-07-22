@@ -31,14 +31,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    Function<String, String> encryptFunction;
-    Function<String, String> decryptFunction;
+    BiFunction<String, String, String> encryptFunction;
+    BiFunction<String, String, String> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\"," +
             "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
@@ -53,8 +54,8 @@ public class HttpConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = s -> "encrypted: "+s.toLowerCase(Locale.ROOT);
-        decryptFunction = s -> "decrypted: "+s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v) -> "encrypted: "+s.toLowerCase(Locale.ROOT);
+        decryptFunction = (s, v) -> "decrypted: "+s.toUpperCase(Locale.ROOT);
     }
 
     @Test
@@ -118,7 +119,7 @@ public class HttpConnectorTest {
     @Test
     public void decrypt() {
         HttpConnector connector = createHttpConnector();
-        connector.decrypt(decryptFunction);
+        connector.decrypt(decryptFunction, null);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -135,7 +136,7 @@ public class HttpConnectorTest {
     @Test
     public void encrypted() {
         HttpConnector connector = createHttpConnector();
-        connector.encrypt(encryptFunction);
+        connector.encrypt(encryptFunction, null);
         Map<String, String> credential = connector.getCredential();
         Assert.assertEquals(1, credential.size());
         Assert.assertEquals("encrypted: test_key_value", credential.get("key"));

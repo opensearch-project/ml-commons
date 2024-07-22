@@ -79,6 +79,8 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
+    private static final Long DEFAULT_SEQUENCE_NUMBER = 0L;
+    private static final Long DEFAULT_PRIMARY_TERM = 1L;
     private static final String HASH_KEY = "_tenant_id";
     private static final String RANGE_KEY = "_id";
 
@@ -111,17 +113,12 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
         final String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
-        final String tableName = getTableName(request.index());
-        final GetItemRequest getItemRequest = getGetItemRequest(tenantId, id, request.index());
-        log.info("Get request details: " + getItemRequest.toString());
-
+        final String tableName = request.index();
+        final GetItemRequest getItemRequest = buildGetItemRequest(tenantId, id, request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try {
                 GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
-                Long sequenceNumber = 1L;
-                if (getItemResponse != null && getItemResponse.item() != null && getItemResponse.item().containsKey(SEQ_NO_KEY)) {
-                    sequenceNumber = Long.parseLong(getItemResponse.item().get(SEQ_NO_KEY).n()) + 1;
-                }
+                Long sequenceNumber = initOrIncrementSeqNo(getItemResponse);
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> sourceMap = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
@@ -159,7 +156,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      */
     @Override
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
-        final GetItemRequest getItemRequest = getGetItemRequest(request.tenantId(), request.id(), request.index());
+        final GetItemRequest getItemRequest = buildGetItemRequest(request.tenantId(), request.id(), request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 final GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
@@ -234,7 +231,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest
                     .builder()
-                    .tableName(getTableName(request.index()))
+                    .tableName(request.index())
                     .key(updateKey)
                     .attributeUpdates(updateAttributeValue);
                 updateItemRequestBuilder
@@ -294,7 +291,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final DeleteItemRequest deleteItemRequest = DeleteItemRequest
             .builder()
-            .tableName(getTableName(request.index()))
+            .tableName(request.index())
             .key(
                 Map
                     .ofEntries(
@@ -308,7 +305,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 DeleteItemResponse deleteItemResponse = dynamoDbClient.deleteItem(deleteItemRequest);
                 Long sequenceNumber = null;
                 if (deleteItemResponse.attributes() != null && deleteItemResponse.attributes().containsKey(SEQ_NO_KEY)) {
-                    sequenceNumber = Long.parseLong(deleteItemResponse.attributes().get(SEQ_NO_KEY).n());
+                    sequenceNumber = Long.parseLong(deleteItemResponse.attributes().get(SEQ_NO_KEY).n()) + 1;
                 }
                 String simulatedDeleteResponse = simulateOpenSearchResponse(
                     request.index(),
@@ -333,7 +330,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      */
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        List<String> indices = Arrays.stream(request.indices()).map(this::getTableName).collect(Collectors.toList());
+        List<String> indices = Arrays.stream(request.indices()).collect(Collectors.toList());
 
         SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest(
             indices.toArray(new String[0]),
@@ -343,21 +340,15 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor);
     }
 
-    private String getTableName(String index) {
-        // Table name will be same as index name. As DDB table name does not support dot(.)
-        // it will be removed from name.
-        return index.replaceAll("\\.", "");
-    }
-
     private XContentParser createParser(String json) throws IOException {
         return jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, json);
     }
 
-    private GetItemRequest getGetItemRequest(String requestTenantId, String documentId, String index) {
+    private GetItemRequest buildGetItemRequest(String requestTenantId, String documentId, String index) {
         final String tenantId = requestTenantId != null ? requestTenantId : DEFAULT_TENANT;
         return GetItemRequest
             .builder()
-            .tableName(getTableName(index))
+            .tableName(index)
             .key(
                 Map
                     .ofEntries(
@@ -368,6 +359,14 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             .build();
     }
 
+    private Long initOrIncrementSeqNo(GetItemResponse getItemResponse) {
+        Long sequenceNumber = DEFAULT_SEQUENCE_NUMBER;
+        if (getItemResponse != null && getItemResponse.item() != null && getItemResponse.item().containsKey(SEQ_NO_KEY)) {
+            sequenceNumber = Long.parseLong(getItemResponse.item().get(SEQ_NO_KEY).n()) + 1;
+        }
+        return sequenceNumber;
+    }
+
     private String simulateOpenSearchResponse(
         String index,
         String id,
@@ -375,13 +374,19 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Long sequenceNumber,
         Map<String, Object> additionalFields
     ) {
+        Long seqNo = UNASSIGNED_SEQ_NO;
+        Long primaryTerm = UNASSIGNED_PRIMARY_TERM;
+        if (sequenceNumber != null) {
+            seqNo = sequenceNumber;
+            primaryTerm = DEFAULT_PRIMARY_TERM;
+        }
         StringBuilder sb = new StringBuilder("{");
         // Fields with a DDB counterpart
         sb.append("\"_index\":\"").append(index).append("\",");
         sb.append("\"_id\":\"").append(id).append("\",");
         // Fields we must simulate using default values
-        sb.append("\"_primary_term\":").append(sequenceNumber == null ? UNASSIGNED_PRIMARY_TERM : 1).append(",");
-        sb.append("\"_seq_no\":").append(sequenceNumber == null ? UNASSIGNED_SEQ_NO : sequenceNumber).append(",");
+        sb.append("\"_primary_term\":").append(primaryTerm).append(",");
+        sb.append("\"_seq_no\":").append(seqNo).append(",");
         sb.append("\"_version\":").append(-1).append(",");
         sb.append("\"_shards\":").append(Strings.toString(MediaTypeRegistry.JSON, new ShardInfo())).append(",");
         // Finish up

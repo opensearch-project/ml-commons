@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
@@ -38,13 +39,13 @@ public class AwsConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    Function<String, String> encryptFunction;
-    Function<String, String> decryptFunction;
+    BiFunction<String, String, String> encryptFunction;
+    BiFunction<String, String, String> decryptFunction;
 
     @Before
     public void setUp() {
-        encryptFunction = s -> "encrypted: "+s.toLowerCase(Locale.ROOT);
-        decryptFunction = s -> "decrypted: "+s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v) -> "encrypted: "+s.toLowerCase(Locale.ROOT);
+        decryptFunction = (s, v) -> "decrypted: "+s.toUpperCase(Locale.ROOT);
     }
 
     @Test
@@ -109,8 +110,8 @@ public class AwsConnectorTest {
         AwsConnector connector = AwsConnector.awsConnectorBuilder().protocol(ConnectorProtocols.AWS_SIGV4).credential(credential).parameters(parameters).build();
         Assert.assertNotNull(connector);
 
-        connector.encrypt(encryptFunction);
-        connector.decrypt(decryptFunction);
+        connector.encrypt(encryptFunction, null);
+        connector.decrypt(decryptFunction, null);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals(null, connector.getSessionToken());
@@ -148,8 +149,8 @@ public class AwsConnectorTest {
         String url = "https://${parameters.endpoint}/model1";
 
         AwsConnector connector = createAwsConnector(parameters, credential, url);
-        connector.encrypt(encryptFunction);
-        connector.decrypt(decryptFunction);
+        connector.encrypt(encryptFunction, null);
+        connector.decrypt(decryptFunction, null);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
@@ -169,8 +170,8 @@ public class AwsConnectorTest {
 
         String url = "https://test.com";
         AwsConnector connector = createAwsConnector(null, credential, url);
-        connector.encrypt(encryptFunction);
-        connector.decrypt(decryptFunction);
+        connector.encrypt(encryptFunction, null);
+        connector.decrypt(decryptFunction, null);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());

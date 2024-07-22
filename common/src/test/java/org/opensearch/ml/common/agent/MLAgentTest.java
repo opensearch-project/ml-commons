@@ -36,12 +36,14 @@ public class MLAgentTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    MLToolSpec mlToolSpec = new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false, null);
+
     @Test
     public void constructor_NullName() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Agent name can't be null");
 
-        MLAgent agent = new MLAgent(null, MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent(null, MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
     }
 
     @Test
@@ -49,7 +51,7 @@ public class MLAgentTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Agent type can't be null");
 
-        MLAgent agent = new MLAgent("test_agent", null, "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test_agent", null, "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
     }
 
     @Test
@@ -57,20 +59,19 @@ public class MLAgentTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("We need model information for the conversational agent type");
 
-        MLAgent agent = new MLAgent("test_agent", MLAgentType.CONVERSATIONAL.name(), "test", null, List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test_agent", MLAgentType.CONVERSATIONAL.name(), "test", null, List.of(mlToolSpec), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
     }
 
     @Test
     public void constructor_DuplicateTool() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate tool defined: test_tool_name");
-        MLToolSpec mlToolSpec = new MLToolSpec("test_tool_type", "test_tool_name", "test", Collections.EMPTY_MAP, false);
+        exceptionRule.expectMessage("Duplicate tool defined: test");
         MLAgent agent = new MLAgent("test_name", MLAgentType.CONVERSATIONAL.name(), "test_description", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec, mlToolSpec), null, null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
     }
 
     @Test
     public void writeTo() throws IOException {
-        MLAgent agent = new MLAgent("test", "CONVERSATIONAL", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test", "CONVERSATIONAL", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
@@ -85,7 +86,7 @@ public class MLAgentTest {
 
     @Test
     public void writeTo_NullLLM() throws IOException {
-        MLAgent agent = new MLAgent("test", "FLOW", "test", null, List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test", "FLOW", "test", null, List.of(mlToolSpec), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
@@ -105,7 +106,7 @@ public class MLAgentTest {
 
     @Test
     public void writeTo_NullParameters() throws IOException {
-        MLAgent agent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), null, new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec), null, new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
@@ -115,7 +116,7 @@ public class MLAgentTest {
 
     @Test
     public void writeTo_NullMemory() throws IOException {
-        MLAgent agent = new MLAgent("test", "CONVERSATIONAL", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test", "CONVERSATIONAL", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec), Map.of("test", "test"), null, Instant.EPOCH, Instant.EPOCH, "test", false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
@@ -125,7 +126,12 @@ public class MLAgentTest {
 
     @Test
     public void toXContent() throws IOException {
-        MLAgent agent = new MLAgent("test", "CONVERSATIONAL", "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Map.of("test", "test"), false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test", "CONVERSATIONAL", "test",
+                new LLMSpec("test_model", Map.of("test_key", "test_value")),
+                List.of(new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null)),
+                Map.of("test", "test"),
+                new MLMemorySpec("test", "123", 0),
+                Instant.EPOCH, Instant.EPOCH, "test", false, null);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
@@ -162,7 +168,7 @@ public class MLAgentTest {
 
     @Test
     public void fromStream() throws IOException {
-        MLAgent agent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
+        MLAgent agent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(mlToolSpec), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = MLAgent.fromStream(output.bytes().streamInput());

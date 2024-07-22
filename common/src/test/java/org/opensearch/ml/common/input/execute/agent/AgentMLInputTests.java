@@ -34,7 +34,7 @@ public class AgentMLInputTests {
         MLInputDataset dataset = mock(MLInputDataset.class); // Mock the MLInputDataset
 
         // Act
-        AgentMLInput input = new AgentMLInput(agentId, functionName, dataset);
+        AgentMLInput input = new AgentMLInput(agentId, null, functionName, dataset);
 
         // Assert
         assertEquals(agentId, input.getAgentId());
@@ -46,7 +46,7 @@ public class AgentMLInputTests {
     public void testWriteTo() throws IOException {
         // Arrange
         String agentId = "testAgentId";
-        AgentMLInput input = new AgentMLInput(agentId, FunctionName.AGENT, null);
+        AgentMLInput input = new AgentMLInput(agentId, null, FunctionName.AGENT, null);
         StreamOutput out = mock(StreamOutput.class);
 
         // Act

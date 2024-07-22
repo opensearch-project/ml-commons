@@ -52,7 +52,7 @@ public abstract class DLModelExecute implements MLExecutable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
-    public abstract void execute(Input input, ActionListener<Output> listener);
+    public abstract void execute(Input input, String tenantId, ActionListener<Output> listener);
 
     protected Predictor<float[][], ai.djl.modality.Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();

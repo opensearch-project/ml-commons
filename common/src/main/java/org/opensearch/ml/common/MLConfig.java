@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.time.Instant;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 @Getter
 @EqualsAndHashCode
@@ -37,19 +38,22 @@ public class MLConfig implements ToXContentObject, Writeable {
 
     private Configuration configuration;
     private final Instant createTime;
-    private Instant lastUpdateTime;
+    private final Instant lastUpdateTime;
+    private final String tenantId;
 
     @Builder(toBuilder = true)
     public MLConfig(
             String type,
             Configuration configuration,
             Instant createTime,
-            Instant lastUpdateTime
+            Instant lastUpdateTime,
+            String tenantId
     ) {
         this.type = type;
         this.configuration = configuration;
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
+        this.tenantId = tenantId;
     }
 
     public MLConfig(StreamInput input) throws IOException {
@@ -59,6 +63,8 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         createTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
+        //TODO: Check BWC later
+        tenantId = input.readOptionalString();
     }
 
     @Override
@@ -72,6 +78,8 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         out.writeOptionalInstant(createTime);
         out.writeOptionalInstant(lastUpdateTime);
+        //TODO: check BWC later
+        out.writeOptionalString(tenantId);
     }
 
     @Override
@@ -89,12 +97,14 @@ public class MLConfig implements ToXContentObject, Writeable {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID, tenantId);
+        }
         return builder.endObject();
     }
 
     public static MLConfig fromStream(StreamInput in) throws IOException {
-        MLConfig mlConfig = new MLConfig(in);
-        return mlConfig;
+        return new MLConfig(in);
     }
 
     public static MLConfig parse(XContentParser parser) throws IOException {
@@ -102,6 +112,7 @@ public class MLConfig implements ToXContentObject, Writeable {
         Configuration configuration = null;
         Instant createTime = null;
         Instant lastUpdateTime = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -121,6 +132,8 @@ public class MLConfig implements ToXContentObject, Writeable {
                 case LAST_UPDATE_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case TENANT_ID:
+                    tenantId = parser.textOrNull();
                 default:
                     parser.skipChildren();
                     break;
@@ -131,6 +144,7 @@ public class MLConfig implements ToXContentObject, Writeable {
                 .configuration(configuration)
                 .createTime(createTime)
                 .lastUpdateTime(lastUpdateTime)
+                .tenantId(tenantId)
                 .build();
     }
 }

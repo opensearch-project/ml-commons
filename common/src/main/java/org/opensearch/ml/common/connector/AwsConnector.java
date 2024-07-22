@@ -14,7 +14,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;

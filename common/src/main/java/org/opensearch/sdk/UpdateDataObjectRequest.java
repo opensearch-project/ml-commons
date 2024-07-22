@@ -67,7 +67,7 @@ public class UpdateDataObjectRequest {
     public String tenantId() {
         return this.tenantId;
     }
-    
+
     /**
      * Returns the sequence number to match, or null if no match required
      * @return the ifSeqNo
@@ -83,7 +83,7 @@ public class UpdateDataObjectRequest {
     public Long ifPrimaryTerm() {
         return ifPrimaryTerm;
     }
-    
+
     /**
      * Returns the data object
      * @return the data object
@@ -125,7 +125,7 @@ public class UpdateDataObjectRequest {
             this.index = index;
             return this;
         }
-        
+
         /**
          * Add an id to this builder
          * @param id the document id
@@ -173,7 +173,7 @@ public class UpdateDataObjectRequest {
             this.ifPrimaryTerm = term;
             return this;
         }
-        
+
         /**
          * Add a data object to this builder
          * @param dataObject the data object
@@ -183,7 +183,7 @@ public class UpdateDataObjectRequest {
             this.dataObject = dataObject;
             return this;
         }
-        
+
         /**
          * Add a data object as a map to this builder
          * @param dataObjectMap the data object as a map of fields

@@ -153,13 +153,13 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         IndexResponse indexActionResponse = IndexResponse.fromXContent(response.parser());
         assertEquals(TEST_ID, indexActionResponse.getId());
         assertEquals(DocWriteResponse.Result.CREATED, indexActionResponse.getResult());
-        assertEquals(1, indexActionResponse.getSeqNo());
+        assertEquals(0, indexActionResponse.getSeqNo());
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
         Assert.assertEquals(TEST_INDEX, putItemRequest.tableName());
         Assert.assertEquals(TEST_ID, putItemRequest.item().get(RANGE_KEY).s());
         Assert.assertEquals(TENANT_ID, putItemRequest.item().get(HASH_KEY).s());
-        Assert.assertEquals("1", putItemRequest.item().get(SEQ_NUM).n());
+        Assert.assertEquals("0", putItemRequest.item().get(SEQ_NUM).n());
         Assert
             .assertEquals(
                 "attribute_not_exists(" + HASH_KEY + ") AND attribute_not_exists(" + RANGE_KEY + ")",
@@ -393,7 +393,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
         DeleteResponse deleteActionResponse = DeleteResponse.fromXContent(deleteResponse.parser());
         assertEquals(TEST_ID, deleteActionResponse.getId());
-        assertEquals(5, deleteActionResponse.getSeqNo());
+        assertEquals(6, deleteActionResponse.getSeqNo());
         assertEquals(DocWriteResponse.Result.DELETED, deleteActionResponse.getResult());
         assertEquals(0, deleteActionResponse.getShardInfo().getFailed());
         assertEquals(0, deleteActionResponse.getShardInfo().getSuccessful());
@@ -534,7 +534,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
         assertEquals(searchDataObjectResponse, searchResponse);
         Mockito.verify(remoteClusterIndicesClient).searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any());
-        Assert.assertEquals("test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
+        Assert.assertEquals(".test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
     }
 
     private Map<String, AttributeValue> getComplexDataSource() {

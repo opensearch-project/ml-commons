@@ -9,6 +9,10 @@
 package org.opensearch.sdk;
 
 import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+
+import java.io.IOException;
+import java.util.Map;
 
 public class PutDataObjectRequest {
 
@@ -142,6 +146,16 @@ public class PutDataObjectRequest {
          */
         public Builder dataObject(ToXContentObject dataObject) {
             this.dataObject = dataObject;
+            return this;
+        }
+
+        /**
+         * Add a data object as a map to this builder
+         * @param dataObjectMap the data object as a map of fields
+         * @return the updated builder
+         */
+        public Builder dataObject(Map<String, Object> dataObjectMap) {
+            this.dataObject = (builder, params) -> builder.map(dataObjectMap);
             return this;
         }
 

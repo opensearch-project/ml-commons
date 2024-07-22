@@ -17,5 +17,16 @@ public interface Executable {
      * @param input input data
      * @return execution result
      */
-    void execute(Input input, ActionListener<Output> listener) throws ExecuteException;
+    default void execute(Input input, ActionListener<Output> listener) throws ExecuteException {
+        execute(input, null, listener);
+    }
+
+    /**
+     * Execute algorithm with given input data.
+     * @param input input data
+     * @param tenantId id of the tenant for multi-tenancy.
+     *                 For single tenant, it will be null
+     * @return execution result
+     */
+    void execute(Input input, String tenantId, ActionListener<Output> listener) throws ExecuteException;
 }

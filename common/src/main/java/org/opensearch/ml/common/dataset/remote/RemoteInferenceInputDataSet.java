@@ -16,11 +16,11 @@ import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 
+@Setter
 @Getter
 @InputDataSet(MLInputDataType.REMOTE)
 public class RemoteInferenceInputDataSet extends MLInputDataset {
 
-    @Setter
     private Map<String, String> parameters;
 
     @Builder(toBuilder = true)
@@ -32,7 +32,7 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
     public RemoteInferenceInputDataSet(StreamInput streamInput) throws IOException {
         super(MLInputDataType.REMOTE);
         if (streamInput.readBoolean()) {
-            parameters = streamInput.readMap(s -> s.readString(), s-> s.readString());
+            parameters = streamInput.readMap(StreamInput::readString, StreamInput::readString);
         }
     }
 
