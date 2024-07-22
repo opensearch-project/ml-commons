@@ -25,10 +25,12 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -49,11 +51,13 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.PredictMode;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -410,6 +414,87 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             .build();
         when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
         taskRunner.validateOutputSchema("testId", modelTensorOutput);
+    }
+
+    public void testValidateBatchPredictionSuccess() throws IOException {
+        setupMocks(true, false, false, false);
+        RemoteInferenceInputDataSet remoteInputDataSet = RemoteInferenceInputDataSet.builder().predictMode(PredictMode.BATCH).build();
+        MLPredictionTaskRequest remoteInputRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInputDataSet).build())
+            .build();
+        Predictable predictor = mock(Predictable.class);
+        when(predictor.isModelReady()).thenReturn(true);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("TransformJobArn", "arn:aws:sagemaker:us-east-1:802041417063:transform-job/batch-transform-01"))
+            .build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "output",
+                "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"array\"}}}"
+            );
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
+            .build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
+            return null;
+        }).when(predictor).asyncPredict(any(), any());
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("mockTaskId");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
+
+        when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
+        when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
+        taskRunner.dispatchTask(FunctionName.REMOTE, remoteInputRequest, transportService, listener);
+        verify(client, never()).get(any(), any());
+        ArgumentCaptor<MLTaskResponse> argumentCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+    }
+
+    public void testValidateBatchPredictionFailure() throws IOException {
+        setupMocks(true, false, false, false);
+        RemoteInferenceInputDataSet remoteInputDataSet = RemoteInferenceInputDataSet.builder().predictMode(PredictMode.BATCH).build();
+        MLPredictionTaskRequest remoteInputRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInputDataSet).build())
+            .build();
+        Predictable predictor = mock(Predictable.class);
+        when(predictor.isModelReady()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
+            actionListener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
+            return null;
+        }).when(predictor).asyncPredict(any(), any());
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("mockTaskId");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
+        when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
+        taskRunner.dispatchTask(FunctionName.REMOTE, remoteInputRequest, transportService, listener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertEquals("Unable to create batch transform job", argumentCaptor.getValue().getMessage());
     }
 
     public void testValidateModelTensorOutputFailed() {

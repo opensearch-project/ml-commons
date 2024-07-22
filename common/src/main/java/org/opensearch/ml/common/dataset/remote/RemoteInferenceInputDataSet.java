@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.PredictMode;
 import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -23,11 +24,17 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
 
     @Setter
     private Map<String, String> parameters;
+    private PredictMode predictMode;
 
     @Builder(toBuilder = true)
-    public RemoteInferenceInputDataSet(Map<String, String> parameters) {
+    public RemoteInferenceInputDataSet(Map<String, String> parameters, PredictMode predictMode) {
         super(MLInputDataType.REMOTE);
         this.parameters = parameters;
+        this.predictMode = predictMode;
+    }
+
+    public RemoteInferenceInputDataSet(Map<String, String> parameters) {
+        this(parameters, null);
     }
 
     public RemoteInferenceInputDataSet(StreamInput streamInput) throws IOException {

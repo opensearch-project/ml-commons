@@ -35,6 +35,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.input.remote.RemoteInferenceMLInput.PREDICT_MODE_FIELD;
 
 /**
  * ML input data: algorithm name, parameters and input data set.
@@ -196,6 +197,7 @@ public class MLInput implements Input {
                     RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) this.inputDataset;
                     Map<String, String> parameters = remoteInferenceInputDataSet.getParameters();
                     builder.field(PARAMETERS_FIELD, parameters);
+                    builder.field(PREDICT_MODE_FIELD, remoteInferenceInputDataSet.getPredictMode());
                     break;
                 default:
                     break;
