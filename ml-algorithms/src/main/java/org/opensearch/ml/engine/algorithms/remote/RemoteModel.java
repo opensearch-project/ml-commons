@@ -18,6 +18,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
@@ -70,7 +72,12 @@ public class RemoteModel implements Predictable {
             return;
         }
         try {
-            connectorExecutor.executeAction(PREDICT.name(), mlInput, actionListener);
+            ActionType actionType = null;
+            if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+            }
+            actionType = actionType == null ? ActionType.PREDICT : actionType;
+            connectorExecutor.executeAction(actionType.toString(), mlInput, actionListener);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
             actionListener.onFailure(e);
