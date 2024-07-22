@@ -79,6 +79,10 @@ public class AgentUtilsTest {
         + "\"thought\": \"Now I know the final answer\",\n  "
         + "\"final_answer\": \"PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```.\"\n}\n```";
 
+    private String responseForFinalAnswerWithQuotes = "---------------------```json\n{\n  "
+        + "\"thought\": \"Now I know the final answer\",\n  "
+        + "\"final_answer\": \"PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans name=\"Jack\" ```.\"\n}\n```";
+
     private String wrongResponseForAction = "---------------------```json\n{\n  "
         + "\"thought\": \"Let's try VectorDBTool\",\n  "
         + "\"action\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
@@ -156,6 +160,15 @@ public class AgentUtilsTest {
                 "PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```."
             );
         llmResponseExpectedParseResults.put(responseForFinalAnswerWithMultilines, responseForFinalAnswerWithMultilinesExpectedResult);
+
+        Map responseForFinalAnswerWithQuotesExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Now I know the final answer",
+                FINAL_ANSWER,
+                "PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans name=\"Jack\" ```."
+            );
+        llmResponseExpectedParseResults.put(responseForFinalAnswerWithQuotes, responseForFinalAnswerWithQuotesExpectedResult);
 
     }
 
