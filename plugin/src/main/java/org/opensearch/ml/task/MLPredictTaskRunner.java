@@ -47,8 +47,10 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -276,13 +278,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private void predict(String modelId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
+        ActionName actionName = getActionNameFromInput(mlInput);
         mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
-        mlStats
-            .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
-            .increment();
+        mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), actionName, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         if (modelId != null) {
-            mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+            mlStats.createModelCounterStatIfAbsent(modelId, actionName, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         }
         mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
@@ -305,7 +306,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 .workerNodes(Arrays.asList(clusterService.localNode().getId()))
                 .build();
             mlModelManager.deployModel(modelId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
-                runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+                runPredict(modelId, mlTask, mlInput, functionName, actionName, internalListener);
             }, e -> {
                 log.error("Failed to auto deploy model " + modelId, e);
                 internalListener.onFailure(e);
@@ -313,7 +314,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             return;
         }
 
-        runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+        runPredict(modelId, mlTask, mlInput, functionName, actionName, internalListener);
     }
 
     private void runPredict(
@@ -321,6 +322,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLTask mlTask,
         MLInput mlInput,
         FunctionName algorithm,
+        ActionName actionName,
         ActionListener<MLTaskResponse> internalListener
     ) {
         // run predict
@@ -340,7 +342,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             handleAsyncMLTaskComplete(mlTask);
                             mlModelManager.trackPredictDuration(modelId, startTime);
                             internalListener.onResponse(output);
-                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId));
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
@@ -357,7 +359,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     return;
                 } catch (Exception e) {
                     log.error("Failed to predict model " + modelId, e);
-                    handlePredictFailure(mlTask, internalListener, e, false, modelId);
+                    handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
                     return;
                 }
             } else if (FunctionName.needDeployFirst(algorithm)) {
@@ -388,7 +390,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             OpenSearchException e = new OpenSearchException(
                                 "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + modelId
                             );
-                            handlePredictFailure(mlTask, internalListener, e, false, modelId);
+                            handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
                             return;
                         }
                         // run predict
@@ -413,7 +415,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
                 }, e -> {
                     log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
-                    handlePredictFailure(mlTask, internalListener, e, true, modelId);
+                    handlePredictFailure(mlTask, internalListener, e, true, modelId, actionName);
                 });
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
                 client
@@ -426,12 +428,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     );
             } catch (Exception e) {
                 log.error("Failed to get model " + mlTask.getModelId(), e);
-                handlePredictFailure(mlTask, internalListener, e, true, modelId);
+                handlePredictFailure(mlTask, internalListener, e, true, modelId, actionName);
             }
         } else {
             IllegalArgumentException e = new IllegalArgumentException("ModelId is invalid");
             log.error("ModelId is invalid", e);
-            handlePredictFailure(mlTask, internalListener, e, false, modelId);
+            handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
         }
     }
 
@@ -445,17 +447,24 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         ActionListener<MLTaskResponse> listener,
         Exception e,
         boolean trackFailure,
-        String modelId
+        String modelId,
+        ActionName actionName
     ) {
         if (trackFailure) {
-            mlStats
-                .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
-                .increment();
-            mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT);
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), actionName, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+            mlStats.createModelCounterStatIfAbsent(modelId, actionName, MLActionLevelStat.ML_ACTION_FAILURE_COUNT);
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
+    }
+
+    private ActionName getActionNameFromInput(MLInput mlInput) {
+        ConnectorAction.ActionType actionType = null;
+        if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+        }
+        return (actionType == null) ? ActionName.PREDICT : ActionName.from(actionType.toString());
     }
 
     public void validateOutputSchema(String modelId, ModelTensorOutput output) {
