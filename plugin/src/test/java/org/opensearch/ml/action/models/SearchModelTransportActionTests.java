@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
@@ -24,7 +25,9 @@ import org.apache.lucene.search.TotalHits;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
@@ -46,6 +49,7 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
@@ -53,6 +57,7 @@ import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.sdkclient.SdkClientFactory;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
@@ -117,6 +122,9 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private FetchSourceContext fetchSourceContext;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
@@ -126,8 +134,15 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         Settings settings = Settings.builder().build();
         sdkClient = SdkClientFactory.createSdkClient(client, namedXContentRegistry, settings);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper, clusterService));
-        searchModelTransportAction = new SearchModelTransportAction(transportService, actionFilters, sdkClient, mlSearchHandler);
+        searchModelTransportAction = new SearchModelTransportAction(
+            transportService,
+            actionFilters,
+            sdkClient,
+            mlSearchHandler,
+            mlFeatureEnabledSetting
+        );
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -177,7 +192,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
     public void test_DoExecute_admin() throws InterruptedException {
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
-        
+
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onResponse(searchResponse);
         when(client.search(any(SearchRequest.class))).thenReturn(future);
@@ -186,7 +201,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         searchModelTransportAction.doExecute(null, searchRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
-        
+
         verify(mlSearchHandler).search(sdkClient, searchRequest, latchedActionListener);
         verify(client, times(1)).search(any());
     }
@@ -322,6 +337,47 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name", "model_IT"));
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        searchModelTransportAction.doExecute(null, searchRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(mlSearchHandler).search(sdkClient, searchRequest, latchedActionListener);
+        verify(client, times(2)).search(any());
+    }
+
+    @Test
+    public void testDoExecute_MultiTenancyEnabled_TenantFilteringNotEnabled() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
+        SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        searchModelTransportAction.doExecute(null, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(captor.capture());
+        OpenSearchStatusException exception = captor.getValue();
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
+        assertEquals("Failed to get the tenant ID from the search request", exception.getMessage());
+    }
+
+    @Test
+    public void testDoExecute_MultiTenancyEnabled_TenantFilteringEnabled() throws InterruptedException, IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        SearchResponse searchResponse = createModelGroupSearchResponse();
+        PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(searchResponse);
+        when(client.search(any(SearchRequest.class))).thenReturn(future);
+
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
+        searchRequest.source().query(QueryBuilders.termQuery("name", "model_IT"));
+        searchRequest.source().query(QueryBuilders.termQuery(TENANT_ID, "123456"));
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         searchModelTransportAction.doExecute(null, searchRequest, latchedActionListener);

@@ -24,7 +24,9 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
@@ -38,6 +40,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
     Client client;
     SdkClient sdkClient;
     ClusterService clusterService;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     ModelAccessControlHelper modelAccessControlHelper;
 
@@ -48,13 +51,15 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
         Client client,
         SdkClient sdkClient,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelGroupSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -62,6 +67,13 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
         request.indices(CommonValue.ML_MODEL_GROUP_INDEX);
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && !TenantAwareHelper.isTenantFilteringEnabled(request)) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException("Failed to get the tenant ID from the search request", RestStatus.INTERNAL_SERVER_ERROR)
+                );
+            return;
+        }
         preProcessRoleAndPerformSearch(request, user, listener);
     }
 
@@ -75,7 +87,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
             if (!modelAccessControlHelper.skipModelAccessControl(user)) {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
-                log.debug("Filtering result by " + user.getBackendRoles());
+                log.debug("Filtering result by {}", user.getBackendRoles());
             }
             SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest
                 .builder()

@@ -32,7 +32,9 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
@@ -53,6 +55,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private final SdkClient sdkClient;
 
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public SearchConnectorTransportAction(
@@ -60,17 +63,26 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLConnectorSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         request.indices(CommonValue.ML_CONNECTOR_INDEX);
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && !TenantAwareHelper.isTenantFilteringEnabled(request)) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException("Failed to get the tenant ID from the search request", RestStatus.INTERNAL_SERVER_ERROR)
+                );
+            return;
+        }
         search(request, actionListener);
     }
 
