@@ -580,6 +580,9 @@ public class ModelInterfaceUtils {
                 case "comprehend":
                     log.info("Creating preset model interface for Amazon Comprehend DetectDominantLanguage API");
                     switch ((connector.getParameters().get("api_name") != null) ? connector.getParameters().get("api_name") : "null"){
+                        // Single case for switch-case statement due to there is one more API in blueprint for Amazon Comprehend Model
+                        // Not set here because there is more than one input/output schema for the DetectEntities API
+                        // TODO: Add default model interface for Amazon Comprehend DetectEntities APIs
                         case "DetectDominantLanguage":
                             return AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE;
                         default:
