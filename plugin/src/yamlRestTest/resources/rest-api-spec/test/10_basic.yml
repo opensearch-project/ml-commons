@@ -5,4 +5,4 @@
         h: component
 
   - match:
-      $body: /^plugin\n$/
+      $body: /opensearch-ml\n$/
