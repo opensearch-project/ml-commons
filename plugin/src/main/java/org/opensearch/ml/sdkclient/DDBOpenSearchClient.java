@@ -107,7 +107,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
         final String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
-        final String tableName = getTableName(request.index());
+        final String tableName = request.index();
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
@@ -145,7 +145,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final GetItemRequest getItemRequest = GetItemRequest
             .builder()
-            .tableName(getTableName(request.index()))
+            .tableName(request.index())
             .key(
                 Map
                     .ofEntries(
@@ -216,7 +216,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest
                     .builder()
-                    .tableName(getTableName(request.index()))
+                    .tableName(request.index())
                     .key(updateKey)
                     .attributeUpdates(updateAttributeValue);
                 if (request.ifSeqNo() != null) {
@@ -262,7 +262,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final DeleteItemRequest deleteItemRequest = DeleteItemRequest
             .builder()
-            .tableName(getTableName(request.index()))
+            .tableName(request.index())
             .key(
                 Map
                     .ofEntries(
@@ -301,7 +301,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      */
     @Override
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        List<String> indices = Arrays.stream(request.indices()).map(this::getTableName).collect(Collectors.toList());
+        List<String> indices = Arrays.stream(request.indices()).collect(Collectors.toList());
 
         SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest(
             indices.toArray(new String[0]),
@@ -309,12 +309,6 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             request.searchSourceBuilder()
         );
         return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor);
-    }
-
-    private String getTableName(String index) {
-        // Table name will be same as index name. As DDB table name does not support dot(.)
-        // it will be removed from name.
-        return index.replaceAll("\\.", "");
     }
 
     private XContentParser createParser(String json) throws IOException {
