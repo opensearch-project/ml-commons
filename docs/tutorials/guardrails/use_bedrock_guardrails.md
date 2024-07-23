@@ -134,7 +134,7 @@ Response:
 # Use the guardrails embedded in the Amazon Bedrock Model Inference API
 
 ## 0. Preparation
-Create your own Bedrock Guardrails. For more details, see the Bedrock document [Create a guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-create.html).
+Create your own Amazon Bedrock guardrails. For more information, see [Create a guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-create.html).
 
 ## 1. Create a connector of Bedrock model with guardrails headers
 
