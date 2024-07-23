@@ -500,6 +500,22 @@ public class EncryptorImplTest {
     }
 
     @Test
+    public void decrypt_NoResponseToInitConfigIndex() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("No response to create ML Config index");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey());
+        encryptor.decrypt("test");
+    }
+
+    @Test
     public void decrypt_MLConfigIndexNotFound() {
         exceptionRule.expect(ResourceNotFoundException.class);
         exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);

@@ -1158,6 +1158,20 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
+    public void testRegisterModelMeta_NoResponseToInitIndex() {
+        setupForModelMeta();
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+        MLRegisterModelMetaInput mlUploadInput = prepareRequest();
+        modelManager.registerModelMeta(mlUploadInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Model index", argumentCaptor.getValue().getMessage());
+    }
+
     public void test_trackPredictDuration_sync() {
         Supplier<String> mockResult = () -> {
             try {
