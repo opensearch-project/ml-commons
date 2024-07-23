@@ -722,8 +722,6 @@ public class MLAgentExecutorTest {
         mlAgentExecutor.execute(getAgentMLInput(), latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
-        mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
-
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
         Assert.assertNotNull(exceptionCaptor.getValue());
     }

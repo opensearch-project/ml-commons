@@ -36,8 +36,10 @@ import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.sdkclient.SdkClientFactory;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -67,6 +69,9 @@ public class SearchTaskTransportActionTests extends OpenSearchTestCase {
     ActionFilters actionFilters;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     SearchRequest searchRequest;
 
     @Mock
@@ -93,7 +98,14 @@ public class SearchTaskTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
         sdkClient = SdkClientFactory.createSdkClient(client, xContentRegistry, settings);
-        searchTaskTransportAction = new SearchTaskTransportAction(transportService, actionFilters, client, sdkClient);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        searchTaskTransportAction = new SearchTaskTransportAction(
+            transportService,
+            actionFilters,
+            client,
+            sdkClient,
+            mlFeatureEnabledSetting
+        );
         ThreadPool threadPool = mock(ThreadPool.class);
         when(client.threadPool()).thenReturn(threadPool);
         ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
@@ -131,14 +143,14 @@ public class SearchTaskTransportActionTests extends OpenSearchTestCase {
     public void test_DoExecute() throws InterruptedException {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
-
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onResponse(searchResponse);
         when(client.search(request)).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        searchTaskTransportAction.doExecute(null, request, latchedActionListener);
+        searchTaskTransportAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(client, times(1)).search(eq(request));
