@@ -413,10 +413,10 @@ public class CommonValue {
                         + MASTER_KEY
                         + "\": {\"type\": \"keyword\"},\n"
                         + "      \""
-                        + MLConfig.TYPE_FIELD
+                        + MLConfig.CONFIG_TYPE_FIELD
                         + "\" : {\"type\":\"keyword\"},\n"
                         + "      \""
-                        + MLConfig.CONFIGURATION_FIELD
+                        + MLConfig.ML_CONFIGURATION_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
                         + CREATE_TIME_FIELD
