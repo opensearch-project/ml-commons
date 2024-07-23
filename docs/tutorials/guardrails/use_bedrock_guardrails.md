@@ -1,6 +1,6 @@
 # Topic
 
-> Remote guardrails is released in OpenSearch 2.15. To read more details, see the OpenSearch document [Guardrails](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/guardrails/).
+> Remote model guardrails has been released in OpenSearch 2.15. For more information, see [Guardrails](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/guardrails/).
 
 This tutorial demonstrates how to apply your Bedrock Guardrails for your remote models in two ways.
 
