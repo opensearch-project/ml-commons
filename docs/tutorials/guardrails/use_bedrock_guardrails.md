@@ -148,10 +148,6 @@ POST /_plugins/_ml/connectors/_create
   "parameters": {
       "region": "us-east-1",
       "service_name": "bedrock",
-      "anthropic_version": "bedrock-2023-05-31",
-      "endpoint": "bedrock.us-east-1.amazonaws.com",
-      "auth": "Sig_V4",
-      "content_type": "application/json",
       "max_tokens_to_sample": 8000,
       "temperature": 0.0001
   },
