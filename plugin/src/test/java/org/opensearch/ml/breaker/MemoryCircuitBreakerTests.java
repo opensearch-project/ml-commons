@@ -84,4 +84,22 @@ public class MemoryCircuitBreakerTests {
         settingsService.applySettings(newSettingsBuilder.build());
         Assert.assertFalse(breaker.isOpen());
     }
+
+    @Test
+    public void testIsOpen_DisableMemoryCB() {
+        ClusterSettings settingsService = new ClusterSettings(Settings.EMPTY, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
+        settingsService.registerSetting(ML_COMMONS_JVM_HEAP_MEM_THRESHOLD);
+        when(clusterService.getClusterSettings()).thenReturn(settingsService);
+
+        CircuitBreaker breaker = new MemoryCircuitBreaker(Settings.builder().build(), clusterService, jvmService);
+
+        when(mem.getHeapUsedPercent()).thenReturn((short) 90);
+        Assert.assertTrue(breaker.isOpen());
+
+        when(mem.getHeapUsedPercent()).thenReturn((short) 100);
+        Settings.Builder newSettingsBuilder = Settings.builder();
+        newSettingsBuilder.put("plugins.ml_commons.jvm_heap_memory_threshold", 100);
+        settingsService.applySettings(newSettingsBuilder.build());
+        Assert.assertFalse(breaker.isOpen());
+    }
 }

@@ -18,6 +18,7 @@ public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
     // TODO: make this value configurable as cluster setting
     private static final String ML_MEMORY_CB = "Memory Circuit Breaker";
     public static final short DEFAULT_JVM_HEAP_USAGE_THRESHOLD = 85;
+    public static final short JVM_HEAP_MAX_THRESHOLD = 100; // when threshold is 100, this CB check is ignored
     private final JvmService jvmService;
     private volatile Integer jvmHeapMemThreshold = 85;
 
@@ -50,6 +51,6 @@ public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
 
     @Override
     public boolean isOpen() {
-        return jvmService.stats().getMem().getHeapUsedPercent() > this.getThreshold();
+        return getThreshold() < JVM_HEAP_MAX_THRESHOLD && jvmService.stats().getMem().getHeapUsedPercent() > getThreshold();
     }
 }
