@@ -46,7 +46,6 @@ POST _plugins/_ml/connectors/_create
 
 ## 2. Create a remote model with your guardrail connector
 
-An example command:
 ```
 POST _plugins/_ml/models/_register
 {
