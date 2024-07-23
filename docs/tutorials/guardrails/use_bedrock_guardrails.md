@@ -183,7 +183,6 @@ A `post_process_function` is required to define the logic for blocking the input
 
 ## 2. Create a model
 
-An example command:
 ```
 POST _plugins/_ml/models/_register
 {
