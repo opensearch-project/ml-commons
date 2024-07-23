@@ -407,8 +407,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                     // Iterate over outputMapping
                                     for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
 
-                                        String newDocumentFieldName = outputMapEntry.getKey(); // text_embedding
-                                        String modelOutputFieldName = outputMapEntry.getValue(); // response
+                                        String newDocumentFieldName = outputMapEntry.getKey();
+                                        String modelOutputFieldName = outputMapEntry.getValue();
 
                                         MapUtils.incrementCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName);
 

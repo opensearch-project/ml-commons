@@ -782,7 +782,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            throw new RuntimeException("Prediction Failed");
+            actionListener.onFailure(new RuntimeException("Prediction Failed"));
+            return null;
         }).when(client).execute(any(), any(), any());
 
         ActionListener<SearchResponse> listener = new ActionListener<>() {
@@ -830,7 +831,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            throw new RuntimeException("Prediction Failed");
+            actionListener.onFailure(new RuntimeException("Prediction Failed"));
+            return null;
         }).when(client).execute(any(), any(), any());
 
         ActionListener<SearchResponse> listener = new ActionListener<>() {
@@ -928,12 +930,13 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         Map<String, String> output = new HashMap<>();
         output.put(newDocumentField, modelOutputField);
         outputMap.add(output);
-
+        Map<String, String> model_config = new HashMap<>();
+        model_config.put("truncate_result", "false");
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
             inputMap,
             outputMap,
-            null,
+            model_config,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
             DESCRIPTION,
