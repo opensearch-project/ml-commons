@@ -193,7 +193,7 @@ POST _plugins/_ml/models/_register
 }
 ```
 
-## 3. Model inference
+## 3. Test the model
 
 An example command:
 ```
