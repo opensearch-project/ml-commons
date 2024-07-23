@@ -139,7 +139,6 @@ Create your own Bedrock Guardrails. For more details, see the Bedrock document [
 
 ## 1. Create a connector of Bedrock model with guardrails headers
 
-An example command:
 ```
 POST /_plugins/_ml/connectors/_create
 {
