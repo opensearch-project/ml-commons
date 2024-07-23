@@ -1620,7 +1620,7 @@ public class MLModelManager {
      * @param connectorId connector id
      * @param listener    action listener
      */
-    private void getConnector(String connectorId, ActionListener<Connector> listener) {
+    public void getConnector(String connectorId, ActionListener<Connector> listener) {
         GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {
