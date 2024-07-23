@@ -111,6 +111,7 @@ public class MLConfig implements ToXContentObject, Writeable {
         Configuration mlConfiguration = null;
         Instant createTime = null;
         Instant lastUpdateTime = null;
+        Instant lastUpdatedTime = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -136,6 +137,9 @@ public class MLConfig implements ToXContentObject, Writeable {
                 case LAST_UPDATE_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -145,7 +149,7 @@ public class MLConfig implements ToXContentObject, Writeable {
                 .type(configType == null ? type : configType)
                 .configuration(mlConfiguration == null ? configuration : mlConfiguration)
                 .createTime(createTime)
-                .lastUpdateTime(lastUpdateTime)
+                .lastUpdateTime(lastUpdatedTime == null ? lastUpdateTime : lastUpdatedTime)
                 .build();
     }
 }
