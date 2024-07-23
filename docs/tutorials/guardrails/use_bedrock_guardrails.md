@@ -8,7 +8,7 @@ Note: Replace the placeholders starting with the prefix `your_` with your own va
 
 # Use the Bedrock Guardrails Independent API
 
-## 0. preparation
+## 0. Preparation
 Create your own Bedrock Guardrails. For more details, see the Bedrock document [Create a guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-create.html).
 
 ## 1. Create a connector with your Bedrock Guardrails endpoint
