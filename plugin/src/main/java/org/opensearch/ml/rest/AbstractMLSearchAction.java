@@ -6,7 +6,6 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getSourceContext;
 import static org.opensearch.ml.utils.RestActionUtils.getTenantID;
 
@@ -20,7 +19,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
@@ -58,13 +57,14 @@ public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends
         searchSourceBuilder.parseXContent(request.contentOrSourceParamParser());
         searchSourceBuilder.fetchSource(getSourceContext(request, searchSourceBuilder));
         searchSourceBuilder.seqNoAndPrimaryTerm(true).version(true);
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-            // Add tenant ID filter
-            String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
-            searchSourceBuilder.query(QueryBuilders.termQuery(TENANT_ID, tenantId));
-        }
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(index);
-        return channel -> client.execute(actionType, searchRequest, search(channel));
+        MLSearchActionRequest mlSearchActionRequest = MLSearchActionRequest
+            .builder()
+            .searchRequest(searchRequest)
+            .tenantId(tenantId)
+            .build();
+        return channel -> client.execute(actionType, mlSearchActionRequest, search(channel));
     }
 
     protected RestResponseListener<SearchResponse> search(RestChannel channel) {

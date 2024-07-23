@@ -31,6 +31,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -49,7 +50,7 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
+public class SearchConnectorTransportAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
 
     private final Client client;
     private final SdkClient sdkClient;
@@ -66,7 +67,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLConnectorSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
+        super(MLConnectorSearchAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
@@ -74,19 +75,17 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     }
 
     @Override
-    protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
-        request.indices(CommonValue.ML_CONNECTOR_INDEX);
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && !TenantAwareHelper.isTenantFilteringEnabled(request)) {
-            actionListener
-                .onFailure(
-                    new OpenSearchStatusException("Failed to get the tenant ID from the search request", RestStatus.INTERNAL_SERVER_ERROR)
-                );
+    protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
+        request.getSearchRequest().indices(CommonValue.ML_CONNECTOR_INDEX);
+
+        String tenantId = request.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        search(request, actionListener);
+        search(request.getSearchRequest(), tenantId, actionListener);
     }
 
-    private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    private void search(SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
@@ -119,6 +118,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
                 .builder()
                 .indices(request.indices())
                 .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
                 .build();
             sdkClient
                 .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))

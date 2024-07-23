@@ -37,6 +37,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
@@ -135,11 +136,12 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
@@ -155,15 +157,16 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
-                "{\"query\":{\"term\":{\"tenant_id\":{\"value\":\"test-tenant\",\"boost\":1.0}}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+                "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
                 searchRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
@@ -201,11 +204,12 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(

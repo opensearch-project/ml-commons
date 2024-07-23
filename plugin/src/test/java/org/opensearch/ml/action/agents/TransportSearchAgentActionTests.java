@@ -38,6 +38,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
@@ -138,13 +139,15 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
 
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onResponse(searchResponse);
         when(client.search(request)).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(client, times(1)).search(eq(request));
@@ -156,6 +159,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.matchAllQuery());
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
 
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onResponse(searchResponse);
@@ -163,7 +167,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(client, times(1)).search(eq(request));
@@ -173,13 +177,14 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecuteOnFailure() throws InterruptedException {
         SearchRequest request = new SearchRequest("my_index");
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new Exception("test exception"));
         when(client.search(request)).thenReturn(future);
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(client, times(1)).search(eq(request));
@@ -191,6 +196,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
 
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onResponse(searchResponse);
@@ -198,7 +204,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         verify(client, times(1)).search(eq(request));
@@ -210,6 +216,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
 
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onFailure(new Exception("failed to search the agent index"));
@@ -217,7 +224,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -232,9 +239,10 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
         // Create a search request
         SearchRequest searchRequest = new SearchRequest();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
 
         // Execute the action
-        transportSearchAgentAction.doExecute(null, searchRequest, actionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
 
         // Verify that the actionListener's onFailure method was called
         verify(actionListener, times(1)).onFailure(any(RuntimeException.class));
@@ -248,16 +256,18 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
 
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(captor.capture());
         OpenSearchStatusException exception = captor.getValue();
-        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
-        assertEquals("Failed to get the tenant ID from the search request", exception.getMessage());
+        assertEquals(RestStatus.FORBIDDEN, exception.status());
+        assertEquals("You don't have permission to access this resource", exception.getMessage());
     }
 
     @Test
@@ -268,6 +278,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
         sourceBuilder.query(QueryBuilders.termQuery(TENANT_ID, "123456"));
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, "123456");
 
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         future.onResponse(searchResponse);
@@ -275,7 +286,7 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<SearchResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportSearchAgentAction.doExecute(null, request, latchedActionListener);
+        transportSearchAgentAction.doExecute(null, mlSearchActionRequest, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
         verify(actionListener).onResponse(any(SearchResponse.class));
     }

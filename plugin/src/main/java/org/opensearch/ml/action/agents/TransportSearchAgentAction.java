@@ -23,6 +23,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.SdkClient;
@@ -34,7 +35,7 @@ import org.opensearch.transport.TransportService;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class TransportSearchAgentAction extends HandledTransportAction<SearchRequest, SearchResponse> {
+public class TransportSearchAgentAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
     private final Client client;
     private final SdkClient sdkClient;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -47,26 +48,23 @@ public class TransportSearchAgentAction extends HandledTransportAction<SearchReq
         SdkClient sdkClient,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLSearchAgentAction.NAME, transportService, actionFilters, SearchRequest::new);
+        super(MLSearchAgentAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
-    protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
-        request.indices(CommonValue.ML_AGENT_INDEX);
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() && !TenantAwareHelper.isTenantFilteringEnabled(request)) {
-            actionListener
-                .onFailure(
-                    new OpenSearchStatusException("Failed to get the tenant ID from the search request", RestStatus.INTERNAL_SERVER_ERROR)
-                );
+    protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
+        request.getSearchRequest().indices(CommonValue.ML_AGENT_INDEX);
+        String tenantId = request.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        search(request, actionListener);
+        search(request.getSearchRequest(), tenantId, actionListener);
     }
 
-    private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    private void search(SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search agent");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
@@ -97,6 +95,7 @@ public class TransportSearchAgentAction extends HandledTransportAction<SearchReq
                 .builder()
                 .indices(request.indices())
                 .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
                 .build();
 
             sdkClient

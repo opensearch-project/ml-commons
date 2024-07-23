@@ -29,16 +29,17 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestResponse;
 import org.opensearch.test.OpenSearchTestCase;
 
 import com.google.gson.Gson;
@@ -73,8 +74,10 @@ public class RestMemorySearchConversationsActionTests extends OpenSearchTestCase
         RestChannel channel = mock(RestChannel.class);
         action.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
+        ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
+
         verify(client, times(1)).execute(eq(SearchConversationsAction.INSTANCE), argumentCaptor.capture(), any());
-        assert (argumentCaptor.getValue().source().query() instanceof MatchAllQueryBuilder);
+        assert (argumentCaptor.getValue().getSearchRequest().source().query() instanceof MatchAllQueryBuilder);
     }
 }
