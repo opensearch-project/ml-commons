@@ -58,7 +58,6 @@ POST _plugins/_ml/models/_register
 
 ## 3. Test the model
 
-An example command:
 ```
 POST _plugins/_ml/models/your_model_id/_predict
 {
