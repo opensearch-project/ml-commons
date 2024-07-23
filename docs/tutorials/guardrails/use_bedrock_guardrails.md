@@ -13,7 +13,6 @@ Create your own Amazon Bedrock guardrails. For more information, see [Create a g
 
 ## 1. Create a connector with your Bedrock Guardrails endpoint
 
-An example command:
 ```
 POST _plugins/_ml/connectors/_create
 {
