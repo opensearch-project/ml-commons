@@ -478,7 +478,6 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      */
     private boolean checkIsModelInputMissing(Map<String, Object> document, Map<String, String> inputMapping) {
         boolean isModelInputMissing = false;
-
         for (Map.Entry<String, String> inputMapEntry : inputMapping.entrySet()) {
             String oldDocumentFieldName = inputMapEntry.getValue();
             boolean checkSingleModelInputPresent = hasField(document, oldDocumentFieldName);

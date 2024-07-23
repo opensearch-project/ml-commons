@@ -28,6 +28,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ingest.Processor;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -248,6 +249,66 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
     }
 
     /**
+     * Tests the successful rewriting of multiple string in terms query based on the model output.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_rewriteTermsQuerySuccess() throws Exception {
+        /**
+         * example term query: {"query":{"terms":{"text":["foo","bar],"boost":1.0}}}
+         */
+        String modelInputField = "inputs";
+        String originalQueryField = "query.terms.text";
+        String newQueryField = "query.terms.text";
+        String modelOutputField = "response";
+        MLInferenceSearchRequestProcessor requestProcessor = getMlInferenceSearchRequestProcessor(
+            null,
+            modelInputField,
+            originalQueryField,
+            newQueryField,
+            modelOutputField,
+            false,
+            false
+        );
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList("car", "vehicle", "truck")))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermsQueryBuilder("text", Arrays.asList("foo", "bar"));
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+        /**
+         * example terms query: {"query":{"terms":{"text":["car","vehicle","truck"],"boost":1.0}}}
+         */
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                QueryBuilder expectedQuery = new TermsQueryBuilder("text", Arrays.asList("car", "vehicle", "truck"));
+                assertEquals(expectedQuery, newSearchRequest.source().query());
+                assertEquals(request.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("Failed in executing processRequestAsync.");
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+    }
+
+    /**
      * Tests the successful rewriting of a double in a term query based on the model output.
      *
      * @throws Exception if an error occurs during the test
@@ -444,7 +505,6 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
      * @throws Exception if an error occurs during the test
      */
     public void testExecute_rewriteListFromTermQueryToGeometryQuerySuccess() throws Exception {
-
         String queryTemplate = "{\n"
             + "  \"query\": {\n"
             + "  \"geo_shape\" : {\n"

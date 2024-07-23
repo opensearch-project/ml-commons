@@ -251,7 +251,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                             requestListener.onResponse(request);
                         }
                     } catch (Exception e) {
-                        if (ignoreMissing || ignoreFailure) {
+                        if (ignoreFailure) {
                             logger.error("Failed in writing prediction outcomes to new query", e);
                             requestListener.onResponse(request);
 
@@ -348,7 +348,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             for (Map.Entry<String, String> entry : inputMap.entrySet()) {
                 // the inputMap takes in model input as keys and query fields as value
                 String queryField = entry.getValue();
-                String pathData = jsonData.read(queryField);
+                Object pathData = jsonData.read(queryField);
                 if (pathData == null) {
                     throw new IllegalArgumentException("cannot find field: " + queryField + " in query string: " + jsonData.jsonString());
                 }
@@ -358,7 +358,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             for (Map<String, String> outputMap : processOutputMap) {
                 for (Map.Entry<String, String> entry : outputMap.entrySet()) {
                     String queryField = entry.getKey();
-                    String pathData = jsonData.read(queryField);
+                    Object pathData = jsonData.read(queryField);
                     if (pathData == null) {
                         throw new IllegalArgumentException(
                             "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
@@ -402,7 +402,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 // model field as key, query field name as value
                 String modelInputFieldName = entry.getKey();
                 String queryFieldName = entry.getValue();
-                String queryFieldValue = JsonPath.parse(newQuery).read(queryFieldName);
+                String queryFieldValue = StringUtils.toJson(JsonPath.parse(newQuery).read(queryFieldName));
                 modelParameters.put(modelInputFieldName, queryFieldValue);
             }
         }
