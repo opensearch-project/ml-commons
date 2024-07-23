@@ -136,7 +136,7 @@ Response:
 ## 0. Preparation
 Create your own Amazon Bedrock guardrails. For more information, see [Create a guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-create.html).
 
-## 1. Create a connector of Bedrock model with guardrails headers
+## 1. Create a connector for an Amazon Bedrock model with guardrail headers
 
 ```
 POST /_plugins/_ml/connectors/_create
