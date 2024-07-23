@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.isValidActionInModelPrediction;
+
 public class ConnectorActionTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -139,5 +141,18 @@ public class ConnectorActionTest {
         Assert.assertEquals("{\"input\": \"${parameters.input}\"}", action.getRequestBody());
         Assert.assertEquals("connector.pre_process.openai.embedding", action.getPreProcessFunction());
         Assert.assertEquals("connector.post_process.openai.embedding", action.getPostProcessFunction());
+    }
+
+    @Test
+    public void test_wrongActionType() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Wrong Action Type");
+        ConnectorAction.ActionType.from("badAction");
+    }
+
+    @Test
+    public void test_invalidActionInModelPrediction() {
+        ConnectorAction.ActionType actionType = ConnectorAction.ActionType.from("execute");
+        Assert.assertEquals(isValidActionInModelPrediction(actionType), false);
     }
 }
