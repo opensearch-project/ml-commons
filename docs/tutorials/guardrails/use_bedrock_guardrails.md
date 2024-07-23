@@ -179,7 +179,7 @@ POST /_plugins/_ml/connectors/_create
   ]
 }
 ```
-A `post_process_function` is required to define the logic for the input blocked by the guardrail or not.
+A `post_process_function` is required to define the logic for blocking the input by the guardrail.
 
 ## 2. Create a model
 
