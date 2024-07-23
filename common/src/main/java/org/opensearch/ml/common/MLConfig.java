@@ -36,6 +36,8 @@ public class MLConfig implements ToXContentObject, Writeable {
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
 
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+
 
     @Setter
     private String type;
