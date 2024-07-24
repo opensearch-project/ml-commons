@@ -112,6 +112,10 @@ public class MLModelGroupManager {
                         }
 
                         mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
+                            if (!res) {
+                                wrappedListener.onFailure(new RuntimeException("No response to create ML Model Group index"));
+                                return;
+                            }
                             IndexRequest indexRequest = new IndexRequest(ML_MODEL_GROUP_INDEX);
                             indexRequest
                                 .source(
