@@ -1000,4 +1000,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
         return modelId;
     }
+
+    public Map searchWithPipeline(RestClient client, String indexName, String pipelineName, String query) throws IOException {
+        String formattedQuery = String.format(Locale.ROOT, query);
+        Response response = TestHelper
+            .makeRequest(client, "GET", "/" + indexName + "/" + "_search?search_pipeline=" + pipelineName, null, formattedQuery, null);
+        return parseResponseToMap(response);
+    }
 }
