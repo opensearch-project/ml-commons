@@ -23,8 +23,11 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
@@ -34,10 +37,11 @@ import org.opensearch.transport.TransportService;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class SearchModelGroupTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
+public class SearchModelGroupTransportAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
     Client client;
     SdkClient sdkClient;
     ClusterService clusterService;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     ModelAccessControlHelper modelAccessControlHelper;
 
@@ -48,26 +52,37 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
         Client client,
         SdkClient sdkClient,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLModelGroupSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
+        super(MLModelGroupSearchAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
-    protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
-        request.indices(CommonValue.ML_MODEL_GROUP_INDEX);
-        preProcessRoleAndPerformSearch(request, user, listener);
+        request.getSearchRequest().indices(CommonValue.ML_MODEL_GROUP_INDEX);
+        String tenantId = request.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+        preProcessRoleAndPerformSearch(request.getSearchRequest(), user, tenantId, listener);
     }
 
-    private void preProcessRoleAndPerformSearch(SearchRequest request, User user, ActionListener<SearchResponse> listener) {
+    private void preProcessRoleAndPerformSearch(
+        SearchRequest request,
+        User user,
+        String tenantId,
+        ActionListener<SearchResponse> listener
+    ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
 
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
@@ -75,12 +90,13 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
             if (!modelAccessControlHelper.skipModelAccessControl(user)) {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
-                log.debug("Filtering result by " + user.getBackendRoles());
+                log.debug("Filtering result by {}", user.getBackendRoles());
             }
             SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest
                 .builder()
                 .indices(request.indices())
                 .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
                 .build();
             sdkClient
                 .searchDataObjectAsync(searchDataObjecRequest, client.threadPool().executor(GENERAL_THREAD_POOL))

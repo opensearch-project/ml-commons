@@ -5,12 +5,18 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+
 import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class TenantAwareHelper {
 
@@ -50,5 +56,17 @@ public class TenantAwareHelper {
             return false;
         } else
             return true;
+    }
+
+    public static boolean isTenantFilteringEnabled(SearchRequest searchRequest) {
+        SearchSourceBuilder searchSourceBuilder = searchRequest.source();
+        if (searchSourceBuilder != null) {
+            QueryBuilder queryBuilder = searchSourceBuilder.query();
+            if (queryBuilder instanceof TermQueryBuilder) {
+                TermQueryBuilder termQuery = (TermQueryBuilder) queryBuilder;
+                return TENANT_ID.equals(termQuery.fieldName()); // Tenant filtering is enabled
+            }
+        }
+        return false; // Tenant filtering is not enabled
     }
 }

@@ -9,6 +9,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -16,9 +17,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class TenantAwareHelperTests {
 
@@ -87,5 +92,42 @@ public class TenantAwareHelperTests {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "tenant_id", "different_tenant_id", actionListener);
         assertTrue(result);
+    }
+
+    @Test
+    public void testIsTenantFilteringEnabled_TenantFilteringEnabled() {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(new TermQueryBuilder(TENANT_ID, "123456"));
+        SearchRequest searchRequest = new SearchRequest().source(sourceBuilder);
+
+        boolean result = TenantAwareHelper.isTenantFilteringEnabled(searchRequest);
+        assertTrue(result);
+    }
+
+    @Test
+    public void testIsTenantFilteringEnabled_TenantFilteringDisabled() {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.matchAllQuery());
+        SearchRequest searchRequest = new SearchRequest().source(sourceBuilder);
+
+        boolean result = TenantAwareHelper.isTenantFilteringEnabled(searchRequest);
+        assertFalse(result);
+    }
+
+    @Test
+    public void testIsTenantFilteringEnabled_NoQuery() {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        SearchRequest searchRequest = new SearchRequest().source(sourceBuilder);
+
+        boolean result = TenantAwareHelper.isTenantFilteringEnabled(searchRequest);
+        assertFalse(result);
+    }
+
+    @Test
+    public void testIsTenantFilteringEnabled_NullSource() {
+        SearchRequest searchRequest = new SearchRequest();
+
+        boolean result = TenantAwareHelper.isTenantFilteringEnabled(searchRequest);
+        assertFalse(result);
     }
 }

@@ -706,7 +706,7 @@ public class MLAgentExecutorTest {
     }
 
     @Test
-    public void test_AgentRunnerFailure_ReturnsResult() throws IOException, InterruptedException {
+    public void test_AgentRunnerFailure_ReturnsResult() throws InterruptedException {
         Mockito.doAnswer(invocation -> {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException());
@@ -721,8 +721,6 @@ public class MLAgentExecutorTest {
         LatchedActionListener<Output> latchedActionListener = new LatchedActionListener<>(agentActionListener, latch);
         mlAgentExecutor.execute(getAgentMLInput(), latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
-
-        mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
         Assert.assertNotNull(exceptionCaptor.getValue());

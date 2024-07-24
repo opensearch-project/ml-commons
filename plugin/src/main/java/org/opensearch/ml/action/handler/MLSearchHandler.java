@@ -80,11 +80,11 @@ public class MLSearchHandler {
 
     /**
      * Fetch all the models from the model group index, and then create a combined query to model version index.
-     * @param sdkClient 
+     * @param sdkClient
      * @param request
      * @param actionListener
      */
-    public void search(SdkClient sdkClient, SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    public void search(SdkClient sdkClient, SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -137,6 +137,7 @@ public class MLSearchHandler {
                     .builder()
                     .indices(request.indices())
                     .searchSourceBuilder(request.source())
+                    .tenantId(tenantId)
                     .build();
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
@@ -180,6 +181,7 @@ public class MLSearchHandler {
                         .builder()
                         .indices(request.indices())
                         .searchSourceBuilder(request.source())
+                        .tenantId(tenantId)
                         .build();
                     sdkClient
                         .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
@@ -205,6 +207,7 @@ public class MLSearchHandler {
                     .builder()
                     .indices(modelGroupSearchRequest.indices())
                     .searchSourceBuilder(modelGroupSearchRequest.source())
+                    .tenantId(tenantId)
                     .build();
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
@@ -269,7 +272,7 @@ public class MLSearchHandler {
      * @return wrapped action listener
      */
     public static <T> ActionListener<T> wrapRestActionListener(ActionListener<T> actionListener, String generalErrorMessage) {
-        return ActionListener.<T>wrap(r -> { actionListener.onResponse(r); }, e -> {
+        return ActionListener.<T>wrap(actionListener::onResponse, e -> {
             log.error("Wrap exception before sending back to user", e);
             Throwable cause = Throwables.getRootCause(e);
             if (isProperExceptionToReturn(e)) {

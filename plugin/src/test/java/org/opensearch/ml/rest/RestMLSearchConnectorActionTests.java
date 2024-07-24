@@ -40,6 +40,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -56,6 +58,9 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
 
     private RestMLSearchConnectorAction restMLSearchConnectorAction;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     NodeClient client;
     private ThreadPool threadPool;
     @Mock
@@ -64,7 +69,7 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        restMLSearchConnectorAction = new RestMLSearchConnectorAction();
+        restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
@@ -110,7 +115,7 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchConnectorAction mlSearchConnectorAction = new RestMLSearchConnectorAction();
+        RestMLSearchConnectorAction mlSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchConnectorAction);
     }
 
@@ -134,11 +139,12 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchConnectorAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLConnectorSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
         assertEquals(
@@ -180,11 +186,12 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchConnectorAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLConnectorSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
         assertEquals(
