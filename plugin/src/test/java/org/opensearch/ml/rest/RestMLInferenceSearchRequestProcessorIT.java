@@ -12,8 +12,8 @@ import static org.opensearch.ml.utils.TestHelper.makeRequest;
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.hc.core5.http.HttpHeaders;
-import org.apache.hc.core5.http.message.BasicHeader;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
 import org.junit.Assert;
 import org.junit.Before;
 import org.opensearch.client.Request;
