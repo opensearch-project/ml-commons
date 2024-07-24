@@ -38,6 +38,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -73,10 +74,11 @@ public class MachineLearningPluginTests {
     public void testGetRequestProcessors() {
         SearchPipelinePlugin.Parameters parameters = mock(SearchPipelinePlugin.Parameters.class);
         Map<String, ?> requestProcessors = plugin.getRequestProcessors(parameters);
-        assertEquals(1, requestProcessors.size());
+        assertEquals(2, requestProcessors.size());
         assertTrue(
             requestProcessors.get(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE) instanceof GenerativeQARequestProcessor.Factory
         );
+        assertTrue(requestProcessors.get(MLInferenceSearchRequestProcessor.TYPE) instanceof MLInferenceSearchRequestProcessor.Factory);
     }
 
     @Test
