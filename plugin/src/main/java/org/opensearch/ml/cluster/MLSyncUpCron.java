@@ -231,7 +231,7 @@ public class MLSyncUpCron implements Runnable {
         }
         mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
             if (!r) {
-                log.debug("Failed to initialize or update ML Config index");
+                log.error("Failed to initialize or update ML Config index");
                 return;
             }
             GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
