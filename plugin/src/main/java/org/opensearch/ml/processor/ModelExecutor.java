@@ -330,23 +330,4 @@ public interface ModelExecutor {
     default String convertToDotPath(String path) {
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
     }
-
-    /**
-     * Checks if a given list contains all null elements or is empty.
-     *
-     * @param list the list to be checked
-     * @return true if the list contains all null elements or is empty, false otherwise
-     */
-    static boolean isEmptyOrNullList(List list) {
-        if (list == null || list.isEmpty()) {
-            return true;
-        }
-
-        for (Object obj : list) {
-            if (obj != null) {
-                return false;
-            }
-        }
-        return true;
-    }
 }

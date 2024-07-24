@@ -186,9 +186,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 processPredictionsManyToOne(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
             }
         } else {
-            {
-                responseListener.onFailure(new IllegalArgumentException("one to one prediction is not supported yet."));
-            }
+            responseListener.onFailure(new IllegalArgumentException("one to one prediction is not supported yet."));
         }
 
     }
