@@ -292,6 +292,10 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             String modelName = mlRegisterModelMetaInput.getName();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                if (!res) {
+                    wrappedListener.onFailure(new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 Instant now = Instant.now();
                 MLModel mlModelMeta = MLModel
                     .builder()
@@ -528,6 +532,10 @@ public class MLModelManager {
             }
 
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
+                if (!boolResponse) {
+                    listener.onFailure(new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -596,6 +604,10 @@ public class MLModelManager {
                 registerModelInput.getConnector().encrypt(mlEngine::encrypt);
             }
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
+                if (!res) {
+                    handleException(functionName, taskId, new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -666,6 +678,10 @@ public class MLModelManager {
             String modelGroupId = registerModelInput.getModelGroupId();
             Instant now = Instant.now();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
+                if (!res) {
+                    handleException(functionName, taskId, new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -1624,7 +1640,7 @@ public class MLModelManager {
      * @param connectorId connector id
      * @param listener    action listener
      */
-    private void getConnector(String connectorId, ActionListener<Connector> listener) {
+    public void getConnector(String connectorId, ActionListener<Connector> listener) {
         GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {

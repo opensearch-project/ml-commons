@@ -142,6 +142,7 @@ public final class MLCommonsSettings {
             ImmutableList
                 .of(
                     "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://api\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",

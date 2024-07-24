@@ -214,6 +214,7 @@ import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
+import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
@@ -843,8 +844,8 @@ public class MachineLearningPlugin extends Plugin
         FixedExecutorBuilder executeThreadPool = new FixedExecutorBuilder(
             settings,
             EXECUTE_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
             ML_THREAD_POOL_PREFIX + EXECUTE_THREAD_POOL,
             false
         );
@@ -977,7 +978,11 @@ public class MachineLearningPlugin extends Plugin
                 GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
                 new GenerativeQARequestProcessor.Factory(() -> this.ragSearchPipelineEnabled)
             );
-
+        requestProcessors
+            .put(
+                MLInferenceSearchRequestProcessor.TYPE,
+                new MLInferenceSearchRequestProcessor.Factory(parameters.client, parameters.namedXContentRegistry)
+            );
         return requestProcessors;
     }
 

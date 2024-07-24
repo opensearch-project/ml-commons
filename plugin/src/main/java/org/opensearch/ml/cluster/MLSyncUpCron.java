@@ -186,10 +186,13 @@ public class MLSyncUpCron implements Runnable {
                     return;
                 }
                 // refresh model status
-                mlIndicesHandler
-                    .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
-                        log.error("Failed to init model index", e);
-                    }));
+                mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                    if (!res) {
+                        log.error("No response to create ML model index");
+                        return;
+                    }
+                    refreshModelState(modelWorkerNodes, deployingModels);
+                }, e -> { log.error("Failed to init model index", e); }));
             }, ex -> { log.error("Failed to sync model routing", ex); }));
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
@@ -211,10 +214,13 @@ public class MLSyncUpCron implements Runnable {
                 log.debug("Received failures in undeploying expired models", mlUndeployModelNodesResponse.failures());
             }
 
-            mlIndicesHandler
-                .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
-                    log.error("Failed to init model index", e);
-                }));
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                if (!res) {
+                    log.error("No response to create ML model index");
+                    return;
+                }
+                refreshModelState(modelWorkerNodes, deployingModels);
+            }, e -> { log.error("Failed to init model index", e); }));
         }, e -> { log.error("Failed to undeploy models {}", expiredModels, e); }));
     }
 
@@ -224,6 +230,10 @@ public class MLSyncUpCron implements Runnable {
             return;
         }
         mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
+            if (!r) {
+                log.error("Failed to initialize or update ML Config index");
+                return;
+            }
             GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.get(getRequest, ActionListener.wrap(getResponse -> {

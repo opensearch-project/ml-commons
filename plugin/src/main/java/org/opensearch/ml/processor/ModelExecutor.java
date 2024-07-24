@@ -189,7 +189,13 @@ public interface ModelExecutor {
                 return modelTensorOutputMap;
             } else {
                 try {
-                    return JsonPath.parse(modelTensorOutputMap).read(modelOutputFieldName);
+                    Object modelOutputValue = JsonPath.parse(modelTensorOutputMap).read(modelOutputFieldName);
+                    if (modelOutputValue == null) {
+                        throw new IllegalArgumentException(
+                            "model inference output cannot find such json path: " + modelOutputFieldName + " in " + modelTensorOutputMap
+                        );
+                    }
+                    return modelOutputValue;
                 } catch (Exception e) {
                     if (ignoreMissing) {
                         return modelTensorOutputMap;
