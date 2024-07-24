@@ -31,6 +31,8 @@ public class TestData {
     public static final String SENTENCE_TRANSFORMER_MODEL_URL =
         "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/traced_small_model.zip?raw=true";
     public static final String TIME_FIELD = "timestamp";
+    public static final String HUGGINGFACE_TRANSFORMER_MODEL_HASH_VALUE =
+        "e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021";
     public static final String TARGET_FIELD = "price";
 
     public static DataFrame constructTestDataFrame(int size) {
