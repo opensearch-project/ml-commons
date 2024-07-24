@@ -1638,26 +1638,33 @@ public class MLModelManager {
      */
     public void getConnector(String connectorId, ActionListener<Connector> listener) {
         GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                try (
-                    XContentParser parser = MLNodeUtils
-                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
-                ) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    Connector connector = Connector.createConnector(parser);
-                    listener.onResponse(connector);
-                } catch (Exception e) {
-                    log.error("Failed to parse connector:" + connectorId);
-                    listener.onFailure(e);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Connector> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            client.get(getRequest, ActionListener.wrap(r -> {
+                if (r != null && r.isExists()) {
+                    try (
+                        XContentParser parser = MLNodeUtils
+                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
+                    ) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        Connector connector = Connector.createConnector(parser);
+                        wrappedListener.onResponse(connector);
+                    } catch (Exception e) {
+                        log.error("Failed to parse connector:" + connectorId);
+                        wrappedListener.onFailure(e);
+                    }
+                } else {
+                    wrappedListener
+                        .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
                 }
-            } else {
-                listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
-            }
-        }, e -> {
+            }, e -> {
+                log.error("Failed to get connector", e);
+                wrappedListener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
+            }));
+        } catch (Exception e) {
             log.error("Failed to get connector", e);
-            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
-        }));
+            listener.onFailure(e);
+        }
     }
 
     /**
