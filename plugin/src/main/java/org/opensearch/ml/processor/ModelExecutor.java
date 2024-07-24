@@ -281,6 +281,15 @@ public interface ModelExecutor {
         return StringUtils.toJson(originalFieldValue);
     }
 
+    default boolean hasField(Object json, String path) {
+        Object value = JsonPath.using(suppressExceptionConfiguration).parse(json).read(path);
+
+        if (value != null) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Writes a new dot path for a nested object within the given JSON object.
      * This method is useful when dealing with arrays or nested objects in the JSON structure.
@@ -321,5 +330,4 @@ public interface ModelExecutor {
     default String convertToDotPath(String path) {
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
     }
-
 }
