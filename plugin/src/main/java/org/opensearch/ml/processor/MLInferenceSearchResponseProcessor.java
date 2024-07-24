@@ -74,7 +74,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     public static final String FULL_RESPONSE_PATH = "full_response_path";
     public static final String MODEL_INPUT = "model_input";
     public static final String ONE_TO_ONE = "one_to_one";
-    public static final String DEFAULT_MODEl_INPUT = "{ \"parameters\": ${ml_inference.parameters} }";
+    public static final String DEFAULT_MODEL_INPUT = "{ \"parameters\": ${ml_inference.parameters} }";
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
@@ -617,7 +617,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
             // if model input is not provided for remote models, use default value
             if (functionName.equalsIgnoreCase("remote")) {
-                modelInput = (modelInput != null) ? modelInput : DEFAULT_MODEl_INPUT;
+                modelInput = (modelInput != null) ? modelInput : DEFAULT_MODEL_INPUT;
             } else if (modelInput == null) {
                 // if model input is not provided for local models, throw exception since it is mandatory here
                 throw new IllegalArgumentException("Please provide model input when using a local model in ML Inference Processor");
