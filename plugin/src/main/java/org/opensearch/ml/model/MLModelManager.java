@@ -712,7 +712,7 @@ public class MLModelManager {
         mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
-            if (workerNodes != null && workerNodes.size() > 0) {
+            if (workerNodes != null && !workerNodes.isEmpty()) {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
                 modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
@@ -720,7 +720,7 @@ public class MLModelManager {
             listener.onResponse("successful");
             return;
         }
-        if (modelCacheHelper.getLocalDeployedModels().length >= maxModelPerNode) {
+        if (functionName != FunctionName.REMOTE && modelCacheHelper.getLocalDeployedModels().length >= maxModelPerNode) {
             listener.onFailure(new IllegalArgumentException("Exceed max local model per node limit"));
             return;
         }
