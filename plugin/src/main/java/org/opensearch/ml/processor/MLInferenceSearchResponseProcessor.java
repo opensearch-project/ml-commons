@@ -144,7 +144,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 responseListener.onResponse(response);
                 return;
             }
-            rewriteResponseDocuments(response, hits, responseListener);
+            rewriteResponseDocuments(response, responseListener);
         } catch (Exception e) {
             if (ignoreFailure) {
                 responseListener.onResponse(response);
@@ -158,12 +158,10 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * Rewrite the documents in the search response with the inference results.
      *
      * @param response        the search response
-     * @param hits            the search hits
      * @param responseListener the listener to be notified when the response is processed
      * @throws IOException if an I/O error occurs during the rewriting process
      */
-    private void rewriteResponseDocuments(SearchResponse response, SearchHit[] hits, ActionListener<SearchResponse> responseListener)
-        throws IOException {
+    private void rewriteResponseDocuments(SearchResponse response, ActionListener<SearchResponse> responseListener) throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
         int inputMapSize = (processInputMap == null) ? 0 : processInputMap.size();
@@ -183,7 +181,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 rewriteResponseListener,
                 inputMapSize
             );
-
+            SearchHit[] hits = response.getHits().getHits();
             for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
                 processPredictionsManyToOne(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
             }
