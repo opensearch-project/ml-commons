@@ -155,6 +155,65 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
+     * Tests create processor with many_to_one is false
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneException() throws Exception {
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals("one to one prediction is not supported yet.", e.getMessage());
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+
+    }
+
+    /**
      * Tests the successful processing of a response without any input-output mappings.
      *
      * @throws Exception if an error occurs during the test
@@ -175,7 +234,88 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+    }
+
+    /**
+     * Tests the successful processing of a response without any input-output mappings.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseEmptyMappingSuccess() throws Exception {
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        inputMap.add(input);
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            null,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
 
         SearchRequest request = getSearchRequest();
@@ -623,7 +763,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
         SearchRequest request = getSearchRequest();
         SearchResponse response = getSearchResponseTwoFields(5, true, originalDocumentField, originalDocumentField1);
@@ -708,7 +849,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
         SearchRequest request = getSearchRequest();
         SearchResponse response = getSearchResponse(5, true, originalDocumentField);
@@ -773,7 +915,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
 
         SearchRequest request = getSearchRequest();
@@ -822,7 +965,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
 
         SearchRequest request = getSearchRequest();
@@ -871,7 +1015,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
 
         SearchRequest request = getSearchRequest();
@@ -947,7 +1092,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             override,
             "{ \"parameters\": ${ml_inference.parameters} }",
             client,
-            TEST_XCONTENT_REGISTRY_FOR_QUERY
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
         );
         return responseProcessor;
     }

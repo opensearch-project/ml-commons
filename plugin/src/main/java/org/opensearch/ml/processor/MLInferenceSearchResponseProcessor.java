@@ -62,6 +62,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     private final String functionName;
     private final boolean override;
     private final boolean fullResponsePath;
+    private final boolean oneToOne;
     private final boolean ignoreFailure;
     private final String modelInput;
     private static Client client;
@@ -72,6 +73,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     public static final String FUNCTION_NAME = "function_name";
     public static final String FULL_RESPONSE_PATH = "full_response_path";
     public static final String MODEL_INPUT = "model_input";
+    public static final String ONE_TO_ONE = "one_to_one";
     public static final String DEFAULT_MODEl_INPUT = "{ \"parameters\": ${ml_inference.parameters} }";
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
     // it can be overwritten using max_prediction_tasks when creating processor
@@ -93,9 +95,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         boolean override,
         String modelInput,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        boolean oneToOne
     ) {
         super(tag, description, ignoreFailure);
+        this.oneToOne = oneToOne;
         this.inferenceProcessorAttributes = new InferenceProcessorAttributes(
             modelId,
             inputMaps,
@@ -166,28 +170,34 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
         // hitCountInPredictions keeps track of the count of hit that have the required input fields for each round of prediction
         Map<Integer, Integer> hitCountInPredictions = new HashMap<>();
-        ActionListener<Map<Integer, MLOutput>> rewriteResponseListener = createRewriteResponseListener(
-            response,
-            responseListener,
-            processInputMap,
-            processOutputMap,
-            hitCountInPredictions
-        );
+        if (!oneToOne) {
+            ActionListener<Map<Integer, MLOutput>> rewriteResponseListener = createRewriteResponseListenerManyToOne(
+                response,
+                responseListener,
+                processInputMap,
+                processOutputMap,
+                hitCountInPredictions
+            );
 
-        GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListener(
-            rewriteResponseListener,
-            inputMapSize
-        );
+            GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListenerManyToOne(
+                rewriteResponseListener,
+                inputMapSize
+            );
 
-        for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
-            processPredictions(response, hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
+            for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
+                processPredictionsManyToOne(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
+            }
+        } else {
+            {
+                responseListener.onFailure(new IllegalArgumentException("one to one prediction is not supported yet."));
+            }
         }
+
     }
 
     /**
      * Processes the predictions for the given input map index.
      *
-     * @param response                the search response
      * @param hits                    the search hits
      * @param processInputMap         the list of input mappings
      * @param inputMapIndex           the index of the input mapping to process
@@ -195,8 +205,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
      * @throws IOException if an I/O error occurs during the prediction process
      */
-    private void processPredictions(
-        SearchResponse response,
+    private void processPredictionsManyToOne(
         SearchHit[] hits,
         List<Map<String, String>> processInputMap,
         int inputMapIndex,
@@ -215,7 +224,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, Object> modelInputParameters = new HashMap<>();
 
         Map<String, String> inputMapping;
-        if (processInputMap != null) {
+        if (processInputMap != null && !processInputMap.isEmpty()) {
             inputMapping = processInputMap.get(inputMapIndex);
 
             for (SearchHit hit : hits) {
@@ -236,24 +245,9 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
                         Object documentValue = JsonPath.using(configuration).parse(documentJson).read(documentFieldName);
                         if (documentValue != null) {
-
                             // when not existed in the map, add into the modelInputParameters map
-                            if (!modelInputParameters.containsKey(modelInputFieldName)) {
-                                modelInputParameters.put(modelInputFieldName, documentValue);
-                            } else {
-                                if (modelInputParameters.get(modelInputFieldName) instanceof List) {
-                                    List<Object> valueList = ((List) modelInputParameters.get(modelInputFieldName));
-                                    valueList.add(documentValue);
-                                } else {
-                                    Object firstValue = modelInputParameters.remove(modelInputFieldName);
-                                    List<Object> documentValueList = new ArrayList<>();
-                                    documentValueList.add(firstValue);
-                                    documentValueList.add(documentValue);
-                                    modelInputParameters.put(modelInputFieldName, documentValueList);
-                                }
-                            }
+                            updateModelInputParametersManyToOne(modelInputParameters, modelInputFieldName, documentValue);
                         }
-
                     }
                 } else { // when document does not contain the documentFieldName, skip when ignoreMissing
                     if (!ignoreMissing) {
@@ -273,20 +267,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                     Object documentValue = entry.getValue();
 
                     // when not existed in the map, add into the modelInputParameters map
-                    if (!modelInputParameters.containsKey(modelInputFieldName)) {
-                        modelInputParameters.put(modelInputFieldName, documentValue);
-                    } else {
-                        if (modelInputParameters.get(modelInputFieldName) instanceof List) {
-                            List<Object> valueList = ((List) modelInputParameters.get(modelInputFieldName));
-                            valueList.add(documentValue);
-                        } else {
-                            Object firstValue = modelInputParameters.remove(modelInputFieldName);
-                            List<Object> documentValueList = new ArrayList<>();
-                            documentValueList.add(firstValue);
-                            documentValueList.add(documentValue);
-                            modelInputParameters.put(modelInputFieldName, documentValueList);
-                        }
-                    }
+                    updateModelInputParametersManyToOne(modelInputParameters, modelInputFieldName, documentValue);
 
                 }
             }
@@ -329,6 +310,21 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         });
     }
 
+    private void updateModelInputParametersManyToOne(
+        Map<String, Object> modelInputParameters,
+        String modelInputFieldName,
+        Object documentValue
+    ) {
+        if (!modelInputParameters.containsKey(modelInputFieldName)) {
+            List<Object> documentValueList = new ArrayList<>();
+            documentValueList.add(documentValue);
+            modelInputParameters.put(modelInputFieldName, documentValueList);
+        } else {
+            List<Object> valueList = ((List) modelInputParameters.get(modelInputFieldName));
+            valueList.add(documentValue);
+        }
+    }
+
     /**
      * Creates a grouped action listener for batch predictions.
      *
@@ -336,7 +332,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param inputMapSize            the size of the input map
      * @return a grouped action listener for batch predictions
      */
-    private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListener(
+    private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListenerManyToOne(
         ActionListener<Map<Integer, MLOutput>> rewriteResponseListener,
         int inputMapSize
     ) {
@@ -368,7 +364,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
      * @return an action listener for rewriting the response with the inference results
      */
-    private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListener(
+    private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListenerManyToOne(
         SearchResponse response,
         ActionListener<SearchResponse> responseListener,
         List<Map<String, String>> processInputMap,
@@ -615,6 +611,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             String functionName = ConfigurationUtils
                 .readStringProperty(TYPE, processorTag, config, FUNCTION_NAME, FunctionName.REMOTE.name());
             boolean override = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, OVERRIDE, false);
+            boolean oneToOne = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, ONE_TO_ONE, false);
 
             String modelInput = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, MODEL_INPUT);
 
@@ -672,7 +669,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 override,
                 modelInput,
                 client,
-                xContentRegistry
+                xContentRegistry,
+                oneToOne
             );
         }
     }

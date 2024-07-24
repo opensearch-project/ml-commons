@@ -5,12 +5,13 @@
 
 package org.opensearch.ml.utils;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 
 import org.apache.lucene.search.TotalHits;
@@ -27,6 +28,18 @@ import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 
 public class SearchResponseUtilTests {
+
+    @Test
+    public void testPrivateConstructor() throws NoSuchMethodException,
+        IllegalAccessException,
+        InvocationTargetException,
+        InstantiationException {
+        Constructor<SearchResponseUtil> constructor = SearchResponseUtil.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        SearchResponseUtil instance = constructor.newInstance();
+        assertNotNull(instance);
+    }
+
     @Test
     public void testReplaceHits() {
         SearchHit[] originalHits = new SearchHit[10];
@@ -119,5 +132,13 @@ public class SearchResponseUtilTests {
         assertEquals(15, newResponse.getHits().getTotalHits().value);
         assertEquals(TotalHits.Relation.EQUAL_TO, newResponse.getHits().getTotalHits().relation);
         assertEquals(0.7f, newResponse.getHits().getMaxScore(), 0.0001f);
+    }
+
+    @Test
+    public void testReplaceHitsWithNoHits() {
+        SearchResponse originalResponse = mock(SearchResponse.class);
+        when(originalResponse.getHits()).thenReturn(null);
+
+        assertThrows(IllegalStateException.class, () -> SearchResponseUtil.replaceHits(new SearchHit[0], originalResponse));
     }
 }

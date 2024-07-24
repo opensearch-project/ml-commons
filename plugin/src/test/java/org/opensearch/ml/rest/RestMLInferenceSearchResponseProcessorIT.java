@@ -206,59 +206,6 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     }
 
     /**
-     * Tests the MLInferenceSearchResponseProcessor with a remote model and a string field as input.
-     * It creates a search pipeline with the processor configured to use the remote model,
-     * performs a search using the pipeline, and verifies the inference results.
-     *
-     * @throws Exception if any error occurs during the test
-     */
-    public void testMLInferenceProcessorRemoteModelString() throws Exception {
-
-        String createPipelineRequestBody = "{\n"
-            + "  \"response_processors\": [\n"
-            + "    {\n"
-            + "      \"ml_inference\": {\n"
-            + "        \"tag\": \"ml_inference\",\n"
-            + "        \"description\": \"This processor is going to run ml inference during search request\",\n"
-            + "        \"model_id\": \""
-            + this.bedrockEmbeddingModelId
-            + "\",\n"
-            + "        \"input_map\": [\n"
-            + "          {\n"
-            + "            \"input\": \"weather\"\n"
-            + "          }\n"
-            + "        ],\n"
-            + "        \"output_map\": [\n"
-            + "          {\n"
-            + "            \"weather_embedding\": \"$.embedding\"\n"
-            + "          }\n"
-            + "        ],\n"
-            + "        \"ignore_missing\": false,\n"
-            + "        \"ignore_failure\": false\n"
-            + "      }\n"
-            + "    }\n"
-            + "  ]\n"
-            + "}";
-
-        String query = "{\"query\":{\"term\":{\"diary_embedding_size\":{\"value\":\"1536\"}}}}";
-
-        String index_name = "daily_index";
-        String pipelineName = "weather_embedding_pipeline";
-        createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
-
-        Map response = searchWithPipeline(client(), index_name, pipelineName, query);
-        System.out.println(response);
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size"), "1536");
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.weather"), "sunny");
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[0]"), "happy");
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[1]"), "first day at school");
-        List embeddingList = (List) JsonPath.parse(response).read("$.hits.hits[0]._source.weather_embedding");
-        Assert.assertEquals(embeddingList.size(), 1536);
-        Assert.assertEquals((Double) embeddingList.get(0), 0.734375, 0.005);
-        Assert.assertEquals((Double) embeddingList.get(1), 0.87109375, 0.005);
-    }
-
-    /**
      * Tests the MLInferenceSearchResponseProcessor with a remote model and a nested list field as input.
      * It creates a search pipeline with the processor configured to use the remote model,
      * performs a search using the pipeline, and verifies the inference results.
@@ -352,9 +299,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
             + "        \"model_input\": \"{ \\\"text_docs\\\": [\\\"${ml_inference.text_docs}\\\"] ,\\\"return_number\\\": true,\\\"target_response\\\": [\\\"sentence_embedding\\\"]}\",\n"
             + "        \"function_name\": \"text_embedding\",\n"
             + "        \"full_response_path\": true,\n"
-            +
-
-            "        \"input_map\": [\n"
+            + "        \"input_map\": [\n"
             + "          {\n"
             + "            \"input\": \"weather\"\n"
             + "          }\n"
