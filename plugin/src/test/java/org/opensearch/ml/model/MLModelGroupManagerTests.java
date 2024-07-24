@@ -389,6 +389,23 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("Failed to find model group with ID: testModelGroupID", argumentCaptor.getValue().getMessage());
     }
 
+    public void test_NoResponseoInitModelGroup() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initModelGroupIndexIfAbsent(any());
+
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+
+        MLRegisterModelGroupInput mlRegisterModelGroupInput = prepareRequest(null, null, null);
+        mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Model Group index", argumentCaptor.getValue().getMessage());
+    }
+
     private MLRegisterModelGroupInput prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         return MLRegisterModelGroupInput
             .builder()
