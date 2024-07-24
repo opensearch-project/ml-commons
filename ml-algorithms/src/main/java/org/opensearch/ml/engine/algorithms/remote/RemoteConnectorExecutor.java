@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -130,6 +131,8 @@ public interface RemoteConnectorExecutor {
 
     Client getClient();
 
+    Logger getLogger();
+
     default void setClient(Client client) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
@@ -175,17 +178,20 @@ public interface RemoteConnectorExecutor {
             .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
         User user = User.parse(userStr);
         if (getRateLimiter() != null && !getRateLimiter().request()) {
+            getLogger().error("Request is throttled at model level.");
             throw new OpenSearchStatusException("Request is throttled at model level.", RestStatus.TOO_MANY_REQUESTS);
         } else if (user != null
             && getUserRateLimiterMap() != null
             && getUserRateLimiterMap().get(user.getName()) != null
             && !getUserRateLimiterMap().get(user.getName()).request()) {
+            getLogger().error("Request is throttled at user level.");
             throw new OpenSearchStatusException(
                 "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
                 RestStatus.TOO_MANY_REQUESTS
             );
         } else {
             if (getMlGuard() != null && !getMlGuard().validate(payload, MLGuard.Type.INPUT)) {
+                getLogger().error("guardrails triggered for user input");
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
             invokeRemoteModel(mlInput, parameters, payload, tensorOutputs, countDownLatch, actionListener);

@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
@@ -71,6 +72,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
         Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
+    }
+
+    @Override
+    public Logger getLogger() {
+        return log;
     }
 
     @SuppressWarnings("removal")
