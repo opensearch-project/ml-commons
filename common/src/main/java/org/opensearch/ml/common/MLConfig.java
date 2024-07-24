@@ -27,10 +27,17 @@ public class MLConfig implements ToXContentObject, Writeable {
 
     public static final String TYPE_FIELD = "type";
 
+    public static final String CONFIG_TYPE_FIELD = "config_type";
+
     public static final String CONFIGURATION_FIELD = "configuration";
+
+    public static final String ML_CONFIGURATION_FIELD = "ml_configuration";
 
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
+
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+
 
     @Setter
     private String type;
@@ -78,10 +85,10 @@ public class MLConfig implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
         XContentBuilder builder = xContentBuilder.startObject();
         if (type != null) {
-            builder.field(TYPE_FIELD, type);
+            builder.field(CONFIG_TYPE_FIELD, type);
         }
         if (configuration != null) {
-            builder.field(CONFIGURATION_FIELD, configuration);
+            builder.field(ML_CONFIGURATION_FIELD, configuration);
         }
         if (createTime != null) {
             builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
@@ -99,9 +106,12 @@ public class MLConfig implements ToXContentObject, Writeable {
 
     public static MLConfig parse(XContentParser parser) throws IOException {
         String type = null;
+        String configType = null;
         Configuration configuration = null;
+        Configuration mlConfiguration = null;
         Instant createTime = null;
         Instant lastUpdateTime = null;
+        Instant lastUpdatedTime = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -112,8 +122,14 @@ public class MLConfig implements ToXContentObject, Writeable {
                 case TYPE_FIELD:
                     type = parser.text();
                     break;
+                case CONFIG_TYPE_FIELD:
+                    configType = parser.text();
+                    break;
                 case CONFIGURATION_FIELD:
                     configuration = Configuration.parse(parser);
+                    break;
+                case ML_CONFIGURATION_FIELD:
+                    mlConfiguration = Configuration.parse(parser);
                     break;
                 case CREATE_TIME_FIELD:
                     createTime = Instant.ofEpochMilli(parser.longValue());
@@ -121,16 +137,19 @@ public class MLConfig implements ToXContentObject, Writeable {
                 case LAST_UPDATE_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
         return MLConfig.builder()
-                .type(type)
-                .configuration(configuration)
+                .type(configType == null ? type : configType)
+                .configuration(mlConfiguration == null ? configuration : mlConfiguration)
                 .createTime(createTime)
-                .lastUpdateTime(lastUpdateTime)
+                .lastUpdateTime(lastUpdatedTime == null ? lastUpdateTime : lastUpdatedTime)
                 .build();
     }
 }
