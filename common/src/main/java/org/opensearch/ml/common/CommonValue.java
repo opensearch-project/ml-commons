@@ -13,6 +13,9 @@ import org.opensearch.ml.common.controller.MLController;
 
 import java.util.Set;
 
+import static org.opensearch.ml.common.MLConfig.CONFIG_TYPE_FIELD;
+import static org.opensearch.ml.common.MLConfig.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.MLConfig.ML_CONFIGURATION_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD;
@@ -407,22 +410,21 @@ public class CommonValue {
                         + "    \"_meta\": {\"schema_version\": "
                         + ML_CONFIG_INDEX_SCHEMA_VERSION
                         + "},\n"
-                        + "    \"dynamic\": \"strict\",\n"
                         + "    \"properties\": {\n"
                         + "      \""
                         + MASTER_KEY
                         + "\": {\"type\": \"keyword\"},\n"
                         + "      \""
-                        + MLConfig.TYPE_FIELD
+                        + CONFIG_TYPE_FIELD
                         + "\" : {\"type\":\"keyword\"},\n"
                         + "      \""
-                        + MLConfig.CONFIGURATION_FIELD
+                        + ML_CONFIGURATION_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
                         + CREATE_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
-                        + LAST_UPDATE_TIME_FIELD
+                        + LAST_UPDATED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
                         + "    }\n"
                         + "}";
