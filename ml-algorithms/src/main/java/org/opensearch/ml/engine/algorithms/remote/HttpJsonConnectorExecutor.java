@@ -24,6 +24,7 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.TokenBucket;
@@ -81,6 +82,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public HttpJsonConnectorExecutor(Connector connector, CloseableHttpClient httpClient) {
         this(connector);
         this.httpClient = httpClient;
+    }
+
+    @Override
+    public Logger getLogger() {
+        return log;
     }
 
     @SuppressWarnings("removal")
