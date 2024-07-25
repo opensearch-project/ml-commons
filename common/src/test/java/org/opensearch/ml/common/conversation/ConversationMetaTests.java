@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class ConversationMetaTests {
@@ -30,7 +31,7 @@ public class ConversationMetaTests {
     @Before
     public void setUp() {
         time = Instant.now();
-        conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin");
+        conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin", null);
     }
 
     @Test
@@ -41,6 +42,7 @@ public class ConversationMetaTests {
         content.field(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, time);
         content.field(ConversationalIndexConstants.META_NAME_FIELD, "meta name");
         content.field(ConversationalIndexConstants.USER_FIELD, "admin");
+        content.field(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD, Map.of("test_key", "test_value"));
         content.endObject();
 
         SearchHit[] hits = new SearchHit[1];
@@ -50,6 +52,7 @@ public class ConversationMetaTests {
         assertEquals(conversationMeta.getId(), "cId");
         assertEquals(conversationMeta.getName(), "meta name");
         assertEquals(conversationMeta.getUser(), "admin");
+        assertEquals(conversationMeta.getAdditionalInfos().get("test_key"), "test_value");
     }
 
     @Test
@@ -85,7 +88,7 @@ public class ConversationMetaTests {
 
     @Test
     public void test_ToXContent() throws IOException {
-        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin");
+        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin", null);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         conversationMeta.toXContent(builder, EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
@@ -94,13 +97,13 @@ public class ConversationMetaTests {
 
     @Test
     public void test_toString() {
-        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin");
+        ConversationMeta conversationMeta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin", null);
         assertEquals("{id=test_id, name=test meta, created=1970-01-01T00:00:00.123Z, updated=1970-01-01T00:00:00.123Z, user=admin}", conversationMeta.toString());
     }
 
     @Test
     public void test_equal() {
-        ConversationMeta meta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin");
+        ConversationMeta meta = new ConversationMeta("test_id", Instant.ofEpochMilli(123), Instant.ofEpochMilli(123), "test meta", "admin", null);
         assertEquals(meta.equals(conversationMeta), false);
     }
 }

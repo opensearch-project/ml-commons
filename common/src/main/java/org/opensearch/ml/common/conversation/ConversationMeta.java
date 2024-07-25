@@ -22,23 +22,26 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
-import org.opensearch.action.index.IndexRequest;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.search.SearchHit;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+
+import static org.opensearch.ml.common.CommonValue.VERSION_2_17_0;
 
 /**
  * Class for holding conversational metadata
  */
 @AllArgsConstructor
 public class ConversationMeta implements Writeable, ToXContentObject {
-
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO = CommonValue.VERSION_2_17_0;
     @Getter
     private String id;
     @Getter
@@ -49,6 +52,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     private String name;
     @Getter
     private String user;
+    @Getter
+    private Map<String, String> additionalInfos;
 
     /**
      * Creates a conversationMeta object from a SearchHit object
@@ -71,7 +76,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_UPDATED_TIME_FIELD));
         String name = (String) docFields.get(ConversationalIndexConstants.META_NAME_FIELD);
         String user = (String) docFields.get(ConversationalIndexConstants.USER_FIELD);
-        return new ConversationMeta(id, created, updated, name, user);
+        Map<String, String> additionalInfos = (Map<String, String>)docFields.get(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD);
+        return new ConversationMeta(id, created, updated, name, user, additionalInfos);
     }
 
     /**
@@ -87,7 +93,13 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = in.readInstant();
         String name = in.readString();
         String user = in.readOptionalString();
-        return new ConversationMeta(id, created, updated, name, user);
+        Map<String, String> additionalInfos = null;
+        if (in.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO)) {
+            if (in.readBoolean()) {
+                additionalInfos = in.readMap(StreamInput::readString, StreamInput::readString);
+            }
+        }
+        return new ConversationMeta(id, created, updated, name, user, additionalInfos);
     }
 
     @Override
@@ -97,6 +109,14 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         out.writeInstant(updatedTime);
         out.writeString(name);
         out.writeOptionalString(user);
+        if(out.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO)) {
+            if (additionalInfos == null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                out.writeMap(additionalInfos, StreamOutput::writeString, StreamOutput::writeString);
+            }
+        }
     }
 
     @Override
@@ -118,6 +138,9 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
         if(this.user != null) {
             builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
+        }
+        if (this.additionalInfos != null) {
+            builder.field(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD, this.additionalInfos);
         }
         builder.endObject();
         return builder;
