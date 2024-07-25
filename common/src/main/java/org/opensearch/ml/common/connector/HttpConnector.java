@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -308,10 +309,18 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public  <T> T createPayload(String action, Map<String, String> parameters) {
+    public <T> T createRawPayload(String action) {
         Optional<ConnectorAction> connectorAction = findAction(action);
         if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
             String payload = connectorAction.get().getRequestBody();
+            return (T) payload;
+        }
+        return null;
+    }
+
+    @Override
+    public <T> T fillInPayload(String payload, Map<String, String> parameters) {
+        if (payload != null) {
             payload = fillNullParameters(parameters, payload);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);

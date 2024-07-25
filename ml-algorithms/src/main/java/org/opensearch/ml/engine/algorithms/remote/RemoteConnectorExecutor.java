@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -188,8 +190,14 @@ public interface RemoteConnectorExecutor {
         }
         // override again to always prioritize the input parameter
         parameters.putAll(inputParameters);
-        String payload = connector.createPayload(action, parameters);
-        connector.validatePayload(payload);
+        // only fill in required parameters when creating payload
+        String payload = connector.createRawPayload(action);
+        Set<String> requiredParameters = connector.getRequiredParameters(payload);
+        connector.validatePayload(requiredParameters, parameters);
+        Map<String, String> fillInParameters = requiredParameters.stream()
+            .filter(parameters::containsKey)
+            .collect(Collectors.toMap(key -> key, parameters::get));;
+        payload = connector.fillInPayload(payload, fillInParameters);
         String userStr = getClient()
             .threadPool()
             .getThreadContext()

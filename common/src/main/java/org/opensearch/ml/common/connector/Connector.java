@@ -10,9 +10,11 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,7 +62,9 @@ public interface Connector extends ToXContentObject, Writeable {
 
     String getActionHttpMethod(String action);
 
-    <T> T createPayload(String action, Map<String, String> parameters);
+    <T> T createRawPayload(String action);
+
+    <T> T fillInPayload(String payload, Map<String, String> parameters);
 
     void decrypt(String action, Function<String, String> function);
     void encrypt(Function<String, String> function);
@@ -77,17 +81,28 @@ public interface Connector extends ToXContentObject, Writeable {
 
     <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException;
 
-    default void validatePayload(String payload) {
+    default Set<String> getRequiredParameters(String payload) {
+        Set<String> requiredParameters = new HashSet<>();
         if (payload != null && payload.contains("${parameters")) {
             Pattern pattern = Pattern.compile("\\$\\{parameters\\.([^}]+)}");
             Matcher matcher = pattern.matcher(payload);
-
-            StringBuilder errorBuilder = new StringBuilder();
             while (matcher.find()) {
                 String parameter = matcher.group(1);
-                errorBuilder.append(parameter).append(", ");
+                requiredParameters.add(parameter);
             }
-            String error = errorBuilder.substring(0, errorBuilder.length() - 2).toString();
+        }
+        return requiredParameters;
+    }
+
+    default void validatePayload(Set<String> requiredParameters, Map<String, String> parameters) {
+        StringBuilder errorBuilder = new StringBuilder();
+        for (String requiredParameter : requiredParameters) {
+            if (!parameters.containsKey(requiredParameter)) {
+                errorBuilder.append(requiredParameter).append(", ");
+            }
+        }
+        if (!errorBuilder.isEmpty()) {
+            String error = errorBuilder.substring(0, errorBuilder.length() - 2);
             throw new IllegalArgumentException("Some parameter placeholder not filled in payload: " + error);
         }
     }
