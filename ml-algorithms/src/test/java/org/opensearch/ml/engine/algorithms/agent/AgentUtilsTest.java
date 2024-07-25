@@ -75,6 +75,14 @@ public class AgentUtilsTest {
         + "\"thought\": \"Now I know the final answer\",\n  "
         + "\"final_answer\": \"PPLTool generates such query ```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```.\"\n}\n```";
 
+    private String responseForFinalAnswerWithMultilines = "---------------------```json\n{\n  "
+        + "\"thought\": \"Now I know the final answer\",\n  "
+        + "\"final_answer\": \"PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```.\"\n}\n```";
+
+    private String responseForFinalAnswerWithQuotes = "---------------------```json\n{\n  "
+        + "\"thought\": \"Now I know the final answer\",\n  "
+        + "\"final_answer\": \"PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans name=\"Jack\" ```.\"\n}\n```";
+
     private String wrongResponseForAction = "---------------------```json\n{\n  "
         + "\"thought\": \"Let's try VectorDBTool\",\n  "
         + "\"action\": \"After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```";
@@ -120,7 +128,7 @@ public class AgentUtilsTest {
                 THOUGHT,
                 "Unfortunately the tools did not provide the weather forecast directly. Let me check online sources:",
                 FINAL_ANSWER,
-                "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```"
+                "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius."
             );
         llmResponseExpectedParseResults.put(responseForFinalAnswerInvalidJson, responseForFinalAnswerExpectedResultExpectedResult);
         Map responseForFinalAnswerWithJsonExpectedResultExpectedResult = Map
@@ -143,6 +151,24 @@ public class AgentUtilsTest {
                     + "}"
             );
         llmResponseExpectedParseResults.put(wrongResponseForAction, wrongResponseForActionExpectedResultExpectedResult);
+
+        Map responseForFinalAnswerWithMultilinesExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Now I know the final answer",
+                FINAL_ANSWER,
+                "PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans centroids=3 ```."
+            );
+        llmResponseExpectedParseResults.put(responseForFinalAnswerWithMultilines, responseForFinalAnswerWithMultilinesExpectedResult);
+
+        Map responseForFinalAnswerWithQuotesExpectedResult = Map
+            .of(
+                THOUGHT,
+                "Now I know the final answer",
+                FINAL_ANSWER,
+                "PPLTool generates such query \n```json source=iris_data | fields petal_length_in_cm,petal_width_in_cm | kmeans name=\"Jack\" ```."
+            );
+        llmResponseExpectedParseResults.put(responseForFinalAnswerWithQuotes, responseForFinalAnswerWithQuotesExpectedResult);
 
     }
 
@@ -442,7 +468,7 @@ public class AgentUtilsTest {
             Assert.assertNull(actionInput);
             Assert
                 .assertEquals(
-                    "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.\"\n}\n```",
+                    "After checking online weather forecasts, it looks like tomorrow will be sunny with a high of 25 degrees Celsius.",
                     finalAnswer
                 );
         }
