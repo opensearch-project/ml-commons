@@ -214,6 +214,7 @@ import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
+import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
@@ -994,6 +995,12 @@ public class MachineLearningPlugin extends Plugin
             .put(
                 GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
                 new GenerativeQAResponseProcessor.Factory(this.client, () -> this.ragSearchPipelineEnabled)
+            );
+
+        responseProcessors
+            .put(
+                MLInferenceSearchResponseProcessor.TYPE,
+                new MLInferenceSearchResponseProcessor.Factory(parameters.client, parameters.namedXContentRegistry)
             );
 
         return responseProcessors;
