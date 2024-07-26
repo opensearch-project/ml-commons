@@ -131,7 +131,7 @@ public class MetricsCorrelation extends DLModelExecute {
             if (!hasModelGroupIndex) { // Create model group index if it doesn't exist
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX)
-                        .mapping("{\"_doc\":" + ML_MODEL_GROUP_INDEX_MAPPING + "}");
+                        .mapping(ML_MODEL_GROUP_INDEX_MAPPING, XContentType.JSON);
                     CreateIndexResponse createIndexResponse = client.admin().indices().create(request).actionGet(1000);
                     if (!createIndexResponse.isAcknowledged()) {
                         throw new MLException("Failed to create model group index");

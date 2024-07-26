@@ -108,9 +108,7 @@ public class MLIndicesHandler {
                         internalListener.onFailure(e);
                     }
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName)
-                    .mapping("{\"_doc\":" + mapping + "}")
-                    .settings(INDEX_SETTINGS);
+                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping, XContentType.JSON).settings(INDEX_SETTINGS);
                 client.admin().indices().create(request, actionListener);
             } else {
                 log.debug("index:{} is already created", indexName);

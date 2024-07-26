@@ -46,6 +46,7 @@ import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -87,7 +88,7 @@ public class ConversationMetaIndex {
             log.debug("No conversational meta index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(META_INDEX_NAME)
-                .mapping("{\"_doc\":" + ConversationalIndexConstants.META_MAPPING + "}")
+                .mapping(ConversationalIndexConstants.META_MAPPING, XContentType.JSON)
                 .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
