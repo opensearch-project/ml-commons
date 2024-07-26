@@ -90,7 +90,7 @@ public class InteractionsIndex {
             log.debug("No messages index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(INTERACTIONS_INDEX_NAME)
-                .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS)
+                .mapping("{\"_doc\":" + ConversationalIndexConstants.INTERACTIONS_MAPPINGS + "}")
                 .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());

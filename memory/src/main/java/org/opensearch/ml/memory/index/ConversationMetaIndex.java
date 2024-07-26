@@ -87,7 +87,7 @@ public class ConversationMetaIndex {
             log.debug("No conversational meta index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(META_INDEX_NAME)
-                .mapping(ConversationalIndexConstants.META_MAPPING)
+                .mapping("{\"_doc\":" + ConversationalIndexConstants.META_MAPPING + "}")
                 .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
