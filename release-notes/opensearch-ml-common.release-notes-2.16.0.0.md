@@ -15,7 +15,8 @@ Compatible with OpenSearch 2.16.0
 * Removing experimental from the Conversation memory feature(#2592)[https://github.com/opensearch-project/ml-commons/pull/2592]
 * Pass all parameters including chat_history to run tools (#2714)[https://github.com/opensearch-project/ml-commons/pull/2714]
 * Feat: add bedrock runtime agent for knowledge base (#2651)[https://github.com/opensearch-project/ml-commons/pull/2651]
-* 
+* change disk circuit breaker to cluster settings (#2634)[https://github.com/opensearch-project/ml-commons/pull/2634]
+
 ### Bug Fixes
 * Add stashcontext to connector getter (#2742)[https://github.com/opensearch-project/ml-commons/pull/2742]
 * Excluding remote models from max node per node setting (#2732)[https://github.com/opensearch-project/ml-commons/pull/2732]
@@ -25,7 +26,6 @@ Compatible with OpenSearch 2.16.0
 * Fix yaml test issue (#2700)[https://github.com/opensearch-project/ml-commons/pull/2700]
 * Fix MLModelTool returns null if the response of LLM is a pure json object (#2675)[https://github.com/opensearch-project/ml-commons/pull/2675]
 * Bump ml config index schema version (#2656)[https://github.com/opensearch-project/ml-commons/pull/2656]
-* change disk circuit breaker to cluster settings (#2634)[https://github.com/opensearch-project/ml-commons/pull/2634]
 
 ### Maintenance
 * Upgrade djl version to 0.28.0 (#2578)[https://github.com/opensearch-project/ml-commons/pull/2578]
