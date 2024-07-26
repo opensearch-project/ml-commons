@@ -5,17 +5,17 @@ Compatible with OpenSearch 2.16.0
 ### Features
 * Add initial MLInferenceSearchResponseProcessor (#2688)[https://github.com/opensearch-project/ml-commons/pull/2688]
 * Add initial search request inference processor (#2731)[https://github.com/opensearch-project/ml-commons/pull/2731]
-* Feat: add bedrock runtime agent for knowledge base (#2651)[https://github.com/opensearch-project/ml-commons/pull/2651]
+* Add Batch Prediction Mode in the Connector Framework for batch inference (#2661)[https://github.com/opensearch-project/ml-commons/pull/2661]
 
 ### Enhancements
 * Automated model interface generation on aws llms (#2689)[https://github.com/opensearch-project/ml-commons/pull/2689]
-* Add Batch Prediction Mode in the Connector Framework for batch inference (#2661)[https://github.com/opensearch-project/ml-commons/pull/2661]
 * Increase execute thread pool size (#2691)[https://github.com/opensearch-project/ml-commons/pull/2691]
 * Add multi modal default preprocess function (#2500)[https://github.com/opensearch-project/ml-commons/pull/2500]
 * Add model input validation for local models in ml processor (#2610)[https://github.com/opensearch-project/ml-commons/pull/2610]
 * Removing experimental from the Conversation memory feature(#2592)[https://github.com/opensearch-project/ml-commons/pull/2592]
 * Pass all parameters including chat_history to run tools (#2714)[https://github.com/opensearch-project/ml-commons/pull/2714]
-
+* Feat: add bedrock runtime agent for knowledge base (#2651)[https://github.com/opensearch-project/ml-commons/pull/2651]
+* 
 ### Bug Fixes
 * Add stashcontext to connector getter (#2742)[https://github.com/opensearch-project/ml-commons/pull/2742]
 * Excluding remote models from max node per node setting (#2732)[https://github.com/opensearch-project/ml-commons/pull/2732]
@@ -46,4 +46,3 @@ Compatible with OpenSearch 2.16.0
 
 ### Refactoring
 * Change multimodal connector name to bedrock multimodal connector (#2672)[https://github.com/opensearch-project/ml-commons/pull/2672]
-* Change guardrail field name (#2571)[https://github.com/opensearch-project/ml-commons/pull/2571]
