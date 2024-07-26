@@ -26,7 +26,6 @@ Compatible with OpenSearch 2.16.0
 * Fix yaml test issue (#2700)[https://github.com/opensearch-project/ml-commons/pull/2700]
 * Fix MLModelTool returns null if the response of LLM is a pure json object (#2675)[https://github.com/opensearch-project/ml-commons/pull/2675]
 * Bump ml config index schema version (#2656)[https://github.com/opensearch-project/ml-commons/pull/2656]
-* Wrap CreateIndexRequest mappings in _doc key in ml-commons (#2759)[https://github.com/opensearch-project/ml-commons/pull/2759]
 
 ### Maintenance
 * Upgrade djl version to 0.28.0 (#2578)[https://github.com/opensearch-project/ml-commons/pull/2578]
