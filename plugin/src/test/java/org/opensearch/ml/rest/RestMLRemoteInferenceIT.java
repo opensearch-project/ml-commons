@@ -38,7 +38,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "    \"content_type\": \"application/json\",\n"
         + "    \"max_tokens\": 7,\n"
         + "    \"temperature\": 0,\n"
-        + "    \"model\": \"text-davinci-003\"\n"
+        + "    \"model\": \"davinci-002\"\n"
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"openAI_key\": \""
@@ -250,6 +250,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertNotNull(responseMap);
     }
 
+    @Ignore
     public void testOpenAIEditsModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {

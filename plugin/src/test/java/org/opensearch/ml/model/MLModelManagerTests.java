@@ -73,6 +73,7 @@ import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.breaker.CircuitBreakingException;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -311,7 +312,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
         when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
-        expectedEx.expect(MLException.class);
+        expectedEx.expect(CircuitBreakingException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
