@@ -27,6 +27,8 @@ Compatible with OpenSearch 2.16.0
 * Fix MLModelTool returns null if the response of LLM is a pure json object (#2675)[https://github.com/opensearch-project/ml-commons/pull/2675]
 * Bump ml config index schema version (#2656)[https://github.com/opensearch-project/ml-commons/pull/2656]
 * Fix final answer with extra meaningless symbol (#2676)[https://github.com/opensearch-project/ml-commons/pull/2676]
+* Add XContentType to wrap the CreateIndexRequest mappings in _doc key to fix v1 templates issue (#2759)[https://github.com/opensearch-project/ml-commons/pull/2759]
+* Remove ignoreFailure and fix JsonArray Parsing Issue (#2770)[https://github.com/opensearch-project/ml-commons/pull/2770]
 
 ### Maintenance
 * Upgrade djl version to 0.28.0 (#2578)[https://github.com/opensearch-project/ml-commons/pull/2578]
@@ -44,6 +46,7 @@ Compatible with OpenSearch 2.16.0
 * Add connector blueprint for cohere embedding models in bedrock (#2667)[https://github.com/opensearch-project/ml-commons/pull/2667]
 * Update tutorials for caching secrets for non-aws models (#2637)[https://github.com/opensearch-project/ml-commons/pull/2637]
 * Add tutuorial for cross-encoder model on sagemaker (#2607)[https://github.com/opensearch-project/ml-commons/pull/2607]
+* Add offline batch inference connector blueprints (#2768)[https://github.com/opensearch-project/ml-commons/pull/2768]
 
 ### Refactoring
 * Change multimodal connector name to bedrock multimodal connector (#2672)[https://github.com/opensearch-project/ml-commons/pull/2672]
