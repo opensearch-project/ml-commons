@@ -276,7 +276,7 @@ POST /_plugins/_ml/connectors/_create
         "x-amz-content-sha256": "required",
         "X-Amzn-Bedrock-Trace": "ENABLED",
         "X-Amzn-Bedrock-GuardrailIdentifier": "your_GuardrailIdentifier",
-        "X-Amzn-Bedrock-GuardrailVersion": "1"
+        "X-Amzn-Bedrock-GuardrailVersion": "your_bedrock_guardrail_version"
       },
       "request_body": "{\"prompt\":\"${parameters.prompt}\", \"max_tokens_to_sample\":${parameters.max_tokens_to_sample}, \"temperature\":${parameters.temperature},  \"anthropic_version\":\"${parameters.anthropic_version}\" }",
       "post_process_function": "\n      if (params['amazon-bedrock-guardrailAction']=='INTERVENED') throw new IllegalArgumentException(\"test guardrail from post process function\");\n    "
