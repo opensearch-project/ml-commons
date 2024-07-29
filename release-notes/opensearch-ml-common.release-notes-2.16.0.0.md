@@ -47,6 +47,7 @@ Compatible with OpenSearch 2.16.0
 * Update tutorials for caching secrets for non-aws models (#2637)[https://github.com/opensearch-project/ml-commons/pull/2637]
 * Add tutuorial for cross-encoder model on sagemaker (#2607)[https://github.com/opensearch-project/ml-commons/pull/2607]
 * Add offline batch inference connector blueprints (#2768)[https://github.com/opensearch-project/ml-commons/pull/2768]
+* Add more logs for automated model interface creation (#2778)[https://github.com/opensearch-project/ml-commons/pull/2778]
 
 ### Refactoring
 * Change multimodal connector name to bedrock multimodal connector (#2672)[https://github.com/opensearch-project/ml-commons/pull/2672]
