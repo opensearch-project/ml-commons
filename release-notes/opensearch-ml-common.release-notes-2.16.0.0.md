@@ -38,6 +38,7 @@ Compatible with OpenSearch 2.16.0
 * Enable tests with mockStatic in MLEngineTest (#2582)[https://github.com/opensearch-project/ml-commons/pull/2582]
 * Fix GA workflow that publishes Apache Maven artifacts (#2625)[https://github.com/opensearch-project/ml-commons/pull/2625]
 * Temp use of older nodejs version before moving to Almalinux8 (#2628)[https://github.com/opensearch-project/ml-commons/pull/2628]
+* Add more logs for automated model interface creation (#2778)[https://github.com/opensearch-project/ml-commons/pull/2778]
 
 ### Documentation
 * Add amazon textract blueprint (#2562)[https://github.com/opensearch-project/ml-commons/pull/2562]
