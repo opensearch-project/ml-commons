@@ -558,38 +558,47 @@ public class ModelInterfaceUtils {
         if (connector.getParameters() != null) {
             switch ((connector.getParameters().get("service_name") != null) ? connector.getParameters().get("service_name") : "null") {
                 case "bedrock":
-                log.info("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
+                log.debug("Detected Amazon Bedrock model");
                 switch ((connector.getParameters().get("model") != null) ? connector.getParameters().get("model") : "null") {
                     case "ai21.j2-mid-v1":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE;
                     case "anthropic.claude-3-sonnet-20240229-v1:0":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_ANTHROPIC_CLAUDE_V3_SONNET_MODEL_INTERFACE;
                     case "anthropic.claude-v2":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE;
-                    case "cohere.embed.english-v3":
+                    case "cohere.embed-english-v3":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
-                    case "cohere.embed.multilingual-v3":
+                    case "cohere.embed-multilingual-v3":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE;
                     case "amazon.titan-embed-text-v1":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
                     case "amazon.titan-embed-image-v1":
+                        log.debug("Creating preset model interface for Amazon Bedrock model: {}", connector.getParameters().get("model"));
                         return BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
                     default:
                         return null;
                 }
                 case "comprehend":
-                    log.info("Creating preset model interface for Amazon Comprehend DetectDominantLanguage API");
+                    log.debug("Detected Amazon Comprehend model");
                     switch ((connector.getParameters().get("api_name") != null) ? connector.getParameters().get("api_name") : "null"){
                         // Single case for switch-case statement due to there is one more API in blueprint for Amazon Comprehend Model
                         // Not set here because there is more than one input/output schema for the DetectEntities API
                         // TODO: Add default model interface for Amazon Comprehend DetectEntities APIs
                         case "DetectDominantLanguage":
+                            log.debug("Creating preset model interface for Amazon Comprehend API: {}", connector.getParameters().get("api_name"));
                             return AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE;
                         default:
                             return null;
                     }
                 case "textract":
-                    log.info("Creating preset model interface for Amazon Textract DetectDocumentText API");
+                    log.debug("Detected Amazon Textract model");
+                    log.debug("Creating preset model interface for Amazon Textract DetectDocumentText API");
                     return AMAZON_TEXTRACT_DETECTDOCUMENTTEXT_API_INTERFACE;
                 default:
                     return null;
