@@ -95,7 +95,7 @@ public class ModelInterfaceUtilsTest {
     public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
-        parameters.put("model", "cohere.embed.english-v3");
+        parameters.put("model", "cohere.embed-english-v3");
         connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
@@ -106,7 +106,7 @@ public class ModelInterfaceUtilsTest {
     public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
-        parameters.put("model", "cohere.embed.multilingual-v3");
+        parameters.put("model", "cohere.embed-multilingual-v3");
         connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
