@@ -11,13 +11,13 @@ Note: Replace the placeholders starting with the prefix `your_` with your own va
 ## 0. Preparation
 Create your own Amazon Bedrock guardrails. For more information, see [Create a guardrail](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-create.html).
 
-## 1. Create a connector with your Bedrock Guardrails endpoint
+## 1. Create a connector with your Bedrock Guardrail endpoint
 
 ```
 POST _plugins/_ml/connectors/_create
 {
-  "name": "BedRock claude Connector",
-  "description": "BedRock claude Connector",
+  "name": "BedRock Guardrail Connector",
+  "description": "BedRock Guardrail Connector",
   "version": 1,
   "protocol": "aws_sigv4",
   "parameters": {
@@ -38,31 +38,31 @@ POST _plugins/_ml/connectors/_create
       "headers": {
         "content-type": "application/json"
       },
-      "request_body": "{\"source\":\"${parameters.source}\", \"content\":[ { \"text\":{\"text\": \"${parameters.input}\"} } ] }"
+      "request_body": "{\"source\":\"${parameters.source}\", \"content\":[ { \"text\":{\"text\": \"${parameters.question}\"} } ] }"
     }
   ]
 }
 ```
 
-## 2. Create a remote model with your guardrail connector
+## 2. Create a remote guardrail model with your guardrail connector
 
 ```
 POST _plugins/_ml/models/_register
 {
-  "name": "bedrock test guardrails API",
+  "name": "bedrock test guardrail API",
   "function_name": "remote",
-  "description": "guardrails test model",
-  "connector_id": "your_connector_id"
+  "description": "guardrail test model",
+  "connector_id": "your_guardrail_connector_id"
 }
 ```
 
-## 3. Test the model
+## 3. Test the guardrail model
 
 ```
 POST _plugins/_ml/models/your_model_id/_predict
 {
   "parameters": {
-    "input": "\n\nHuman:how to suicide\n\nAssistant:"
+    "question": "\n\nHuman:how to suicide\n\nAssistant:"
   }
 }
 ```
@@ -129,6 +129,116 @@ Response:
     }
   ]
 }
+```
+
+## 4. Create a connector with your Bedrock Claude endpoint
+
+```
+POST _plugins/_ml/connectors/_create
+{
+  "name": "BedRock claude Connector",
+  "description": "BedRock claude Connector",
+  "version": 1,
+  "protocol": "aws_sigv4",
+  "parameters": {
+    "region": "us-east-1",
+    "service_name": "bedrock",
+    "anthropic_version": "bedrock-2023-05-31",
+    "max_tokens_to_sample": 8000,
+    "temperature": 0.0001,
+    "response_filter": "$.completion"
+  },
+  "credential": {
+    "access_key": "your_aws_access_key",
+    "secret_key": "your_aws_secret_key",
+    "session_token": "your_aws_session_token"
+  },
+  "actions": [
+    {
+      "action_type": "predict",
+      "method": "POST",
+      "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke",
+      "headers": {
+        "content-type": "application/json",
+        "x-amz-content-sha256": "required"
+      },
+      "request_body": "{\"prompt\":\"${parameters.prompt}\", \"max_tokens_to_sample\":${parameters.max_tokens_to_sample}, \"temperature\":${parameters.temperature},  \"anthropic_version\":\"${parameters.anthropic_version}\" }"
+    }
+  ]
+}
+```
+
+## 5. Create a Bedrock Claude model
+
+```
+POST /_plugins/_ml/models/_register?deploy=true
+{
+    "name": "Bedrock Claude V2 model",
+    "function_name": "remote",
+    "description": "Bedrock Claude V2 model",
+    "connector_id": "your_connector_id",
+    "guardrails": {
+        "input_guardrail": {
+            "model_id": "your_guardrail_model_id",
+            "response_filter":"$.action",
+            "response_validation_regex": "^\"NONE\"$"
+        },
+        "type": "model"
+    }
+}
+```
+
+## 6. Test the model
+
+```
+POST /_plugins/_ml/models/your_model_id/_predict
+{
+  "parameters": {
+    "prompt": "\n\nHuman:${parameters.question}\n\nnAssistant:",
+    "question": "hello"
+  }
+}
+
+Response
+{
+  "inference_results": [
+    {
+      "output": [
+        {
+          "name": "response",
+          "dataAsMap": {
+            "response": " Hello!"
+          }
+        }
+      ],
+      "status_code": 200
+    }
+  ]
+}
+
+POST /_plugins/_ml/models/your_model_id/_predict
+{
+  "parameters": {
+    "prompt": "\n\nHuman:${parameters.question}\n\nnAssistant:",
+    "question": "how to suicide"
+  }
+}
+
+Response
+{
+  "error": {
+    "root_cause": [
+      {
+        "type": "illegal_argument_exception",
+        "reason": "guardrails triggered for user input"
+      }
+    ],
+    "type": "illegal_argument_exception",
+    "reason": "guardrails triggered for user input"
+  },
+  "status": 400
+}
+
 ```
 
 # Use the guardrails embedded in the Amazon Bedrock Model Inference API
