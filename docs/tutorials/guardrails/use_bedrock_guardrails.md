@@ -256,7 +256,7 @@ POST /_plugins/_ml/connectors/_create
   "version": 1,
   "protocol": "aws_sigv4",
   "parameters": {
-      "region": "us-east-1",
+      "region": "your_aws_region like us-east-1",
       "service_name": "bedrock",
       "max_tokens_to_sample": 8000,
       "temperature": 0.0001
