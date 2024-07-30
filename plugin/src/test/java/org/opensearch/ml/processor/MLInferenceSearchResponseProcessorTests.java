@@ -7,6 +7,8 @@ package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -96,6 +98,17 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         }
     }
 
+    // public void testPrint(){
+    // String payload = "{\"prompt\":\"\\n\\nHuman: You are a professional data analysist. You will always answer question based on the
+    // given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you do not
+    // know the answer, just say I do not know. Context:[\"Dr. Eric Goldberg is a fantastic doctor who has correctly diagnosed every issue
+    // that my wife and I have had. Unlike many of my past doctors, Dr. Goldberg is very accessible and we have been able to schedule
+    // appointments with him and his staff very quickly. We are happy to have him in the neighborhood and look forward to being his patients
+    // for many years to come.\",\"happy visit\"]. Please answer this question: \"please summerize the documents\"
+    // \\n\\nAssistant:\",\"max_tokens_to_sample\":300,\"temperature\":0.5,\"top_k\":250,\"top_p\":1,\"stop_sequences\":[\"\\\\n\\\\nHuman:\"]}";
+    // System.out.println(payload);
+    // }
+
     /**
      * Tests the successful processing of a response with a single pair of input and output mappings.
      *
@@ -155,11 +168,12 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
-     * Tests create processor with many_to_one is false
-     *
+     * Tests create processor with one_to_one is true
+     * with no mapping provided
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
-    public void testProcessResponseOneToOneException() throws Exception {
+    public void testProcessResponseOneToOneWithNoMappings() throws Exception {
 
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -200,17 +214,253 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         ActionListener<SearchResponse> listener = new ActionListener<>() {
             @Override
             public void onResponse(SearchResponse newSearchResponse) {
-                throw new RuntimeException("error handling not properly");
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                );
             }
 
             @Override
             public void onFailure(Exception e) {
-                assertEquals("one to one prediction is not supported yet.", e.getMessage());
+                throw new RuntimeException(e);
             }
 
         };
         responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
 
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappings() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with two rounds predictions for every document
+     * with one to one prediction, 5 documents in hits are calling 10 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneTwoRoundsPredictions() throws Exception {
+
+        String modelInputField = "inputs";
+        String modelOutputField = "response";
+
+        // document fields for first round of prediction
+        String originalDocumentField = "text";
+        String newDocumentField = "text_embedding";
+
+        // document fields for second round of prediction
+        String originalDocumentField1 = "image";
+        String newDocumentField1 = "image_embedding";
+
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalDocumentField);
+        inputMap.add(input);
+
+        Map<String, String> input1 = new HashMap<>();
+        input1.put(modelInputField, originalDocumentField1);
+        inputMap.add(input1);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        Map<String, String> output2 = new HashMap<>();
+        output2.put(newDocumentField1, modelOutputField);
+        outputMap.add(output2);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(10)).execute(any(), any(), any());
     }
 
     /**
