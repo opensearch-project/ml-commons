@@ -54,6 +54,7 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerNodesRe
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -104,6 +105,9 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLUndeployControllerNodesResponse mlUndeployControllerNodesResponse;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -137,7 +141,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         );
 
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
-
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
         deleteControllerTransportAction = spy(
             new DeleteControllerTransportAction(
                 transportService,
@@ -147,7 +151,8 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 mlModelManager,
                 mlModelCacheHelper,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
 

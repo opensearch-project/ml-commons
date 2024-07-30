@@ -256,7 +256,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(new AtomicBoolean(false));
 
         modelManager = spy(

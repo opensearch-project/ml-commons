@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
@@ -20,6 +21,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerAction;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -29,11 +31,14 @@ import com.google.common.collect.ImmutableList;
 public class RestMLCreateControllerAction extends BaseRestHandler {
 
     public final static String ML_CREATE_CONTROLLER_ACTION = "ml_create_controller_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLCreateControllerAction() {}
+    public RestMLCreateControllerAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -61,6 +66,10 @@ public class RestMLCreateControllerAction extends BaseRestHandler {
      * @return MLCreateControllerRequest
      */
     private MLCreateControllerRequest getRequest(RestRequest request) throws IOException {
+        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+        }
+
         if (!request.hasContent()) {
             throw new OpenSearchParseException("Create model controller request has empty body");
         }

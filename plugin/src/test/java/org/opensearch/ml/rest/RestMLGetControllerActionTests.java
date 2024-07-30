@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 
 import java.util.HashMap;
@@ -22,6 +23,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -30,6 +32,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.controller.MLControllerGetAction;
 import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -49,11 +52,16 @@ public class RestMLGetControllerActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     @Before
     public void setup() {
-        restMLGetControllerAction = new RestMLGetControllerAction();
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
+        restMLGetControllerAction = new RestMLGetControllerAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -73,7 +81,7 @@ public class RestMLGetControllerActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLGetControllerAction mlGetControllerAction = new RestMLGetControllerAction();
+        RestMLGetControllerAction mlGetControllerAction = new RestMLGetControllerAction(mlFeatureEnabledSetting);
         assertNotNull(mlGetControllerAction);
     }
 

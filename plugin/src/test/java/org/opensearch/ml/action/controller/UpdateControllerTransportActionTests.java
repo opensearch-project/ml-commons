@@ -58,6 +58,7 @@ import org.opensearch.ml.common.transport.controller.MLUpdateControllerRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -105,6 +106,9 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLDeployControllerNodesResponse mlDeployControllerNodesResponse;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -141,7 +145,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
 
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
         String[] targetNodeIds = new String[] { node1.getId(), node2.getId() };
-
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
         updateControllerTransportAction = spy(
             new UpdateControllerTransportAction(
                 transportService,
@@ -150,7 +154,8 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 modelAccessControlHelper,
                 mlModelCacheHelper,
-                mlModelManager
+                mlModelManager,
+                mlFeatureEnabledSetting
             )
         );
 
