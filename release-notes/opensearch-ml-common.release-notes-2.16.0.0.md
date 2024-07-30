@@ -29,6 +29,7 @@ Compatible with OpenSearch 2.16.0
 * Fix final answer with extra meaningless symbol (#2676)[https://github.com/opensearch-project/ml-commons/pull/2676]
 * Add XContentType to wrap the CreateIndexRequest mappings in _doc key to fix v1 templates issue (#2759)[https://github.com/opensearch-project/ml-commons/pull/2759]
 * Remove ignoreFailure and fix JsonArray Parsing Issue (#2770)[https://github.com/opensearch-project/ml-commons/pull/2770]
+* Merge the existing parameters when updating connectors (#2784)[https://github.com/opensearch-project/ml-commons/pull/2784]
 
 ### Maintenance
 * Upgrade djl version to 0.28.0 (#2578)[https://github.com/opensearch-project/ml-commons/pull/2578]
