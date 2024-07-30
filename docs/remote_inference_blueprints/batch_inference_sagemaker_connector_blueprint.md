@@ -5,6 +5,18 @@ Read more details on https://opensearch.org/docs/latest/ml-commons-plugin/remote
 Integrate the SageMaker Batch Transform API using the connector below with a new action type "batch_predict". 
 For more details to use batch transform to run inference with Amazon SageMaker, please refer to https://docs.aws.amazon.com/sagemaker/latest/dg/batch-transform.html.
 
+SageMaker uses your pre-created model to execute the batch transform job. For creating your model in SageMaker
+that supports batch transform, please refer to https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_CreateModel.html. In this example, the following primary 
+container is used to create the text-embedding DJL model in SageMaker.
+```json
+"ModelName": "DJL-Text-Embedding-Model-imageforjsonlines",
+"PrimaryContainer": {
+"Environment": {
+"SERVING_LOAD_MODELS" : "djl://ai.djl.huggingface.pytorch/sentence-transformers/all-MiniLM-L6-v2"
+},
+"Image": "763104351884.dkr.ecr.us-east-1.amazonaws.com/djl-inference:0.22.1-cpu-full"
+}
+```
 #### 1. Create your Model connector and Model group
 
 ##### 1a. Register Model group
