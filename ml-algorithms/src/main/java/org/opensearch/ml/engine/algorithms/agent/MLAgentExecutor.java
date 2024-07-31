@@ -41,6 +41,7 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
@@ -66,7 +67,7 @@ import lombok.extern.log4j.Log4j2;
 @Data
 @NoArgsConstructor
 @Function(FunctionName.AGENT)
-public class MLAgentExecutor implements Executable {
+public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     public static final String MEMORY_ID = "memory_id";
     public static final String QUESTION = "question";
@@ -104,20 +105,25 @@ public class MLAgentExecutor implements Executable {
     }
 
     @Override
-    public void execute(Input input, String tenantId, ActionListener<Output> listener) {
+    public void onMultiTenancyEnabledChanged(boolean isEnabled) {
+        this.isMultiTenancyEnabled = isEnabled;
+    }
+
+    @Override
+    public void execute(Input input, ActionListener<Output> listener) {
         if (!(input instanceof AgentMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }
         AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
-        String agentTenantId = agentMLInput.getTenantId();
+        String tenantId = agentMLInput.getTenantId();
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         if (inputDataSet == null || inputDataSet.getParameters() == null) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
-        if (isMultiTenancyEnabled && !Objects.equals(tenantId, agentTenantId)) {
+        if (isMultiTenancyEnabled && tenantId == null) {
             throw new OpenSearchStatusException("You don't have permission to access this resource", RestStatus.FORBIDDEN);
         }
 
