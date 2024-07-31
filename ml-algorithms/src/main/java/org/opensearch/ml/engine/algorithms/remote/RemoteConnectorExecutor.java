@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.*;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.RECURSIVE_PARAMETER_ENABLED;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -192,6 +194,10 @@ public interface RemoteConnectorExecutor {
 
         String payload = connector.createRawPayload(action);
         if (Boolean.parseBoolean(parameters.getOrDefault(RECURSIVE_PARAMETER_ENABLED, "false"))) {
+            // recursively fill in parameters
+            payload = connector.fillInPayload(payload, parameters);
+            connector.validatePayload(payload);
+        } else {
             // only fill in required parameters
             Set<String> requiredParameters = connector.getRequiredParameters(payload);
             connector.validateParameters(requiredParameters, parameters);
@@ -200,10 +206,6 @@ public interface RemoteConnectorExecutor {
                 .filter(parameters::containsKey)
                 .collect(Collectors.toMap(key -> key, parameters::get));
             payload = connector.fillInPayload(payload, fillInParameters);
-        } else {
-            // recursively fill in parameters
-            payload = connector.fillInPayload(payload, parameters);
-            connector.validatePayload(payload);
         }
 
         String userStr = getClient()
