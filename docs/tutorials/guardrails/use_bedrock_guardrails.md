@@ -247,7 +247,6 @@ Response:
   },
   "status": 400
 }
-
 ```
 
 # Use the guardrails embedded in the Amazon Bedrock Model Inference API
