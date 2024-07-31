@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -39,8 +41,8 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class GetConversationTransportAction extends HandledTransportAction<GetConversationRequest, GetConversationResponse> {
-    private Client client;
-    private ConversationalMemoryHandler cmHandler;
+    private final Client client;
+    private final ConversationalMemoryHandler cmHandler;
 
     private volatile boolean featureIsEnabled;
 
@@ -72,25 +74,18 @@ public class GetConversationTransportAction extends HandledTransportAction<GetCo
     @Override
     public void doExecute(Task task, GetConversationRequest request, ActionListener<GetConversationResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         } else {
             String conversationId = request.getConversationId();
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
-                ActionListener<GetConversationResponse> internalListener = ActionListener
-                    .runBefore(actionListener, () -> context.restore());
+                ActionListener<GetConversationResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
                 ActionListener<ConversationMeta> al = ActionListener.wrap(conversationMeta -> {
                     internalListener.onResponse(new GetConversationResponse(conversationMeta));
-                }, e -> { internalListener.onFailure(e); });
+                }, internalListener::onFailure);
                 cmHandler.getConversation(conversationId, al);
             } catch (Exception e) {
-                log.error("Failed to get memory " + conversationId, e);
+                log.error("Failed to get memory {}", conversationId, e);
                 actionListener.onFailure(e);
             }
 

@@ -473,7 +473,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
                     tools.get(action).run(llmToolTmpParameters, toolListener); // run tool
                 } else {
-                    tools.get(action).run(toolParams, toolListener); // run tool
+                    Map<String, String> parameters = new HashMap<>();
+                    parameters.putAll(tmpParameters);
+                    parameters.putAll(toolParams);
+                    tools.get(action).run(parameters, toolListener); // run tool
                 }
             } catch (Exception e) {
                 nextStepListener

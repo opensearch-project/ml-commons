@@ -65,7 +65,9 @@ public class ConnectorTest {
         HttpConnector connector = createHttpConnector();
         connector.validateConnectorURL(Arrays.asList("^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                 "^https://api\\.openai\\.com/.*$",
-                "^https://api\\.cohere\\.ai/.*$"));
+                "^https://api\\.cohere\\.ai/.*$",
+                "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
+            ));
     }
 
     @Test
@@ -73,6 +75,7 @@ public class ConnectorTest {
         HttpConnector connector = createHttpConnector();
         connector.validateConnectorURL(Arrays.asList("^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                 "^https://api\\.openai\\.com/.*$",
+                "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$",
                 "^" + connector.getActions().get(0).getUrl()));
     }
 }

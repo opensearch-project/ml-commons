@@ -13,6 +13,9 @@ import org.opensearch.ml.common.controller.MLController;
 
 import java.util.Set;
 
+import static org.opensearch.ml.common.MLConfig.CONFIG_TYPE_FIELD;
+import static org.opensearch.ml.common.MLConfig.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.MLConfig.ML_CONFIGURATION_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD;
@@ -65,7 +68,7 @@ public class CommonValue {
         public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
         public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
         public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
-        public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
+        public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 3;
         public static final String ML_CONTROLLER_INDEX = ".plugins-ml-controller";
         public static final Integer ML_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MAP_RESPONSE_KEY = "response";
@@ -74,6 +77,7 @@ public class CommonValue {
         public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
         public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
+        public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
         public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
         public static final Integer ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION = 1;
         public static final String USER_FIELD_MAPPING = "      \""
@@ -406,22 +410,21 @@ public class CommonValue {
                         + "    \"_meta\": {\"schema_version\": "
                         + ML_CONFIG_INDEX_SCHEMA_VERSION
                         + "},\n"
-                        + "    \"dynamic\": \"strict\",\n"
                         + "    \"properties\": {\n"
                         + "      \""
                         + MASTER_KEY
                         + "\": {\"type\": \"keyword\"},\n"
                         + "      \""
-                        + MLConfig.TYPE_FIELD
+                        + CONFIG_TYPE_FIELD
                         + "\" : {\"type\":\"keyword\"},\n"
                         + "      \""
-                        + MLConfig.CONFIGURATION_FIELD
+                        + ML_CONFIGURATION_FIELD
                         + "\" : {\"type\": \"flat_object\"},\n"
                         + "      \""
                         + CREATE_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
                         + "      \""
-                        + LAST_UPDATE_TIME_FIELD
+                        + LAST_UPDATED_TIME_FIELD
                         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
                         + "    }\n"
                         + "}";
@@ -537,4 +540,5 @@ public class CommonValue {
         public static final Version VERSION_2_12_0 = Version.fromString("2.12.0");
         public static final Version VERSION_2_13_0 = Version.fromString("2.13.0");
         public static final Version VERSION_2_14_0 = Version.fromString("2.14.0");
+        public static final Version VERSION_2_16_0 = Version.fromString("2.16.0");
 }

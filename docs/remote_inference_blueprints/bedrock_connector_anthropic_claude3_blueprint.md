@@ -73,7 +73,8 @@ POST /_plugins/_ml/connectors/_create
         "auth": "Sig_V4",
         "response_filter": "$.content[0].text",
         "max_tokens_to_sample": "8000",
-        "anthropic_version": "bedrock-2023-05-31"
+        "anthropic_version": "bedrock-2023-05-31",
+        "model": "anthropic.claude-3-sonnet-20240229-v1:0"
     },
     "actions": [
         {
@@ -82,7 +83,7 @@ POST /_plugins/_ml/connectors/_create
             "headers": {
                 "content-type": "application/json"
             },
-            "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-sonnet-20240229-v1:0/invoke",
+            "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.prompt}\"}]}],\"anthropic_version\":\"${parameters.anthropic_version}\",\"max_tokens\":${parameters.max_tokens_to_sample}}"
         }
     ]

@@ -103,6 +103,10 @@ public class MLModelChunkUploader {
                                         throw new Exception("Chunk size exceeds 10MB");
                                     }
                                     mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                                        if (!res) {
+                                            wrappedListener.onFailure(new RuntimeException("No response to create ML Model index"));
+                                            return;
+                                        }
                                         int chunkNum = uploadModelChunkInput.getChunkNumber();
                                         MLModel mlModel = MLModel
                                             .builder()

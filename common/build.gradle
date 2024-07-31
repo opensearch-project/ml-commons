@@ -6,7 +6,7 @@
 //TODO: cleanup gradle config file, some overlap
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow'
+    id 'io.github.goooler.shadow' version "8.1.7"
     id 'jacoco'
     id "io.freefair.lombok"
     id 'maven-publish'

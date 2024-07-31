@@ -295,7 +295,7 @@ public class AgentUtils {
     public static String extractFinalAnswer(String text) {
         String result = null;
         if (text.contains("\"final_answer\"")) {
-            String pattern = "\"final_answer\"\\s*:\\s*\"(.*?)$";
+            String pattern = "\"final_answer\"\\s*:\\s*\"(.*)\"";
             Pattern jsonBlockPattern = Pattern.compile(pattern, Pattern.DOTALL);
             Matcher jsonBlockMatcher = jsonBlockPattern.matcher(text);
             if (jsonBlockMatcher.find()) {

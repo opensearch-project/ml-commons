@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,8 +46,8 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class CreateInteractionTransportAction extends HandledTransportAction<CreateInteractionRequest, CreateInteractionResponse> {
 
-    private ConversationalMemoryHandler cmHandler;
-    private Client client;
+    private final ConversationalMemoryHandler cmHandler;
+    private final Client client;
 
     private volatile boolean featureIsEnabled;
 
@@ -77,13 +79,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
     @Override
     protected void doExecute(Task task, CreateInteractionRequest request, ActionListener<CreateInteractionResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         }
         String cid = request.getConversationId();
@@ -95,18 +91,18 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String parintIid = request.getParentIid();
         Integer traceNumber = request.getTraceNumber();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
-            ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
             ActionListener<String> al = ActionListener.wrap(iid -> {
                 cmHandler.updateConversation(cid, new HashMap<>(), getUpdateResponseListener(cid, iid, internalListener));
                 log.info("Updating the memory {} after the message {} is created", cid, iid);
-            }, e -> { internalListener.onFailure(e); });
+            }, internalListener::onFailure);
             if (parintIid == null || traceNumber == null) {
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
             } else {
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al, parintIid, traceNumber);
             }
         } catch (Exception e) {
-            log.error("Failed to create message for memory " + cid, e);
+            log.error("Failed to create message for memory {}", cid, e);
             actionListener.onFailure(e);
         }
     }

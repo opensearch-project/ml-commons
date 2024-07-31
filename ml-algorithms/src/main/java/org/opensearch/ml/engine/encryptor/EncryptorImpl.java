@@ -114,58 +114,65 @@ public class EncryptorImpl implements Encryptor {
 
         CountDownLatch latch = new CountDownLatch(1);
         mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
-            GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.get(getRequest, ActionListener.wrap(getResponse -> {
-                    if (getResponse == null || !getResponse.isExists()) {
-                        IndexRequest indexRequest = new IndexRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
-                        final String generatedMasterKey = generateMasterKey();
-                        indexRequest
-                            .source(ImmutableMap.of(MASTER_KEY, generatedMasterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
-                        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                        indexRequest.opType(DocWriteRequest.OpType.CREATE);
-                        client.index(indexRequest, ActionListener.wrap(indexResponse -> {
-                            this.masterKey = generatedMasterKey;
-                            log.info("ML encryption master key initialized successfully");
-                            latch.countDown();
-                        }, e -> {
-
-                            if (ExceptionUtils.getRootCause(e) instanceof VersionConflictEngineException) {
-                                GetRequest getMasterKeyRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
-                                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                    client.get(getMasterKeyRequest, ActionListener.wrap(getMasterKeyResponse -> {
-                                        if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
-                                            final String masterKey = (String) getMasterKeyResponse.getSourceAsMap().get(MASTER_KEY);
-                                            this.masterKey = masterKey;
-                                            log.info("ML encryption master key already initialized, no action needed");
-                                            latch.countDown();
-                                        } else {
-                                            exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
-                                            latch.countDown();
-                                        }
-                                    }, error -> {
-                                        log.debug("Failed to get ML encryption master key", e);
-                                        exceptionRef.set(error);
-                                        latch.countDown();
-                                    }));
-                                }
-                            } else {
-                                log.debug("Failed to index ML encryption master key", e);
-                                exceptionRef.set(e);
+            if (!r) {
+                exceptionRef.set(new RuntimeException("No response to create ML Config index"));
+                latch.countDown();
+            } else {
+                GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    client.get(getRequest, ActionListener.wrap(getResponse -> {
+                        if (getResponse == null || !getResponse.isExists()) {
+                            IndexRequest indexRequest = new IndexRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                            final String generatedMasterKey = generateMasterKey();
+                            indexRequest
+                                .source(ImmutableMap.of(MASTER_KEY, generatedMasterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+                            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                            indexRequest.opType(DocWriteRequest.OpType.CREATE);
+                            client.index(indexRequest, ActionListener.wrap(indexResponse -> {
+                                this.masterKey = generatedMasterKey;
+                                log.info("ML encryption master key initialized successfully");
                                 latch.countDown();
-                            }
-                        }));
-                    } else {
-                        final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY);
-                        this.masterKey = masterKey;
-                        log.info("ML encryption master key already initialized, no action needed");
+                            }, e -> {
+
+                                if (ExceptionUtils.getRootCause(e) instanceof VersionConflictEngineException) {
+                                    GetRequest getMasterKeyRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                                    try (
+                                        ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()
+                                    ) {
+                                        client.get(getMasterKeyRequest, ActionListener.wrap(getMasterKeyResponse -> {
+                                            if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
+                                                final String masterKey = (String) getMasterKeyResponse.getSourceAsMap().get(MASTER_KEY);
+                                                this.masterKey = masterKey;
+                                                log.info("ML encryption master key already initialized, no action needed");
+                                                latch.countDown();
+                                            } else {
+                                                exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                                                latch.countDown();
+                                            }
+                                        }, error -> {
+                                            log.debug("Failed to get ML encryption master key", e);
+                                            exceptionRef.set(error);
+                                            latch.countDown();
+                                        }));
+                                    }
+                                } else {
+                                    log.debug("Failed to index ML encryption master key", e);
+                                    exceptionRef.set(e);
+                                    latch.countDown();
+                                }
+                            }));
+                        } else {
+                            final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY);
+                            this.masterKey = masterKey;
+                            log.info("ML encryption master key already initialized, no action needed");
+                            latch.countDown();
+                        }
+                    }, e -> {
+                        log.debug("Failed to get ML encryption master key from config index", e);
+                        exceptionRef.set(e);
                         latch.countDown();
-                    }
-                }, e -> {
-                    log.debug("Failed to get ML encryption master key from config index", e);
-                    exceptionRef.set(e);
-                    latch.countDown();
-                }));
+                    }));
+                }
             }
         }, e -> {
             log.debug("Failed to init ML config index", e);

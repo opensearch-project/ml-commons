@@ -39,6 +39,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -309,4 +310,25 @@ public class RestActionUtils {
         }
     }
 
+    /**
+     * Determine the ActionType from the restful request by checking the url path and method name so there's no need
+     * to specify the ActionType in the request body. For example, /_plugins/_ml/models/{model_id}/_predict will return
+     * PREDICT as the ActionType, and /_plugins/_ml/models/{model_id}/_batch_predict will return BATCH_PREDICT.
+     * @param request A Restful request that needs to determine the ActionType from the path.
+     * @return parsed user object
+     */
+    public static String getActionTypeFromRestRequest(RestRequest request) {
+        String path = request.path();
+        System.out.println("path is " + path);
+        String[] segments = path.split("/");
+        String methodName = segments[segments.length - 1];
+        methodName = methodName.startsWith("_") ? methodName.substring(1) : methodName;
+
+        // find the action type for "/_plugins/_ml/_predict/<algorithm>/<model_id>"
+        if (!ActionType.isValidAction(methodName) && segments.length > 3) {
+            methodName = segments[3];
+            methodName = methodName.contains("_") ? methodName.split("_")[1] : methodName;
+        }
+        return methodName;
+    }
 }

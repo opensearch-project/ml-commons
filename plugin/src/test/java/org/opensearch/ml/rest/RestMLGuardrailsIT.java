@@ -366,7 +366,11 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             + "  \"description\": \"test model\",\n"
             + "  \"connector_id\": \""
             + connectorId
-            + "\"\n"
+            + "\",\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {},\n"
+            + "    \"output\": {}\n"
+            + "    }\n"
             + "}";
         return TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
@@ -423,7 +427,11 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             + "      ],\n"
             + "      \"regex\": [\"regex1\", \"regex2\"]\n"
             + "    }\n"
-            + "  }\n"
+            + "},\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {},\n"
+            + "    \"output\": {}\n"
+            + "    }\n"
             + "}";
         return TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
@@ -461,6 +469,10 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             + "  \"connector_id\": \""
             + connectorId
             + "\",\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {},\n"
+            + "    \"output\": {}\n"
+            + "  },\n"
             + "  \"guardrails\": {\n"
             + "    \"type\": \"model\",\n"
             + "    \"input_guardrail\": {\n"
