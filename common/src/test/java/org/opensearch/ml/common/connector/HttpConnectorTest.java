@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
@@ -179,6 +180,14 @@ public class HttpConnectorTest {
         String rawPayload = connector.createRawPayload(PREDICT.name());
         String predictPayload = connector.fillInPayload(rawPayload, null);
         connector.validatePayload(predictPayload);
+    }
+
+    @Test
+    public void getRequiredParameters() {
+        HttpConnector connector = createHttpConnector();
+        String payload = connector.createRawPayload(PREDICT.name());
+        Set<String> requiredParameters = connector.getRequiredParameters(payload);;
+        Assert.assertEquals(Set.of("input"), requiredParameters);
     }
 
     @Test

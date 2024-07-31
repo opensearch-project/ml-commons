@@ -108,18 +108,8 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     default void validatePayload(String payload) {
-        if (payload != null && payload.contains("${parameters")) {
-            Pattern pattern = Pattern.compile("\\$\\{parameters\\.([^}]+)}");
-            Matcher matcher = pattern.matcher(payload);
-
-            StringBuilder errorBuilder = new StringBuilder();
-            while (matcher.find()) {
-                String parameter = matcher.group(1);
-                errorBuilder.append(parameter).append(", ");
-            }
-            String error = errorBuilder.substring(0, errorBuilder.length() - 2).toString();
-            throw new IllegalArgumentException("Some parameter placeholder not filled in payload: " + error);
-        }
+        Set<String> requiredParameters = getRequiredParameters(payload);
+        validateParameters(requiredParameters, Map.of());
     }
 
     static Connector fromStream(StreamInput in) throws IOException {
