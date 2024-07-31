@@ -151,6 +151,20 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    public void test_NoResponseInitModelIndex() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Model index", argumentCaptor.getValue().getMessage());
+    }
+
     private MLUploadModelChunkInput prepareRequest() {
         final byte[] content = new byte[] { 1, 2, 3, 4 };
         MLUploadModelChunkInput input = MLUploadModelChunkInput.builder().chunkNumber(0).modelId("someModelId").content(content).build();

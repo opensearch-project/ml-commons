@@ -292,6 +292,10 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             String modelName = mlRegisterModelMetaInput.getName();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                if (!res) {
+                    wrappedListener.onFailure(new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 Instant now = Instant.now();
                 MLModel mlModelMeta = MLModel
                     .builder()
@@ -528,6 +532,10 @@ public class MLModelManager {
             }
 
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
+                if (!boolResponse) {
+                    listener.onFailure(new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -596,6 +604,10 @@ public class MLModelManager {
                 registerModelInput.getConnector().encrypt(mlEngine::encrypt);
             }
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
+                if (!res) {
+                    handleException(functionName, taskId, new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -666,6 +678,10 @@ public class MLModelManager {
             String modelGroupId = registerModelInput.getModelGroupId();
             Instant now = Instant.now();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
+                if (!res) {
+                    handleException(functionName, taskId, new RuntimeException("No response to create ML Model index"));
+                    return;
+                }
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -978,7 +994,7 @@ public class MLModelManager {
         mlStats.createModelCounterStatIfAbsent(modelId, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
-            if (!autoDeployModel && workerNodes != null && workerNodes.size() > 0) {
+            if (!autoDeployModel && workerNodes != null && !workerNodes.isEmpty()) {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
                 modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
@@ -987,7 +1003,7 @@ public class MLModelManager {
             listener.onResponse("successful");
             return;
         }
-        if (modelCacheHelper.getLocalDeployedModels().length >= maxModelPerNode) {
+        if (functionName != FunctionName.REMOTE && modelCacheHelper.getLocalDeployedModels().length >= maxModelPerNode) {
             listener.onFailure(new IllegalArgumentException("Exceed max local model per node limit"));
             return;
         }
@@ -1624,28 +1640,35 @@ public class MLModelManager {
      * @param connectorId connector id
      * @param listener    action listener
      */
-    private void getConnector(String connectorId, ActionListener<Connector> listener) {
+    public void getConnector(String connectorId, ActionListener<Connector> listener) {
         GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
-        client.get(getRequest, ActionListener.wrap(r -> {
-            if (r != null && r.isExists()) {
-                try (
-                    XContentParser parser = MLNodeUtils
-                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
-                ) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    Connector connector = Connector.createConnector(parser);
-                    listener.onResponse(connector);
-                } catch (Exception e) {
-                    log.error("Failed to parse connector:" + connectorId);
-                    listener.onFailure(e);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Connector> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            client.get(getRequest, ActionListener.wrap(r -> {
+                if (r != null && r.isExists()) {
+                    try (
+                        XContentParser parser = MLNodeUtils
+                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
+                    ) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        Connector connector = Connector.createConnector(parser);
+                        wrappedListener.onResponse(connector);
+                    } catch (Exception e) {
+                        log.error("Failed to parse connector:" + connectorId);
+                        wrappedListener.onFailure(e);
+                    }
+                } else {
+                    wrappedListener
+                        .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
                 }
-            } else {
-                listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
-            }
-        }, e -> {
+            }, e -> {
+                log.error("Failed to get connector", e);
+                wrappedListener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
+            }));
+        } catch (Exception e) {
             log.error("Failed to get connector", e);
-            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
-        }));
+            listener.onFailure(e);
+        }
     }
 
     /**

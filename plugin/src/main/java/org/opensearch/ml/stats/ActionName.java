@@ -12,7 +12,8 @@ public enum ActionName {
     EXECUTE,
     REGISTER,
     DEPLOY,
-    UNDEPLOY;
+    UNDEPLOY,
+    BATCH_PREDICT;
 
     public static ActionName from(String value) {
         try {

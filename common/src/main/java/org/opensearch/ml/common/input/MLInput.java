@@ -13,6 +13,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
@@ -36,6 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.input.remote.RemoteInferenceMLInput.ACTION_TYPE_FIELD;
 
 /**
  * ML input data: algorithm name, parameters and input data set.
@@ -200,6 +202,7 @@ public class MLInput implements Input {
                     RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) this.inputDataset;
                     Map<String, String> parameters = remoteInferenceInputDataSet.getParameters();
                     builder.field(PARAMETERS_FIELD, parameters);
+                    builder.field(ACTION_TYPE_FIELD, remoteInferenceInputDataSet.getActionType());
                     break;
                 case IMAGE_EMBEDDING:
                     ImageEmbeddingInputDataSet imageInputDataset = (ImageEmbeddingInputDataSet) this.inputDataset;
@@ -213,6 +216,17 @@ public class MLInput implements Input {
         }
         builder.endObject();
         return builder;
+    }
+
+    public static MLInput parse(XContentParser parser, String inputAlgoName, ActionType actionType) throws IOException {
+        MLInput mlInput = parse(parser, inputAlgoName);
+        if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet)mlInput.getInputDataset();
+            if (remoteInferenceInputDataSet.getActionType() == null) {
+                remoteInferenceInputDataSet.setActionType(actionType);
+            }
+        }
+        return mlInput;
     }
 
     public static MLInput parse(XContentParser parser, String inputAlgoName) throws IOException {

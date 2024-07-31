@@ -14,10 +14,13 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -183,6 +186,33 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     public enum ActionType {
         PREDICT,
-        EXECUTE
+        EXECUTE,
+        BATCH_PREDICT;
+
+        public static ActionType from(String value) {
+            try {
+                return ActionType.valueOf(value.toUpperCase(Locale.ROOT));
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong Action Type of " + value);
+            }
+        }
+
+        private static final HashSet<ActionType> MODEL_SUPPORT_ACTIONS = new HashSet<>(Set.of(
+                PREDICT,
+                BATCH_PREDICT
+        ));
+
+        public static boolean isValidActionInModelPrediction(ActionType actionType) {
+            return MODEL_SUPPORT_ACTIONS.contains(actionType);
+        }
+
+        public static boolean isValidAction(String action) {
+            try {
+                ActionType.valueOf(action.toUpperCase());
+                return true;
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
     }
 }
