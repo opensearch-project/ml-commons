@@ -218,6 +218,8 @@ Response:
     }
   ]
 }
+```
+
 
 POST /_plugins/_ml/models/your_model_id/_predict
 {
