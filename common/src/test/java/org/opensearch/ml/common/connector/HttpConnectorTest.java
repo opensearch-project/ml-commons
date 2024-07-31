@@ -165,7 +165,8 @@ public class HttpConnectorTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Some parameter placeholder not filled in payload: input");
         HttpConnector connector = createHttpConnector();
-        String predictPayload = connector.createPayload(PREDICT.name(), null);
+        String rawPayload = connector.createRawPayload(PREDICT.name());
+        String predictPayload = connector.fillInPayload(rawPayload, null);
         connector.validatePayload(predictPayload);
     }
 
@@ -175,7 +176,8 @@ public class HttpConnectorTest {
         exceptionRule.expectMessage("Invalid payload: {\"input\": ${parameters.input} }");
         String requestBody = "{\"input\": ${parameters.input} }";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        String predictPayload = connector.createPayload(PREDICT.name(), null);
+        String rawPayload = connector.createRawPayload(PREDICT.name());
+        String predictPayload = connector.fillInPayload(rawPayload, null);
         connector.validatePayload(predictPayload);
     }
 
@@ -184,7 +186,8 @@ public class HttpConnectorTest {
         HttpConnector connector = createHttpConnector();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        String rawPayload = connector.createRawPayload(PREDICT.name());
+        String predictPayload = connector.fillInPayload(rawPayload, parameters);
         connector.validatePayload(predictPayload);
         Assert.assertEquals("{\"input\": \"test input value\"}", predictPayload);
     }
