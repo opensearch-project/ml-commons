@@ -5,8 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.*;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -190,14 +189,23 @@ public interface RemoteConnectorExecutor {
         }
         // override again to always prioritize the input parameter
         parameters.putAll(inputParameters);
-        // only fill in required parameters when creating payload
+
         String payload = connector.createRawPayload(action);
-        Set<String> requiredParameters = connector.getRequiredParameters(payload);
-        connector.validatePayload(requiredParameters, parameters);
-        Map<String, String> fillInParameters = requiredParameters.stream()
-            .filter(parameters::containsKey)
-            .collect(Collectors.toMap(key -> key, parameters::get));;
-        payload = connector.fillInPayload(payload, fillInParameters);
+        if (Boolean.parseBoolean(parameters.getOrDefault(RECURSIVE_PARAMETER_ENABLED, "false"))) {
+            // only fill in required parameters
+            Set<String> requiredParameters = connector.getRequiredParameters(payload);
+            connector.validateParameters(requiredParameters, parameters);
+            Map<String, String> fillInParameters = requiredParameters
+                .stream()
+                .filter(parameters::containsKey)
+                .collect(Collectors.toMap(key -> key, parameters::get));
+            payload = connector.fillInPayload(payload, fillInParameters);
+        } else {
+            // recursively fill in parameters
+            payload = connector.fillInPayload(payload, parameters);
+            connector.validatePayload(payload);
+        }
+
         String userStr = getClient()
             .threadPool()
             .getThreadContext()

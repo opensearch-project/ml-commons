@@ -94,7 +94,7 @@ public interface Connector extends ToXContentObject, Writeable {
         return requiredParameters;
     }
 
-    default void validatePayload(Set<String> requiredParameters, Map<String, String> parameters) {
+    default void validateParameters(Set<String> requiredParameters, Map<String, String> parameters) {
         StringBuilder errorBuilder = new StringBuilder();
         for (String requiredParameter : requiredParameters) {
             if (!parameters.containsKey(requiredParameter)) {
@@ -103,6 +103,21 @@ public interface Connector extends ToXContentObject, Writeable {
         }
         if (!errorBuilder.isEmpty()) {
             String error = errorBuilder.substring(0, errorBuilder.length() - 2);
+            throw new IllegalArgumentException("Some parameter placeholder not filled in payload: " + error);
+        }
+    }
+
+    default void validatePayload(String payload) {
+        if (payload != null && payload.contains("${parameters")) {
+            Pattern pattern = Pattern.compile("\\$\\{parameters\\.([^}]+)}");
+            Matcher matcher = pattern.matcher(payload);
+
+            StringBuilder errorBuilder = new StringBuilder();
+            while (matcher.find()) {
+                String parameter = matcher.group(1);
+                errorBuilder.append(parameter).append(", ");
+            }
+            String error = errorBuilder.substring(0, errorBuilder.length() - 2).toString();
             throw new IllegalArgumentException("Some parameter placeholder not filled in payload: " + error);
         }
     }
