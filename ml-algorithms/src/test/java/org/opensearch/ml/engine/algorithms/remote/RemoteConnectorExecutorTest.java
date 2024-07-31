@@ -162,6 +162,6 @@ public class RemoteConnectorExecutorTest {
         executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
         Mockito
             .verify(executor, times(1))
-            .invokeRemoteService(any(), any(), any(), argThat(argument -> argument.contains("You are a ${parameters.role}")), any(), any());
+            .invokeRemoteService(any(), any(), any(), argThat(argument -> argument.contains("You are a bot")), any(), any());
     }
 }

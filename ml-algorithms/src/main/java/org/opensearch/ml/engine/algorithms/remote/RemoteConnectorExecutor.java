@@ -193,7 +193,7 @@ public interface RemoteConnectorExecutor {
         parameters.putAll(inputParameters);
 
         String payload = connector.createRawPayload(action);
-        if (Boolean.parseBoolean(parameters.getOrDefault(RECURSIVE_PARAMETER_ENABLED, "false"))) {
+        if (Boolean.parseBoolean(parameters.getOrDefault(RECURSIVE_PARAMETER_ENABLED, "true"))) {
             // recursively fill in parameters
             payload = connector.fillInPayload(payload, parameters);
             connector.validatePayload(payload);
