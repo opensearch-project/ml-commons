@@ -128,8 +128,8 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 item.put(SOURCE, AttributeValue.builder().m(sourceMap).build());
                 item.put(SEQ_NO_KEY, AttributeValue.builder().n(sequenceNumber.toString()).build());
                 Builder builder = PutItemRequest.builder().tableName(tableName).item(item);
-                if (!request.overwriteIfExists()) {
-                    builder.conditionExpression("attribute_not_exists(" + HASH_KEY + ") AND attribute_not_exists(" + RANGE_KEY + ")");
+                if (!request.overwriteIfExists() && getItemResponse != null && getItemResponse.item() != null) {
+                    throw new OpenSearchStatusException("Existing data object for ID: " + request.id(), RestStatus.CONFLICT);
                 }
                 final PutItemRequest putItemRequest = builder.build();
 

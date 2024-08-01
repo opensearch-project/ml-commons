@@ -160,11 +160,6 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Assert.assertEquals(TEST_ID, putItemRequest.item().get(RANGE_KEY).s());
         Assert.assertEquals(TENANT_ID, putItemRequest.item().get(HASH_KEY).s());
         Assert.assertEquals("0", putItemRequest.item().get(SEQ_NUM).n());
-        Assert
-            .assertEquals(
-                "attribute_not_exists(" + HASH_KEY + ") AND attribute_not_exists(" + RANGE_KEY + ")",
-                putItemRequest.conditionExpression()
-            );
         Assert.assertEquals("foo", putItemRequest.item().get("_source").m().get("data").s());
     }
 
@@ -174,7 +169,6 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
-            .overwriteIfExists(false)
             .tenantId(TENANT_ID)
             .dataObject(testDataObject)
             .build();
@@ -191,6 +185,27 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         IndexResponse indexActionResponse = IndexResponse.fromXContent(response.parser());
         assertEquals(6, indexActionResponse.getSeqNo());
         Assert.assertEquals("6", putItemRequest.item().get(SEQ_NUM).n());
+    }
+
+    @Test
+    public void testPutDataObject_ExistingDocument_DisableOverwrite() throws IOException {
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .tenantId(TENANT_ID)
+            .overwriteIfExists(false)
+            .dataObject(testDataObject)
+            .build();
+        Mockito
+            .when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class)))
+            .thenReturn(GetItemResponse.builder().item(ImmutableMap.of(SEQ_NUM, AttributeValue.builder().n("5").build())).build());
+        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
+        CompletableFuture<PutDataObjectResponse> response = sdkClient
+            .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+        CompletionException ce = assertThrows(CompletionException.class, () -> response.join());
+        assertEquals(OpenSearchStatusException.class, ce.getCause().getClass());
     }
 
     @Test
