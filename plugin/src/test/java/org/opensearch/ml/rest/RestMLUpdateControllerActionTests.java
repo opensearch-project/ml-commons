@@ -135,6 +135,18 @@ public class RestMLUpdateControllerActionTests extends OpenSearchTestCase {
         restMLUpdateControllerAction.handleRequest(request, channel, client);
     }
 
+    @Test
+    public void testUpdateControllerRequestWithControllerDisabled() throws Exception {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule
+            .expectMessage(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true."
+            );
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest();
+        restMLUpdateControllerAction.handleRequest(request, channel, client);
+    }
+
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.PUT;
         String requestContent = "{\"user_rate_limiter\":{\"testUser\":{}}}";

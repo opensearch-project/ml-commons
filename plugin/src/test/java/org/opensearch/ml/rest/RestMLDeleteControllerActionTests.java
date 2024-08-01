@@ -100,6 +100,17 @@ public class RestMLDeleteControllerActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/controllers/{model_id}", route.getPath());
     }
 
+    public void testDeleteControllerRequestWithControllerDisabled() throws Exception {
+        thrown.expect(IllegalStateException.class);
+        thrown
+            .expectMessage(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true."
+            );
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest();
+        restMLDeleteControllerAction.handleRequest(request, channel, client);
+    }
+
     public void test_PrepareRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLDeleteControllerAction.handleRequest(request, channel, client);

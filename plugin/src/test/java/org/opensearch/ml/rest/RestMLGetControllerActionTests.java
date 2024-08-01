@@ -20,6 +20,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -98,6 +99,18 @@ public class RestMLGetControllerActionTests extends OpenSearchTestCase {
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.GET, route.getMethod());
         assertEquals("/_plugins/_ml/controllers/{model_id}", route.getPath());
+    }
+
+    @Test
+    public void testGetControllerRequestWithControllerDisabled() throws Exception {
+        thrown.expect(IllegalStateException.class);
+        thrown
+            .expectMessage(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true."
+            );
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest();
+        restMLGetControllerAction.handleRequest(request, channel, client);
     }
 
     public void test_PrepareRequest() throws Exception {
