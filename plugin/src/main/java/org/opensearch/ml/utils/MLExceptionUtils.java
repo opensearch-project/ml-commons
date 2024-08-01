@@ -24,6 +24,8 @@ public class MLExceptionUtils {
         "Local Model is currently disabled. To enable it, update the setting \"plugins.ml_commons.local_model.enabled\" to true.";
     public static final String AGENT_FRAMEWORK_DISABLED_ERR_MSG =
         "Agent Framework is currently disabled. To enable it, update the setting \"plugins.ml_commons.agent_framework_enabled\" to true.";
+    public static final String CONTROLLER_DISABLED_ERR_MSG =
+        "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true.";
 
     public static String getRootCauseMessage(final Throwable throwable) {
         String message = ExceptionUtils.getRootCauseMessage(throwable);

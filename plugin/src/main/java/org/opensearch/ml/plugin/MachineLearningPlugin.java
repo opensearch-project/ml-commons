@@ -215,7 +215,6 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
@@ -380,7 +379,7 @@ public class MachineLearningPlugin extends Plugin
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
-        return ImmutableList
+        return List
             .of(
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
@@ -664,7 +663,7 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
-        return ImmutableList
+        return List
             .of(
                 encryptor,
                 mlEngine,
@@ -746,10 +745,10 @@ public class MachineLearningPlugin extends Plugin
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
-        RestMLCreateControllerAction restMLCreateControllerAction = new RestMLCreateControllerAction();
-        RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction();
-        RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction();
-        RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction();
+        RestMLCreateControllerAction restMLCreateControllerAction = new RestMLCreateControllerAction(mlFeatureEnabledSetting);
+        RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction(mlFeatureEnabledSetting);
+        RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction(mlFeatureEnabledSetting);
+        RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction(mlFeatureEnabledSetting);
         RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
         RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
@@ -759,7 +758,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
-        return ImmutableList
+        return List
             .of(
                 restMLStatsAction,
                 restMLTrainingAction,
@@ -874,7 +873,7 @@ public class MachineLearningPlugin extends Plugin
             false
         );
 
-        return ImmutableList
+        return List
             .of(
                 generalThreadPool,
                 registerModelThreadPool,
@@ -888,7 +887,7 @@ public class MachineLearningPlugin extends Plugin
 
     @Override
     public List<NamedXContentRegistry.Entry> getNamedXContent() {
-        return ImmutableList
+        return List
             .of(
                 KMeansParams.XCONTENT_REGISTRY,
                 LinearRegressionParams.XCONTENT_REGISTRY,
@@ -908,7 +907,7 @@ public class MachineLearningPlugin extends Plugin
 
     @Override
     public List<Setting<?>> getSettings() {
-        List<Setting<?>> settings = ImmutableList
+        List<Setting<?>> settings = List
             .of(
                 MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY,
                 MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE,
@@ -942,7 +941,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
-                MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
+                MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED
             );
         return settings;
     }
