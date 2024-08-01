@@ -524,7 +524,7 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
     }
 
     @Override
-    public void execute(Input input, String tenantId, ActionListener<Output> listener) {
+    public void execute(Input input, ActionListener<Output> listener) {
         getLocalizationResults(
             (AnomalyLocalizationInput) input,
             ActionListener.wrap(o -> listener.onResponse(o), e -> listener.onFailure(e))

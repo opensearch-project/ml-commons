@@ -12,8 +12,14 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODE
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.common.settings.SettingsChangeListener;
+
+import com.google.common.annotations.VisibleForTesting;
 
 public class MLFeatureEnabledSetting {
 
@@ -24,6 +30,8 @@ public class MLFeatureEnabledSetting {
 
     // This is to identify if this node is in multi-tenancy or not.
     private volatile Boolean isMultiTenancyEnabled;
+
+    private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
@@ -38,7 +46,10 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MULTI_TENANCY_ENABLED, it -> isMultiTenancyEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MULTI_TENANCY_ENABLED, it -> {
+            isMultiTenancyEnabled = it;
+            notifyMultiTenancyListeners(it);
+        });
     }
 
     /**
@@ -71,6 +82,17 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isMultiTenancyEnabled() {
         return isMultiTenancyEnabled;
+    }
+
+    public void addListener(SettingsChangeListener listener) {
+        listeners.add(listener);
+    }
+
+    @VisibleForTesting
+    void notifyMultiTenancyListeners(boolean isEnabled) {
+        for (SettingsChangeListener listener : listeners) {
+            listener.onMultiTenancyEnabledChanged(isEnabled);
+        }
     }
 
 }
