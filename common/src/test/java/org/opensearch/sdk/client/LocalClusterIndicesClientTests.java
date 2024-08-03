@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -89,9 +90,10 @@ public class LocalClusterIndicesClientTests {
     // Copied constants from MachineLearningPlugin.java
     private static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     private static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
-    
+
     private static final String TEST_ID = "123";
     private static final String TEST_INDEX = "test_index";
+    private static final String TEST_TENANT_ID = "xyz";
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
         LocalClusterIndicesClientTests.class.getName(),
@@ -126,6 +128,7 @@ public class LocalClusterIndicesClientTests {
         ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
+    @Test
     public void testPutDataObject() throws IOException {
         PutDataObjectRequest putRequest = PutDataObjectRequest
             .builder()
@@ -159,6 +162,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(DocWriteResponse.Result.CREATED, indexActionResponse.getResult());
     }
 
+    @Test
     public void testPutDataObject_Exception() throws IOException {
         PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
 
@@ -174,6 +178,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals("test", cause.getMessage());
     }
 
+    @Test
     public void testPutDataObject_IOException() throws IOException {
         ToXContentObject badDataObject = new ToXContentObject() {
             @Override
@@ -193,6 +198,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) cause).status());
     }
 
+    @Test
     public void testGetDataObject() throws IOException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
@@ -225,6 +231,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals("foo", TestDataObject.parse(dataParser).data());
     }
 
+    @Test
     public void testGetDataObject_NullResponse() throws IOException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
@@ -246,6 +253,7 @@ public class LocalClusterIndicesClientTests {
         assertTrue(response.source().isEmpty());
     }
 
+    @Test
     public void testGetDataObject_NotFound() throws IOException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
         GetResponse getResponse = new GetResponse(new GetResult(TEST_INDEX, TEST_ID, -2, 0, 1, false, null, null, null));
@@ -268,6 +276,7 @@ public class LocalClusterIndicesClientTests {
         assertFalse(GetResponse.fromXContent(response.parser()).isExists());
     }
 
+    @Test
     public void testGetDataObject_Exception() throws IOException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
@@ -284,6 +293,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals("test", cause.getMessage());
     }
 
+    @Test
     public void testUpdateDataObject() throws IOException {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -325,6 +335,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(1, updateActionResponse.getShardInfo().getTotal());
     }
 
+    @Test
     public void testUpdateDataObjectWithMap() throws IOException {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -357,6 +368,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals("bar", requestCaptor.getValue().doc().sourceAsMap().get("foo"));
     }
 
+    @Test
     public void testUpdateDataObject_NotFound() throws IOException {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -398,6 +410,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(1, updateActionResponse.getShardInfo().getTotal());
     }
 
+    @Test
     public void testUpdateDataObject_Null() throws IOException {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -423,6 +436,7 @@ public class LocalClusterIndicesClientTests {
         assertNull(response.parser());
     }
 
+    @Test
     public void testUpdateDataObject_Exception() throws IOException {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -444,6 +458,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals("test", cause.getMessage());
     }
 
+    @Test
     public void testUpdateDataObject_VersionCheck() throws IOException {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -472,6 +487,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) cause).status());
     }
 
+    @Test
     public void testDeleteDataObject() throws IOException {
         DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
@@ -495,6 +511,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(DocWriteResponse.Result.DELETED, deleteActionResponse.getResult());
     }
 
+    @Test
     public void testDeleteDataObject_Exception() throws IOException {
         DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
 
@@ -511,11 +528,13 @@ public class LocalClusterIndicesClientTests {
         assertEquals("test", cause.getMessage());
     }
 
+    @Test
     public void testSearchDataObject() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
             .indices(TEST_INDEX)
+            .tenantId(TEST_TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
@@ -547,6 +566,8 @@ public class LocalClusterIndicesClientTests {
         verify(mockedClient, times(1)).search(requestCaptor.capture());
         assertEquals(1, requestCaptor.getValue().indices().length);
         assertEquals(TEST_INDEX, requestCaptor.getValue().indices()[0]);
+        assertTrue(requestCaptor.getValue().source().toString().contains("\"query\":{\"bool\":{\"must\":"));
+        assertTrue(requestCaptor.getValue().source().toString().contains("\"filter\":[{\"term\":{\"_tenant_id\":{\"value\":\"xyz\""));
 
         SearchResponse searchActionResponse = SearchResponse.fromXContent(response.parser());
         assertEquals(0, searchActionResponse.getFailedShards());
@@ -556,11 +577,13 @@ public class LocalClusterIndicesClientTests {
         assertEquals(0, searchActionResponse.getHits().getTotalHits().value);
     }
 
+    @Test
     public void testSearchDataObject_Exception() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
             .indices(TEST_INDEX)
+            // null tenant Id
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 

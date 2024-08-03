@@ -25,8 +25,13 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.json.JsonpMapper;
 import org.opensearch.client.json.JsonpSerializable;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.OpType;
 import org.opensearch.client.opensearch._types.OpenSearchException;
+import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
+import org.opensearch.client.opensearch._types.query_dsl.MatchAllQuery;
+import org.opensearch.client.opensearch._types.query_dsl.Query;
+import org.opensearch.client.opensearch._types.query_dsl.TermQuery;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -70,6 +75,9 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class RemoteClusterIndicesClient implements SdkClientDelegate {
+
+    private static final String HASH_KEY = "_tenant_id";
+    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
@@ -202,9 +210,16 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
+                String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+                TermQuery tenantIdFilterQuery = new TermQuery.Builder().field(HASH_KEY).value(FieldValue.of(tenantId)).build();
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
-                searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).build();
+                Query existingQuery = searchRequest.query();
+                BoolQuery boolQuery = new BoolQuery.Builder()
+                    .must(existingQuery == null ? new MatchAllQuery.Builder().build().toQuery() : existingQuery)
+                    .filter(tenantIdFilterQuery.toQuery())
+                    .build();
+                searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).query(boolQuery.toQuery()).build();
                 SearchResponse<?> searchResponse = openSearchClient.search(searchRequest, MAP_DOCTYPE);
                 log.info("Search returned {} hits", searchResponse.hits().total().value());
                 return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();

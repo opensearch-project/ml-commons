@@ -44,6 +44,10 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.engine.VersionConflictEngineException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -56,6 +60,7 @@ import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -64,6 +69,9 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class LocalClusterIndicesClient implements SdkClientDelegate {
+
+    private static final String HASH_KEY = "_tenant_id";
+    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
@@ -189,7 +197,13 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             log.info("Searching {}", Arrays.toString(request.indices()));
-            SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
+            SearchSourceBuilder searchSource = request.searchSourceBuilder();
+            QueryBuilder existingQuery = searchSource.query();
+            String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
+            boolQuery.filter(QueryBuilders.termQuery(HASH_KEY, tenantId));
+            searchSource.query(boolQuery);
+            SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), searchSource)).actionGet();
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
             try {
                 return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();

@@ -38,6 +38,7 @@ import org.opensearch.client.opensearch._types.OpType;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch._types.ShardStatistics;
+import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -86,6 +87,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     private static final String TEST_ID = "123";
     private static final String TEST_INDEX = "test_index";
+    private static final String TEST_TENANT_ID = "xyz";
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
         RemoteClusterIndicesClientTests.class.getName(),
@@ -527,6 +529,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
             .indices(TEST_INDEX)
+            .tenantId(TEST_TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
@@ -549,6 +552,13 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         verify(mockedOpenSearchClient, times(1)).search(requestCaptor.capture(), any());
         assertEquals(1, requestCaptor.getValue().index().size());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index().get(0));
+        Query query = requestCaptor.getValue().query();
+        assertTrue(query.isBool());
+        assertEquals(1, query.bool().must().size());
+        assertEquals(1, query.bool().filter().size());
+        assertTrue(query.bool().filter().get(0).isTerm());
+        assertEquals("_tenant_id", query.bool().filter().get(0).term().field());
+        assertEquals(TEST_TENANT_ID, query.bool().filter().get(0).term().value().stringValue());
 
         org.opensearch.action.search.SearchResponse searchActionResponse = org.opensearch.action.search.SearchResponse
             .fromXContent(response.parser());
@@ -564,6 +574,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
             .indices(TEST_INDEX)
+            // null tenant Id
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
