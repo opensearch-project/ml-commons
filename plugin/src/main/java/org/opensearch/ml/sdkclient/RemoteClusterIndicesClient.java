@@ -53,6 +53,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -75,9 +76,6 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class RemoteClusterIndicesClient implements SdkClientDelegate {
-
-    private static final String HASH_KEY = "_tenant_id";
-    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
@@ -210,8 +208,8 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
-                String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
-                TermQuery tenantIdFilterQuery = new TermQuery.Builder().field(HASH_KEY).value(FieldValue.of(tenantId)).build();
+                String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
+                TermQuery tenantIdFilterQuery = new TermQuery.Builder().field(CommonValue.TENANT_ID).value(FieldValue.of(tenantId)).build();
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
                 Query existingQuery = searchRequest.query();

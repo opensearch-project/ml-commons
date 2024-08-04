@@ -1676,7 +1676,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 mlModel = MLModel
                     .builder()
                     .name("test_name")
-                    .tenantId("tenant_id")
+                    .tenantId("_tenant_id")
                     .modelId("test_model_id")
                     .modelGroupId("test_model_group_id")
                     .description("test_description")

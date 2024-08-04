@@ -44,7 +44,8 @@ public class CommonValue {
         public static final String UNDEPLOYED = "undeployed";
         public static final String NOT_FOUND = "not_found";
 
-        public static final String TENANT_ID = "tenant_id";
+        public static final String TENANT_ID = "_tenant_id";
+        public static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
         public static final String MASTER_KEY = "master_key";
         public static final String CREATE_TIME_FIELD = "create_time";

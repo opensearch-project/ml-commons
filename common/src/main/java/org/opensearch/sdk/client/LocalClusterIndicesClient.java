@@ -48,6 +48,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -69,9 +70,6 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class LocalClusterIndicesClient implements SdkClientDelegate {
-
-    private static final String HASH_KEY = "_tenant_id";
-    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
@@ -199,9 +197,9 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
             log.info("Searching {}", Arrays.toString(request.indices()));
             SearchSourceBuilder searchSource = request.searchSourceBuilder();
             QueryBuilder existingQuery = searchSource.query();
-            String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+            String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
             BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
-            boolQuery.filter(QueryBuilders.termQuery(HASH_KEY, tenantId));
+            boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, tenantId));
             searchSource.query(boolQuery);
             SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), searchSource)).actionGet();
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());

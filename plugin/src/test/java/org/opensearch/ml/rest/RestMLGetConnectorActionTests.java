@@ -126,11 +126,11 @@ public class RestMLGetConnectorActionTests extends OpenSearchTestCase {
 
     public void testGetRequest_MultiTenancyEnabled() throws IOException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        RestRequest request = getRestRequest("connector_id", "tenant_id", true);
+        RestRequest request = getRestRequest("connector_id", "_tenant_id", true);
         MLConnectorGetRequest mlConnectorGetRequest = restMLGetConnectorAction.getRequest(request);
 
         assertEquals("connector_id", mlConnectorGetRequest.getConnectorId());
-        assertEquals("tenant_id", mlConnectorGetRequest.getTenantId());
+        assertEquals("_tenant_id", mlConnectorGetRequest.getTenantId());
     }
 
     public void testGetRequest_MissingConnectorId() throws IOException {

@@ -55,7 +55,7 @@ public class TenantAwareHelperTests {
     @Test
     public void testValidateTenantId_MultiTenancyEnabled_TenantIdPresent() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        boolean result = tenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, "tenant_id", actionListener);
+        boolean result = tenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, "_tenant_id", actionListener);
         assertTrue(result);
     }
 
@@ -83,14 +83,14 @@ public class TenantAwareHelperTests {
     @Test
     public void testValidateTenantResource_MultiTenancyEnabled_TenantIdMatch() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "tenant_id", "tenant_id", actionListener);
+        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "_tenant_id", "_tenant_id", actionListener);
         assertTrue(result);
     }
 
     @Test
     public void testValidateTenantResource_MultiTenancyDisabled() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "tenant_id", "different_tenant_id", actionListener);
+        boolean result = tenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, "_tenant_id", "different_tenant_id", actionListener);
         assertTrue(result);
     }
 

@@ -36,6 +36,7 @@ import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -77,11 +78,9 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 public class DDBOpenSearchClient implements SdkClientDelegate {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     private static final Long DEFAULT_SEQUENCE_NUMBER = 0L;
     private static final Long DEFAULT_PRIMARY_TERM = 1L;
-    private static final String HASH_KEY = "_tenant_id";
     private static final String RANGE_KEY = "_id";
 
     private static final String SOURCE = "_source";
@@ -112,7 +111,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
     @Override
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
         final String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
-        final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+        final String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
         final String tableName = request.index();
         final GetItemRequest getItemRequest = buildGetItemRequest(tenantId, id, request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
@@ -123,7 +122,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> sourceMap = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 Map<String, AttributeValue> item = new HashMap<>();
-                item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                item.put(CommonValue.TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
                 item.put(SOURCE, AttributeValue.builder().m(sourceMap).build());
                 item.put(SEQ_NO_KEY, AttributeValue.builder().n(sequenceNumber.toString()).build());
@@ -208,13 +207,13 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      */
     @Override
     public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
-        final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+        final String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
-                updateItem.remove(HASH_KEY);
+                updateItem.remove(CommonValue.TENANT_ID);
                 updateItem.remove(RANGE_KEY);
                 Map<String, AttributeValueUpdate> updateAttributeValue = new HashMap<>();
                 updateAttributeValue
@@ -227,7 +226,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                             .build()
                     );
                 Map<String, AttributeValue> updateKey = new HashMap<>();
-                updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                updateKey.put(CommonValue.TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest
                     .builder()
@@ -288,14 +287,14 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      */
     @Override
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
-        final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
+        final String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
         final DeleteItemRequest deleteItemRequest = DeleteItemRequest
             .builder()
             .tableName(request.index())
             .key(
                 Map
                     .ofEntries(
-                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
+                        Map.entry(CommonValue.TENANT_ID, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(request.id()).build())
                     )
             )
@@ -345,14 +344,14 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
     }
 
     private GetItemRequest buildGetItemRequest(String requestTenantId, String documentId, String index) {
-        final String tenantId = requestTenantId != null ? requestTenantId : DEFAULT_TENANT;
+        final String tenantId = requestTenantId != null ? requestTenantId : CommonValue.DEFAULT_TENANT;
         return GetItemRequest
             .builder()
             .tableName(index)
             .key(
                 Map
                     .ofEntries(
-                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
+                        Map.entry(CommonValue.TENANT_ID, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(documentId).build())
                     )
             )
