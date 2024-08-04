@@ -119,6 +119,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     private void checkForModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<DeleteResponse> restoringListener = ActionListener.runBefore(actionListener, context::restore);
             SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
             sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
             if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
@@ -133,26 +134,25 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             sdkClient
                 .searchDataObjectAsync(searchDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((sr, st) -> {
-                    context.restore();
                     if (sr != null) {
                         try {
                             SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
                             SearchHit[] searchHits = searchResponse.getHits().getHits();
                             if (searchHits.length == 0) {
-                                deleteConnector(connectorId, actionListener);
+                                deleteConnector(connectorId, restoringListener);
                             } else {
-                                handleModelsUsingConnector(searchHits, connectorId, actionListener);
+                                handleModelsUsingConnector(searchHits, connectorId, restoringListener);
                             }
                         } catch (Exception e) {
                             log.error("Failed to parse search response", e);
-                            actionListener
+                            restoringListener
                                 .onFailure(
                                     new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR)
                                 );
                         }
                     } else {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
-                        handleSearchFailure(connectorId, cause, actionListener);
+                        handleSearchFailure(connectorId, cause, restoringListener);
                     }
                 });
         } catch (Exception e) {

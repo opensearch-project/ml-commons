@@ -162,6 +162,15 @@ public class ConnectorAccessControlHelper {
         }));
     }
 
+    /**
+     * Gets a connector with the provided clients. 
+     * @param sdkClient The SDKClient
+     * @param client The OpenSearch client for thread pool management
+     * @param context The Stored Context.  Executing this method will restore this context.
+     * @param getDataObjectRequest The get request
+     * @param connectorId The connector Id
+     * @param listener the action listener to complete with the GetResponse or Exception
+     */
     public void getConnector(
         SdkClient sdkClient,
         Client client,

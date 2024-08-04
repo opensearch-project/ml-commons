@@ -115,6 +115,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             connectorAccessControlHelper
                 .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
+                    // context is already restored here
                     if (TenantAwareHelper
                         .validateTenantResource(
                             mlFeatureEnabledSetting,
@@ -123,7 +124,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             listener
                         )) {
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
-                        if (Boolean.TRUE.equals(hasPermission)) {
+                        if (hasPermission) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
                             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                             UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
@@ -132,7 +133,13 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 .id(connectorId)
                                 .dataObject(connector)
                                 .build();
-                            updateUndeployedConnector(connectorId, updateDataObjectRequest, listener, context);
+                            try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
+                                updateUndeployedConnector(
+                                    connectorId,
+                                    updateDataObjectRequest,
+                                    ActionListener.runBefore(listener, innerContext::restore)
+                                );
+                            }
                         } else {
                             listener
                                 .onFailure(
@@ -155,8 +162,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     private void updateUndeployedConnector(
         String connectorId,
         UpdateDataObjectRequest updateDataObjectRequest,
-        ActionListener<UpdateResponse> listener,
-        ThreadContext.StoredContext context
+        ActionListener<UpdateResponse> listener
     ) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
@@ -180,11 +186,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             sdkClient
                                 .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                                 .whenComplete((r, throwable) -> {
-                                    handleUpdateDataObjectCompletionStage(
-                                        r,
-                                        throwable,
-                                        getUpdateResponseListener(connectorId, listener, context)
-                                    );
+                                    handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(connectorId, listener));
                                 });
                         } else {
                             log.error(searchHits.length + " models are still using this connector, please undeploy the models first!");
@@ -214,11 +216,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         sdkClient
                             .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                             .whenComplete((r, throwable) -> {
-                                handleUpdateDataObjectCompletionStage(
-                                    r,
-                                    throwable,
-                                    getUpdateResponseListener(connectorId, listener, context)
-                                );
+                                handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(connectorId, listener));
                             });
                         return;
                     } else {
@@ -246,12 +244,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         }
     }
 
-    private ActionListener<UpdateResponse> getUpdateResponseListener(
-        String connectorId,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
-    ) {
-        return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
+    private ActionListener<UpdateResponse> getUpdateResponseListener(String connectorId, ActionListener<UpdateResponse> actionListener) {
+        return ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
                 log.error("Failed to update the connector with ID: {}", connectorId);
                 actionListener.onResponse(updateResponse);
@@ -262,6 +256,6 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         }, exception -> {
             log.error("Failed to update ML connector with ID {}. Details: {}", connectorId, exception);
             actionListener.onFailure(exception);
-        }), context::restore);
+        });
     }
 }
