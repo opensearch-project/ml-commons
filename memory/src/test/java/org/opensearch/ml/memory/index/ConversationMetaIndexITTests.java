@@ -20,11 +20,14 @@ package org.opensearch.ml.memory.index;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.opensearch.OpenSearchStatusException;
@@ -561,6 +564,8 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             assert (cid2.result().equals(get2.result().getId()));
             assert (get1.result().getName().equals("convo1"));
             assert (get2.result().getName().equals("convo2"));
+            Assert.assertTrue(convo2.getAdditionalInfos().isEmpty());
+            Assert.assertTrue(get1.result().getAdditionalInfos().isEmpty());
             cdl.countDown();
         }, e -> {
             cdl.countDown();
@@ -634,4 +639,80 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         }
     }
 
+    public void testCanCreateConversationWithAdditionalInfo() {
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> cid1 = new StepListener<>();
+        index.createConversation("hailong-convo", "app", Map.of("k", "v"), cid1);
+
+        StepListener<ConversationMeta> get1 = new StepListener<>();
+        cid1.whenComplete(cid -> { index.getConversation(cid1.result(), get1); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        get1.whenComplete(convo1 -> {
+            try {
+                Assert.assertEquals(cid1.result(), convo1.getId());
+                Assert.assertEquals("hailong-convo", convo1.getName());
+                Assert.assertNotNull(convo1.getAdditionalInfos());
+                Assert.assertEquals("v", convo1.getAdditionalInfos().get("k"));
+            } finally {
+                cdl.countDown();
+            }
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
+
+    public void testCanQueryOverConversationsByAdditionalInfo() {
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> convo1 = new StepListener<>();
+        index.createConversation("Conversation1", "app", Map.of("k1", "v1"), convo1);
+
+        StepListener<String> convo2 = new StepListener<>();
+        convo1.whenComplete(cid -> { index.createConversation("Mehul Conversation", convo2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<SearchResponse> search = new StepListener<>();
+        convo2.whenComplete(cid -> {
+            SearchRequest request = new SearchRequest();
+            request.source(new SearchSourceBuilder());
+            request.source().query(QueryBuilders.matchQuery(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD + ".k1", "v1"));
+            index.searchConversations(request, search);
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        search.whenComplete(response -> {
+            log.info("SEARCH RESPONSE");
+            log.info(response.toString());
+            cdl.countDown();
+            assert (response.getHits().getAt(0).getId().equals(convo1.result()));
+            Assert.assertEquals(1L, Objects.requireNonNull(response.getHits().getTotalHits()).value);
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
 }

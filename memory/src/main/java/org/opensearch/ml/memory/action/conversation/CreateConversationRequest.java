@@ -18,15 +18,19 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD;
 
 import java.io.IOException;
 import java.util.Map;
 
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
@@ -36,10 +40,14 @@ import lombok.Getter;
  * Action Request for creating a conversation
  */
 public class CreateConversationRequest extends ActionRequest {
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO = CommonValue.VERSION_2_17_0;
+
     @Getter
     private String name = null;
     @Getter
     private String applicationType = null;
+    @Getter
+    private Map<String, String> additionalInfos = null;
 
     /**
      * Constructor
@@ -50,6 +58,11 @@ public class CreateConversationRequest extends ActionRequest {
         super(in);
         this.name = in.readOptionalString();
         this.applicationType = in.readOptionalString();
+        if (in.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO)) {
+            if (in.readBoolean()) {
+                this.additionalInfos = in.readMap(StreamInput::readString, StreamInput::readString);
+            }
+        }
     }
 
     /**
@@ -73,6 +86,19 @@ public class CreateConversationRequest extends ActionRequest {
 
     /**
      * Constructor
+     * @param name name of the conversation
+     * @param applicationType of the conversation
+     * @param additionalInfos information of the conversation
+     */
+    public CreateConversationRequest(String name, String applicationType, Map<String, String> additionalInfos) {
+        super();
+        this.name = name;
+        this.applicationType = applicationType;
+        this.additionalInfos = additionalInfos;
+    }
+
+    /**
+     * Constructor
      * name will be null
      */
     public CreateConversationRequest() {}
@@ -82,6 +108,14 @@ public class CreateConversationRequest extends ActionRequest {
         super.writeTo(out);
         out.writeOptionalString(name);
         out.writeOptionalString(applicationType);
+        if (out.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO)) {
+            if (additionalInfos == null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                out.writeMap(additionalInfos, StreamOutput::writeString, StreamOutput::writeString);
+            }
+        }
     }
 
     @Override
@@ -101,12 +135,13 @@ public class CreateConversationRequest extends ActionRequest {
         if (!restRequest.hasContent()) {
             return new CreateConversationRequest();
         }
-        try {
-            Map<String, String> body = restRequest.contentParser().mapStrings();
-            if (body.containsKey(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
+        try (XContentParser parser = restRequest.contentParser()) {
+            Map<String, Object> body = parser.map();
+            if (body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD) != null) {
                 return new CreateConversationRequest(
-                    body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD),
-                    body.get(APPLICATION_TYPE_FIELD)
+                    (String) body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD),
+                    body.get(APPLICATION_TYPE_FIELD) == null ? null : (String) body.get(APPLICATION_TYPE_FIELD),
+                    body.get(META_ADDITIONAL_INFO_FIELD) == null ? null : (Map<String, String>) body.get(META_ADDITIONAL_INFO_FIELD)
                 );
             } else {
                 return new CreateConversationRequest();

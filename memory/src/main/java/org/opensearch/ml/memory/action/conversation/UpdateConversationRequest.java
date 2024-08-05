@@ -6,6 +6,7 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_NAME_FIELD;
 
 import java.io.ByteArrayInputStream;
@@ -35,7 +36,7 @@ public class UpdateConversationRequest extends ActionRequest {
     private String conversationId;
     private Map<String, Object> updateContent;
 
-    private static final Set<String> allowedList = new HashSet<>(Arrays.asList(META_NAME_FIELD));
+    private static final Set<String> allowedList = new HashSet<>(Arrays.asList(META_NAME_FIELD, META_ADDITIONAL_INFO_FIELD));
 
     @Builder
     public UpdateConversationRequest(String conversationId, Map<String, Object> updateContent) {
