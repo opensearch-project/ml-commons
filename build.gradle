@@ -1,3 +1,5 @@
+import org.opensearch.gradle.VersionProperties
+
 /*
  * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
@@ -63,6 +65,9 @@ allprojects {
     plugins.withId('java') {
         sourceCompatibility = targetCompatibility = JavaVersion.VERSION_11
     }
+
+    project.getExtensions().getExtraProperties().set("versions", VersionProperties.getVersions());
+
 }
 
 subprojects {
