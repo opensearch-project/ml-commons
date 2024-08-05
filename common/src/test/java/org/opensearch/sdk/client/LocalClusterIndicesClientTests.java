@@ -120,6 +120,8 @@ public class LocalClusterIndicesClientTests {
         MockitoAnnotations.openMocks(this);
 
         sdkClient = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry));
+        sdkClient.onMultiTenancyEnabledChanged(false);
+
         testDataObject = new TestDataObject("foo");
     }
 
@@ -529,7 +531,7 @@ public class LocalClusterIndicesClientTests {
     }
 
     @Test
-    public void testSearchDataObject() throws IOException {
+    public void testSearchDataObjectNotTenantAware() throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
@@ -557,6 +559,56 @@ public class LocalClusterIndicesClientTests {
         when(mockedClient.search(any(SearchRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(searchResponse);
 
+        sdkClient.onMultiTenancyEnabledChanged(false);
+        SearchDataObjectResponse response = sdkClient
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(mockedClient, times(1)).search(requestCaptor.capture());
+        assertEquals(1, requestCaptor.getValue().indices().length);
+        assertEquals(TEST_INDEX, requestCaptor.getValue().indices()[0]);
+        assertEquals("{}", requestCaptor.getValue().source().toString());
+
+        SearchResponse searchActionResponse = SearchResponse.fromXContent(response.parser());
+        assertEquals(0, searchActionResponse.getFailedShards());
+        assertEquals(0, searchActionResponse.getSkippedShards());
+        assertEquals(1, searchActionResponse.getSuccessfulShards());
+        assertEquals(1, searchActionResponse.getTotalShards());
+        assertEquals(0, searchActionResponse.getHits().getTotalHits().value);
+    }
+
+    @Test
+    public void testSearchDataObjectTenantAware() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
+            .indices(TEST_INDEX)
+            .tenantId(TEST_TENANT_ID)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        SearchResponse searchResponse = new SearchResponse(
+            InternalSearchResponse.empty(),
+            null,
+            1,
+            1,
+            0,
+            123,
+            new SearchResponse.PhaseTook(
+                EnumSet.allOf(SearchPhaseName.class).stream().collect(Collectors.toMap(SearchPhaseName::getName, e -> (long) e.ordinal()))
+            ),
+            new ShardSearchFailure[0],
+            SearchResponse.Clusters.EMPTY,
+            null
+        );
+        @SuppressWarnings("unchecked")
+        ActionFuture<SearchResponse> future = mock(ActionFuture.class);
+        when(mockedClient.search(any(SearchRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(searchResponse);
+
+        sdkClient.onMultiTenancyEnabledChanged(true);
         SearchDataObjectResponse response = sdkClient
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture()

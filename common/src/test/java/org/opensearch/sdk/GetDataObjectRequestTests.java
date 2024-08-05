@@ -19,7 +19,7 @@ public class GetDataObjectRequestTests {
 
     private String testIndex;
     private String testId;
-    private String testTenantId;    
+    private String testTenantId;
     private FetchSourceContext testFetchSourceContext;
 
     @Before
@@ -32,7 +32,8 @@ public class GetDataObjectRequestTests {
 
     @Test
     public void testGetDataObjectRequest() {
-        GetDataObjectRequest request = GetDataObjectRequest.builder()
+        GetDataObjectRequest request = GetDataObjectRequest
+            .builder()
             .index(testIndex)
             .id(testId)
             .tenantId(testTenantId)

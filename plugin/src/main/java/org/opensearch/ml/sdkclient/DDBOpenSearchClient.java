@@ -109,7 +109,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
+        PutDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
         final String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
         final String tableName = request.index();
@@ -154,7 +158,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(
+        GetDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final GetItemRequest getItemRequest = buildGetItemRequest(request.tenantId(), request.id(), request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
@@ -206,7 +214,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(
+        UpdateDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try {
@@ -286,7 +298,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(
+        DeleteDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
         final DeleteItemRequest deleteItemRequest = DeleteItemRequest
             .builder()
@@ -328,7 +344,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(
+        SearchDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         List<String> indices = Arrays.stream(request.indices()).collect(Collectors.toList());
 
         SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest(
@@ -336,7 +356,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             request.tenantId(),
             request.searchSourceBuilder()
         );
-        return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor);
+        return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor, isMultiTenancyEnabled);
     }
 
     private XContentParser createParser(String json) throws IOException {

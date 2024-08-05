@@ -93,7 +93,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
+        PutDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try {
                 IndexRequest.Builder<?> builder = new IndexRequest.Builder<>()
@@ -120,7 +124,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(
+        GetDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
@@ -141,7 +149,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(
+        UpdateDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
                 request.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -184,7 +196,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(
+        DeleteDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 DeleteRequest deleteRequest = new DeleteRequest.Builder().index(request.index()).id(request.id()).build();
@@ -204,20 +220,29 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(
+        SearchDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
-                String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
-                TermQuery tenantIdFilterQuery = new TermQuery.Builder().field(CommonValue.TENANT_ID).value(FieldValue.of(tenantId)).build();
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
-                Query existingQuery = searchRequest.query();
-                BoolQuery boolQuery = new BoolQuery.Builder()
-                    .must(existingQuery == null ? new MatchAllQuery.Builder().build().toQuery() : existingQuery)
-                    .filter(tenantIdFilterQuery.toQuery())
-                    .build();
-                searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).query(boolQuery.toQuery()).build();
+                if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
+                    String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
+                    TermQuery tenantIdFilterQuery = new TermQuery.Builder()
+                        .field(CommonValue.TENANT_ID)
+                        .value(FieldValue.of(tenantId))
+                        .build();
+                    Query existingQuery = searchRequest.query();
+                    BoolQuery boolQuery = new BoolQuery.Builder()
+                        .must(existingQuery == null ? new MatchAllQuery.Builder().build().toQuery() : existingQuery)
+                        .filter(tenantIdFilterQuery.toQuery())
+                        .build();
+                    searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).query(boolQuery.toQuery()).build();
+                }
                 SearchResponse<?> searchResponse = openSearchClient.search(searchRequest, MAP_DOCTYPE);
                 log.info("Search returned {} hits", searchResponse.hits().total().value());
                 return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();

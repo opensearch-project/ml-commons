@@ -129,6 +129,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
 
         sdkClient = SdkClientFactory.wrapSdkClientDelegate(new DDBOpenSearchClient(dynamoDbClient, remoteClusterIndicesClient));
+        sdkClient.onMultiTenancyEnabledChanged(true);
         testDataObject = new TestDataObject("foo");
     }
 
@@ -523,11 +524,15 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .searchSourceBuilder(searchSourceBuilder)
             .build();
         CompletionStage<SearchDataObjectResponse> searchDataObjectResponse = Mockito.mock(CompletionStage.class);
-        Mockito.when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any())).thenReturn(searchDataObjectResponse);
+        Mockito
+            .when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any(), Mockito.anyBoolean()))
+            .thenReturn(searchDataObjectResponse);
         CompletionStage<SearchDataObjectResponse> searchResponse = sdkClient.searchDataObjectAsync(searchDataObjectRequest);
 
         assertEquals(searchDataObjectResponse, searchResponse);
-        Mockito.verify(remoteClusterIndicesClient).searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Mockito
+            .verify(remoteClusterIndicesClient)
+            .searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any(), Mockito.anyBoolean());
         Assert.assertEquals(TENANT_ID, searchDataObjectRequestArgumentCaptor.getValue().tenantId());
         Assert.assertEquals(TEST_INDEX, searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
         Assert.assertEquals(TEST_INDEX_2, searchDataObjectRequestArgumentCaptor.getValue().indices()[1]);
@@ -544,11 +549,15 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .searchSourceBuilder(searchSourceBuilder)
             .build();
         CompletionStage<SearchDataObjectResponse> searchDataObjectResponse = Mockito.mock(CompletionStage.class);
-        Mockito.when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any())).thenReturn(searchDataObjectResponse);
+        Mockito
+            .when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any(), Mockito.anyBoolean()))
+            .thenReturn(searchDataObjectResponse);
         CompletionStage<SearchDataObjectResponse> searchResponse = sdkClient.searchDataObjectAsync(searchDataObjectRequest);
 
         assertEquals(searchDataObjectResponse, searchResponse);
-        Mockito.verify(remoteClusterIndicesClient).searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any());
+        Mockito
+            .verify(remoteClusterIndicesClient)
+            .searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any(), Mockito.anyBoolean());
         Assert.assertEquals(".test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
     }
 

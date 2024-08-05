@@ -123,6 +123,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
                 )
             );
         sdkClient = SdkClientFactory.wrapSdkClientDelegate(new RemoteClusterIndicesClient(mockedOpenSearchClient));
+        sdkClient.onMultiTenancyEnabledChanged(true);
         testDataObject = new TestDataObject("foo");
     }
 

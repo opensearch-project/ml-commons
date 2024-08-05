@@ -15,14 +15,22 @@ import java.util.concurrent.ForkJoinPool;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
+import org.opensearch.ml.common.settings.SettingsChangeListener;
+
 import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
-public class SdkClient {
+public class SdkClient implements SettingsChangeListener {
     
     private final SdkClientDelegate delegate;
+    private volatile Boolean isMultiTenancyEnabled;
     
     public SdkClient(SdkClientDelegate delegate) {
         this.delegate = delegate;
+    }
+
+    @Override
+    public void onMultiTenancyEnabledChanged(boolean isEnabled) {
+        this.isMultiTenancyEnabled = isEnabled;
     }
 
     /**
@@ -32,7 +40,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
-        return delegate.putDataObjectAsync(request, executor);
+        return delegate.putDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
     /**
@@ -65,7 +73,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
-        return delegate.getDataObjectAsync(request, executor);
+        return delegate.getDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
     /**
@@ -99,7 +107,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
-        return delegate.updateDataObjectAsync(request, executor);
+        return delegate.updateDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
     /**
@@ -133,7 +141,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
-        return delegate.deleteDataObjectAsync(request, executor);
+        return delegate.deleteDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
     /**
@@ -167,7 +175,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        return delegate.searchDataObjectAsync(request, executor);
+        return delegate.searchDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
     /**
