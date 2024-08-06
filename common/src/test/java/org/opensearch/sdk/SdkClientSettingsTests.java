@@ -34,12 +34,7 @@ public class SdkClientSettingsTests {
         final Set<Setting<?>> settingsSet = Stream
             .concat(
                 ClusterSettings.BUILT_IN_CLUSTER_SETTINGS.stream(),
-                Stream
-                    .of(
-                        REMOTE_METADATA_TYPE,
-                        REMOTE_METADATA_ENDPOINT,
-                        REMOTE_METADATA_REGION
-                    )
+                Stream.of(REMOTE_METADATA_TYPE, REMOTE_METADATA_ENDPOINT, REMOTE_METADATA_REGION)
             )
             .collect(Collectors.toSet());
         clusterSettings = new ClusterSettings(settings, settingsSet);

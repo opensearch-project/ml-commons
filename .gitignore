@@ -11,3 +11,4 @@ plugin/build/
 plugin/src/test/resources/bwc/*
 .DS_Store
 */bin/
+/bin/

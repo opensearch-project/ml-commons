@@ -613,6 +613,8 @@ public class MachineLearningPlugin extends Plugin
             memoryFactoryMap,
             mlFeatureEnabledSetting.isMultiTenancyEnabled()
         );
+        // Register the sdkClient as a listener
+        mlFeatureEnabledSetting.addListener(sdkClient);
         // Register the agentExecutor as a listener
         mlFeatureEnabledSetting.addListener(agentExecutor);
 

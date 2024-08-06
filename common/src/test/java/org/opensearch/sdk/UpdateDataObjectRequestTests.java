@@ -47,7 +47,13 @@ public class UpdateDataObjectRequestTests {
 
     @Test
     public void testUpdateDataObjectRequest() {
-        UpdateDataObjectRequest request = UpdateDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject).build();
+        UpdateDataObjectRequest request = UpdateDataObjectRequest
+            .builder()
+            .index(testIndex)
+            .id(testId)
+            .tenantId(testTenantId)
+            .dataObject(testDataObject)
+            .build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());
@@ -59,18 +65,34 @@ public class UpdateDataObjectRequestTests {
 
     @Test
     public void testUpdateDataObjectMapRequest() {
-        UpdateDataObjectRequest request = UpdateDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObjectMap).build();
+        UpdateDataObjectRequest request = UpdateDataObjectRequest
+            .builder()
+            .index(testIndex)
+            .id(testId)
+            .tenantId(testTenantId)
+            .dataObject(testDataObjectMap)
+            .build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());
         assertEquals(testTenantId, request.tenantId());
-        assertEquals(testDataObjectMap, XContentHelper.convertToMap(JsonXContent.jsonXContent, Strings.toString(XContentType.JSON, request.dataObject()), false));        
+        assertEquals(
+            testDataObjectMap,
+            XContentHelper.convertToMap(JsonXContent.jsonXContent, Strings.toString(XContentType.JSON, request.dataObject()), false)
+        );
     }
-    
+
     @Test
     public void testUpdateDataObjectRequestConcurrency() {
-        UpdateDataObjectRequest request = UpdateDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(testDataObject)
-            .ifSeqNo(testSeqNo).ifPrimaryTerm(testPrimaryTerm).build();
+        UpdateDataObjectRequest request = UpdateDataObjectRequest
+            .builder()
+            .index(testIndex)
+            .id(testId)
+            .tenantId(testTenantId)
+            .dataObject(testDataObject)
+            .ifSeqNo(testSeqNo)
+            .ifPrimaryTerm(testPrimaryTerm)
+            .build();
 
         assertEquals(testIndex, request.index());
         assertEquals(testId, request.id());

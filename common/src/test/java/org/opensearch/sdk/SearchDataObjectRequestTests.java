@@ -23,14 +23,15 @@ public class SearchDataObjectRequestTests {
 
     @Before
     public void setUp() {
-        testIndices = new String[] {"test-index"};
+        testIndices = new String[] { "test-index" };
         testTenantId = "test-tenant-id";
         testSearchSourceBuilder = new SearchSourceBuilder();
     }
 
     @Test
     public void testGetDataObjectRequest() {
-        SearchDataObjectRequest request = SearchDataObjectRequest.builder()
+        SearchDataObjectRequest request = SearchDataObjectRequest
+            .builder()
             .indices(testIndices)
             .tenantId(testTenantId)
             .searchSourceBuilder(testSearchSourceBuilder)

@@ -84,6 +84,6 @@ public class SdkClientUtilsTests {
         future.onFailure(ioException);
         RuntimeException e = assertThrows(RuntimeException.class, () -> future.actionGet());
         Throwable wrapped = SdkClientUtils.getRethrownExecutionExceptionRootCause(e);
-        assertSame(ioException, wrapped);        
+        assertSame(ioException, wrapped);
     }
 }
