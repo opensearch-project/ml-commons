@@ -640,8 +640,10 @@ public class LocalClusterIndicesClientTests {
             .build();
 
         ArgumentCaptor<SearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
-        when(mockedClient.search(searchRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
-
+        PlainActionFuture<SearchResponse> exceptionalFuture = PlainActionFuture.newFuture();
+        exceptionalFuture.onFailure(new UnsupportedOperationException("test"));
+        when(mockedClient.search(searchRequestCaptor.capture())).thenReturn(exceptionalFuture);
+        
         CompletableFuture<SearchDataObjectResponse> future = sdkClient
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();

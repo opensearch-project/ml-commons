@@ -33,6 +33,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.common.Strings;
@@ -192,29 +193,39 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
-            log.info("Searching {}", Arrays.toString(request.indices()));
-            SearchSourceBuilder searchSource = request.searchSourceBuilder();
-            if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
-                QueryBuilder existingQuery = searchSource.query();
-                String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
-                BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
-                boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, tenantId));
-                searchSource.query(boolQuery);                
-            }
-            SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), searchSource)).actionGet();
-            log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
-            try {
-                return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
-            } catch (IOException e) {
-                // Rethrow unchecked exception on XContent parsing error
-                throw new OpenSearchStatusException(
-                    "Failed to search indices " + Arrays.toString(request.indices()),
-                    RestStatus.INTERNAL_SERVER_ERROR
-                );
-            }
-        }), executor);
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(
+        SearchDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        log.info("Searching {}", Arrays.toString(request.indices()));
+        SearchSourceBuilder searchSource = request.searchSourceBuilder();
+        if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
+            QueryBuilder existingQuery = searchSource.query();
+            String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
+            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
+            boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, tenantId));
+            searchSource.query(boolQuery);
+        }
+        log.info("Searching {}", Arrays.toString(request.indices()));
+        ActionFuture<SearchResponse> searchResponseFuture = AccessController
+            .doPrivileged((PrivilegedAction<ActionFuture<SearchResponse>>) () -> {
+                return client.search(new SearchRequest(request.indices(), searchSource));
+            });
+        return CompletableFuture
+            .supplyAsync(searchResponseFuture::actionGet, executor)
+            .thenApply(searchResponse -> {
+                log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
+                try {
+                    return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
+                } catch (IOException e) {
+                    // Rethrow unchecked exception on XContent parsing error
+                    throw new OpenSearchStatusException(
+                        "Failed to search indices " + Arrays.toString(request.indices()),
+                        RestStatus.INTERNAL_SERVER_ERROR
+                    );
+                }
+            });
     }
 
     private XContentParser createParser(ToXContent obj) throws IOException {
