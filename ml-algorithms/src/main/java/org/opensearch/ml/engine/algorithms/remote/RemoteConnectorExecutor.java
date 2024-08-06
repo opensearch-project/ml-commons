@@ -196,7 +196,8 @@ public interface RemoteConnectorExecutor {
         if (Boolean.parseBoolean(parameters.getOrDefault(RECURSIVE_PARAMETER_ENABLED, "true"))) {
             // recursively fill in parameters
             payload = connector.fillInPayload(payload, parameters);
-            connector.validatePayload(payload);
+            Set<String> requiredParameters = connector.getRequiredParameters(payload);
+            connector.validateParameters(requiredParameters, Map.of());
         } else {
             // only fill in required parameters
             Set<String> requiredParameters = connector.getRequiredParameters(payload);

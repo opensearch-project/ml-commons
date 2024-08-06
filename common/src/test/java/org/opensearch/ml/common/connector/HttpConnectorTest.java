@@ -168,7 +168,8 @@ public class HttpConnectorTest {
         HttpConnector connector = createHttpConnector();
         String rawPayload = connector.createRawPayload(PREDICT.name());
         String predictPayload = connector.fillInPayload(rawPayload, null);
-        connector.validatePayload(predictPayload);
+        Set<String> requiredParameters = connector.getRequiredParameters(predictPayload);
+        connector.validateParameters(requiredParameters, Map.of());
     }
 
     @Test
@@ -179,7 +180,8 @@ public class HttpConnectorTest {
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         String rawPayload = connector.createRawPayload(PREDICT.name());
         String predictPayload = connector.fillInPayload(rawPayload, null);
-        connector.validatePayload(predictPayload);
+        Set<String> requiredParameters = connector.getRequiredParameters(predictPayload);
+        connector.validateParameters(requiredParameters, Map.of());
     }
 
     @Test
@@ -197,7 +199,8 @@ public class HttpConnectorTest {
         parameters.put("input", "test input value");
         String rawPayload = connector.createRawPayload(PREDICT.name());
         String predictPayload = connector.fillInPayload(rawPayload, parameters);
-        connector.validatePayload(predictPayload);
+        Set<String> requiredParameters = connector.getRequiredParameters(predictPayload);
+        connector.validateParameters(requiredParameters, Map.of());
         Assert.assertEquals("{\"input\": \"test input value\"}", predictPayload);
     }
 
