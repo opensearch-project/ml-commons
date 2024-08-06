@@ -185,7 +185,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     @VisibleForTesting
     void deleteModelChunks(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
-        deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
+        deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId)).setRefresh(true);
 
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
             if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
