@@ -287,6 +287,69 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         });
     }
 
+    public void testPredictRemoteModelWithRecursiveParameter(
+        String testCase,
+        Consumer<Map> verifyResponse,
+        Consumer<Exception> verifyException
+    ) throws IOException,
+        InterruptedException {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        Response response = createConnector(this.getConnectorBodyByRecursiveParameter(testCase));
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModelWithInterface("openAI-GPT-3.5 completions", connectorId, "correctInterface");
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a ${parameters.test}\"\n" + "  }\n" + "}";
+        try {
+            response = predictRemoteModel(modelId, predictInput);
+            responseMap = parseResponseToMap(response);
+            verifyResponse.accept(responseMap);
+        } catch (Exception e) {
+            verifyException.accept(e);
+        }
+    }
+
+    public void testPredictRemoteModelWithRecursiveParameterMissing() throws IOException, InterruptedException {
+        testPredictRemoteModelWithRecursiveParameter("missing", null, (exception) -> {
+            assertTrue(exception.getMessage().contains("Some parameter placeholder not filled in payload"));
+        });
+    }
+
+    public void testPredictRemoteModelWithRecursiveParameterEnabled() throws IOException, InterruptedException {
+        testPredictRemoteModelWithRecursiveParameter("enabled", null, (exception) -> {
+            assertTrue(exception.getMessage().contains("Some parameter placeholder not filled in payload"));
+        });
+    }
+
+    public void testPredictRemoteModelWithRecursiveParameterDisabled() throws IOException, InterruptedException {
+        testPredictRemoteModelWithRecursiveParameter("disabled", (responseMap) -> {
+            List responseList = (List) responseMap.get("inference_results");
+            responseMap = (Map) responseList.get(0);
+            responseList = (List) responseMap.get("output");
+            responseMap = (Map) responseList.get(0);
+            responseMap = (Map) responseMap.get("dataAsMap");
+            responseList = (List) responseMap.get("choices");
+            if (responseList == null) {
+                assertTrue(checkThrottlingOpenAI(responseMap));
+                return;
+            }
+            responseMap = (Map) responseList.get(0);
+            assertFalse(((String) responseMap.get("text")).isEmpty());
+        }, null);
+    }
+
     public void testOpenAIChatCompletionModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -868,6 +931,85 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "}";
         return TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
+    }
+
+    private String getConnectorBodyByRecursiveParameter(String testCase) {
+        return switch (testCase) {
+            case "missing" -> completionModelConnectorEntity;
+            case "enabled" -> "{\n"
+                + "\"name\": \"OpenAI Connector\",\n"
+                + "\"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
+                + "\"version\": 1,\n"
+                + "\"client_config\": {\n"
+                + "    \"max_connection\": 20,\n"
+                + "    \"connection_timeout\": 50000,\n"
+                + "    \"read_timeout\": 50000\n"
+                + "  },\n"
+                + "\"protocol\": \"http\",\n"
+                + "\"parameters\": {\n"
+                + "    \"endpoint\": \"api.openai.com\",\n"
+                + "    \"auth\": \"API_Key\",\n"
+                + "    \"content_type\": \"application/json\",\n"
+                + "    \"max_tokens\": 7,\n"
+                + "    \"temperature\": 0,\n"
+                + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+                + "    \"recursive_parameter_enabled\": \"true\"\n"
+                + "  },\n"
+                + "  \"credential\": {\n"
+                + "    \"openAI_key\": \""
+                + this.OPENAI_KEY
+                + "\"\n"
+                + "  },\n"
+                + "  \"actions\": [\n"
+                + "      {"
+                + "      \"action_type\": \"predict\",\n"
+                + "      \"method\": \"POST\",\n"
+                + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+                + "       \"headers\": {\n"
+                + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
+                + "       },\n"
+                + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+                + "      }\n"
+                + "  ]\n"
+                + "}";
+            case "disabled" -> "{\n"
+                + "\"name\": \"OpenAI Connector\",\n"
+                + "\"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
+                + "\"version\": 1,\n"
+                + "\"client_config\": {\n"
+                + "    \"max_connection\": 20,\n"
+                + "    \"connection_timeout\": 50000,\n"
+                + "    \"read_timeout\": 50000\n"
+                + "  },\n"
+                + "\"protocol\": \"http\",\n"
+                + "\"parameters\": {\n"
+                + "    \"endpoint\": \"api.openai.com\",\n"
+                + "    \"auth\": \"API_Key\",\n"
+                + "    \"content_type\": \"application/json\",\n"
+                + "    \"max_tokens\": 7,\n"
+                + "    \"temperature\": 0,\n"
+                + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+                + "    \"recursive_parameter_enabled\": \"false\"\n"
+                + "  },\n"
+                + "  \"credential\": {\n"
+                + "    \"openAI_key\": \""
+                + this.OPENAI_KEY
+                + "\"\n"
+                + "  },\n"
+                + "  \"actions\": [\n"
+                + "      {"
+                + "      \"action_type\": \"predict\",\n"
+                + "      \"method\": \"POST\",\n"
+                + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+                + "       \"headers\": {\n"
+                + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
+                + "       },\n"
+                + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+                + "      }\n"
+                + "  ]\n"
+                + "}";
+            default -> throw new IllegalArgumentException("Invalid test case");
+        };
     }
 
     public static Response registerRemoteModelWithInterface(String name, String connectorId, String testCase) throws IOException {
