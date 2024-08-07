@@ -383,7 +383,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete, current model state is: DEPLOYING",
             argumentCaptor.getValue().getMessage()
         );
     }
