@@ -862,9 +862,16 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
         String entityString = TestHelper.httpEntityToString(entity);
-        if (response.getStatusLine().getStatusCode() != 200) {
-            log.warn(String.format("response status is not success, raw response is: %s", entityString));
-        }
+        log
+            .info(
+                String
+                    .format(
+                        "request uri is: %s, response status is: %s, raw response is: %s",
+                        response.getRequestLine().getUri(),
+                        response.getStatusLine().getStatusCode(),
+                        entityString
+                    )
+            );
         return StringUtils.gson.fromJson(entityString, Map.class);
     }
 
