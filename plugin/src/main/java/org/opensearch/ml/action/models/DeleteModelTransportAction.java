@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -133,7 +134,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
-                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                String.format(Locale.ROOT, "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete, current model state is: %s", mlModelState.name()),
                                                 RestStatus.BAD_REQUEST
                                             )
                                         );
@@ -156,7 +157,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                         wrappedListener
                                             .onFailure(
                                                 new OpenSearchStatusException(
-                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                    String.format(Locale.ROOT, "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete, current model state is: %s", mlModelState.name())
                                                     RestStatus.BAD_REQUEST
                                                 )
                                             );
