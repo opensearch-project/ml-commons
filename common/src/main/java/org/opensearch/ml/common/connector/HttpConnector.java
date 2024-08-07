@@ -322,6 +322,7 @@ public class HttpConnector extends AbstractConnector {
         if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
             String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
+            parameters = formatArrayParameters(parameters);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
@@ -332,6 +333,29 @@ public class HttpConnector extends AbstractConnector {
         }
         return (T) parameters.get("http_body");
     }
+
+    private Map<String,String> formatArrayParameters(Map<String, String> parameters) {
+        Map<String,String> newParameters =  new HashMap<>();
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            String escapedValue = escapeJsonArrayIfNeeded(value);
+            newParameters.put(key,escapedValue);
+        }
+        return newParameters;
+    }
+    protected String escapeJsonArrayIfNeeded(String value) {
+        if (isJsonArray(value)) {
+            return value.replaceAll("([^\\\\])\"", "$1\\\\\"");
+        }
+        return value;
+    }
+
+    protected boolean isJsonArray(String value) {
+        Pattern jsonArrayPattern = Pattern.compile("^\\[.*\\]$");
+        return jsonArrayPattern.matcher(value).matches();
+    }
+
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
         List<String> bodyParams = findStringParametersWithNullDefaultValue(payload);

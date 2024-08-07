@@ -184,6 +184,33 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayloadWithString() {
+        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+
+        parameters.put("prompt", "answer question based on context: ${parameters.context}");
+        parameters.put("context", "document1");
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+        Assert.assertEquals("{\"prompt\": \"answer question based on context: document1\"}", predictPayload);
+    }
+
+    @Test
+    public void createPayloadWithList() {
+        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("prompt", "answer question based on context: ${parameters.context}");
+        ArrayList<String> listOfDocuments= new ArrayList<>();
+        listOfDocuments.add("document1");
+        listOfDocuments.add("document2");
+        parameters.put("context", toJson(listOfDocuments));
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+    }
+
+    @Test
     public void createPayload() {
         HttpConnector connector = createHttpConnector();
         Map<String, String> parameters = new HashMap<>();
