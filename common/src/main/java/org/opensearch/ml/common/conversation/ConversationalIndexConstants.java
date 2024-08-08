@@ -24,7 +24,7 @@ import org.opensearch.common.settings.Setting;
  */
 public class ConversationalIndexConstants {
     /** Version of the meta index schema */
-    public final static Integer META_INDEX_SCHEMA_VERSION = 1;
+    public final static Integer META_INDEX_SCHEMA_VERSION = 2;
     /** Name of the conversational metadata index */
     public final static String META_INDEX_NAME = ".plugins-ml-memory-meta";
     /** Name of the metadata field for initial timestamp */
@@ -37,6 +37,9 @@ public class ConversationalIndexConstants {
     public final static String USER_FIELD = "user";
     /** Name of the application that created this conversation */
     public final static String APPLICATION_TYPE_FIELD = "application_type";
+    /** Name of the additional information for this memory  */
+    public final static String META_ADDITIONAL_INFO_FIELD = "additional_info";
+
     /** Mappings for the conversational metadata index */
     public final static String META_MAPPING = "{\n"
         + "    \"_meta\": {\n"
@@ -57,7 +60,10 @@ public class ConversationalIndexConstants {
         + "\": {\"type\": \"keyword\"},\n"
         + "        \""
         + APPLICATION_TYPE_FIELD
-        + "\": {\"type\": \"keyword\"}\n"
+        + "\": {\"type\": \"keyword\"},\n"
+        + "        \""
+        + META_ADDITIONAL_INFO_FIELD
+        + "\": {\"type\": \"flat_object\"}\n"
         + "    }\n"
         + "}";
 

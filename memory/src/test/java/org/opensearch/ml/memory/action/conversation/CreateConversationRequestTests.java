@@ -18,14 +18,15 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.APPLICATION_TYPE_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD;
 
 import java.io.IOException;
 import java.util.Map;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -107,11 +108,28 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
     }
 
     public void testRestRequest_NullName() throws IOException {
-        exceptionRule.expect(OpenSearchParseException.class);
-        exceptionRule.expectMessage("Can't get text on a VALUE_NULL");
         RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withContent(new BytesArray("{\"name\":null}"), MediaTypeRegistry.JSON)
             .build();
-        CreateConversationRequest.fromRestRequest(req);
+        CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
+        Assert.assertNull(request.getName());
+    }
+
+    public void testRestRequest_WithAdditionalInfo() throws IOException {
+        String name = "test-name";
+        Map<String, Object> additionalInfo = Map.of("key1", "value1", "key2", 123);
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(
+                new BytesArray(
+                    gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name, META_ADDITIONAL_INFO_FIELD, additionalInfo))
+                ),
+                MediaTypeRegistry.JSON
+            )
+            .build();
+        CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
+        assert (request.getName().equals(name));
+        Assert.assertNull(request.getApplicationType());
+        Assert.assertEquals("value1", request.getAdditionalInfos().get("key1"));
+        Assert.assertEquals(123, request.getAdditionalInfos().get("key2"));
     }
 }
