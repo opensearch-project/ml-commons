@@ -190,6 +190,15 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_Skip_Parameter_Validation() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Some parameter placeholder not filled in payload: input");
+        HttpConnector connector = createHttpConnector();
+        String predictPayload = connector.createPayload(PREDICT.name(), Map.of("skip_validating_missing_parameters", "true"));
+        connector.validatePayload(predictPayload);
+    }
+
+    @Test
     public void parseResponse_modelTensorJson() throws IOException {
         HttpConnector connector = createHttpConnector();
 
