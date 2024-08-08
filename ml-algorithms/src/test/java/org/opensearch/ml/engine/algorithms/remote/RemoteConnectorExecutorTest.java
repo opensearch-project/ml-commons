@@ -119,7 +119,11 @@ public class RemoteConnectorExecutorTest {
         String actionType = inputDataSet.getActionType().toString();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
 
-        Exception exception = Assert.assertThrows(IllegalArgumentException.class, () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener));
+        Exception exception = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
+            );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
 
@@ -158,7 +162,11 @@ public class RemoteConnectorExecutorTest {
         String actionType = inputDataSet.getActionType().toString();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
 
-        Exception exception = Assert.assertThrows(IllegalArgumentException.class, () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener));
+        Exception exception = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
+            );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
 }
