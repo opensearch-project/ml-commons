@@ -5,8 +5,14 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -15,22 +21,17 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
 
-    public static final String NAME_FIELD = "name"; //mandatory
-    public static final String DESCRIPTION_FIELD = "description"; //optional
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
-    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
+    public static final String NAME_FIELD = "name"; // mandatory
+    public static final String DESCRIPTION_FIELD = "description"; // optional
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // optional
+    public static final String MODEL_ACCESS_MODE = "access_mode"; // optional
+    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; // optional
 
     private String name;
     private String description;
@@ -39,7 +40,13 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelGroupInput(String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+    public MLRegisterModelGroupInput(
+        String name,
+        String description,
+        List<String> backendRoles,
+        AccessMode modelAccessMode,
+        Boolean isAddAllBackendRoles
+    ) {
         this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
         this.backendRoles = backendRoles;
@@ -47,7 +54,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
         this.isAddAllBackendRoles = isAddAllBackendRoles;
     }
 
-    public MLRegisterModelGroupInput(StreamInput in) throws IOException{
+    public MLRegisterModelGroupInput(StreamInput in) throws IOException {
         this.name = in.readString();
         this.description = in.readOptionalString();
         this.backendRoles = in.readOptionalStringList();

@@ -5,10 +5,11 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.time.Instant;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -16,10 +17,10 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.time.Instant;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
@@ -38,7 +39,6 @@ public class MLConfig implements ToXContentObject, Writeable {
 
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
 
-
     @Setter
     private String type;
 
@@ -47,12 +47,7 @@ public class MLConfig implements ToXContentObject, Writeable {
     private Instant lastUpdateTime;
 
     @Builder(toBuilder = true)
-    public MLConfig(
-            String type,
-            Configuration configuration,
-            Instant createTime,
-            Instant lastUpdateTime
-    ) {
+    public MLConfig(String type, Configuration configuration, Instant createTime, Instant lastUpdateTime) {
         this.type = type;
         this.configuration = configuration;
         this.createTime = createTime;
@@ -145,11 +140,12 @@ public class MLConfig implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return MLConfig.builder()
-                .type(configType == null ? type : configType)
-                .configuration(mlConfiguration == null ? configuration : mlConfiguration)
-                .createTime(createTime)
-                .lastUpdateTime(lastUpdatedTime == null ? lastUpdateTime : lastUpdatedTime)
-                .build();
+        return MLConfig
+            .builder()
+            .type(configType == null ? type : configType)
+            .configuration(mlConfiguration == null ? configuration : mlConfiguration)
+            .createTime(createTime)
+            .lastUpdateTime(lastUpdatedTime == null ? lastUpdateTime : lastUpdatedTime)
+            .build();
     }
 }

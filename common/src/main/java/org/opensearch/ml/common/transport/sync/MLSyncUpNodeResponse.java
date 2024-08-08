@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.common.transport.sync;
 
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
+
 import org.opensearch.Version;
 import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -14,11 +14,12 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.model.MLDeploySetting;
 
-import java.io.IOException;
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Getter
-public class MLSyncUpNodeResponse extends BaseNodeResponse  {
+public class MLSyncUpNodeResponse extends BaseNodeResponse {
 
     private String modelStatus;
     private String[] deployedModelIds;
@@ -26,8 +27,14 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
     private String[] runningDeployModelTaskIds; // deploy model task ids which is running
     private String[] expiredModelIds;
 
-    public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] deployedModelIds, String[] runningDeployModelIds,
-                                String[] runningDeployModelTaskIds, String[] expiredModelIds) {
+    public MLSyncUpNodeResponse(
+        DiscoveryNode node,
+        String modelStatus,
+        String[] deployedModelIds,
+        String[] runningDeployModelIds,
+        String[] runningDeployModelTaskIds,
+        String[] expiredModelIds
+    ) {
         super(node);
         this.modelStatus = modelStatus;
         this.deployedModelIds = deployedModelIds;

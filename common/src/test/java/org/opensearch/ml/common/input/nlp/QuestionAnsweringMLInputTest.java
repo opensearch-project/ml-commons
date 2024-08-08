@@ -4,6 +4,9 @@
  */
 package org.opensearch.ml.common.input.nlp;
 
+import java.io.IOException;
+import java.util.Collections;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -25,14 +28,8 @@ import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-
-import static org.junit.Assert.assertThrows;
-
 public class QuestionAnsweringMLInputTest {
-    
+
     MLInput input;
 
     private final FunctionName algorithm = FunctionName.QUESTION_ANSWERING;
@@ -50,9 +47,13 @@ public class QuestionAnsweringMLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());
@@ -69,15 +70,23 @@ public class QuestionAnsweringMLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assert (jsonStr.equals("{\"algorithm\":\"QUESTION_ANSWERING\",\"question\":\"What color is apple\",\"context\":\"I like Apples. They are red\"}"));
+        assert (jsonStr
+            .equals(
+                "{\"algorithm\":\"QUESTION_ANSWERING\",\"question\":\"What color is apple\",\"context\":\"I like Apples. They are red\"}"
+            ));
     }
 
     @Test
     public void testParseJson() throws IOException {
-        String json = "{\"algorithm\":\"QUESTION_ANSWERING\",\"question\":\"What color is apple\",\"context\":\"I like Apples. They are red\"}";
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, json);
+        String json =
+            "{\"algorithm\":\"QUESTION_ANSWERING\",\"question\":\"What color is apple\",\"context\":\"I like Apples. They are red\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());

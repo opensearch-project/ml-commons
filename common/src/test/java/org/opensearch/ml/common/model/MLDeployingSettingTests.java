@@ -5,7 +5,14 @@
 
 package org.opensearch.ml.common.model;
 
-import com.fasterxml.jackson.core.JsonParseException;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.function.Consumer;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -22,13 +29,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.util.Collections;
-import java.util.function.Consumer;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import com.fasterxml.jackson.core.JsonParseException;
 
 public class MLDeployingSettingTests {
 
@@ -43,9 +44,7 @@ public class MLDeployingSettingTests {
 
     @Before
     public void setUp() throws Exception {
-        deploySetting = MLDeploySetting.builder()
-                .isAutoDeployEnabled(true)
-                .build();
+        deploySetting = MLDeploySetting.builder().isAutoDeployEnabled(true).build();
 
         deploySettingNull = MLDeploySetting.builder().build();
 
@@ -53,9 +52,7 @@ public class MLDeployingSettingTests {
 
     @Test
     public void readInputStreamSuccess() throws IOException {
-        readInputStream(deploySetting, parsedInput -> {
-            assertTrue(parsedInput.getIsAutoDeployEnabled());
-        });
+        readInputStream(deploySetting, parsedInput -> { assertTrue(parsedInput.getIsAutoDeployEnabled()); });
     }
 
     @Test
@@ -74,9 +71,7 @@ public class MLDeployingSettingTests {
 
     @Test
     public void parseSuccess() throws Exception {
-        testParseFromJsonString(expectedInputStr, parsedInput -> {
-            assertTrue(parsedInput.getIsAutoDeployEnabled());
-        });
+        testParseFromJsonString(expectedInputStr, parsedInput -> { assertTrue(parsedInput.getIsAutoDeployEnabled()); });
     }
 
     @Test
@@ -109,8 +104,9 @@ public class MLDeployingSettingTests {
 
     @Test
     public void parseWithIllegalField() throws Exception {
-        final String expectedInputStrWithIllegalField = "{\"is_auto_deploy_enabled\":true," + "\"model_ttl_hours\":0," +
-                "\"illegal_field\":\"This field need to be skipped.\"}";
+        final String expectedInputStrWithIllegalField = "{\"is_auto_deploy_enabled\":true,"
+            + "\"model_ttl_hours\":0,"
+            + "\"illegal_field\":\"This field need to be skipped.\"}";
 
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
@@ -122,10 +118,13 @@ public class MLDeployingSettingTests {
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLDeploySetting> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE,
-                        expectedInputStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                expectedInputStr
+            );
         parser.nextToken();
         MLDeploySetting parsedInput = MLDeploySetting.parse(parser);
         verify.accept(parsedInput);

@@ -5,9 +5,14 @@
 
 package org.opensearch.ml.common.transport.model;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.Map;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -17,22 +22,17 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
-import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+import lombok.Builder;
+import lombok.Data;
+import lombok.Getter;
 
 @Data
 public class MLUpdateModelInput implements ToXContentObject, Writeable {
@@ -74,10 +74,23 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private Map<String, String> modelInterface;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelInput(String modelId, String description, String version, String name, String modelGroupId,
-            Boolean isEnabled, MLRateLimiter rateLimiter, MLModelConfig modelConfig, MLDeploySetting deploySetting,
-            Connector updatedConnector, String connectorId, MLCreateConnectorInput connector, Instant lastUpdateTime,
-            Guardrails guardrails, Map<String, String> modelInterface) {
+    public MLUpdateModelInput(
+        String modelId,
+        String description,
+        String version,
+        String name,
+        String modelGroupId,
+        Boolean isEnabled,
+        MLRateLimiter rateLimiter,
+        MLModelConfig modelConfig,
+        MLDeploySetting deploySetting,
+        Connector updatedConnector,
+        String connectorId,
+        MLCreateConnectorInput connector,
+        Instant lastUpdateTime,
+        Guardrails guardrails,
+        Map<String, String> modelInterface
+    ) {
         this.modelId = modelId;
         this.description = description;
         this.version = version;
@@ -160,7 +173,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (deploySetting != null) {
             builder.field(DEPLOY_SETTING_FIELD, deploySetting);
         }
-        // Notice that we serialize the updatedConnector to the connector field, in order to be compatible with original internal connector field format.
+        // Notice that we serialize the updatedConnector to the connector field, in order to be compatible with original internal connector
+        // field format.
         if (updatedConnector != null) {
             builder.field(CONNECTOR_FIELD, updatedConnector);
         }
@@ -301,8 +315,22 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         // Model ID can only be set through RestRequest. Model version can only be set
         // automatically.
-        return new MLUpdateModelInput(modelId, description, version, name, modelGroupId, isEnabled, rateLimiter,
-                modelConfig, deploySetting, updatedConnector, connectorId, connector, lastUpdateTime, guardrails,
-                modelInterface);
+        return new MLUpdateModelInput(
+            modelId,
+            description,
+            version,
+            name,
+            modelGroupId,
+            isEnabled,
+            rateLimiter,
+            modelConfig,
+            deploySetting,
+            updatedConnector,
+            connectorId,
+            connector,
+            lastUpdateTime,
+            guardrails,
+            modelInterface
+        );
     }
 }

@@ -11,5 +11,7 @@ public class MLModelGroupGetAction extends ActionType<MLModelGroupGetResponse> {
     public static final MLModelGroupGetAction INSTANCE = new MLModelGroupGetAction();
     public static final String NAME = "cluster:admin/opensearch/ml/model_groups/get";
 
-    private MLModelGroupGetAction() { super(NAME, MLModelGroupGetResponse::new);}
+    private MLModelGroupGetAction() {
+        super(NAME, MLModelGroupGetResponse::new);
+    }
 }

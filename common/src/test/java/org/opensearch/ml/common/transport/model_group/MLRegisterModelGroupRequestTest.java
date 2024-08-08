@@ -1,5 +1,14 @@
 package org.opensearch.ml.common.transport.model_group;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -8,15 +17,6 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.AccessMode;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-
 public class MLRegisterModelGroupRequestTest {
 
     private MLRegisterModelGroupInput mlRegisterModelGroupInput;
@@ -24,19 +24,18 @@ public class MLRegisterModelGroupRequestTest {
     private MLRegisterModelGroupRequest request;
 
     @Before
-    public void setUp(){
+    public void setUp() {
 
-        mlRegisterModelGroupInput = MLRegisterModelGroupInput.builder()
-                .name("name")
-                .description("description")
-                .backendRoles(List.of("IT"))
-                .modelAccessMode(AccessMode.RESTRICTED)
-                .isAddAllBackendRoles(true)
-                .build();
+        mlRegisterModelGroupInput = MLRegisterModelGroupInput
+            .builder()
+            .name("name")
+            .description("description")
+            .backendRoles(List.of("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
 
-        request = MLRegisterModelGroupRequest.builder()
-                .registerModelGroupInput(mlRegisterModelGroupInput)
-                .build();
+        request = MLRegisterModelGroupRequest.builder().registerModelGroupInput(mlRegisterModelGroupInput).build();
     }
 
     @Test
@@ -46,9 +45,18 @@ public class MLRegisterModelGroupRequestTest {
         MLRegisterModelGroupRequest parsedRequest = new MLRegisterModelGroupRequest(bytesStreamOutput.bytes().streamInput());
         assertEquals(request.getRegisterModelGroupInput().getName(), parsedRequest.getRegisterModelGroupInput().getName());
         assertEquals(request.getRegisterModelGroupInput().getDescription(), parsedRequest.getRegisterModelGroupInput().getDescription());
-        assertEquals(request.getRegisterModelGroupInput().getBackendRoles().get(0), parsedRequest.getRegisterModelGroupInput().getBackendRoles().get(0));
-        assertEquals(request.getRegisterModelGroupInput().getModelAccessMode(), parsedRequest.getRegisterModelGroupInput().getModelAccessMode());
-        assertEquals(request.getRegisterModelGroupInput().getIsAddAllBackendRoles() ,parsedRequest.getRegisterModelGroupInput().getIsAddAllBackendRoles());
+        assertEquals(
+            request.getRegisterModelGroupInput().getBackendRoles().get(0),
+            parsedRequest.getRegisterModelGroupInput().getBackendRoles().get(0)
+        );
+        assertEquals(
+            request.getRegisterModelGroupInput().getModelAccessMode(),
+            parsedRequest.getRegisterModelGroupInput().getModelAccessMode()
+        );
+        assertEquals(
+            request.getRegisterModelGroupInput().getIsAddAllBackendRoles(),
+            parsedRequest.getRegisterModelGroupInput().getIsAddAllBackendRoles()
+        );
     }
 
     @Test
@@ -67,9 +75,10 @@ public class MLRegisterModelGroupRequestTest {
     // MLRegisterModelGroupInput check its parameters when created, so exception is not thrown here
     public void validateNullMLModelNameException() {
         mlRegisterModelGroupInput.setName(null);
-        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
-                .registerModelGroupInput(mlRegisterModelGroupInput)
-                .build();
+        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest
+            .builder()
+            .registerModelGroupInput(mlRegisterModelGroupInput)
+            .build();
 
         assertNull(request.validate());
         assertNull(request.getRegisterModelGroupInput().getName());

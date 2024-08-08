@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.common.dataframe;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import static org.junit.Assert.assertEquals;
 
 import java.math.BigDecimal;
 
-import static org.junit.Assert.assertEquals;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 public class ColumnValueBuilderTest {
 
@@ -45,12 +45,12 @@ public class ColumnValueBuilderTest {
         assertEquals(2.1f, value.floatValue(), 1e-5);
         assertEquals(2.1d, value.doubleValue(), 1e-5);
 
-        value = ColumnValueBuilder.build((short)2);
+        value = ColumnValueBuilder.build((short) 2);
         assertEquals(ColumnType.SHORT, value.columnType());
         assertEquals(2, value.shortValue());
         assertEquals(2.0d, value.doubleValue(), 1e-5);
 
-        value = ColumnValueBuilder.build((long)2);
+        value = ColumnValueBuilder.build((long) 2);
         assertEquals(ColumnType.LONG, value.columnType());
         assertEquals(2, value.longValue());
         assertEquals(2.0d, value.doubleValue(), 1e-5);

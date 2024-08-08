@@ -1,17 +1,17 @@
 package org.opensearch.ml.common.transport.task;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
 
 public class MLTaskGetRequestTest {
     private String taskId;
@@ -23,8 +23,7 @@ public class MLTaskGetRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder()
-                .taskId(taskId).build();
+        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlTaskGetRequest.writeTo(bytesStreamOutput);
         MLTaskGetRequest parsedModel = new MLTaskGetRequest(bytesStreamOutput.bytes().streamInput());
@@ -41,8 +40,7 @@ public class MLTaskGetRequestTest {
 
     @Test
     public void fromActionRequest_Success() {
-        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder()
-                .taskId(taskId).build();
+        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

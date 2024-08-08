@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.common.transport.agent;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -16,11 +21,6 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.*;
 
 public class MLRegisterAgentResponseTest {
     String agentId;

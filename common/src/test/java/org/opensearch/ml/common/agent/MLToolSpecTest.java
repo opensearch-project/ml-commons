@@ -1,5 +1,11 @@
 package org.opensearch.ml.common.agent;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -11,12 +17,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-
-import static org.junit.Assert.*;
 
 public class MLToolSpecTest {
 
@@ -41,14 +41,24 @@ public class MLToolSpecTest {
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
-        Assert.assertEquals("{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}", content);
+        Assert
+            .assertEquals(
+                "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}",
+                content
+            );
     }
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        String jsonStr =
+            "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         MLToolSpec spec = MLToolSpec.parse(parser);
 

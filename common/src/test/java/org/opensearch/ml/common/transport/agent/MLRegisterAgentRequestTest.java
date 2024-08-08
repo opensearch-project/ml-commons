@@ -5,6 +5,12 @@
 
 package org.opensearch.ml.common.transport.agent;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -16,12 +22,6 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Arrays;
-
-import static org.junit.Assert.*;
-
 public class MLRegisterAgentRequestTest {
 
     MLAgent mlAgent;
@@ -30,12 +30,13 @@ public class MLRegisterAgentRequestTest {
 
     @Before
     public void setUp() {
-        mlAgent = MLAgent.builder()
-                .name("test_agent")
-                .appType("test_app")
-                .type("flow")
-                .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
-                .build();
+        mlAgent = MLAgent
+            .builder()
+            .name("test_agent")
+            .appType("test_app")
+            .type("flow")
+            .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
+            .build();
     }
 
     @Test

@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.common.output.execute.metricscorrelation;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.function.Consumer;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -13,14 +21,6 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTen
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Consumer;
-
-import static org.junit.Assert.*;
-
 public class MetricsCorrelationOutputTest {
 
     MetricsCorrelationOutput output;
@@ -28,11 +28,12 @@ public class MetricsCorrelationOutputTest {
     @Before
     public void setUp() {
         List<MCorrModelTensors> outputs = new ArrayList<>();
-        MCorrModelTensor mCorrModelTensor = MCorrModelTensor.builder()
-                .event_pattern(new float[]{1.0f, 2.0f, 3.0f})
-                .event_window(new float[]{4.0f, 5.0f, 6.0f})
-                .suspected_metrics(new long[]{1, 2})
-                .build();
+        MCorrModelTensor mCorrModelTensor = MCorrModelTensor
+            .builder()
+            .event_pattern(new float[] { 1.0f, 2.0f, 3.0f })
+            .event_window(new float[] { 4.0f, 5.0f, 6.0f })
+            .suspected_metrics(new long[] { 1, 2 })
+            .build();
         List<MCorrModelTensor> mlModelTensors = Arrays.asList(mCorrModelTensor);
         MCorrModelTensors modelTensors = MCorrModelTensors.builder().mCorrModelTensors(mlModelTensors).build();
         outputs.add(modelTensors);
@@ -48,8 +49,8 @@ public class MetricsCorrelationOutputTest {
             MCorrModelTensor modelTensor = modelTensors.getMCorrModelTensors().get(0);
             float[] events = modelTensor.getEvent_pattern();
             long[] metrics = modelTensor.getSuspected_metrics();
-            assertArrayEquals(new float[]{1.0f, 2.0f, 3.0f}, events, 0.001f);
-            assertArrayEquals(new long[]{1, 2}, metrics);
+            assertArrayEquals(new float[] { 1.0f, 2.0f, 3.0f }, events, 0.001f);
+            assertArrayEquals(new long[] { 1, 2 }, metrics);
 
         });
     }
@@ -57,9 +58,7 @@ public class MetricsCorrelationOutputTest {
     @Test
     public void readInputStream_NullField() throws IOException {
         MetricsCorrelationOutput modelTensorOutput = MetricsCorrelationOutput.builder().build();
-        readInputStream(modelTensorOutput, parsedTensorOutput -> {
-            assertNull(parsedTensorOutput.getModelOutput());
-        });
+        readInputStream(modelTensorOutput, parsedTensorOutput -> { assertNull(parsedTensorOutput.getModelOutput()); });
     }
 
     private void readInputStream(MetricsCorrelationOutput input, Consumer<MetricsCorrelationOutput> verify) throws IOException {
@@ -67,8 +66,8 @@ public class MetricsCorrelationOutputTest {
         input.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-//        MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
-//        assertEquals(MLOutputType.MCORR_TENSOR, outputType);
+        // MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
+        // assertEquals(MLOutputType.MCORR_TENSOR, outputType);
         verify.accept(new MetricsCorrelationOutput(streamInput));
     }
 }

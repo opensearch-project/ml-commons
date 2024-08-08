@@ -4,8 +4,10 @@
  */
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -14,10 +16,8 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
+import lombok.Builder;
+import lombok.Getter;
 
 public class ToolMetadata implements ToXContentObject, Writeable {
 
@@ -25,7 +25,6 @@ public class ToolMetadata implements ToXContentObject, Writeable {
     public static final String TOOL_DESCRIPTION_FIELD = "description";
     public static final String TOOL_TYPE_FIELD = "type";
     public static final String TOOL_VERSION_FIELD = "version";
-
 
     @Getter
     private String name;
@@ -103,12 +102,7 @@ public class ToolMetadata implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return ToolMetadata.builder()
-                .name(name)
-                .description(description)
-                .type(type)
-                .version(version)
-                .build();
+        return ToolMetadata.builder().name(name).description(description).type(type).version(version).build();
     }
 
     public static ToolMetadata fromStream(StreamInput in) throws IOException {

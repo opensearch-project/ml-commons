@@ -9,7 +9,7 @@ package org.opensearch.ml.common.exception;
  * This exception is thrown when a some limit is exceeded.
  * Won't count this exception in stats.
  */
-public class MLLimitExceededException extends MLException{
+public class MLLimitExceededException extends MLException {
 
     /**
      * Constructor with error message.

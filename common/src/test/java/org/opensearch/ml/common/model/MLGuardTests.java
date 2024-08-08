@@ -5,6 +5,12 @@
 
 package org.opensearch.ml.common.model;
 
+import static org.mockito.Mockito.when;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Pattern;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -16,12 +22,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.search.SearchModule;
 import org.opensearch.threadpool.ThreadPool;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.regex.Pattern;
-
-import static org.mockito.Mockito.when;
 
 public class MLGuardTests {
 

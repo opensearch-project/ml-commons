@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.common.connector;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
 import org.opensearch.ml.common.connector.functions.preprocess.BedrockEmbeddingPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.CohereEmbeddingPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.CohereRerankPreProcessFunction;
@@ -12,10 +16,6 @@ import org.opensearch.ml.common.connector.functions.preprocess.MultiModalConnect
 import org.opensearch.ml.common.connector.functions.preprocess.OpenAIEmbeddingPreProcessFunction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
 
 public class MLPreProcessFunction {
 

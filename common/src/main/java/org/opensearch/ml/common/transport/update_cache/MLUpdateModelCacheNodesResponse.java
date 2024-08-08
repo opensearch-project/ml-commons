@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.common.transport.update_cache;
 
+import java.io.IOException;
+import java.util.List;
+
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.nodes.BaseNodesResponse;
 import org.opensearch.cluster.ClusterName;
@@ -15,16 +18,17 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
-import java.util.List;
-
 public class MLUpdateModelCacheNodesResponse extends BaseNodesResponse<MLUpdateModelCacheNodeResponse> implements ToXContentObject {
 
     public MLUpdateModelCacheNodesResponse(StreamInput in) throws IOException {
         super(new ClusterName(in), in.readList(MLUpdateModelCacheNodeResponse::readStats), in.readList(FailedNodeException::new));
     }
 
-    public MLUpdateModelCacheNodesResponse(ClusterName clusterName, List<MLUpdateModelCacheNodeResponse> nodes, List<FailedNodeException> failures) {
+    public MLUpdateModelCacheNodesResponse(
+        ClusterName clusterName,
+        List<MLUpdateModelCacheNodeResponse> nodes,
+        List<FailedNodeException> failures
+    ) {
         super(clusterName, nodes, failures);
     }
 

@@ -5,12 +5,17 @@
 
 package org.opensearch.ml.common.transport.model;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.action.ActionResponse;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -19,25 +24,21 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.*;
-
 public class MLModelGetResponseTest {
 
     MLModel mlModel;
 
     @Before
     public void setUp() {
-        mlModel = MLModel.builder()
-                .name("model")
-                .algorithm(FunctionName.KMEANS)
-                .version("1.0.0")
-                .content("content")
-                .user(new User())
-                .modelState(MLModelState.TRAINED)
-                .build();
+        mlModel = MLModel
+            .builder()
+            .name("model")
+            .algorithm(FunctionName.KMEANS)
+            .version("1.0.0")
+            .content("content")
+            .user(new User())
+            .modelState(MLModelState.TRAINED)
+            .build();
     }
 
     @Test
@@ -61,12 +62,14 @@ public class MLModelGetResponseTest {
         mlModelGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"name\":\"model\"," +
-                "\"algorithm\":\"KMEANS\"," +
-                "\"model_version\":\"1.0.0\"," +
-                "\"model_content\":\"content\"," +
-                "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},\"model_state\":\"TRAINED\"}",
-                jsonStr);
+        assertEquals(
+            "{\"name\":\"model\","
+                + "\"algorithm\":\"KMEANS\","
+                + "\"model_version\":\"1.0.0\","
+                + "\"model_content\":\"content\","
+                + "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},\"model_state\":\"TRAINED\"}",
+            jsonStr
+        );
     }
 
     @Test

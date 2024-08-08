@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -16,27 +25,19 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModelGroup;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-
 public class MLModelGroupGetResponseTest {
 
     MLModelGroup mlModelGroup;
 
     @Before
     public void setUp() {
-        mlModelGroup = MLModelGroup.builder()
-                .name("modelGroup1")
-                .latestVersion(1)
-                .description("This is an example model group")
-                .access("public")
-                .build();
+        mlModelGroup = MLModelGroup
+            .builder()
+            .name("modelGroup1")
+            .latestVersion(1)
+            .description("This is an example model group")
+            .access("public")
+            .build();
     }
 
     @Test
@@ -58,17 +59,20 @@ public class MLModelGroupGetResponseTest {
         mlModelGroupGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"name\":\"modelGroup1\"," +
-                "\"latest_version\":1," +
-                "\"description\":\"This is an example model group\"," +
-                "\"access\":\"public\"}",
-                jsonStr);
+        assertEquals(
+            "{\"name\":\"modelGroup1\","
+                + "\"latest_version\":1,"
+                + "\"description\":\"This is an example model group\","
+                + "\"access\":\"public\"}",
+            jsonStr
+        );
     }
 
     @Test
     public void fromActionResponseWithMLModelGroupGetResponseSuccess() {
         MLModelGroupGetResponse mlModelGroupGetResponse = MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build();
-        MLModelGroupGetResponse mlModelGroupGetResponseFromActionResponse = MLModelGroupGetResponse.fromActionResponse(mlModelGroupGetResponse);
+        MLModelGroupGetResponse mlModelGroupGetResponseFromActionResponse = MLModelGroupGetResponse
+            .fromActionResponse(mlModelGroupGetResponse);
         assertSame(mlModelGroupGetResponse, mlModelGroupGetResponseFromActionResponse);
         assertEquals(mlModelGroupGetResponse.mlModelGroup, mlModelGroupGetResponseFromActionResponse.mlModelGroup);
     }
