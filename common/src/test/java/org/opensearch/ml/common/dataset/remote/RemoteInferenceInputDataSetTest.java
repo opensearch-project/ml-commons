@@ -53,7 +53,11 @@ public class RemoteInferenceInputDataSetTest {
         parameters.put("key1", "test value1");
         parameters.put("key2", "test value2");
         ActionType actionType = ActionType.from("predict");
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).actionType(actionType).build();
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(parameters)
+            .actionType(actionType)
+            .build();
 
         BytesStreamOutput output = new BytesStreamOutput();
         inputDataSet.writeTo(output);

@@ -5,18 +5,6 @@
 
 package org.opensearch.ml.common.utils;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.mockito.Spy;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-
-import java.util.HashMap;
-import java.util.Map;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE;
@@ -29,6 +17,18 @@ import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.mockito.Spy;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class ModelInterfaceUtilsTest {
     @Spy
@@ -46,16 +46,16 @@ public class ModelInterfaceUtilsTest {
     @Before
     public void setUp() throws Exception {
         registerModelInputWithInnerConnector = MLRegisterModelInput
-                .builder()
-                .modelName("test-model-with-inner-connector")
-                .functionName(FunctionName.REMOTE)
-                .build();
+            .builder()
+            .modelName("test-model-with-inner-connector")
+            .functionName(FunctionName.REMOTE)
+            .build();
 
         registerModelInputWithStandaloneConnector = MLRegisterModelInput
-                .builder()
-                .modelName("test-model-with-stand-alone-connector")
-                .functionName(FunctionName.REMOTE)
-                .build();
+            .builder()
+            .modelName("test-model-with-stand-alone-connector")
+            .functionName(FunctionName.REMOTE)
+            .build();
     }
 
     @Test
@@ -143,7 +143,10 @@ public class ModelInterfaceUtilsTest {
         connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
-        assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE);
+        assertEquals(
+            registerModelInputWithStandaloneConnector.getModelInterface(),
+            AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE
+        );
     }
 
     @Test
@@ -195,7 +198,9 @@ public class ModelInterfaceUtilsTest {
     }
 
     @Test
-    public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorInnerConnectorBEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE() {
+    public
+        void
+        testUpdateRegisterModelInputModelInterfaceFieldsByConnectorInnerConnectorBEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "ai21.j2-mid-v1");

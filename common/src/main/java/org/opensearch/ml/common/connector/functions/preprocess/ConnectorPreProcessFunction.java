@@ -5,7 +5,13 @@
 
 package org.opensearch.ml.common.connector.functions.preprocess;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
+
+import java.util.Collections;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -14,13 +20,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.script.ScriptType;
 import org.opensearch.script.TemplateScript;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.function.Function;
-
-import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This abstract class represents a pre-processing function for a connector.
@@ -50,7 +50,7 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
             throw new IllegalArgumentException("Preprocess function input can't be null");
         }
         if (returnDirectlyForRemoteInferenceInput && mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
-            return (RemoteInferenceInputDataSet)mlInput.getInputDataset();
+            return (RemoteInferenceInputDataSet) mlInput.getInputDataset();
         } else {
             validate(mlInput);
             return process(mlInput);
@@ -70,8 +70,18 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
      */
     public void validateTextDocsInput(MLInput mlInput) {
         if (!(mlInput.getInputDataset() instanceof TextDocsInputDataSet)) {
-            log.error(String.format(Locale.ROOT, "This pre_process_function can only support TextDocsInputDataSet, actual input type is: %s", mlInput.getInputDataset().getClass().getName()));
-            throw new IllegalArgumentException("This pre_process_function can only support TextDocsInputDataSet which including a list of string with key 'text_docs'");
+            log
+                .error(
+                    String
+                        .format(
+                            Locale.ROOT,
+                            "This pre_process_function can only support TextDocsInputDataSet, actual input type is: %s",
+                            mlInput.getInputDataset().getClass().getName()
+                        )
+                );
+            throw new IllegalArgumentException(
+                "This pre_process_function can only support TextDocsInputDataSet which including a list of string with key 'text_docs'"
+            );
         }
     }
 
