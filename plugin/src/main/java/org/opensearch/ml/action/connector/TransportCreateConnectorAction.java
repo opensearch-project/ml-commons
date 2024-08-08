@@ -229,9 +229,11 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
 
     private void validateSecurityDisabledOrConnectorAccessControlDisabled(MLCreateConnectorInput input) {
         if (input.getAccess() != null || input.getAddAllBackendRoles() != null || !CollectionUtils.isEmpty(input.getBackendRoles())) {
-            throw new IllegalArgumentException(
-                "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled on your cluster."
-            );
+            // TODO: Get Security Plugin installed and working
+            // throw new IllegalArgumentException(
+            // "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled
+            // on your cluster."
+            // );
         }
     }
 
