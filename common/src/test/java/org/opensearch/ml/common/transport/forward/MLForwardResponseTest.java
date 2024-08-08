@@ -1,25 +1,25 @@
 package org.opensearch.ml.common.transport.forward;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
-import org.opensearch.core.action.ActionResponse;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.output.MLPredictionOutput;
+import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.HashMap;
 
-import static org.junit.Assert.*;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.action.ActionResponse;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.output.MLPredictionOutput;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLForwardResponseTest {
@@ -30,14 +30,12 @@ public class MLForwardResponseTest {
     @Before
     public void setUp() throws Exception {
         status = "test";
-        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-            put("key1", 2.0D);
-        }}));
-        predictionOutput = MLPredictionOutput.builder()
-                .status("Success")
-                .predictionResult(dataFrame)
-                .taskId("taskId")
-                .build();
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
+        predictionOutput = MLPredictionOutput.builder().status("Success").predictionResult(dataFrame).taskId("taskId").build();
     }
 
     @Test
@@ -63,7 +61,10 @@ public class MLForwardResponseTest {
         assertNotNull(builder);
         String jsonStr = builder.toString();
         // Verify the results
-        assertEquals("{\"result\":{\"task_id\":\"taskId\",\"status\":\"Success\",\"prediction_result\":{\"column_metas\":[{\"name\":\"key1\",\"column_type\":\"DOUBLE\"}],\"rows\":[{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":2.0}]}]}}}", jsonStr);
+        assertEquals(
+            "{\"result\":{\"task_id\":\"taskId\",\"status\":\"Success\",\"prediction_result\":{\"column_metas\":[{\"name\":\"key1\",\"column_type\":\"DOUBLE\"}],\"rows\":[{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":2.0}]}]}}}",
+            jsonStr
+        );
     }
 
     @Test

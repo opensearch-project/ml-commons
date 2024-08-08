@@ -5,16 +5,16 @@
 
 package org.opensearch.ml.common.connector.functions.postprocess;
 
+import static org.junit.Assert.assertEquals;
+
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.output.model.ModelTensor;
-
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
 
 public class BedrockEmbeddingPostProcessFunctionTest {
     @Rule

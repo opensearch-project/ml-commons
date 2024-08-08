@@ -5,11 +5,21 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NonNull;
-import lombok.extern.log4j.Log4j2;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.client.Client;
@@ -29,20 +39,11 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @EqualsAndHashCode
@@ -65,8 +66,13 @@ public class ModelGuardrail extends Guardrail {
         this.responseFilter = responseFilter;
         this.responseAccept = responseAccept;
     }
+
     public ModelGuardrail(@NonNull Map<String, Object> params) {
-        this((String) params.get(MODEL_ID_FIELD), (String) params.get(RESPONSE_FILTER_FIELD), (String) params.get(RESPONSE_VALIDATION_REGEX_FIELD));
+        this(
+            (String) params.get(MODEL_ID_FIELD),
+            (String) params.get(RESPONSE_FILTER_FIELD),
+            (String) params.get(RESPONSE_VALIDATION_REGEX_FIELD)
+        );
     }
 
     public ModelGuardrail(StreamInput input) throws IOException {
@@ -97,14 +103,14 @@ public class ModelGuardrail extends Guardrail {
         AtomicBoolean isAccepted = new AtomicBoolean(true);
         ActionListener<MLTaskResponse> internalListener = ActionListener.wrap(predictionResponse -> {
             ModelTensorOutput output = (ModelTensorOutput) predictionResponse.getOutput();
-            ModelTensor tensor =  output.getMlModelOutputs().get(0).getMlModelTensors().get(0);
+            ModelTensor tensor = output.getMlModelOutputs().get(0).getMlModelTensors().get(0);
             String guardrailResponse = AccessController
-                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(tensor.getDataAsMap().get("response")));
+                .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(tensor.getDataAsMap().get("response")));
             log.info("Guardrail response: {}", guardrailResponse);
             if (!validateAcceptRegex(guardrailResponse)) {
                 isAccepted.set(false);
             }
-        }, e -> {log.error("[ModelGuardrail] Failed to get prediction response.", e);});
+        }, e -> { log.error("[ModelGuardrail] Failed to get prediction response.", e); });
         ActionListener<MLTaskResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLTaskResponse predictionResponse = MLTaskResponse.fromActionResponse(res);
             return predictionResponse;
@@ -117,19 +123,14 @@ public class ModelGuardrail extends Guardrail {
         }
         log.info("Guardrail resFilter: {}", responseFilter);
         ActionRequest request = new MLPredictionTaskRequest(
-                modelId,
-                RemoteInferenceMLInput
-                        .builder()
-                        .algorithm(FunctionName.REMOTE)
-                        .inputDataset(RemoteInferenceInputDataSet.builder().parameters(guardrailModelParams).build())
-                        .build()
+            modelId,
+            RemoteInferenceMLInput
+                .builder()
+                .algorithm(FunctionName.REMOTE)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(guardrailModelParams).build())
+                .build()
         );
-        client
-                .execute(
-                        MLPredictionTaskAction.INSTANCE,
-                        request,
-                        new LatchedActionListener(actionListener, latch)
-                );
+        client.execute(MLPredictionTaskAction.INSTANCE, request, new LatchedActionListener(actionListener, latch));
         try {
             latch.await(5, SECONDS);
         } catch (InterruptedException e) {
@@ -187,16 +188,12 @@ public class ModelGuardrail extends Guardrail {
                     break;
             }
         }
-        return ModelGuardrail.builder()
-                .modelId(modelId)
-                .responseFilter(responseFilter)
-                .responseAccept(responseAccept)
-                .build();
+        return ModelGuardrail.builder().modelId(modelId).responseFilter(responseFilter).responseAccept(responseAccept).build();
     }
 
     private <T extends ActionResponse> ActionListener<T> wrapActionListener(
-            final ActionListener<T> listener,
-            final Function<ActionResponse, T> recreate
+        final ActionListener<T> listener,
+        final Function<ActionResponse, T> recreate
     ) {
         ActionListener<T> actionListener = ActionListener.wrap(r -> {
             listener.onResponse(recreate.apply(r));

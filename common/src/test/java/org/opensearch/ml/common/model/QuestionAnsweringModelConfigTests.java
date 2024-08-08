@@ -5,6 +5,12 @@
 
 package org.opensearch.ml.common.model;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -16,12 +22,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-
 public class QuestionAnsweringModelConfigTests {
 
     QuestionAnsweringModelConfig config;
@@ -31,12 +31,13 @@ public class QuestionAnsweringModelConfigTests {
 
     @Before
     public void setUp() {
-        config = QuestionAnsweringModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .normalizeResult(false)
-                .frameworkType(QuestionAnsweringModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .build();
+        config = QuestionAnsweringModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .normalizeResult(false)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
         function = parser -> {
             try {
                 return QuestionAnsweringModelConfig.parse(parser);
@@ -51,29 +52,30 @@ public class QuestionAnsweringModelConfigTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"model_type\":\"testModelType\",\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}", configContent);
+        assertEquals(
+            "{\"model_type\":\"testModelType\",\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}",
+            configContent
+        );
     }
 
     @Test
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = QuestionAnsweringModelConfig.builder()
-                .build();
+        config = QuestionAnsweringModelConfig.builder().build();
     }
 
     @Test
     public void nullFields_FrameworkType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("framework type is null");
-        config = QuestionAnsweringModelConfig.builder()
-                .modelType("testModelType")
-                .build();
+        config = QuestionAnsweringModelConfig.builder().modelType("testModelType").build();
     }
 
     @Test
     public void parse() throws IOException {
-        String content = "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"normalize_result\":false,\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
+        String content =
+            "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"normalize_result\":false,\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}";
         TestHelper.testParseFromString(config, content, function);
     }
 

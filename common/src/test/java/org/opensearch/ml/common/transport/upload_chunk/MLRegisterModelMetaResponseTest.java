@@ -20,31 +20,30 @@ import org.opensearch.ml.common.TestHelper;
 
 public class MLRegisterModelMetaResponseTest {
 
-	MLRegisterModelMetaResponse mlRegisterModelMetaResponse;
+    MLRegisterModelMetaResponse mlRegisterModelMetaResponse;
 
-	@Before
-	public void setup() {
-		mlRegisterModelMetaResponse = new MLRegisterModelMetaResponse("Model Id", "Status");
-	}
+    @Before
+    public void setup() {
+        mlRegisterModelMetaResponse = new MLRegisterModelMetaResponse("Model Id", "Status");
+    }
 
+    @Test
+    public void writeTo_Success() throws IOException {
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        mlRegisterModelMetaResponse.writeTo(bytesStreamOutput);
+        MLRegisterModelMetaResponse newResponse = new MLRegisterModelMetaResponse(bytesStreamOutput.bytes().streamInput());
+        assertEquals(mlRegisterModelMetaResponse.getModelId(), newResponse.getModelId());
+        assertEquals(mlRegisterModelMetaResponse.getStatus(), newResponse.getStatus());
+    }
 
-	@Test
-	public void writeTo_Success() throws IOException {
-		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-		mlRegisterModelMetaResponse.writeTo(bytesStreamOutput);
-		MLRegisterModelMetaResponse newResponse = new MLRegisterModelMetaResponse(bytesStreamOutput.bytes().streamInput());
-		assertEquals(mlRegisterModelMetaResponse.getModelId(), newResponse.getModelId());
-		assertEquals(mlRegisterModelMetaResponse.getStatus(), newResponse.getStatus());
-	}
-
-	@Test
-	public void testToXContent() throws IOException {
-		MLRegisterModelMetaResponse response = new MLRegisterModelMetaResponse("Model Id", "Status");
-		XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
-		response.toXContent(builder, EMPTY_PARAMS);
-		assertNotNull(builder);
-		String jsonStr = TestHelper.xContentBuilderToString(builder);
-		final String expected = "{\"model_id\":\"Model Id\",\"status\":\"Status\"}";
-		assertEquals(expected, jsonStr);
-	}
+    @Test
+    public void testToXContent() throws IOException {
+        MLRegisterModelMetaResponse response = new MLRegisterModelMetaResponse("Model Id", "Status");
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        response.toXContent(builder, EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = TestHelper.xContentBuilderToString(builder);
+        final String expected = "{\"model_id\":\"Model Id\",\"status\":\"Status\"}";
+        assertEquals(expected, jsonStr);
+    }
 }

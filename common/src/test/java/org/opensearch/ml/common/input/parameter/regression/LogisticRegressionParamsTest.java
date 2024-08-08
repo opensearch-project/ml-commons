@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.common.input.parameter.regression;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.common.TestHelper.contentObjectToString;
+import static org.opensearch.ml.common.TestHelper.testParseFromString;
+import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.PARSE_FIELD_NAME;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -13,14 +21,6 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.common.TestHelper.contentObjectToString;
-import static org.opensearch.ml.common.TestHelper.testParseFromString;
-import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.PARSE_FIELD_NAME;
 
 public class LogisticRegressionParamsTest {
 
@@ -40,21 +40,21 @@ public class LogisticRegressionParamsTest {
     @Before
     public void setUp() {
         logisticRegressionParams = LogisticRegressionParams
-                .builder()
-                .objectiveType(LogisticRegressionParams.ObjectiveType.LOGMULTICLASS)
-                .optimizerType(LogisticRegressionParams.OptimizerType.ADA_GRAD)
-                .learningRate(0.1)
-                .momentumType(LogisticRegressionParams.MomentumType.STANDARD)
-                .momentumFactor(0.2)
-                .epsilon(0.3)
-                .beta1(0.4)
-                .beta2(0.5)
-                .decayRate(0.6)
-                .epochs(1)
-                .batchSize(2)
-                .seed(3L)
-                .target("test_target")
-                .build();
+            .builder()
+            .objectiveType(LogisticRegressionParams.ObjectiveType.LOGMULTICLASS)
+            .optimizerType(LogisticRegressionParams.OptimizerType.ADA_GRAD)
+            .learningRate(0.1)
+            .momentumType(LogisticRegressionParams.MomentumType.STANDARD)
+            .momentumFactor(0.2)
+            .epsilon(0.3)
+            .beta1(0.4)
+            .beta2(0.5)
+            .decayRate(0.6)
+            .epochs(1)
+            .batchSize(2)
+            .seed(3L)
+            .target("test_target")
+            .build();
     }
 
     @Test
@@ -114,8 +114,12 @@ public class LogisticRegressionParamsTest {
 
     @Test
     public void parse_LogisticRegressionParams_WrongExtraField() throws IOException {
-        TestHelper.testParseFromString(logisticRegressionParams, "{\"objective\":\"LOGMULTICLASS\",\"learning_rate\":0.1,\"wrong_field\":1.0}", function);
+        TestHelper
+            .testParseFromString(
+                logisticRegressionParams,
+                "{\"objective\":\"LOGMULTICLASS\",\"learning_rate\":0.1,\"wrong_field\":1.0}",
+                function
+            );
     }
 
 }
-

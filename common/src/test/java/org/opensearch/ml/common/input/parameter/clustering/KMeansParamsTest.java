@@ -5,6 +5,13 @@
 
 package org.opensearch.ml.common.input.parameter.clustering;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.common.TestHelper.contentObjectToString;
+import static org.opensearch.ml.common.TestHelper.testParseFromString;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -14,13 +21,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.common.TestHelper.contentObjectToString;
-import static org.opensearch.ml.common.TestHelper.testParseFromString;
-
 public class KMeansParamsTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -28,7 +28,7 @@ public class KMeansParamsTest {
     KMeansParams params;
     private Function<XContentParser, KMeansParams> function = parser -> {
         try {
-            return (KMeansParams)KMeansParams.parse(parser);
+            return (KMeansParams) KMeansParams.parse(parser);
         } catch (IOException e) {
             throw new RuntimeException("failed to parse KMeansParams", e);
         }
@@ -36,11 +36,7 @@ public class KMeansParamsTest {
 
     @Before
     public void setUp() {
-        params = KMeansParams.builder()
-                .centroids(2)
-                .iterations(10)
-                .distanceType(KMeansParams.DistanceType.COSINE)
-                .build();
+        params = KMeansParams.builder().centroids(2).iterations(10).distanceType(KMeansParams.DistanceType.COSINE).build();
     }
 
     @Test

@@ -25,10 +25,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.common.transport.TransportAddress;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLUndeployControllerNodeResponseTest {
@@ -42,23 +39,22 @@ public class MLUndeployControllerNodeResponseTest {
     @Before
     public void setUp() throws Exception {
         localNode = new DiscoveryNode(
-                "foo0",
-                "foo0",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT);
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
     }
 
     @Test
     public void testSerializationDeserialization() throws IOException {
         Map<String, String> undeployControllerStatus = Map.of("modelName:version", "response");
-        MLUndeployControllerNodeResponse response = new MLUndeployControllerNodeResponse(localNode,
-                undeployControllerStatus);
+        MLUndeployControllerNodeResponse response = new MLUndeployControllerNodeResponse(localNode, undeployControllerStatus);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLUndeployControllerNodeResponse newResponse = new MLUndeployControllerNodeResponse(
-                output.bytes().streamInput());
+        MLUndeployControllerNodeResponse newResponse = new MLUndeployControllerNodeResponse(output.bytes().streamInput());
         assertEquals(newResponse.getNode().getId(), response.getNode().getId());
     }
 
@@ -67,8 +63,7 @@ public class MLUndeployControllerNodeResponseTest {
         MLUndeployControllerNodeResponse response = new MLUndeployControllerNodeResponse(localNode, null);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLUndeployControllerNodeResponse newResponse = new MLUndeployControllerNodeResponse(
-                output.bytes().streamInput());
+        MLUndeployControllerNodeResponse newResponse = new MLUndeployControllerNodeResponse(output.bytes().streamInput());
         assertEquals(newResponse.getNode().getId(), response.getNode().getId());
     }
 
@@ -77,8 +72,7 @@ public class MLUndeployControllerNodeResponseTest {
         MLUndeployControllerNodeResponse response = new MLUndeployControllerNodeResponse(localNode, new HashMap<>());
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLUndeployControllerNodeResponse newResponse = MLUndeployControllerNodeResponse
-                .readStats(output.bytes().streamInput());
+        MLUndeployControllerNodeResponse newResponse = MLUndeployControllerNodeResponse.readStats(output.bytes().streamInput());
         assertNotEquals(newResponse, response);
     }
 }

@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.common.connector.functions.preprocess;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -17,14 +25,6 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.script.ScriptService;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 public class RemoteInferencePreProcessFunctionTest {
     @Rule
@@ -70,8 +70,7 @@ public class RemoteInferencePreProcessFunctionTest {
     public void process_CorrectInput_WrongProcessedResult() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Preprocess function output is null");
-        when(scriptService.compile(any(), any()))
-                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(null));
+        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(null));
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
         function.apply(mlInput);
     }
@@ -79,8 +78,7 @@ public class RemoteInferencePreProcessFunctionTest {
     @Test
     public void process_CorrectInput() {
         String preprocessResult = "{\"parameters\": { \"input\": \"test doc1\" } }";
-        when(scriptService.compile(any(), any()))
-                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult));
+        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult));
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());

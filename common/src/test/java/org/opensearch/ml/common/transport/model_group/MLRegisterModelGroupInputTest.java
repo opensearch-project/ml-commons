@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -17,13 +18,14 @@ public class MLRegisterModelGroupInputTest {
     @Before
     public void setUp() throws Exception {
 
-        mlRegisterModelGroupInput = mlRegisterModelGroupInput.builder()
-                .name("name")
-                .description("description")
-                .backendRoles(Arrays.asList("IT"))
-                .modelAccessMode(AccessMode.RESTRICTED)
-                .isAddAllBackendRoles(true)
-                .build();
+        mlRegisterModelGroupInput = mlRegisterModelGroupInput
+            .builder()
+            .name("name")
+            .description("description")
+            .backendRoles(Arrays.asList("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
     }
 
     @Test

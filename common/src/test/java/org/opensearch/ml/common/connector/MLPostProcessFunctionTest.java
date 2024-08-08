@@ -5,19 +5,19 @@
 
 package org.opensearch.ml.common.connector;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 public class MLPostProcessFunctionTest {
 

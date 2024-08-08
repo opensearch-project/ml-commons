@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.common.transport.tools;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -12,13 +21,6 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.ToolMetadata;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.List;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
 
 public class MLToolsListRequestTests {
     private List<ToolMetadata> toolMetadataList;
@@ -26,20 +28,20 @@ public class MLToolsListRequestTests {
     @Before
     public void setUp() {
         toolMetadataList = new ArrayList<>();
-        ToolMetadata wikipediaTool = ToolMetadata.builder()
-                .name("WikipediaTool")
-                .description("Use this tool to search general knowledge on wikipedia.")
-                .type("WikipediaTool")
-                .version(null)
-                .build();
+        ToolMetadata wikipediaTool = ToolMetadata
+            .builder()
+            .name("WikipediaTool")
+            .description("Use this tool to search general knowledge on wikipedia.")
+            .type("WikipediaTool")
+            .version(null)
+            .build();
         toolMetadataList.add(wikipediaTool);
     }
+
     @Test
     public void writeTo_success() throws IOException {
 
-        MLToolsListRequest mlToolsListRequest = MLToolsListRequest.builder()
-                .toolMetadataList(toolMetadataList)
-                .build();
+        MLToolsListRequest mlToolsListRequest = MLToolsListRequest.builder().toolMetadataList(toolMetadataList).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlToolsListRequest.writeTo(bytesStreamOutput);
         MLToolsListRequest parsedToolMetadata = new MLToolsListRequest(bytesStreamOutput.bytes().streamInput());
@@ -73,6 +75,7 @@ public class MLToolsListRequestTests {
             public ActionRequestValidationException validate() {
                 return null;
             }
+
             @Override
             public void writeTo(StreamOutput out) throws IOException {
                 throw new IOException("test");
@@ -83,10 +86,9 @@ public class MLToolsListRequestTests {
 
     @Test
     public void fromActionRequest_Success() {
-        MLToolsListRequest mlToolsListRequest = MLToolsListRequest.builder()
-                .toolMetadataList(toolMetadataList).build();
+        MLToolsListRequest mlToolsListRequest = MLToolsListRequest.builder().toolMetadataList(toolMetadataList).build();
 
-        ActionRequest  actionRequest = new ActionRequest() {
+        ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
                 return null;

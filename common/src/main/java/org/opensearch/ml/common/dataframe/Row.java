@@ -5,9 +5,14 @@
 
 package org.opensearch.ml.common.dataframe;
 
-import lombok.AccessLevel;
-import lombok.ToString;
-import lombok.experimental.FieldDefaults;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -16,13 +21,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.AccessLevel;
+import lombok.ToString;
+import lombok.experimental.FieldDefaults;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
@@ -43,14 +44,14 @@ public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
     }
 
     void setValue(int index, ColumnValue value) {
-        if(index < 0 || index > size() - 1) {
+        if (index < 0 || index > size() - 1) {
             throw new IllegalArgumentException("index is out of scope, index:" + index + "; row size:" + size());
         }
         this.values[index] = value;
     }
 
     public ColumnValue getValue(int index) {
-        if(index < 0 || index > size() - 1) {
+        if (index < 0 || index > size() - 1) {
             throw new IllegalArgumentException("index is out of scope, index:" + index + "; row size:" + size());
         }
         return this.values[index];
@@ -71,7 +72,7 @@ public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
     }
 
     Row remove(int removedIndex) {
-        if(removedIndex < 0 || removedIndex >= values.length) {
+        if (removedIndex < 0 || removedIndex >= values.length) {
             throw new IllegalArgumentException("removed index can't be negative or bigger than row's values length:" + values.length);
         }
         ColumnValue[] newValues = new ColumnValue[Math.max(values.length - 1, 0)];
@@ -86,7 +87,7 @@ public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
     Row select(int[] columns) {
         ColumnValue[] newValues = new ColumnValue[columns.length];
         int index = 0;
-        for(int col: columns) {
+        for (int col : columns) {
             newValues[index++] = values[col];
         }
 
@@ -109,7 +110,9 @@ public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
                         if (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                             String columnTypeField = parser.currentName();
                             if (!"column_type".equals(columnTypeField)) {
-                                throw new IllegalArgumentException("wrong column type, expect column_type field but got " + columnTypeField);
+                                throw new IllegalArgumentException(
+                                    "wrong column type, expect column_type field but got " + columnTypeField
+                                );
                             }
                             parser.nextToken();
                             String columnType = parser.text();
@@ -182,26 +185,28 @@ public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Row other = (Row) o;
         if (this.size() != other.size()) {
             return false;
         }
-        for (int i = 0; i< this.size(); i++) {
-            if(!this.getValue(i).equals(other.getValue(i))) {
+        for (int i = 0; i < this.size(); i++) {
+            if (!this.getValue(i).equals(other.getValue(i))) {
                 return false;
             }
         }
         return true;
     }
 
-        public boolean equals(Row other) {
+    public boolean equals(Row other) {
         if (this.size() != other.size()) {
             return false;
         }
-        for (int i = 0; i< this.size(); i++) {
-            if(!this.getValue(i).equals(other.getValue(i))) {
+        for (int i = 0; i < this.size(); i++) {
+            if (!this.getValue(i).equals(other.getValue(i))) {
                 return false;
             }
         }

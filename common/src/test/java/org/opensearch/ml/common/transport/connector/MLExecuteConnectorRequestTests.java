@@ -5,6 +5,16 @@
 
 package org.opensearch.ml.common.transport.connector;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -17,23 +27,13 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-
 public class MLExecuteConnectorRequestTests {
     private MLExecuteConnectorRequest mlExecuteConnectorRequest;
     private MLInput mlInput;
     private String connectorId;
 
     @Before
-    public void setUp(){
+    public void setUp() {
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("input", "hello")).build();
         connectorId = "test_connector";
         mlInput = RemoteInferenceMLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.CONNECTOR).build();
@@ -41,14 +41,17 @@ public class MLExecuteConnectorRequestTests {
     }
 
     @Test
-    public void writeToSuccess() throws IOException  {
+    public void writeToSuccess() throws IOException {
         BytesStreamOutput output = new BytesStreamOutput();
         mlExecuteConnectorRequest.writeTo(output);
         MLExecuteConnectorRequest parsedRequest = new MLExecuteConnectorRequest(output.bytes().streamInput());
         assertEquals(mlExecuteConnectorRequest.getConnectorId(), parsedRequest.getConnectorId());
         assertEquals(mlExecuteConnectorRequest.getMlInput().getAlgorithm(), parsedRequest.getMlInput().getAlgorithm());
-        assertEquals(mlExecuteConnectorRequest.getMlInput().getInputDataset().getInputDataType(), parsedRequest.getMlInput().getInputDataset().getInputDataType());
-        assertEquals("hello", ((RemoteInferenceInputDataSet)parsedRequest.getMlInput().getInputDataset()).getParameters().get("input"));
+        assertEquals(
+            mlExecuteConnectorRequest.getMlInput().getInputDataset().getInputDataType(),
+            parsedRequest.getMlInput().getInputDataset().getInputDataType()
+        );
+        assertEquals("hello", ((RemoteInferenceInputDataSet) parsedRequest.getMlInput().getInputDataset()).getParameters().get("input"));
     }
 
     @Test
@@ -64,16 +67,14 @@ public class MLExecuteConnectorRequestTests {
 
     @Test
     public void validateWithNullMLInputException() {
-        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder()
-                .build();
+        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder().build();
         ActionRequestValidationException exception = executeConnectorRequest.validate();
         assertEquals("Validation Failed: 1: ML input can't be null;", exception.getMessage());
     }
 
     @Test
     public void validateWithNullMLInputDataSetException() {
-        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder().mlInput(new MLInput())
-                .build();
+        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder().mlInput(new MLInput()).build();
         ActionRequestValidationException exception = executeConnectorRequest.validate();
         assertEquals("Validation Failed: 1: input data can't be null;", exception.getMessage());
     }

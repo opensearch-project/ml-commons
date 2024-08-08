@@ -5,9 +5,10 @@
 
 package org.opensearch.ml.common.transport.config;
 
-import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+
+import org.junit.Test;
 
 public class MLConfigGetActionTest {
 
@@ -16,6 +17,5 @@ public class MLConfigGetActionTest {
         assertNotNull(MLConfigGetAction.INSTANCE);
         assertEquals("cluster:admin/opensearch/ml/config/get", MLConfigGetAction.NAME);
     }
-
 
 }

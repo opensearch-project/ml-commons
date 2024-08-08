@@ -5,16 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.FunctionName;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -22,7 +13,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @Getter
 @EqualsAndHashCode
@@ -173,15 +173,16 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return ConnectorAction.builder()
-                .actionType(actionType)
-                .method(method)
-                .url(url)
-                .headers(headers)
-                .requestBody(requestBody)
-                .preProcessFunction(preProcessFunction)
-                .postProcessFunction(postProcessFunction)
-                .build();
+        return ConnectorAction
+            .builder()
+            .actionType(actionType)
+            .method(method)
+            .url(url)
+            .headers(headers)
+            .requestBody(requestBody)
+            .preProcessFunction(preProcessFunction)
+            .postProcessFunction(postProcessFunction)
+            .build();
     }
 
     public enum ActionType {
@@ -197,10 +198,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             }
         }
 
-        private static final HashSet<ActionType> MODEL_SUPPORT_ACTIONS = new HashSet<>(Set.of(
-                PREDICT,
-                BATCH_PREDICT
-        ));
+        private static final HashSet<ActionType> MODEL_SUPPORT_ACTIONS = new HashSet<>(Set.of(PREDICT, BATCH_PREDICT));
 
         public static boolean isValidActionInModelPrediction(ActionType actionType) {
             return MODEL_SUPPORT_ACTIONS.contains(actionType);

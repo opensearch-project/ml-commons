@@ -1,7 +1,16 @@
 package org.opensearch.ml.common.input.nlp;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -17,18 +26,9 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.search.SearchModule;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 public class TextDocsMLInputTest {
 
@@ -41,10 +41,14 @@ public class TextDocsMLInputTest {
 
     @Before
     public void setUp() throws Exception {
-        ModelResultFilter resultFilter = ModelResultFilter.builder().returnBytes(true).returnNumber(true)
-            .targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
-        MLInputDataset inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2"))
-            .resultFilter(resultFilter).build();
+        ModelResultFilter resultFilter = ModelResultFilter
+            .builder()
+            .returnBytes(true)
+            .returnNumber(true)
+            .targetResponse(Arrays.asList("field1"))
+            .targetResponsePositions(Arrays.asList(2))
+            .build();
+        MLInputDataset inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2")).resultFilter(resultFilter).build();
         input = new TextDocsMLInput(algorithm, inputDataset);
     }
 
@@ -58,27 +62,40 @@ public class TextDocsMLInputTest {
 
     @Test
     public void parseTextDocsMLInput_OldWay() throws IOException {
-        String jsonStr = "{\"text_docs\": [ \"doc1\", \"doc2\", null ],\"return_number\": true, \"return_bytes\": true,\"target_response\": [ \"field1\" ], \"target_response_positions\": [2]}";
+        String jsonStr =
+            "{\"text_docs\": [ \"doc1\", \"doc2\", null ],\"return_number\": true, \"return_bytes\": true,\"target_response\": [ \"field1\" ], \"target_response_positions\": [2]}";
         parseMLInput(jsonStr, 3);
     }
 
     @Test
     public void parseTextDocsMLInput_NewWay() throws IOException {
-        String jsonStr = "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}}";
+        String jsonStr =
+            "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}}";
         parseMLInput(jsonStr, 2);
     }
 
     @Test
     public void parseTextDocsMLInput_WithParameters() throws IOException {
-        String jsonStr = "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}, \"parameters\" : {\"content_type\": \"passage\"}}";
+        String jsonStr =
+            "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}, \"parameters\" : {\"content_type\": \"passage\"}}";
         parseMLInput(jsonStr, 2);
     }
 
     private void parseMLInput(String jsonStr, int docSize) throws IOException {
-        XContentParser parser = XContentType.JSON.xContent()
-            .createParser(new NamedXContentRegistry(Stream.concat(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents().stream(), Stream.of(
-                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY)).collect(Collectors.toList())), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(
+                    Stream
+                        .concat(
+                            new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents().stream(),
+                            Stream.of(AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY)
+                        )
+                        .collect(Collectors.toList())
+                ),
+                null,
+                jsonStr
+            );
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());

@@ -5,15 +5,15 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import java.io.IOException;
+
 import org.junit.Test;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 
 public class StringValueTest {
     @Test

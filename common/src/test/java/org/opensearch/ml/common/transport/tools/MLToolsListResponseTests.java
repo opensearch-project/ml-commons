@@ -5,11 +5,16 @@
 
 package org.opensearch.ml.common.transport.tools;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
-// import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -17,12 +22,6 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.ToolMetadata;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.*;
 
 public class MLToolsListResponseTests {
     List<ToolMetadata> toolMetadataList;
@@ -32,18 +31,20 @@ public class MLToolsListResponseTests {
     @Before
     public void setUp() {
         toolMetadataList = new ArrayList<>();
-        ToolMetadata searchWikipediaTool = ToolMetadata.builder()
-                .name("SearchWikipediaTool")
-                .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
-                .type("SearchWikipediaTool")
-                .version(null)
-                .build();
-        ToolMetadata toolMetadata = ToolMetadata.builder()
-                .name("MathTool")
-                .description("Use this tool to calculate any math problem.")
-                .type("MathTool")
-                .version("test")
-                .build();
+        ToolMetadata searchWikipediaTool = ToolMetadata
+            .builder()
+            .name("SearchWikipediaTool")
+            .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
+            .type("SearchWikipediaTool")
+            .version(null)
+            .build();
+        ToolMetadata toolMetadata = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to calculate any math problem.")
+            .type("MathTool")
+            .version("test")
+            .build();
 
         toolMetadataList.add(searchWikipediaTool);
         toolMetadataList.add(toolMetadata);
@@ -67,14 +68,20 @@ public class MLToolsListResponseTests {
         mlToolsListResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("[{\"name\":\"SearchWikipediaTool\",\"description\":\"Useful when you need to use this tool to search general knowledge on wikipedia.\",\"type\":\"SearchWikipediaTool\",\"version\":\"undefined\"},{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}]", jsonStr);
+        assertEquals(
+            "[{\"name\":\"SearchWikipediaTool\",\"description\":\"Useful when you need to use this tool to search general knowledge on wikipedia.\",\"type\":\"SearchWikipediaTool\",\"version\":\"undefined\"},{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}]",
+            jsonStr
+        );
     }
 
     @Test
     public void fromActionResponseWithMLToolsListResponse_Success() {
         MLToolsListResponse mlToolsListResponseFromActionResponse = MLToolsListResponse.fromActionResponse(mlToolsListResponse);
         assertSame(mlToolsListResponse, mlToolsListResponseFromActionResponse);
-        assertEquals(mlToolsListResponse.getToolMetadataList().get(0).getName(), mlToolsListResponseFromActionResponse.getToolMetadataList().get(0).getName());
+        assertEquals(
+            mlToolsListResponse.getToolMetadataList().get(0).getName(),
+            mlToolsListResponseFromActionResponse.getToolMetadataList().get(0).getName()
+        );
     }
 
     @Test
@@ -86,7 +93,10 @@ public class MLToolsListResponseTests {
             }
         };
         MLToolsListResponse mlToolsListResponseFromActionResponse = MLToolsListResponse.fromActionResponse(actionResponse);
-        assertEquals(mlToolsListResponse.getToolMetadataList().get(0).getName(), mlToolsListResponseFromActionResponse.getToolMetadataList().get(0).getName());
+        assertEquals(
+            mlToolsListResponse.getToolMetadataList().get(0).getName(),
+            mlToolsListResponseFromActionResponse.getToolMetadataList().get(0).getName()
+        );
     }
 
     @Test(expected = UncheckedIOException.class)

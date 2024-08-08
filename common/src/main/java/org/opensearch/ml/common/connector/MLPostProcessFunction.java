@@ -5,15 +5,15 @@
 
 package org.opensearch.ml.common.connector;
 
-import org.opensearch.ml.common.connector.functions.postprocess.BedrockEmbeddingPostProcessFunction;
-import org.opensearch.ml.common.connector.functions.postprocess.CohereRerankPostProcessFunction;
-import org.opensearch.ml.common.connector.functions.postprocess.EmbeddingPostProcessFunction;
-import org.opensearch.ml.common.output.model.ModelTensor;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+
+import org.opensearch.ml.common.connector.functions.postprocess.BedrockEmbeddingPostProcessFunction;
+import org.opensearch.ml.common.connector.functions.postprocess.CohereRerankPostProcessFunction;
+import org.opensearch.ml.common.connector.functions.postprocess.EmbeddingPostProcessFunction;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class MLPostProcessFunction {
 

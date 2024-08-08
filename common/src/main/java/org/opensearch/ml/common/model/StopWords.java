@@ -5,21 +5,22 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NonNull;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NonNull;
 
 @EqualsAndHashCode
 @Getter
@@ -86,9 +87,6 @@ public class StopWords implements ToXContentObject {
                     break;
             }
         }
-        return StopWords.builder()
-                .index(index)
-                .sourceFields(sourceFields)
-                .build();
+        return StopWords.builder().index(index).sourceFields(sourceFields).build();
     }
 }

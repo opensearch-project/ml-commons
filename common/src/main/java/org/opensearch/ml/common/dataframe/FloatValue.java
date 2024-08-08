@@ -5,13 +5,14 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import java.io.IOException;
+
+import org.opensearch.core.common.io.stream.StreamOutput;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
-import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor

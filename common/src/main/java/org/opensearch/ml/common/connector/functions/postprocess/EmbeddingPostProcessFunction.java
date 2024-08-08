@@ -5,11 +5,11 @@
 
 package org.opensearch.ml.common.connector.functions.postprocess;
 
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<List<List<Float>>> {
 
@@ -36,15 +36,19 @@ public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<L
     @Override
     public List<ModelTensor> process(List<List<Float>> embeddings) {
         List<ModelTensor> modelTensors = new ArrayList<>();
-        embeddings.forEach(embedding -> modelTensors.add(
-                ModelTensor
-                        .builder()
-                        .name("sentence_embedding")
-                        .dataType(MLResultDataType.FLOAT32)
-                        .shape(new long[]{embedding.size()})
-                        .data(embedding.toArray(new Number[0]))
-                        .build()
-        ));
+        embeddings
+            .forEach(
+                embedding -> modelTensors
+                    .add(
+                        ModelTensor
+                            .builder()
+                            .name("sentence_embedding")
+                            .dataType(MLResultDataType.FLOAT32)
+                            .shape(new long[] { embedding.size() })
+                            .data(embedding.toArray(new Number[0]))
+                            .build()
+                    )
+            );
         return modelTensors;
     }
 }
