@@ -8,21 +8,27 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import java.util.Map;
+
 import javax.net.ssl.SSLContext;
 
-import org.apache.http.HttpHost;
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
+import org.apache.hc.core5.http.HttpHost;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchException;
 import org.opensearch.client.Client;
-import org.opensearch.client.RestClient;
 import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.aws.AwsSdk2Transport;
 import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
-import org.opensearch.client.transport.rest_client.RestClientTransport;
+import org.opensearch.client.transport.httpclient5.ApacheHttpClient5Transport;
+import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
@@ -114,28 +120,38 @@ public class SdkClientFactory {
 
     private static OpenSearchClient createOpenSearchClient(String remoteMetadataEndpoint) {
         try {
-            BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-            SSLContext sslContext = SSLContextBuilder.create().loadTrustMaterial((chain, authType) -> true).build();
-            RestClient restClient = RestClient
-                // This HttpHost syntax works with export REMOTE_METADATA_ENDPOINT=http://127.0.0.1:9200
-                .builder(HttpHost.create(remoteMetadataEndpoint))
-                .setStrictDeprecationMode(true)
+            Map<String, String> env = System.getenv();
+            String user = env.getOrDefault("user", "admin");
+            String pass = env.getOrDefault("password", "admin");
+            // Endpoint syntax: https://127.0.0.1:9200
+            HttpHost[] hosts = new HttpHost[] { HttpHost.create(remoteMetadataEndpoint) };
+            SSLContext sslContext = SSLContextBuilder.create().loadTrustMaterial(null, (chain, authType) -> true).build();
+            ApacheHttpClient5Transport transport = ApacheHttpClient5TransportBuilder
+                .builder(hosts)
+                .setMapper(
+                    new JacksonJsonpMapper(
+                        new ObjectMapper()
+                            .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+                            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                            .registerModule(new JavaTimeModule())
+                    )
+                )
                 .setHttpClientConfigCallback(httpClientBuilder -> {
-                    try {
-                        return httpClientBuilder
-                            .setDefaultCredentialsProvider(credentialsProvider)
-                            .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-                            .setSSLContext(sslContext);
-                    } catch (Exception e) {
-                        throw new OpenSearchException(e);
+                    BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+                    for (HttpHost host : hosts) {
+                        credentialsProvider.setCredentials(new AuthScope(host), new UsernamePasswordCredentials(user, pass.toCharArray()));
                     }
+                    // Disable SSL/TLS verification as our local testing clusters use self-signed certificates
+                    final var tlsStrategy = ClientTlsStrategyBuilder
+                        .create()
+                        .setSslContext(sslContext)
+                        .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                        .build();
+                    final var connectionManager = PoolingAsyncClientConnectionManagerBuilder.create().setTlsStrategy(tlsStrategy).build();
+                    return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider).setConnectionManager(connectionManager);
                 })
                 .build();
-            ObjectMapper objectMapper = new ObjectMapper()
-                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                .registerModule(new JavaTimeModule());
-            return new OpenSearchClient(new RestClientTransport(restClient, new JacksonJsonpMapper(objectMapper)));
+            return new OpenSearchClient(transport);
         } catch (Exception e) {
             throw new OpenSearchException(e);
         }
