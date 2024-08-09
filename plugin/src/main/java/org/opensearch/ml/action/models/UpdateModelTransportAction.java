@@ -326,7 +326,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         ActionListener<UpdateResponse> wrappedListener,
         boolean isUpdateModelCache
     ) {
-        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
+        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         if (newModelGroupId != null) {
             modelAccessControlHelper
                 .validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasNewModelGroupPermission -> {
