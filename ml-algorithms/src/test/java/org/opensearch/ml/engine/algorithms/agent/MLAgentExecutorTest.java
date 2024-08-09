@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.CONVERSATION_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
@@ -115,7 +116,6 @@ public class MLAgentExecutorTest {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
         Mockito.doAnswer(invocation -> {
             MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
             MLAgent mlAgent = MLAgent.builder().name("agent").memory(mlMemorySpec).type("flow").build();
@@ -581,10 +581,45 @@ public class MLAgentExecutorTest {
         Assert.assertNotNull(exceptionCaptor.getValue());
     }
 
+    @Test
+    public void test_UseConversationNameAsTitle() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Map<String, String> parameters = Map.of(QUESTION, "test question", CONVERSATION_NAME, "test name");
+        mlAgentExecutor.execute(getAgentMLInput(parameters), agentActionListener);
+
+        Mockito.verify(mockMemoryFactory).create(Mockito.eq("test name"), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void test_UseQuestionAsDefaultTitle() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Map<String, String> parameters = Map.of(QUESTION, "test question");
+        mlAgentExecutor.execute(getAgentMLInput(parameters), agentActionListener);
+
+        Mockito.verify(mockMemoryFactory).create(Mockito.eq("test question"), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
     private AgentMLInput getAgentMLInput() {
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parentInteractionId");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        return new AgentMLInput("test", FunctionName.AGENT, dataset);
+    }
+
+    private AgentMLInput getAgentMLInput(Map<String, String> params) {
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         return new AgentMLInput("test", FunctionName.AGENT, dataset);
     }
