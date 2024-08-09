@@ -8,6 +8,7 @@
  */
 package org.opensearch.ml.sdkclient;
 
+<<<<<<< HEAD
 import static org.opensearch.sdk.SdkClientSettings.AWS_DYNAMO_DB;
 import static org.opensearch.sdk.SdkClientSettings.AWS_OPENSEARCH_SERVICE;
 import static org.opensearch.sdk.SdkClientSettings.REMOTE_METADATA_ENDPOINT;
@@ -19,6 +20,8 @@ import static org.opensearch.sdk.SdkClientSettings.VALID_AWS_OPENSEARCH_SERVICE_
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+=======
+>>>>>>> 3ff2d5eb (Updated Remote Client creation, working remote connections)
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -26,17 +29,13 @@ import javax.net.ssl.SSLContext;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
 import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
-import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.core5.http.HttpHost;
-import org.apache.hc.core5.http.URIScheme;
-import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchException;
-import org.opensearch.SpecialPermission;
 import org.opensearch.client.Client;
 import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
@@ -53,7 +52,6 @@ import org.opensearch.sdk.client.LocalClusterIndicesClient;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.extern.log4j.Log4j2;
@@ -143,36 +141,30 @@ public class SdkClientFactory {
             String user = env.getOrDefault("user", "admin");
             String pass = env.getOrDefault("password", "admin");
             // Endpoint syntax: https://127.0.0.1:9200
-            HttpHost host = HttpHost.create(remoteMetadataEndpoint);
+            HttpHost[] hosts = new HttpHost[] { HttpHost.create(remoteMetadataEndpoint) };
             SSLContext sslContext = SSLContextBuilder.create().loadTrustMaterial(null, (chain, authType) -> true).build();
             ApacheHttpClient5Transport transport = ApacheHttpClient5TransportBuilder
-                .builder(host)
+                .builder(hosts)
                 .setMapper(
                     new JacksonJsonpMapper(
                         new ObjectMapper()
                             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
                             .setSerializationInclusion(JsonInclude.Include.NON_NULL)
                             .registerModule(new JavaTimeModule())
-                            .configure(SerializationFeature.WRITE_DATE_TIMESTAMPS_AS_NANOSECONDS, false)
                     )
                 )
                 .setHttpClientConfigCallback(httpClientBuilder -> {
                     BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-                    credentialsProvider.setCredentials(new AuthScope(host), new UsernamePasswordCredentials(user, pass.toCharArray()));
-                    if (URIScheme.HTTP.getId().equalsIgnoreCase(host.getSchemeName())) {
-                        // No SSL/TLS
-                        return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+                    for (HttpHost host : hosts) {
+                        credentialsProvider.setCredentials(new AuthScope(host), new UsernamePasswordCredentials(user, pass.toCharArray()));
                     }
                     // Disable SSL/TLS verification as our local testing clusters use self-signed certificates
-                    final TlsStrategy tlsStrategy = ClientTlsStrategyBuilder
+                    final var tlsStrategy = ClientTlsStrategyBuilder
                         .create()
                         .setSslContext(sslContext)
                         .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                         .build();
-                    final PoolingAsyncClientConnectionManager connectionManager = PoolingAsyncClientConnectionManagerBuilder
-                        .create()
-                        .setTlsStrategy(tlsStrategy)
-                        .build();
+                    final var connectionManager = PoolingAsyncClientConnectionManagerBuilder.create().setTlsStrategy(tlsStrategy).build();
                     return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider).setConnectionManager(connectionManager);
                 })
                 .build();

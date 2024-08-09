@@ -67,7 +67,7 @@ dependencies {
     implementation "org.opensearch.client:opensearch-java:2.10.2"
     api "org.apache.httpcomponents.client5:httpclient5:5.3.1"
     api "org.apache.httpcomponents.core5:httpcore5:5.2.5"
-    
+
     // Dynamo dependencies
     implementation("software.amazon.awssdk:sdk-core:2.25.40")
     implementation("software.amazon.awssdk:aws-core:2.25.40")
@@ -188,13 +188,11 @@ integTest {
     if (System.getProperty("tests.rest.tenantaware") != null) {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*TenantAwareIT"
-            // mock LLM run in localhost, it will not reachable for docker or remote cluster
-            excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
     }
 
     // Only rest case can run with remote cluster
-    if (System.getProperty("tests.rest.cluster") != null) {
+    if (System.getProperty("tests.rest.cluster") != null && System.getProperty("tests.rest.tenantaware") == null) {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*IT"
             excludeTestsMatching "org.opensearch.ml.rest.*TenantAwareIT"
@@ -226,7 +224,7 @@ integTest {
                 ymlFile.withWriterAppend { writer ->
                     writer.write("\n# Use a remote cluster\n")
                     writer.write("plugins.ml_commons.remote_metadata_type: RemoteOpenSearch\n")
-                    writer.write("plugins.ml_commons.remote_metadata_endpoint: http://127.0.0.1\n")
+                    writer.write("plugins.ml_commons.remote_metadata_endpoint: https://127.0.0.1:9200\n")
                 }
             } else {
                 throw new GradleException("opensearch.yml not found at: $ymlFile")
