@@ -1,5 +1,16 @@
 package org.opensearch.ml.common.transport.undeploy;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -10,21 +21,10 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
-import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLUndeployModelNodesResponseTest {
@@ -39,20 +39,20 @@ public class MLUndeployModelNodesResponseTest {
     public void setUp() throws Exception {
         clusterName = new ClusterName("clusterName");
         node1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
+            "foo1",
+            "foo1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
         node2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
+            "foo2",
+            "foo2",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
         modelWorkerNodeCounts = new HashMap<>();
         modelWorkerNodeCounts.put("modelId1", 1);
@@ -76,13 +76,13 @@ public class MLUndeployModelNodesResponseTest {
         Map<String, String> modelToUndeployStatus1 = new HashMap<>();
         modelToUndeployStatus1.put("modelId1", "response");
         Map<String, String[]> modelWorkerNodeCounts1 = new HashMap<>();
-        modelWorkerNodeCounts1.put("modelId1", new String[]{"mockNode1"});
+        modelWorkerNodeCounts1.put("modelId1", new String[] { "mockNode1" });
         nodes.add(new MLUndeployModelNodeResponse(node1, modelToUndeployStatus1, modelWorkerNodeCounts1));
 
         Map<String, String> modelToUndeployStatus2 = new HashMap<>();
         modelToUndeployStatus2.put("modelId2", "response");
         Map<String, String[]> modelWorkerNodeCounts2 = new HashMap<>();
-        modelWorkerNodeCounts2.put("modelId2", new String[]{"mockNode2"});
+        modelWorkerNodeCounts2.put("modelId2", new String[] { "mockNode2" });
         nodes.add(new MLUndeployModelNodeResponse(node2, modelToUndeployStatus2, modelWorkerNodeCounts2));
 
         List<FailedNodeException> failures = new ArrayList<>();
@@ -90,9 +90,6 @@ public class MLUndeployModelNodesResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals(
-                "{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}",
-                jsonStr
-        );
+        assertEquals("{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}", jsonStr);
     }
 }

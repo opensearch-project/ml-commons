@@ -5,11 +5,17 @@
 
 package org.opensearch.ml.common.output;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
@@ -20,37 +26,32 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.IntValue;
 import org.opensearch.ml.common.dataframe.Row;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-
 public class MLPredictionOutputTest {
 
     MLPredictionOutput output;
+
     @Before
     public void setUp() {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("test", ColumnType.INTEGER)};
+        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("test", ColumnType.INTEGER) };
         List<Row> rows = new ArrayList<>();
-        rows.add(new Row(new ColumnValue[]{new IntValue(1)}));
-        rows.add(new Row(new ColumnValue[]{new IntValue(2)}));
+        rows.add(new Row(new ColumnValue[] { new IntValue(1) }));
+        rows.add(new Row(new ColumnValue[] { new IntValue(2) }));
         DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
-        output = MLPredictionOutput.builder()
-                .taskId("test_task_id")
-                .status("test_status")
-                .predictionResult(dataFrame)
-                .build();
+        output = MLPredictionOutput.builder().taskId("test_task_id").status("test_status").predictionResult(dataFrame).build();
     }
+
     @Test
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":" +
-                "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":" +
-                "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\"," +
-                "\"value\":2}]}]}}", jsonStr);
+        assertEquals(
+            "{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":"
+                + "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":"
+                + "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\","
+                + "\"value\":2}]}]}}",
+            jsonStr
+        );
     }
 
     @Test
@@ -88,7 +89,7 @@ public class MLPredictionOutputTest {
             assertEquals(output.predictionResult, parsedOutput.getPredictionResult());
         } else {
             assertEquals(output.predictionResult.size(), parsedOutput.getPredictionResult().size());
-            for (int i = 0 ;i<output.predictionResult.size(); i++) {
+            for (int i = 0; i < output.predictionResult.size(); i++) {
                 Row row = output.predictionResult.getRow(i);
                 Row parsedRow = parsedOutput.predictionResult.getRow(i);
                 assertEquals(row, parsedRow);

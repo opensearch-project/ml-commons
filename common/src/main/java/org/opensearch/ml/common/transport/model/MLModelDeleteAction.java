@@ -12,5 +12,7 @@ public class MLModelDeleteAction extends ActionType<DeleteResponse> {
     public static final MLModelDeleteAction INSTANCE = new MLModelDeleteAction();
     public static final String NAME = "cluster:admin/opensearch/ml/models/delete";
 
-    private MLModelDeleteAction() { super(NAME, DeleteResponse::new);}
+    private MLModelDeleteAction() {
+        super(NAME, DeleteResponse::new);
+    }
 }

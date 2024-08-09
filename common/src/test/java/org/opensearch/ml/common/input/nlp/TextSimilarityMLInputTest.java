@@ -45,7 +45,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.search.SearchModule;
 
 public class TextSimilarityMLInputTest {
-    
+
     MLInput input;
 
     private final FunctionName algorithm = FunctionName.TEXT_SIMILARITY;
@@ -63,9 +63,13 @@ public class TextSimilarityMLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());
@@ -84,15 +88,23 @@ public class TextSimilarityMLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assert (jsonStr.equals("{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}"));
+        assert (jsonStr
+            .equals(
+                "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}"
+            ));
     }
 
     @Test
     public void testParseJson() throws IOException {
-        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}";
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, json);
+        String json =
+            "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());
@@ -109,13 +121,19 @@ public class TextSimilarityMLInputTest {
     @Test
     public void testParseJson_NoPairs_ThenFail() throws IOException {
         String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[]}";
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), null, json);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
         parser.nextToken();
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-            () -> MLInput.parse(parser, input.getFunctionName().name()));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLInput.parse(parser, input.getFunctionName().name())
+        );
         assert (e.getMessage().equals("No text documents were provided"));
     }
 

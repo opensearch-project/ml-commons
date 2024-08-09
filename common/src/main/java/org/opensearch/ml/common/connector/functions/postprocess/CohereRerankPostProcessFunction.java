@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.common.connector.functions.postprocess;
 
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunction<List<Map<String, Object>>> {
 
@@ -44,12 +44,16 @@ public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunctio
             }
 
             for (int i = 0; i < scores.length; i++) {
-                modelTensors.add(ModelTensor.builder()
-                        .name("similarity")
-                        .shape(new long[]{1})
-                        .data(new Number[]{scores[i]})
-                        .dataType(MLResultDataType.FLOAT32)
-                        .build());
+                modelTensors
+                    .add(
+                        ModelTensor
+                            .builder()
+                            .name("similarity")
+                            .shape(new long[] { 1 })
+                            .data(new Number[] { scores[i] })
+                            .dataType(MLResultDataType.FLOAT32)
+                            .build()
+                    );
             }
         }
         return modelTensors;

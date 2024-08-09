@@ -31,7 +31,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
 public class TextSimilarityInputDatasetTest {
-    
+
     @Test
     public void testStreaming() throws IOException {
         List<String> docs = List.of("That is a happy dog", "it's summer");
@@ -50,8 +50,10 @@ public class TextSimilarityInputDatasetTest {
     public void noPairs_ThenFail() {
         List<String> docs = List.of();
         String queryText = "today is sunny";
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build()
+        );
         assert (e.getMessage().equals("No text documents were provided"));
     }
 
@@ -59,7 +61,6 @@ public class TextSimilarityInputDatasetTest {
     public void noQuery_ThenFail() {
         List<String> docs = List.of("That is a happy dog", "it's summer");
         String queryText = null;
-        assertThrows(NullPointerException.class,
-            () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
+        assertThrows(NullPointerException.class, () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
     }
 }

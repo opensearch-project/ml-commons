@@ -33,7 +33,7 @@ import lombok.Data;
  * `query_prefix` and `passage_prefix` configuration parameters.
  */
 @Data
-@MLAlgoParameter(algorithms={FunctionName.TEXT_EMBEDDING})
+@MLAlgoParameter(algorithms = { FunctionName.TEXT_EMBEDDING })
 public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
 
     public enum EmbeddingContentType {

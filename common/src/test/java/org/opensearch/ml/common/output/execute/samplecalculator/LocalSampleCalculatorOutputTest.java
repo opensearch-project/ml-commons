@@ -5,26 +5,25 @@
 
 package org.opensearch.ml.common.output.execute.samplecalculator;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
+import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
+import org.junit.Before;
+import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 
 public class LocalSampleCalculatorOutputTest {
 
     LocalSampleCalculatorOutput output;
+
     @Before
     public void setUp() {
-        output = LocalSampleCalculatorOutput.builder()
-                .totalSum(1.0)
-                .build();
+        output = LocalSampleCalculatorOutput.builder().totalSum(1.0).build();
     }
 
     @Test

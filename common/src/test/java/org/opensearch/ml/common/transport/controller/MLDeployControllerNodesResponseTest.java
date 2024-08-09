@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,27 +43,28 @@ public class MLDeployControllerNodesResponseTest {
     public void setUp() throws Exception {
         clusterName = new ClusterName("clusterName");
         node1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT);
+            "foo1",
+            "foo1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
         node2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT);
+            "foo2",
+            "foo2",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
     }
 
     @Test
     public void testSerializationDeserialization1() throws IOException {
         List<MLDeployControllerNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
-        MLDeployControllerNodesResponse response = new MLDeployControllerNodesResponse(clusterName, responseList,
-                failuresList);
+        MLDeployControllerNodesResponse response = new MLDeployControllerNodesResponse(clusterName, responseList, failuresList);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLDeployControllerNodesResponse newResponse = new MLDeployControllerNodesResponse(output.bytes().streamInput());
@@ -86,9 +86,7 @@ public class MLDeployControllerNodesResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals(
-                "{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}",
-                jsonStr);
+        assertEquals("{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}", jsonStr);
     }
 
     @Test

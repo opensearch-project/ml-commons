@@ -22,11 +22,11 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -50,18 +50,11 @@ public class MLRateLimiterTest {
 
     @Before
     public void setUp() throws Exception {
-        rateLimiter = MLRateLimiter.builder()
-                .limit("1")
-                .unit(TimeUnit.MILLISECONDS)
-                .build();
+        rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
 
-        rateLimiterWithNumber = MLRateLimiter.builder()
-                .limit("1")
-                .build();
+        rateLimiterWithNumber = MLRateLimiter.builder().limit("1").build();
 
-        rateLimiterWithUnit = MLRateLimiter.builder()
-                .unit(TimeUnit.MILLISECONDS)
-                .build();
+        rateLimiterWithUnit = MLRateLimiter.builder().unit(TimeUnit.MILLISECONDS).build();
 
         rateLimiterNull = MLRateLimiter.builder().build();
 
@@ -77,9 +70,7 @@ public class MLRateLimiterTest {
 
     @Test
     public void readInputStreamSuccessWithNullFields() throws IOException {
-        readInputStream(rateLimiterWithNumber, parsedInput -> {
-            assertNull(parsedInput.getUnit());
-        });
+        readInputStream(rateLimiterWithNumber, parsedInput -> { assertNull(parsedInput.getUnit()); });
     }
 
     @Test
@@ -134,8 +125,8 @@ public class MLRateLimiterTest {
 
     @Test
     public void parseWithIllegalField() throws Exception {
-        final String expectedInputStrWithIllegalField = "{\"limit\":\"1\",\"unit\":" +
-                "\"MILLISECONDS\",\"illegal_field\":\"This field need to be skipped.\"}";
+        final String expectedInputStrWithIllegalField = "{\"limit\":\"1\",\"unit\":"
+            + "\"MILLISECONDS\",\"illegal_field\":\"This field need to be skipped.\"}";
 
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
@@ -205,13 +196,9 @@ public class MLRateLimiterTest {
 
     @Test
     public void testRateLimiterIsDeployRequiredAfterUpdate() {
-        MLRateLimiter rateLimiterWithNumber2 = MLRateLimiter.builder()
-                .limit("2")
-                .build();
+        MLRateLimiter rateLimiterWithNumber2 = MLRateLimiter.builder().limit("2").build();
 
-        MLRateLimiter rateLimiterWithUnit2 = MLRateLimiter.builder()
-                .unit(TimeUnit.NANOSECONDS)
-                .build();
+        MLRateLimiter rateLimiterWithUnit2 = MLRateLimiter.builder().unit(TimeUnit.NANOSECONDS).build();
 
         assertTrue(MLRateLimiter.isDeployRequiredAfterUpdate(rateLimiter, rateLimiterWithNumber2));
 
@@ -224,10 +211,13 @@ public class MLRateLimiterTest {
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLRateLimiter> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent()
-                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                        Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE,
-                        expectedInputStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                expectedInputStr
+            );
         parser.nextToken();
         MLRateLimiter parsedInput = MLRateLimiter.parse(parser);
         verify.accept(parsedInput);

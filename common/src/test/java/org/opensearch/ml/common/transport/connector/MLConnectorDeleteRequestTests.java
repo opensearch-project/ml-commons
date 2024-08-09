@@ -12,6 +12,7 @@ import static org.junit.Assert.assertSame;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -29,8 +30,7 @@ public class MLConnectorDeleteRequestTests {
 
     @Test
     public void writeToSuccess() throws IOException {
-        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder()
-                .connectorId(connectorId).build();
+        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(connectorId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlConnectorDeleteRequest.writeTo(bytesStreamOutput);
         MLConnectorDeleteRequest parsedRequest = new MLConnectorDeleteRequest(bytesStreamOutput.bytes().streamInput());
@@ -46,16 +46,14 @@ public class MLConnectorDeleteRequestTests {
 
     @Test
     public void validateSuccess() {
-        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder()
-                .connectorId(connectorId).build();
+        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(connectorId).build();
         ActionRequestValidationException actionRequestValidationException = mlConnectorDeleteRequest.validate();
         assertNull(actionRequestValidationException);
     }
 
     @Test
     public void fromActionRequestSuccess() {
-        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder()
-                .connectorId(connectorId).build();
+        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(connectorId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -90,9 +88,9 @@ public class MLConnectorDeleteRequestTests {
 
     @Test
     public void fromActionRequestWithConnectorDeleteRequestSuccess() {
-        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder()
-                .connectorId(connectorId).build();
-        MLConnectorDeleteRequest mlConnectorDeleteRequestFromActionRequest = MLConnectorDeleteRequest.fromActionRequest(mlConnectorDeleteRequest);
+        MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(connectorId).build();
+        MLConnectorDeleteRequest mlConnectorDeleteRequestFromActionRequest = MLConnectorDeleteRequest
+            .fromActionRequest(mlConnectorDeleteRequest);
         assertSame(mlConnectorDeleteRequest, mlConnectorDeleteRequestFromActionRequest);
         assertEquals(mlConnectorDeleteRequest.getConnectorId(), mlConnectorDeleteRequestFromActionRequest.getConnectorId());
     }

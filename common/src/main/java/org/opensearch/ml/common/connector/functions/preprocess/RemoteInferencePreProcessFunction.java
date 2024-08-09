@@ -5,19 +5,20 @@
 
 package org.opensearch.ml.common.connector.functions.preprocess;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.experimental.FieldDefaults;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.script.ScriptService;
+import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.script.ScriptService;
+
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.experimental.FieldDefaults;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class RemoteInferencePreProcessFunction extends ConnectorPreProcessFunction {
@@ -47,8 +48,8 @@ public class RemoteInferencePreProcessFunction extends ConnectorPreProcessFuncti
     public RemoteInferenceInputDataSet process(MLInput mlInput) {
         Map<String, Object> inputParams = new HashMap<>();
         Map<String, String> parameters = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters();
-        if (params.containsKey(CONVERT_REMOTE_INFERENCE_PARAM_TO_OBJECT) &&
-                Boolean.parseBoolean(params.get(CONVERT_REMOTE_INFERENCE_PARAM_TO_OBJECT))) {
+        if (params.containsKey(CONVERT_REMOTE_INFERENCE_PARAM_TO_OBJECT)
+            && Boolean.parseBoolean(params.get(CONVERT_REMOTE_INFERENCE_PARAM_TO_OBJECT))) {
             for (String key : parameters.keySet()) {
                 if (isJson(parameters.get(key))) {
                     inputParams.put(key, gson.fromJson(parameters.get(key), Object.class));

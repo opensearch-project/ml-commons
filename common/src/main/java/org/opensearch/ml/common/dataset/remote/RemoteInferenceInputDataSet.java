@@ -7,17 +7,19 @@ package org.opensearch.ml.common.dataset.remote;
 
 import java.io.IOException;
 import java.util.Map;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.annotation.InputDataSet;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @InputDataSet(MLInputDataType.REMOTE)
@@ -43,7 +45,7 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
         super(MLInputDataType.REMOTE);
         Version streamInputVersion = streamInput.getVersion();
         if (streamInput.readBoolean()) {
-            parameters = streamInput.readMap(s -> s.readString(), s-> s.readString());
+            parameters = streamInput.readMap(s -> s.readString(), s -> s.readString());
         }
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG)) {
             if (streamInput.readBoolean()) {
@@ -58,7 +60,7 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
     public void writeTo(StreamOutput streamOutput) throws IOException {
         super.writeTo(streamOutput);
         Version streamOutputVersion = streamOutput.getVersion();
-        if (parameters !=  null) {
+        if (parameters != null) {
             streamOutput.writeBoolean(true);
             streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
         } else {

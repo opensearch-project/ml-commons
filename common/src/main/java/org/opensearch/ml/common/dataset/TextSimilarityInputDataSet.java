@@ -35,17 +35,17 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @InputDataSet(MLInputDataType.TEXT_SIMILARITY)
 public class TextSimilarityInputDataSet extends MLInputDataset {
-    
-   List<String> textDocs;
 
-   String queryText;
+    List<String> textDocs;
+
+    String queryText;
 
     @Builder(toBuilder = true)
     public TextSimilarityInputDataSet(String queryText, List<String> textDocs) {
         super(MLInputDataType.TEXT_SIMILARITY);
         Objects.requireNonNull(textDocs);
         Objects.requireNonNull(queryText);
-        if(textDocs.isEmpty()) {
+        if (textDocs.isEmpty()) {
             throw new IllegalArgumentException("No text documents were provided");
         }
         this.textDocs = textDocs;
@@ -57,7 +57,7 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
         this.queryText = in.readString();
         int size = in.readInt();
         this.textDocs = new ArrayList<String>();
-        for(int i = 0; i < size; i++) {
+        for (int i = 0; i < size; i++) {
             String context = in.readString();
             this.textDocs.add(context);
         }

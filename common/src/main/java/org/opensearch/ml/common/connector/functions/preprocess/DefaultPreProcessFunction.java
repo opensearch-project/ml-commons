@@ -5,21 +5,22 @@
 
 package org.opensearch.ml.common.connector.functions.preprocess;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.experimental.FieldDefaults;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.io.IOException;
+import java.util.Map;
+
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.script.ScriptService;
 
-import java.io.IOException;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.experimental.FieldDefaults;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class DefaultPreProcessFunction extends ConnectorPreProcessFunction {
@@ -37,8 +38,7 @@ public class DefaultPreProcessFunction extends ConnectorPreProcessFunction {
     }
 
     @Override
-    public void validate(MLInput mlInput) {
-    }
+    public void validate(MLInput mlInput) {}
 
     @Override
     public RemoteInferenceInputDataSet process(MLInput mlInput) {

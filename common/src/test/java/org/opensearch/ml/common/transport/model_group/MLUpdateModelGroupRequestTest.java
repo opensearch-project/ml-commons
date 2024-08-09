@@ -8,6 +8,7 @@ import static org.junit.Assert.assertSame;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -21,24 +22,23 @@ public class MLUpdateModelGroupRequestTest {
     private MLUpdateModelGroupInput mlUpdateModelGroupInput;
 
     @Before
-    public void setUp(){
+    public void setUp() {
 
-        mlUpdateModelGroupInput = mlUpdateModelGroupInput.builder()
-                .modelGroupID("modelGroupId")
-                .name("name")
-                .description("description")
-                .backendRoles(Arrays.asList("IT"))
-                .modelAccessMode(AccessMode.RESTRICTED)
-                .isAddAllBackendRoles(true)
-                .build();
+        mlUpdateModelGroupInput = mlUpdateModelGroupInput
+            .builder()
+            .modelGroupID("modelGroupId")
+            .name("name")
+            .description("description")
+            .backendRoles(Arrays.asList("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
     }
 
     @Test
     public void writeToSuccess() throws IOException {
 
-        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
-                .updateModelGroupInput(mlUpdateModelGroupInput)
-                .build();
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(mlUpdateModelGroupInput).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
         request = new MLUpdateModelGroupRequest(bytesStreamOutput.bytes().streamInput());
@@ -52,17 +52,14 @@ public class MLUpdateModelGroupRequestTest {
 
     @Test
     public void validateSuccess() {
-        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
-                .updateModelGroupInput(mlUpdateModelGroupInput)
-                .build();
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(mlUpdateModelGroupInput).build();
 
         assertNull(request.validate());
     }
 
     @Test
     public void validateWithNullMLUpdateModelGroupInputException() {
-        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
-                .build();
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().build();
         ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: Update Model group input can't be null;", exception.getMessage());
     }
@@ -71,28 +68,21 @@ public class MLUpdateModelGroupRequestTest {
     // MLUpdateModelGroupInput check its parameters when created, so exception is not thrown here
     public void validateWithNullMLModelNameException() {
         mlUpdateModelGroupInput.setName(null);
-        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
-                .updateModelGroupInput(mlUpdateModelGroupInput)
-                .build();
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(mlUpdateModelGroupInput).build();
 
         assertNull(request.validate());
         assertNull(request.getUpdateModelGroupInput().getName());
     }
 
-
     @Test
     public void fromActionRequestWithMLUpdateModelGroupRequestSuccess() {
-        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
-                .updateModelGroupInput(mlUpdateModelGroupInput)
-                .build();
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(mlUpdateModelGroupInput).build();
         assertSame(MLUpdateModelGroupRequest.fromActionRequest(request), request);
     }
 
     @Test
     public void fromActionRequestWithNonMLUpdateModelGroupRequestSuccess() {
-        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder()
-                .updateModelGroupInput(mlUpdateModelGroupInput)
-                .build();
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(mlUpdateModelGroupInput).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

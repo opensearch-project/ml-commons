@@ -16,31 +16,31 @@ public enum ColumnType {
     NULL;
 
     public static ColumnType from(Object object) {
-        if(object instanceof Short) {
+        if (object instanceof Short) {
             return SHORT;
         }
 
-        if(object instanceof Integer) {
+        if (object instanceof Integer) {
             return INTEGER;
         }
 
-        if(object instanceof Long) {
+        if (object instanceof Long) {
             return LONG;
         }
 
-        if(object instanceof String) {
+        if (object instanceof String) {
             return STRING;
         }
 
-        if(object instanceof Double) {
+        if (object instanceof Double) {
             return DOUBLE;
         }
 
-        if(object instanceof Boolean) {
+        if (object instanceof Boolean) {
             return BOOLEAN;
         }
 
-        if(object instanceof Float) {
+        if (object instanceof Float) {
             return FLOAT;
         }
 

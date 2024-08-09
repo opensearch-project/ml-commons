@@ -5,20 +5,21 @@
 
 package org.opensearch.ml.common.agent;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+
+import java.io.IOException;
+import java.util.Map;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @EqualsAndHashCode
 @Getter
@@ -29,7 +30,6 @@ public class LLMSpec implements ToXContentObject {
     private String modelId;
     private Map<String, String> parameters;
 
-
     @Builder(toBuilder = true)
     public LLMSpec(String modelId, Map<String, String> parameters) {
         if (modelId == null) {
@@ -39,7 +39,7 @@ public class LLMSpec implements ToXContentObject {
         this.parameters = parameters;
     }
 
-    public LLMSpec(StreamInput input) throws IOException{
+    public LLMSpec(StreamInput input) throws IOException {
         modelId = input.readString();
         if (input.readBoolean()) {
             parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
@@ -90,10 +90,7 @@ public class LLMSpec implements ToXContentObject {
                     break;
             }
         }
-        return LLMSpec.builder()
-                .modelId(modelId)
-                .parameters(parameters)
-                .build();
+        return LLMSpec.builder().modelId(modelId).parameters(parameters).build();
     }
 
     public static LLMSpec fromStream(StreamInput in) throws IOException {

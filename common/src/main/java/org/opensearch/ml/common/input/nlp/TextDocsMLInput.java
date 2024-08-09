@@ -5,7 +5,13 @@
 
 package org.opensearch.ml.common.input.nlp;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -17,17 +23,14 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
 /**
  * ML input class which supports a list fo text docs.
  * This class can be used for TEXT_EMBEDDING model.
  */
-@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_EMBEDDING, FunctionName.SPARSE_ENCODING, FunctionName.SPARSE_TOKENIZE})
+@org.opensearch.ml.common.annotation.MLInput(functionNames = {
+    FunctionName.TEXT_EMBEDDING,
+    FunctionName.SPARSE_ENCODING,
+    FunctionName.SPARSE_TOKENIZE })
 public class TextDocsMLInput extends MLInput {
     public static final String TEXT_DOCS_FIELD = "text_docs";
     public static final String RESULT_FILTER_FIELD = "result_filter";
@@ -97,8 +100,7 @@ public class TextDocsMLInput extends MLInput {
 
             switch (fieldName) {
                 case ML_PARAMETERS_FIELD:
-                    mlParameters = parser.namedObject(MLAlgoParams.class, this.algorithm.name().toUpperCase(
-                        Locale.ROOT), null);
+                    mlParameters = parser.namedObject(MLAlgoParams.class, this.algorithm.name().toUpperCase(Locale.ROOT), null);
                     break;
                 case RETURN_BYTES_FIELD:
                     returnBytes = parser.booleanValue();
@@ -136,8 +138,14 @@ public class TextDocsMLInput extends MLInput {
                     break;
             }
         }
-        ModelResultFilter filter = resultFilter != null ? resultFilter : ModelResultFilter.builder().returnBytes(returnBytes)
-                .returnNumber(returnNumber).targetResponse(targetResponse).targetResponsePositions(targetResponsePositions)
+        ModelResultFilter filter = resultFilter != null
+            ? resultFilter
+            : ModelResultFilter
+                .builder()
+                .returnBytes(returnBytes)
+                .returnNumber(returnNumber)
+                .targetResponse(targetResponse)
+                .targetResponsePositions(targetResponsePositions)
                 .build();
 
         if (docs.size() == 0) {

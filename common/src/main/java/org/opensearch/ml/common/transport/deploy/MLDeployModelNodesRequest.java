@@ -5,13 +5,14 @@
 
 package org.opensearch.ml.common.transport.deploy;
 
-import lombok.Getter;
+import java.io.IOException;
+
 import org.opensearch.action.support.nodes.BaseNodesRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
-import java.io.IOException;
+import lombok.Getter;
 
 public class MLDeployModelNodesRequest extends BaseNodesRequest<MLDeployModelNodesRequest> {
 

@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.output.execute.anomalylocalization;
 
+import static org.junit.Assert.assertEquals;
+
 import java.util.Arrays;
 
 import org.junit.Before;
@@ -15,8 +17,6 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-
-import static org.junit.Assert.assertEquals;
 
 public class AnomalyLocalizationOutputTests {
 

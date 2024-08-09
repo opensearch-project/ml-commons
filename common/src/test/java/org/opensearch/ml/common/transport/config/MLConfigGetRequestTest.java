@@ -4,17 +4,17 @@
  */
 package org.opensearch.ml.common.transport.config;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.action.ValidateActions.addValidationError;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 public class MLConfigGetRequestTest {
     String configId;
@@ -23,7 +23,7 @@ public class MLConfigGetRequestTest {
     public void constructor_configId() {
         configId = "test-abc";
         MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
-        assertEquals(mlConfigGetRequest.getConfigId(),configId);
+        assertEquals(mlConfigGetRequest.getConfigId(), configId);
     }
 
     @Test
@@ -52,13 +52,14 @@ public class MLConfigGetRequestTest {
     public void validate_Failure() {
         configId = null;
         MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
-        assertEquals(null,mlConfigGetRequest.configId);
+        assertEquals(null, mlConfigGetRequest.configId);
 
         ActionRequestValidationException exception = addValidationError("ML config id can't be null", null);
-        mlConfigGetRequest.validate().equals(exception) ;
+        mlConfigGetRequest.validate().equals(exception);
     }
+
     @Test
-    public void fromActionRequest_Success()  throws IOException {
+    public void fromActionRequest_Success() throws IOException {
         configId = "test-lmn";
         MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(configId);
         assertEquals(mlConfigGetRequest.fromActionRequest(mlConfigGetRequest), mlConfigGetRequest);
@@ -74,6 +75,7 @@ public class MLConfigGetRequestTest {
             public ActionRequestValidationException validate() {
                 return null;
             }
+
             @Override
             public void writeTo(StreamOutput out) throws IOException {
                 mlConfigGetRequest.writeTo(out);
@@ -101,5 +103,3 @@ public class MLConfigGetRequestTest {
         mlConfigGetRequest.fromActionRequest(actionRequest);
     }
 }
-
-

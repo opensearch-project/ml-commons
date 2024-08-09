@@ -17,8 +17,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -26,6 +25,9 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class ModelTensor implements Writeable, ToXContentObject {
@@ -49,7 +51,15 @@ public class ModelTensor implements Writeable, ToXContentObject {
     private Map<String, ?> dataAsMap;// whole result in Map
 
     @Builder
-    public ModelTensor(String name, Number[] data, long[] shape, MLResultDataType dataType, ByteBuffer byteBuffer, String result, Map<String, ?> dataAsMap) {
+    public ModelTensor(
+        String name,
+        Number[] data,
+        long[] shape,
+        MLResultDataType dataType,
+        ByteBuffer byteBuffer,
+        String result,
+        Map<String, ?> dataAsMap
+    ) {
         if (data != null && (dataType == null || dataType == MLResultDataType.UNKNOWN)) {
             throw new IllegalArgumentException("data type is null");
         }
@@ -179,14 +189,7 @@ public class ModelTensor implements Writeable, ToXContentObject {
                 data[i] = (Number) dataList.get(i);
             }
         }
-        return ModelTensor.builder()
-                .name(name)
-                .shape(shape)
-                .dataType(dataType)
-                .data(data)
-                .result(result)
-                .dataAsMap(dataAsMap)
-                .build();
+        return ModelTensor.builder().name(name).shape(shape).dataType(dataType).data(data).result(result).dataAsMap(dataAsMap).build();
     }
 
     public ModelTensor(StreamInput in) throws IOException {

@@ -65,9 +65,9 @@ public class ActionConstants {
     /** path for create conversation */
     public final static String CREATE_CONVERSATION_REST_PATH = BASE_REST_PATH;
     /** path for get conversations */
-    public final static String GET_CONVERSATIONS_REST_PATH  = BASE_REST_PATH;
+    public final static String GET_CONVERSATIONS_REST_PATH = BASE_REST_PATH;
     /** path for update conversations */
-    public final static String UPDATE_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/{memory_id}";
+    public final static String UPDATE_CONVERSATIONS_REST_PATH = BASE_REST_PATH + "/{memory_id}";
     /** path for create interaction */
     public final static String CREATE_INTERACTION_REST_PATH = BASE_REST_PATH + "/{memory_id}/messages";
     /** path for get interactions */
