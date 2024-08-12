@@ -41,7 +41,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
          * Get
          */
         // Now try to get that connector
-        response = makeRequest(tenantGetRequest, GET, CONNECTORS_PATH + connectorId);
+        response = makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("OpenAI Connector", map.get("name"));
@@ -55,14 +55,14 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
-                () -> makeRequest(otherGetRequest, GET, CONNECTORS_PATH + connectorId)
+                () -> makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + connectorId)
             );
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
         } else {
-            response = makeRequest(otherGetRequest, GET, CONNECTORS_PATH + connectorId);
+            response = makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("OpenAI Connector", map.get("name"));
@@ -72,14 +72,14 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
-                () -> makeRequest(nullGetRequest, GET, CONNECTORS_PATH + connectorId)
+                () -> makeRequest(nullTenantRequest, GET, CONNECTORS_PATH + connectorId)
             );
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         } else {
-            response = makeRequest(nullGetRequest, GET, CONNECTORS_PATH + connectorId);
+            response = makeRequest(nullTenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("OpenAI Connector", map.get("name"));
@@ -96,7 +96,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         assertEquals(connectorId, map.get(DOC_ID).toString());
 
         // Verify the update
-        response = makeRequest(tenantGetRequest, GET, CONNECTORS_PATH + connectorId);
+        response = makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("Updated name", map.get("name"));
@@ -116,7 +116,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             response = makeRequest(otherUpdateRequest, PUT, CONNECTORS_PATH + connectorId);
             assertOK(response);
             // Verify the update
-            response = makeRequest(otherGetRequest, GET, CONNECTORS_PATH + connectorId);
+            response = makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("Other tenant name", map.get("name"));
@@ -137,7 +137,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             response = makeRequest(nullUpdateRequest, PUT, CONNECTORS_PATH + connectorId);
             assertOK(response);
             // Verify the update
-            response = makeRequest(tenantGetRequest, GET, CONNECTORS_PATH + connectorId);
+            response = makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("Null tenant name", map.get("name"));
@@ -145,7 +145,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
 
         // Verify no change from original update when multiTenancy enabled
         if (multiTenancyEnabled) {
-            response = makeRequest(tenantGetRequest, GET, CONNECTORS_PATH + connectorId);
+            response = makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("Updated name", map.get("name"));
@@ -163,7 +163,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         String otherConnectorId = map.get(CONNECTOR_ID).toString();
 
         // Verify it
-        response = makeRequest(otherGetRequest, GET, CONNECTORS_PATH + otherConnectorId);
+        response = makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + otherConnectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("OpenAI Connector", map.get("name"));
@@ -224,21 +224,21 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
-                () -> makeRequest(tenantDeleteRequest, DELETE, CONNECTORS_PATH + otherConnectorId)
+                () -> makeRequest(tenantRequest, DELETE, CONNECTORS_PATH + otherConnectorId)
             );
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
 
-            ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantDeleteRequest, DELETE, CONNECTORS_PATH + connectorId));
+            ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, DELETE, CONNECTORS_PATH + connectorId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
 
             // and can't delete without a tenant ID either
-            ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantDeleteRequest, DELETE, CONNECTORS_PATH + connectorId));
+            ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantRequest, DELETE, CONNECTORS_PATH + connectorId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
@@ -247,29 +247,26 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
 
         // Now actually do the deletions. Same result whether multi-tenancy is enabled.
         // Delete from tenant
-        response = makeRequest(tenantDeleteRequest, DELETE, CONNECTORS_PATH + connectorId);
+        response = makeRequest(tenantRequest, DELETE, CONNECTORS_PATH + connectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(connectorId, map.get(DOC_ID).toString());
 
         // Verify the deletion
-        ResponseException ex = assertThrows(
-            ResponseException.class,
-            () -> makeRequest(tenantGetRequest, GET, CONNECTORS_PATH + connectorId)
-        );
+        ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find connector with the provided connector id: " + connectorId, getErrorReasonFromResponseMap(map));
 
         // Delete from other tenant
-        response = makeRequest(otherTenantDeleteRequest, DELETE, CONNECTORS_PATH + otherConnectorId);
+        response = makeRequest(otherTenantRequest, DELETE, CONNECTORS_PATH + otherConnectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(otherConnectorId, map.get(DOC_ID).toString());
 
         // Verify the deletion
-        ex = assertThrows(ResponseException.class, () -> makeRequest(otherGetRequest, GET, CONNECTORS_PATH + otherConnectorId));
+        ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + otherConnectorId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);

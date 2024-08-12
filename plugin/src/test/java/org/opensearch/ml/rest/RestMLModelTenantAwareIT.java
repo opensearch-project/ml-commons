@@ -56,7 +56,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
          * Get
          */
         // Now try to get that model
-        response = makeRequest(tenantGetRequest, GET, MODELS_PATH + modelId);
+        response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("test model", map.get("description"));
@@ -68,13 +68,13 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
         // Now try again with an other ID
         if (multiTenancyEnabled) {
-            ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(otherGetRequest, GET, MODELS_PATH + modelId));
+            ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, GET, MODELS_PATH + modelId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
         } else {
-            response = makeRequest(otherGetRequest, GET, MODELS_PATH + modelId);
+            response = makeRequest(otherTenantRequest, GET, MODELS_PATH + modelId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("test model", map.get("description"));
@@ -82,13 +82,13 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
         // Now try again with a null ID
         if (multiTenancyEnabled) {
-            ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(nullGetRequest, GET, MODELS_PATH + modelId));
+            ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantRequest, GET, MODELS_PATH + modelId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         } else {
-            response = makeRequest(nullGetRequest, GET, MODELS_PATH + modelId);
+            response = makeRequest(nullTenantRequest, GET, MODELS_PATH + modelId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("test model", map.get("description"));
@@ -105,7 +105,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertEquals(modelId, map.get(DOC_ID).toString());
 
         // Verify the update
-        response = makeRequest(tenantGetRequest, GET, MODELS_PATH + modelId);
+        response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("Updated test model", map.get("description"));
@@ -125,7 +125,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             response = makeRequest(otherUpdateRequest, PUT, MODELS_PATH + modelId);
             assertOK(response);
             // Verify the update
-            response = makeRequest(otherGetRequest, GET, MODELS_PATH + modelId);
+            response = makeRequest(otherTenantRequest, GET, MODELS_PATH + modelId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("Other updated test model", map.get("description"));
@@ -143,7 +143,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             response = makeRequest(nullUpdateRequest, PUT, MODELS_PATH + modelId);
             assertOK(response);
             // Verify the update
-            response = makeRequest(tenantGetRequest, GET, MODELS_PATH + modelId);
+            response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("Null updated test model", map.get("description"));
@@ -151,7 +151,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
         // Verify no change from original update when multiTenancy enabled
         if (multiTenancyEnabled) {
-            response = makeRequest(tenantGetRequest, GET, MODELS_PATH + modelId);
+            response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
             assertOK(response);
             map = responseToMap(response);
             assertEquals("Updated test model", map.get("description"));
@@ -199,7 +199,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         String otherModelId = map.get(MODEL_ID_FIELD).toString();
 
         // Verify it
-        response = makeRequest(otherGetRequest, GET, MODELS_PATH + otherModelId);
+        response = makeRequest(otherTenantRequest, GET, MODELS_PATH + otherModelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("other test model", map.get("description"));
@@ -260,21 +260,21 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
-                () -> makeRequest(tenantDeleteRequest, DELETE, MODELS_PATH + otherModelId)
+                () -> makeRequest(tenantRequest, DELETE, MODELS_PATH + otherModelId)
             );
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
 
-            ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantDeleteRequest, DELETE, MODELS_PATH + modelId));
+            ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, DELETE, MODELS_PATH + modelId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
 
             // and can't delete without a tenant ID either
-            ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantDeleteRequest, DELETE, MODELS_PATH + modelId));
+            ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantRequest, DELETE, MODELS_PATH + modelId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
@@ -287,7 +287,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
          * Caused by: OpenSearchStatusException: Failed to delete all model chunks, Bulk failure while deleting model of -9iYQ5EBZ_lf6RWAq7U5
          
         // Delete from tenant
-        response = makeRequest(tenantDeleteRequest, DELETE, MODELS_PATH + modelId);
+        response = makeRequest(tenantRequest, DELETE, MODELS_PATH + modelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(modelId, map.get(DOC_ID).toString());
@@ -300,7 +300,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertEquals("Failed to find model with the provided model id: " + modelId, getErrorReasonFromResponseMap(map));
         
         // Delete from other tenant
-        response = makeRequest(otherTenantDeleteRequest, DELETE, MODELS_PATH + otherModelId);
+        response = makeRequest(otherTenantRequest, DELETE, MODELS_PATH + otherModelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(otherModelId, map.get(DOC_ID).toString());
