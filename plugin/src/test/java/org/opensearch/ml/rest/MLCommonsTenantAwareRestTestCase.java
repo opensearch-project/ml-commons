@@ -53,39 +53,29 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected static final String MATCH_ALL_QUERY = "{\"query\":{\"match_all\":{}}}";
     protected static final String EMPTY_CONTENT = "{}";
 
-    // REST headers
-    protected String tenantId = "123:abc";
-    protected String otherTenantId = "789:xyz";
-    protected Map<String, List<String>> tenantIdHeaders = Map.of(TENANT_ID_HEADER, singletonList(tenantId));
-    protected Map<String, List<String>> otherTenantIdHeaders = Map.of(TENANT_ID_HEADER, singletonList(otherTenantId));
-    protected Map<String, List<String>> nullTenantIdHeaders = emptyMap();
-
     // REST Response error reasons
     protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing";
     protected static final String NO_PERMISSION_REASON = "You don't have permission to access this resource";
 
-    // Common get requests in subclasses
-    protected final RestRequest tenantGetRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-        .withHeaders(tenantIdHeaders)
+    // Common constants used in subclasses
+    protected String tenantId = "123:abc";
+    protected String otherTenantId = "789:xyz";
+
+    protected final RestRequest tenantRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        .withHeaders(Map.of(TENANT_ID_HEADER, singletonList(tenantId)))
         .build();
-    protected final RestRequest otherGetRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-        .withHeaders(otherTenantIdHeaders)
+    protected final RestRequest otherTenantRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        .withHeaders(Map.of(TENANT_ID_HEADER, singletonList(otherTenantId)))
         .build();
-    protected final RestRequest nullGetRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-        .withHeaders(nullTenantIdHeaders)
+    protected final RestRequest nullTenantRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        .withHeaders(emptyMap())
         .build();
 
-    // Common search requests in subclasses
     protected final RestRequest tenantMatchAllRequest = getRestRequestWithHeadersAndContent(tenantId, MATCH_ALL_QUERY);
     protected final RestRequest otherTenantMatchAllRequest = getRestRequestWithHeadersAndContent(otherTenantId, MATCH_ALL_QUERY);
     protected final RestRequest nullTenantMatchAllRequest = getRestRequestWithHeadersAndContent(null, MATCH_ALL_QUERY);
 
-    // Common delete requests in subclasses
-    protected final RestRequest tenantDeleteRequest = getRestRequestWithHeadersAndContent(tenantId, EMPTY_CONTENT);
-    protected final RestRequest otherTenantDeleteRequest = getRestRequestWithHeadersAndContent(otherTenantId, EMPTY_CONTENT);
-    protected final RestRequest nullTenantDeleteRequest = getRestRequestWithHeadersAndContent(null, EMPTY_CONTENT);
-
-    protected void enableMultiTenancy(boolean multiTenancyEnabled) throws IOException {
+    protected static void enableMultiTenancy(boolean multiTenancyEnabled) throws IOException {
         Response response = TestHelper
             .makeRequest(
                 client(),
@@ -98,7 +88,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
-    protected Response makeRequest(RestRequest request, String method, String path) throws IOException {
+    protected static Response makeRequest(RestRequest request, String method, String path) throws IOException {
         return TestHelper
             .makeRequest(client(), method, path, request.params(), request.content().utf8ToString(), getHeadersFromRequest(request));
     }
