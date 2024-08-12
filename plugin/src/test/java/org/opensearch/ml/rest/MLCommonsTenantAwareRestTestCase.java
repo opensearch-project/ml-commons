@@ -48,6 +48,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     // REST paths; some subclasses need multiple of these
     protected static final String CONNECTOR_ID = "connector_id";
     protected static final String CONNECTORS_PATH = "/_plugins/_ml/connectors/";
+    protected static final String MODELS_PATH = "/_plugins/_ml/models/";
 
     // REST body
     protected static final String MATCH_ALL_QUERY = "{\"query\":{\"match_all\":{}}}";
@@ -142,6 +143,10 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         assertEquals(RestStatus.FORBIDDEN.getStatus(), response.getStatusLine().getStatusCode());
     }
 
+    /*
+     * JSON Request body for tests. Model needs connector. Agent needs connector and model. 
+     */
+
     protected static String createConnectorContent() {
         return "{\n"
             + "    \"name\": \"OpenAI Connector\",\n"
@@ -171,5 +176,16 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
             + "        }\n"
             + "    ]\n"
             + "}";
+    }
+
+    protected static String registerRemoteModelContent(String description, String connectorId) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"name\": \"openAI-gpt-3.5-turbo\",\n");
+        sb.append("  \"function_name\": \"remote\",\n");
+        sb.append("  \"description\": \"").append(description).append("\",\n");
+        sb.append("  \"connector_id\": \"").append(connectorId).append("\"\n");
+        sb.append("}");
+        return sb.toString();
     }
 }

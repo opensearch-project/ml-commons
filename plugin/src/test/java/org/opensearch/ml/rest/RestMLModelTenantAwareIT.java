@@ -20,8 +20,6 @@ import org.opensearch.rest.RestRequest;
 
 public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
-    private static final String MODELS_PATH = "/_plugins/_ml/models/";
-
     public void testModelCRUD() throws IOException, InterruptedException {
         testModelCRUDMultitenancyEnabled(true);
         testModelCRUDMultitenancyEnabled(false);
@@ -31,7 +29,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         enableMultiTenancy(multiTenancyEnabled);
 
         /*
-         * Create
+         * Setup
          */
         // Create a connector to use
         RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, createConnectorContent());
@@ -40,7 +38,17 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         Map<String, Object> map = responseToMap(response);
         assertTrue(map.containsKey(CONNECTOR_ID));
         String connectorId = map.get(CONNECTOR_ID).toString();
+        // Create a second connector from other tenant
+        createConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, createConnectorContent());
+        response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
+        assertOK(response);
+        map = responseToMap(response);
+        assertTrue(map.containsKey(CONNECTOR_ID));
+        String otherConnectorId = map.get(CONNECTOR_ID).toString();
 
+        /*
+         * Create
+         */
         // Register a remote model with a tenant id
         RestRequest registerModelRequest = getRestRequestWithHeadersAndContent(
             tenantId,
@@ -179,15 +187,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             assertOK(response);
         }
 
-        // Create a second connector from other tenant
-        createConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, createConnectorContent());
-        response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
-        assertOK(response);
-        map = responseToMap(response);
-        assertTrue(map.containsKey(CONNECTOR_ID));
-        String otherConnectorId = map.get(CONNECTOR_ID).toString();
-
-        // Now register a model with it
+        // Now register a model with correct connector
         RestRequest otherModelRequest = getRestRequestWithHeadersAndContent(
             otherTenantId,
             registerRemoteModelContent("other test model", otherConnectorId)
@@ -317,16 +317,5 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         deleteIndexWithAdminClient(ML_MODEL_INDEX);
         // We test connector deletion elsewhere, just wipe the index
         deleteIndexWithAdminClient(ML_CONNECTOR_INDEX);
-    }
-
-    private static String registerRemoteModelContent(String description, String connectorId) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\n");
-        sb.append("  \"name\": \"openAI-gpt-3.5-turbo\",\n");
-        sb.append("  \"function_name\": \"remote\",\n");
-        sb.append("  \"description\": \"").append(description).append("\",\n");
-        sb.append("  \"connector_id\": \"").append(connectorId).append("\"\n");
-        sb.append("}");
-        return sb.toString();
     }
 }
