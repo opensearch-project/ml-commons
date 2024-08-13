@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
 import java.io.IOException;
 import java.util.Map;
@@ -30,7 +31,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
          * Create
          */
         // Create a connector with a tenant id
-        RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, createConnectorContent());
+        RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, COHERE_CONNECTOR_BLUEPRINT);
         Response response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
         assertOK(response);
         Map<String, Object> map = responseToMap(response);
@@ -44,7 +45,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         response = makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId);
         assertOK(response);
         map = responseToMap(response);
-        assertEquals("OpenAI Connector", map.get("name"));
+        assertEquals("Cohere Chat Model", map.get("name"));
         if (multiTenancyEnabled) {
             assertEquals(tenantId, map.get(TENANT_ID));
         } else {
@@ -65,7 +66,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             response = makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
-            assertEquals("OpenAI Connector", map.get("name"));
+            assertEquals("Cohere Chat Model", map.get("name"));
         }
 
         // Now try again with a null ID
@@ -82,7 +83,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             response = makeRequest(nullTenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
             map = responseToMap(response);
-            assertEquals("OpenAI Connector", map.get("name"));
+            assertEquals("Cohere Chat Model", map.get("name"));
         }
 
         /*
@@ -155,7 +156,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
          * Search
          */
         // Create a second connector using otherTenantId
-        RestRequest otherConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, createConnectorContent());
+        RestRequest otherConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, COHERE_CONNECTOR_BLUEPRINT);
         response = makeRequest(otherConnectorRequest, POST, CONNECTORS_PATH + "_create");
         assertOK(response);
         map = responseToMap(response);
@@ -166,7 +167,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         response = makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + otherConnectorId);
         assertOK(response);
         map = responseToMap(response);
-        assertEquals("OpenAI Connector", map.get("name"));
+        assertEquals("Cohere Chat Model", map.get("name"));
 
         // Search should show only the connector for tenant
         response = makeRequest(tenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");

@@ -57,6 +57,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     // REST Response error reasons
     protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing";
     protected static final String NO_PERMISSION_REASON = "You don't have permission to access this resource";
+    protected static final String SYSTEM_ERROR_REASON = "System Error";
 
     // Common constants used in subclasses
     protected String tenantId = "123:abc";
@@ -143,45 +144,10 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         assertEquals(RestStatus.FORBIDDEN.getStatus(), response.getStatusLine().getStatusCode());
     }
 
-    /*
-     * JSON Request body for tests. Model needs connector. Agent needs connector and model. 
-     */
-
-    protected static String createConnectorContent() {
-        return "{\n"
-            + "    \"name\": \"OpenAI Connector\",\n"
-            + "    \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
-            + "    \"version\": 1,\n"
-            + "    \"protocol\": \"http\",\n"
-            + "    \"parameters\": {\n"
-            + "        \"endpoint\": \"api.openai.com\",\n"
-            + "        \"auth\": \"API_Key\",\n"
-            + "        \"content_type\": \"application/json\",\n"
-            + "        \"max_tokens\": 7,\n"
-            + "        \"temperature\": 0,\n"
-            + "        \"model\": \"gpt-3.5-turbo-instruct\"\n"
-            + "    },\n"
-            + "    \"credential\": {\n"
-            + "        \"openAI_key\": \"xxxxxxxx\"\n"
-            + "    },\n"
-            + "    \"actions\": [\n"
-            + "        {\n"
-            + "            \"action_type\": \"predict\",\n"
-            + "            \"method\": \"POST\",\n"
-            + "            \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
-            + "            \"headers\": {\n"
-            + "                \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
-            + "            },\n"
-            + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\", \\\"max_tokens\\\": ${parameters.max_tokens}, \\\"temperature\\\": ${parameters.temperature} }\"\n"
-            + "        }\n"
-            + "    ]\n"
-            + "}";
-    }
-
     protected static String registerRemoteModelContent(String description, String connectorId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
-        sb.append("  \"name\": \"openAI-gpt-3.5-turbo\",\n");
+        sb.append("  \"name\": \"remote model for connector_id ").append(connectorId).append("\",\n");
         sb.append("  \"function_name\": \"remote\",\n");
         sb.append("  \"description\": \"").append(description).append("\",\n");
         sb.append("  \"connector_id\": \"").append(connectorId).append("\"\n");
