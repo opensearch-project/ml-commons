@@ -11,6 +11,8 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.input.execute.agent.AgentMLInput.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
+import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
 import java.io.IOException;
 import java.util.Map;
@@ -23,6 +25,16 @@ import org.opensearch.rest.RestRequest;
 public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
     private static final String AGENTS_PATH = "/_plugins/_ml/agents/";
+    private static final String EXECUTE_AGENT_BODY = "{\n"
+        + "  \"parameters\": {\n"
+        + "    \"question\": \"what's the population increase of Seattle from 2021 to 2023\",\n"
+        + "    \"inputs\": \""
+        + "      The current metro area population of Seattle in 2024 is 3,549,000, a 0.85% increase from 2023."
+        + "      The metro area population of Seattle in 2023 was 3,519,000, a 0.86% increase from 2022."
+        + "      The metro area population of Seattle in 2022 was 3,489,000, a 0.81% increase from 2021."
+        + "      The metro area population of Seattle in 2021 was 3,461,000, a 0.82% increase from 2020.\"\n"
+        + "  }\n"
+        + "}";
 
     public void testAgentCRUD() throws IOException, InterruptedException {
         testAgentCRUDMultitenancyEnabled(true);
@@ -36,7 +48,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
          * Setup
          */
         // Create a connector to use
-        RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, createConnectorContent());
+        RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, COHERE_CONNECTOR_BLUEPRINT);
         Response response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
         assertOK(response);
         Map<String, Object> map = responseToMap(response);
@@ -114,7 +126,47 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         /*
          * Execute
          */
-        // TODO Add tests here
+        RestRequest executeAgentRequest = getRestRequestWithHeadersAndContent(tenantId, EXECUTE_AGENT_BODY);
+        response = makeRequest(executeAgentRequest, POST, AGENTS_PATH + agentId + "/_execute");
+        assertOK(response);
+        map = responseToMap(response);
+        assertTrue(map.containsKey(INFERENCE_RESULT_FIELD));
+
+        // Now try again with an other ID
+        RestRequest otherTenantExecuteAgentRequest = getRestRequestWithHeadersAndContent(otherTenantId, EXECUTE_AGENT_BODY);
+        if (multiTenancyEnabled) {
+            ResponseException ex = assertThrows(
+                ResponseException.class,
+                () -> makeRequest(otherTenantExecuteAgentRequest, POST, AGENTS_PATH + agentId + "/_execute")
+            );
+            response = ex.getResponse();
+            assertForbidden(response);
+            map = responseToMap(response);
+            assertEquals(SYSTEM_ERROR_REASON, getErrorReasonFromResponseMap(map));
+        } else {
+            response = makeRequest(otherTenantExecuteAgentRequest, POST, AGENTS_PATH + agentId + "/_execute");
+            assertOK(response);
+            map = responseToMap(response);
+            assertTrue(map.containsKey(INFERENCE_RESULT_FIELD));
+        }
+
+        // Now try again with a null ID
+        RestRequest nullTenantExecuteAgentRequest = getRestRequestWithHeadersAndContent(null, EXECUTE_AGENT_BODY);
+        if (multiTenancyEnabled) {
+            ResponseException ex = assertThrows(
+                ResponseException.class,
+                () -> makeRequest(nullTenantExecuteAgentRequest, POST, AGENTS_PATH + agentId + "/_execute")
+            );
+            response = ex.getResponse();
+            assertForbidden(response);
+            map = responseToMap(response);
+            assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
+        } else {
+            response = makeRequest(nullTenantExecuteAgentRequest, POST, AGENTS_PATH + agentId + "/_execute");
+            assertOK(response);
+            map = responseToMap(response);
+            assertTrue(map.containsKey(INFERENCE_RESULT_FIELD));
+        }
 
         /*
          * Search

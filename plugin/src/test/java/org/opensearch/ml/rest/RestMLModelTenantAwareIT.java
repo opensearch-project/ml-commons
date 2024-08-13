@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
 import java.io.IOException;
 import java.util.Map;
@@ -32,14 +33,14 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
          * Setup
          */
         // Create a connector to use
-        RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, createConnectorContent());
+        RestRequest createConnectorRequest = getRestRequestWithHeadersAndContent(tenantId, COHERE_CONNECTOR_BLUEPRINT);
         Response response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
         assertOK(response);
         Map<String, Object> map = responseToMap(response);
         assertTrue(map.containsKey(CONNECTOR_ID));
         String connectorId = map.get(CONNECTOR_ID).toString();
         // Create a second connector from other tenant
-        createConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, createConnectorContent());
+        createConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, COHERE_CONNECTOR_BLUEPRINT);
         response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
         assertOK(response);
         map = responseToMap(response);
