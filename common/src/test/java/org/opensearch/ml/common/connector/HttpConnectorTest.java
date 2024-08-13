@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -202,7 +203,7 @@ public class HttpConnectorTest {
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        ArrayList<String> listOfDocuments= new ArrayList<>();
+        ArrayList<String> listOfDocuments = new ArrayList<>();
         listOfDocuments.add("document1");
         listOfDocuments.add("document2");
         parameters.put("context", toJson(listOfDocuments));

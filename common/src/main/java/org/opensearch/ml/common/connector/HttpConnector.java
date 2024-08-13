@@ -322,40 +322,42 @@ public class HttpConnector extends AbstractConnector {
         if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
             String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
-            parameters = formatArrayParameters(parameters);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
-
-            if (!isJson(payload)) {
-                throw new IllegalArgumentException("Invalid payload: " + payload);
+            boolean isJson = isJson(payload);
+            if (!isJson) {
+                String manuallyFixedJson = connectorAction.get().getRequestBody();
+                Map<String, String> escapedParameters = escapeMapValues(parameters);
+                StringSubstitutor escapedSubstitutor = new StringSubstitutor(escapedParameters, "${parameters.", "}");
+                manuallyFixedJson = escapedSubstitutor.replace(manuallyFixedJson);
+                if (!isJson(manuallyFixedJson)) {
+                    throw new IllegalArgumentException("Invalid payload: " + payload);
+                } else {
+                    payload = manuallyFixedJson;
+                }
             }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+
     }
 
-    private Map<String,String> formatArrayParameters(Map<String, String> parameters) {
-        Map<String,String> newParameters =  new HashMap<>();
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            String escapedValue = escapeJsonArrayIfNeeded(value);
-            newParameters.put(key,escapedValue);
+    public static Map<String, String> escapeMapValues(Map<String, String> parameters) {
+        Map<String, String> escapedMap = new HashMap<>();
+        if (parameters != null) {
+            for (Map.Entry<String, String> entry : parameters.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                String escapedValue = escapeValue(value);
+                escapedMap.put(key, escapedValue);
+            }
         }
-        return newParameters;
-    }
-    protected String escapeJsonArrayIfNeeded(String value) {
-        if (isJsonArray(value)) {
-            return value.replaceAll("([^\\\\])\"", "$1\\\\\"");
-        }
-        return value;
+        return escapedMap;
     }
 
-    protected boolean isJsonArray(String value) {
-        Pattern jsonArrayPattern = Pattern.compile("^\\[.*\\]$");
-        return jsonArrayPattern.matcher(value).matches();
+    private static String escapeValue(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
-
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
         List<String> bodyParams = findStringParametersWithNullDefaultValue(payload);
