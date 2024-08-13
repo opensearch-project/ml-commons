@@ -126,12 +126,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     /**
      * Processes the search response asynchronously by rewriting the documents with the inference results.
      *
-     * At default, process many document in one prediction through rewriteResponseDocuments method.
-     * but when process inference one document for one inference,
-     * separate one N-hits searchResponse into N one-hit search response,
-     * execute the same rewriteResponseDocument method,
-     * after N one-hit search response with inference result gets back,
-     * combined N one-hit search response back into one N-hits searchResponse.
+     * By default, it processes multiple documents in a single prediction through the rewriteResponseDocuments method.
+     * However, when processing one document per inference, it separates the N-hits search response into N one-hit search responses,
+     * executes the same rewriteResponseDocument method for each one-hit search response,
+     * and after receiving N one-hit search responses with inference results,
+     * it combines them back into a single N-hits search response.
      *
      * @param request          the search request
      * @param response         the search response

@@ -98,17 +98,6 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         }
     }
 
-    // public void testPrint(){
-    // String payload = "{\"prompt\":\"\\n\\nHuman: You are a professional data analysist. You will always answer question based on the
-    // given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you do not
-    // know the answer, just say I do not know. Context:[\"Dr. Eric Goldberg is a fantastic doctor who has correctly diagnosed every issue
-    // that my wife and I have had. Unlike many of my past doctors, Dr. Goldberg is very accessible and we have been able to schedule
-    // appointments with him and his staff very quickly. We are happy to have him in the neighborhood and look forward to being his patients
-    // for many years to come.\",\"happy visit\"]. Please answer this question: \"please summerize the documents\"
-    // \\n\\nAssistant:\",\"max_tokens_to_sample\":300,\"temperature\":0.5,\"top_k\":250,\"top_p\":1,\"stop_sequences\":[\"\\\\n\\\\nHuman:\"]}";
-    // System.out.println(payload);
-    // }
-
     /**
      * Tests the successful processing of a response with a single pair of input and output mappings.
      *
