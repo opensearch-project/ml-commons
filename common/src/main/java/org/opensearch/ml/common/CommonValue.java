@@ -66,7 +66,7 @@ public class CommonValue {
     public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
     public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 11;
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
-    public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
+    public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 3;
     public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
     public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
     public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 3;
@@ -392,6 +392,10 @@ public class CommonValue {
         + MLTask.IS_ASYNC_TASK_FIELD
         + "\" : {\"type\" : \"boolean\"}, \n"
         + USER_FIELD_MAPPING
+        + "    }\n"
+        + "}"
+        + MLTask.TRANSFORM_JOB_FIELD
+        + "\" : {\"type\": \"flat_object\"}\n"
         + "    }\n"
         + "}";
 
