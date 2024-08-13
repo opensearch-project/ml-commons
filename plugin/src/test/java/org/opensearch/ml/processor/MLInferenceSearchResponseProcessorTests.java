@@ -380,8 +380,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         );
 
         SearchRequest request = getSearchRequest();
-        String fieldName = "text";
-        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        SearchResponse response = getSearchResponseTwoFields(5, true, originalDocumentField, originalDocumentField1);
 
         ModelTensor modelTensor = ModelTensor
             .builder()
@@ -935,7 +935,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             @Override
             public void onFailure(Exception e) {
                 assertEquals(
-                    "cannot find all required input fields: [text] in hit:{\n"
+                    "Failed to process response: cannot find all required input fields: [text] in hit:{\n"
                         + "  \"_id\" : \"doc 2\",\n"
                         + "  \"_score\" : 2.0,\n"
                         + "  \"_source\" : {\n"
