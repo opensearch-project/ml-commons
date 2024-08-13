@@ -24,6 +24,7 @@ import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -33,6 +34,7 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -176,7 +178,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             if (ignoreFailure) {
                 responseListener.onResponse(response);
             } else {
-                responseListener.onFailure(new RuntimeException(e.getMessage()));
+                responseListener
+                    .onFailure(new OpenSearchStatusException("Failed to process response: " + e.getMessage(), RestStatus.BAD_REQUEST));
             }
         }
     }
