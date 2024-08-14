@@ -619,7 +619,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(1, requestCaptor.getValue().indices().length);
         assertEquals(TEST_INDEX, requestCaptor.getValue().indices()[0]);
         assertTrue(requestCaptor.getValue().source().toString().contains("\"query\":{\"bool\":{\"must\":"));
-        assertTrue(requestCaptor.getValue().source().toString().contains("\"filter\":[{\"term\":{\"_tenant_id\":{\"value\":\"xyz\""));
+        assertTrue(requestCaptor.getValue().source().toString().contains("\"filter\":[{\"term\":{\"tenant_id\":{\"value\":\"xyz\""));
 
         SearchResponse searchActionResponse = SearchResponse.fromXContent(response.parser());
         assertEquals(0, searchActionResponse.getFailedShards());
@@ -635,7 +635,7 @@ public class LocalClusterIndicesClientTests {
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
             .indices(TEST_INDEX)
-            // null tenant Id
+            .tenantId(TEST_TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
@@ -652,5 +652,28 @@ public class LocalClusterIndicesClientTests {
         Throwable cause = ce.getCause();
         assertEquals(UnsupportedOperationException.class, cause.getClass());
         assertEquals("test", cause.getMessage());
+    }
+    
+    @Test
+    public void testSearchDataObject_NullTenantId() throws IOException {
+        // Tests exception if multitenancy enabled
+        sdkClient.onMultiTenancyEnabledChanged(true);
+        
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
+            .indices(TEST_INDEX)
+            // null tenant Id
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        
+        CompletableFuture<SearchDataObjectResponse> future = sdkClient
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchStatusException.class, cause.getClass());
+        assertEquals("Tenant ID is required when multitenancy is enabled.", cause.getMessage());
     }
 }

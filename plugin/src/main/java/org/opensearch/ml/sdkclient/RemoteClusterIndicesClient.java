@@ -231,10 +231,12 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
                 if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
-                    String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
+                    if (request.tenantId() == null) {
+                        throw new OpenSearchStatusException("Tenant ID is required when multitenancy is enabled.", RestStatus.BAD_REQUEST);
+                    }
                     TermQuery tenantIdFilterQuery = new TermQuery.Builder()
                         .field(CommonValue.TENANT_ID)
-                        .value(FieldValue.of(tenantId))
+                        .value(FieldValue.of(request.tenantId()))
                         .build();
                     Query existingQuery = searchRequest.query();
                     BoolQuery boolQuery = new BoolQuery.Builder()

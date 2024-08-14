@@ -309,7 +309,7 @@ public class MLCreateConnectorInputTests {
 
     @Test
     public void testParseWithTenantId() throws Exception {
-        String inputWithTenantId = "{\"name\":\"test_connector_name\",\"version\":\"1\",\"protocol\":\"http\",\"_tenant_id\":\"test_tenant\"}";
+        String inputWithTenantId = "{\"name\":\"test_connector_name\",\"version\":\"1\",\"protocol\":\"http\",\"tenant_id\":\"test_tenant\"}";
         testParseFromJsonString(inputWithTenantId, parsedInput -> {
             assertEquals("test_connector_name", parsedInput.getName());
             assertEquals("test_tenant", parsedInput.getTenantId());

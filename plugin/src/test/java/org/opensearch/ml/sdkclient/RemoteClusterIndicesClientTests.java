@@ -558,7 +558,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         assertEquals(1, query.bool().must().size());
         assertEquals(1, query.bool().filter().size());
         assertTrue(query.bool().filter().get(0).isTerm());
-        assertEquals("_tenant_id", query.bool().filter().get(0).term().field());
+        assertEquals("tenant_id", query.bool().filter().get(0).term().field());
         assertEquals(TEST_TENANT_ID, query.bool().filter().get(0).term().value().stringValue());
 
         org.opensearch.action.search.SearchResponse searchActionResponse = org.opensearch.action.search.SearchResponse
@@ -575,12 +575,11 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
             .indices(TEST_INDEX)
-            // null tenant Id
+            .tenantId(TEST_TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
-        ArgumentCaptor<SearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
-        when(mockedOpenSearchClient.search(searchRequestCaptor.capture(), any())).thenThrow(new UnsupportedOperationException("test"));
+        when(mockedOpenSearchClient.search(any(SearchRequest.class), any())).thenThrow(new UnsupportedOperationException("test"));
         CompletableFuture<SearchDataObjectResponse> future = sdkClient
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
@@ -589,5 +588,28 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         Throwable cause = ce.getCause();
         assertEquals(UnsupportedOperationException.class, cause.getClass());
         assertEquals("test", cause.getMessage());
+    }
+
+    public void testSearchDataObject_NullTenant() throws IOException {
+        // Tests exception if multitenancy enabled
+        sdkClient.onMultiTenancyEnabledChanged(true);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
+            .indices(TEST_INDEX)
+            // null tenant Id
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        when(mockedOpenSearchClient.search(any(SearchRequest.class), any())).thenThrow(new UnsupportedOperationException("test"));
+        CompletableFuture<SearchDataObjectResponse> future = sdkClient
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchStatusException.class, cause.getClass());
+        assertEquals("Tenant ID is required when multitenancy is enabled.", cause.getMessage());
     }
 }

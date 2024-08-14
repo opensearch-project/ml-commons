@@ -17,6 +17,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
@@ -30,6 +31,7 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -87,7 +89,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
+        PutDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Indexing data object in {}", request.index());
@@ -112,7 +118,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(
+        GetDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 GetResponse getResponse = client
@@ -138,7 +148,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled) {
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(
+        UpdateDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Updating {} from {}", request.id(), request.index());
@@ -175,7 +189,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(
+        DeleteDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 log.info("Deleting {} from {}", request.id(), request.index());
@@ -201,10 +219,14 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
         log.info("Searching {}", Arrays.toString(request.indices()));
         SearchSourceBuilder searchSource = request.searchSourceBuilder();
         if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
+            if (request.tenantId() == null) {
+                return CompletableFuture.failedFuture(
+                    new OpenSearchStatusException("Tenant ID is required when multitenancy is enabled.", RestStatus.BAD_REQUEST)
+                );
+            }
             QueryBuilder existingQuery = searchSource.query();
-            String tenantId = request.tenantId() != null ? request.tenantId() : CommonValue.DEFAULT_TENANT;
             BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
-            boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, tenantId));
+            boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, request.tenantId()));
             searchSource.query(boolQuery);
         }
         log.info("Searching {}", Arrays.toString(request.indices()));
@@ -212,20 +234,18 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
             .doPrivileged((PrivilegedAction<ActionFuture<SearchResponse>>) () -> {
                 return client.search(new SearchRequest(request.indices(), searchSource));
             });
-        return CompletableFuture
-            .supplyAsync(searchResponseFuture::actionGet, executor)
-            .thenApply(searchResponse -> {
-                log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
-                try {
-                    return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
-                } catch (IOException e) {
-                    // Rethrow unchecked exception on XContent parsing error
-                    throw new OpenSearchStatusException(
-                        "Failed to search indices " + Arrays.toString(request.indices()),
-                        RestStatus.INTERNAL_SERVER_ERROR
-                    );
-                }
-            });
+        return CompletableFuture.supplyAsync(searchResponseFuture::actionGet, executor).thenApply(searchResponse -> {
+            log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
+            try {
+                return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException(
+                    "Failed to search indices " + Arrays.toString(request.indices()),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+            }
+        });
     }
 
     private XContentParser createParser(ToXContent obj) throws IOException {
