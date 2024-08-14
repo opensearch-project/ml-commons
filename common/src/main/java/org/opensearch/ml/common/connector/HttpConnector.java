@@ -324,16 +324,15 @@ public class HttpConnector extends AbstractConnector {
             payload = fillNullParameters(parameters, payload);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
-            boolean isJson = isJson(payload);
-            if (!isJson) {
-                String manuallyFixedJson = connectorAction.get().getRequestBody();
+            if (!isJson(payload)) {
+                String payloadAfterEscape = connectorAction.get().getRequestBody();
                 Map<String, String> escapedParameters = escapeMapValues(parameters);
                 StringSubstitutor escapedSubstitutor = new StringSubstitutor(escapedParameters, "${parameters.", "}");
-                manuallyFixedJson = escapedSubstitutor.replace(manuallyFixedJson);
-                if (!isJson(manuallyFixedJson)) {
+                payloadAfterEscape = escapedSubstitutor.replace(payloadAfterEscape);
+                if (!isJson(payloadAfterEscape)) {
                     throw new IllegalArgumentException("Invalid payload: " + payload);
                 } else {
-                    payload = manuallyFixedJson;
+                    payload = payloadAfterEscape;
                 }
             }
             return (T) payload;
