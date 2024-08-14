@@ -304,12 +304,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         Boolean isHidden,
         DeleteResponse deleteResponse
     ) {
-        CountDownLatch countDownLatch;
-        if (Objects.equals(functionName, FunctionName.REMOTE.name())){
-            countDownLatch = new CountDownLatch(1);
-        } else {
-            countDownLatch = new CountDownLatch(2);
-        }
+        CountDownLatch countDownLatch = new CountDownLatch(2);
         AtomicBoolean bothDeleted = new AtomicBoolean(true);
         ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
             countDownLatch.countDown();
@@ -350,6 +345,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         // evaluate if it's safe to leave as is
         if (!Objects.equals(functionName, FunctionName.REMOTE.name())) {
             deleteModelChunks(modelId, isHidden, countDownActionListener);
+        } else {
+            // for remote model we don't need to delete model chunks so reducing one latch countdown.
+            countDownLatch.countDown();
         }
         deleteController(modelId, isHidden, countDownActionListener);
     }
