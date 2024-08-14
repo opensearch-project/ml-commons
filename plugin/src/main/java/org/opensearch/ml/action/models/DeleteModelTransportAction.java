@@ -304,7 +304,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         Boolean isHidden,
         DeleteResponse deleteResponse
     ) {
-        CountDownLatch countDownLatch = new CountDownLatch(2);
+        CountDownLatch countDownLatch;
+        if (Objects.equals(functionName, FunctionName.REMOTE.name())){
+            countDownLatch = new CountDownLatch(1);
+        } else {
+            countDownLatch = new CountDownLatch(2);
+        }
         AtomicBoolean bothDeleted = new AtomicBoolean(true);
         ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
             countDownLatch.countDown();
