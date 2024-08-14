@@ -57,7 +57,6 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     // REST Response error reasons
     protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing";
     protected static final String NO_PERMISSION_REASON = "You don't have permission to access this resource";
-    protected static final String SYSTEM_ERROR_REASON = "System Error";
 
     // Common constants used in subclasses
     protected String tenantId = "123:abc";
@@ -123,7 +122,35 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
 
     @SuppressWarnings("unchecked")
     protected static String getErrorReasonFromResponseMap(Map<String, Object> map) {
-        return ((Map<String, String>) map.get("error")).get("reason");
+        // Two possible cases:
+        String type = ((Map<String, String>) map.get("error")).get("type");
+
+        // {
+        // "error": {
+        // "root_cause": [
+        // {
+        // "type": "status_exception",
+        // "reason": "You don't have permission to access this resource"
+        // }
+        // ],
+        // "type": "status_exception",
+        // "reason": "You don't have permission to access this resource"
+        // },
+        // "status": 403
+        // }
+        if ("status_exception".equals(type)) {
+            return ((Map<String, String>) map.get("error")).get("reason");
+        }
+
+        // {
+        // "error": {
+        // "reason": "System Error",
+        // "details": "You don't have permission to access this resource",
+        // "type": "OpenSearchStatusException"
+        // },
+        // "status": 403
+        // }
+        return ((Map<String, String>) map.get("error")).get("details");
     }
 
     protected static SearchResponse searchResponseFromResponse(Response response) throws IOException {

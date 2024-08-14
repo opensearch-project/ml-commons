@@ -142,7 +142,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(SYSTEM_ERROR_REASON, getErrorReasonFromResponseMap(map));
+            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
         } else {
             response = makeRequest(otherTenantExecuteAgentRequest, POST, AGENTS_PATH + agentId + "/_execute");
             assertOK(response);
