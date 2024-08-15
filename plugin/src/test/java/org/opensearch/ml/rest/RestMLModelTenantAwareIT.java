@@ -283,36 +283,32 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         }
 
         // Now actually do the deletions. Same result whether multi-tenancy is enabled.
-        /*
-         * TODO: Deletion currently failing due to IllegalStateException: Model is not all cleaned up, please try again.
-         * Caused by: OpenSearchStatusException: Failed to delete all model chunks, Bulk failure while deleting model of -9iYQ5EBZ_lf6RWAq7U5
-         
+
         // Delete from tenant
         response = makeRequest(tenantRequest, DELETE, MODELS_PATH + modelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(modelId, map.get(DOC_ID).toString());
-        
+
         // Verify the deletion
-        ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(tenantGetRequest, GET, MODELS_PATH + modelId));
+        ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(tenantRequest, GET, MODELS_PATH + modelId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find model with the provided model id: " + modelId, getErrorReasonFromResponseMap(map));
-        
+
         // Delete from other tenant
         response = makeRequest(otherTenantRequest, DELETE, MODELS_PATH + otherModelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(otherModelId, map.get(DOC_ID).toString());
-        
+
         // Verify the deletion
-        ex = assertThrows(ResponseException.class, () -> makeRequest(otherGetRequest, GET, MODELS_PATH + otherModelId));
+        ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, GET, MODELS_PATH + otherModelId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find model with the provided model id: " + otherModelId, getErrorReasonFromResponseMap(map));
-         */
 
         // Cleanup (since deletions may linger in search results)
         deleteIndexWithAdminClient(ML_MODEL_INDEX);
