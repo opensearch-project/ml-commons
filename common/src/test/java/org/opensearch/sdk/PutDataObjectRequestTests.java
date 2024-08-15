@@ -63,11 +63,7 @@ public class PutDataObjectRequestTests {
     public void testPutDataObjectRequestWithMap() throws IOException {
         Map<String, Object> dataObjectMap = Map.of("key1", "value1", "key2", "value2");
 
-        Builder builder = PutDataObjectRequest.builder()
-                .index(testIndex)
-                .id(testId)
-                .tenantId(testTenantId)
-                .dataObject(dataObjectMap);
+        Builder builder = PutDataObjectRequest.builder().index(testIndex).id(testId).tenantId(testTenantId).dataObject(dataObjectMap);
         PutDataObjectRequest request = builder.build();
 
         // Verify the index, id, tenantId, and overwriteIfExists fields

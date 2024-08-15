@@ -11,6 +11,7 @@ package org.opensearch.ml.sdkclient;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -77,15 +78,16 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 public class DDBOpenSearchClient implements SdkClientDelegate {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     private static final Long DEFAULT_SEQUENCE_NUMBER = 0L;
     private static final Long DEFAULT_PRIMARY_TERM = 1L;
-    private static final String HASH_KEY = "_tenant_id";
     private static final String RANGE_KEY = "_id";
 
     private static final String SOURCE = "_source";
     private static final String SEQ_NO_KEY = "_seq_no";
+
+    // TENANT_ID hash key requires non-null value
+    private static final String DEFAULT_TENANT = "DEFAULT_TENANT";
 
     private DynamoDbClient dynamoDbClient;
     private RemoteClusterIndicesClient remoteClusterIndicesClient;
@@ -110,7 +112,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
+        PutDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final String id = request.id() != null ? request.id() : UUID.randomUUID().toString();
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final String tableName = request.index();
@@ -123,7 +129,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> sourceMap = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 Map<String, AttributeValue> item = new HashMap<>();
-                item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                item.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
                 item.put(SOURCE, AttributeValue.builder().m(sourceMap).build());
                 item.put(SEQ_NO_KEY, AttributeValue.builder().n(sequenceNumber.toString()).build());
@@ -155,7 +161,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(
+        GetDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final GetItemRequest getItemRequest = buildGetItemRequest(request.tenantId(), request.id(), request.index());
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
@@ -207,14 +217,18 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(
+        UpdateDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
-                updateItem.remove(HASH_KEY);
+                updateItem.remove(TENANT_ID);
                 updateItem.remove(RANGE_KEY);
                 Map<String, AttributeValueUpdate> updateAttributeValue = new HashMap<>();
                 updateAttributeValue
@@ -227,7 +241,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                             .build()
                     );
                 Map<String, AttributeValue> updateKey = new HashMap<>();
-                updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+                updateKey.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest
                     .builder()
@@ -287,7 +301,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(
+        DeleteDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final DeleteItemRequest deleteItemRequest = DeleteItemRequest
             .builder()
@@ -295,7 +313,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             .key(
                 Map
                     .ofEntries(
-                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
+                        Map.entry(TENANT_ID, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(request.id()).build())
                     )
             )
@@ -329,7 +347,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
      * {@inheritDoc}
      */
     @Override
-    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(
+        SearchDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         List<String> indices = Arrays.stream(request.indices()).collect(Collectors.toList());
 
         SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest(
@@ -337,7 +359,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             request.tenantId(),
             request.searchSourceBuilder()
         );
-        return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor);
+        return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor, isMultiTenancyEnabled);
     }
 
     private XContentParser createParser(String json) throws IOException {
@@ -352,7 +374,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             .key(
                 Map
                     .ofEntries(
-                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
+                        Map.entry(TENANT_ID, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(documentId).build())
                     )
             )

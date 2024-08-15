@@ -25,8 +25,13 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.json.JsonpMapper;
 import org.opensearch.client.json.JsonpSerializable;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.OpType;
 import org.opensearch.client.opensearch._types.OpenSearchException;
+import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
+import org.opensearch.client.opensearch._types.query_dsl.MatchAllQuery;
+import org.opensearch.client.opensearch._types.query_dsl.Query;
+import org.opensearch.client.opensearch._types.query_dsl.TermQuery;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -48,6 +53,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -87,7 +93,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
+        PutDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try {
                 IndexRequest.Builder<?> builder = new IndexRequest.Builder<>()
@@ -114,7 +124,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(
+        GetDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
@@ -135,7 +149,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(
+        UpdateDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
                 request.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -178,7 +196,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(
+        DeleteDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 DeleteRequest deleteRequest = new DeleteRequest.Builder().index(request.index()).id(request.id()).build();
@@ -198,13 +220,31 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(
+        SearchDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
                 JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
-                searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).build();
+                if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
+                    if (request.tenantId() == null) {
+                        throw new OpenSearchStatusException("Tenant ID is required when multitenancy is enabled.", RestStatus.BAD_REQUEST);
+                    }
+                    TermQuery tenantIdFilterQuery = new TermQuery.Builder()
+                        .field(CommonValue.TENANT_ID)
+                        .value(FieldValue.of(request.tenantId()))
+                        .build();
+                    Query existingQuery = searchRequest.query();
+                    BoolQuery boolQuery = new BoolQuery.Builder()
+                        .must(existingQuery == null ? new MatchAllQuery.Builder().build().toQuery() : existingQuery)
+                        .filter(tenantIdFilterQuery.toQuery())
+                        .build();
+                    searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).query(boolQuery.toQuery()).build();
+                }
                 SearchResponse<?> searchResponse = openSearchClient.search(searchRequest, MAP_DOCTYPE);
                 log.info("Search returned {} hits", searchResponse.hits().total().value());
                 return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();

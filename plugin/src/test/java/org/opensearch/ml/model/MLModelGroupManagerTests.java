@@ -76,7 +76,7 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 public class MLModelGroupManagerTests extends OpenSearchTestCase {
-    private static final String TENANT_ID = "tenant_id";
+    private static final String TENANT_ID = "_tenant_id";
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();

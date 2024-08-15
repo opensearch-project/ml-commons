@@ -78,7 +78,7 @@ import com.google.common.collect.ImmutableMap;
 public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private static final String CONNECTOR_ID = "connector_id";
-    private static final String TENANT_ID = "tenant_id";
+    private static final String TENANT_ID = "_tenant_id";
 
     private static TestThreadPool testThreadPool = new TestThreadPool(
         TransportCreateConnectorActionTests.class.getName(),

@@ -109,14 +109,14 @@ public class RestMLDeleteConnectorActionTests extends OpenSearchTestCase {
 
     public void testPrepareRequest_MultiTenancyEnabled() throws Exception {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        RestRequest request = getRestRequest("connector_id", "tenant_id");
+        RestRequest request = getRestRequest("connector_id", "_tenant_id");
         restMLDeleteConnectorAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLConnectorDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLConnectorDeleteRequest.class);
         verify(client, times(1)).execute(eq(MLConnectorDeleteAction.INSTANCE), argumentCaptor.capture(), any());
         MLConnectorDeleteRequest mlConnectorDeleteRequest = argumentCaptor.getValue();
         assertEquals("connector_id", mlConnectorDeleteRequest.getConnectorId());
-        assertEquals("tenant_id", mlConnectorDeleteRequest.getTenantId());
+        assertEquals("_tenant_id", mlConnectorDeleteRequest.getTenantId());
     }
 
     private RestRequest getRestRequest(String connectorId, String tenantId) {

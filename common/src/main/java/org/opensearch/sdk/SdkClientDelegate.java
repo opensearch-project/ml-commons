@@ -17,43 +17,48 @@ public interface SdkClientDelegate {
      * Create/Put/Index a data object/document into a table/index.
      * @param request A request encapsulating the data object to store
      * @param executor the executor to use for asynchronous execution
+     * @param isMultiTenancyEnabled whether multitenancy is enabled
      * @return A completion stage encapsulating the response or exception
      */
-    CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor);
+    CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled);
 
     /**
      * Read/Get a data object/document from a table/index.
      *
      * @param request  A request identifying the data object to retrieve
      * @param executor the executor to use for asynchronous execution
+     * @param isMultiTenancyEnabled whether multitenancy is enabled
      * @return A completion stage encapsulating the response or exception
      */
-    CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor);
+    CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled);
 
     /**
      * Update a data object/document in a table/index.
      *
      * @param request  A request identifying the data object to update
      * @param executor the executor to use for asynchronous execution
+     * @param isMultiTenancyEnabled whether multitenancy is enabled
      * @return A completion stage encapsulating the response or exception
      */
-    CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor);
+    CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled);
 
     /**
      * Delete a data object/document from a table/index.
      *
      * @param request  A request identifying the data object to delete
      * @param executor the executor to use for asynchronous execution
+     * @param isMultiTenancyEnabled whether multitenancy is enabled
      * @return A completion stage encapsulating the response or exception
      */
-    CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor);
+    CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled);
 
     /**
      * Search for data objects/documents in a table/index.
      *
      * @param request  A request identifying the data objects to search for
      * @param executor the executor to use for asynchronous execution
+     * @param isMultiTenancyEnabled whether multitenancy is enabled
      * @return A completion stage encapsulating the response or exception
      */
-    CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor);
+    CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor, Boolean isMultiTenancyEnabled);
 }

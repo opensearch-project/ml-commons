@@ -17,6 +17,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
@@ -30,9 +31,11 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.common.Strings;
@@ -44,6 +47,11 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.engine.VersionConflictEngineException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -56,6 +64,7 @@ import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -80,7 +89,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
+    public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
+        PutDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Indexing data object in {}", request.index());
@@ -105,7 +118,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request, Executor executor) {
+    public CompletionStage<GetDataObjectResponse> getDataObjectAsync(
+        GetDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
             try {
                 GetResponse getResponse = client
@@ -131,7 +148,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+    public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(
+        UpdateDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
             try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
                 log.info("Updating {} from {}", request.id(), request.index());
@@ -168,7 +189,11 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
+    public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(
+        DeleteDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 log.info("Deleting {} from {}", request.id(), request.index());
@@ -186,10 +211,30 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
     }
 
     @Override
-    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
-            log.info("Searching {}", Arrays.toString(request.indices()));
-            SearchResponse searchResponse = client.search(new SearchRequest(request.indices(), request.searchSourceBuilder())).actionGet();
+    public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(
+        SearchDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        log.info("Searching {}", Arrays.toString(request.indices()));
+        SearchSourceBuilder searchSource = request.searchSourceBuilder();
+        if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
+            if (request.tenantId() == null) {
+                return CompletableFuture.failedFuture(
+                    new OpenSearchStatusException("Tenant ID is required when multitenancy is enabled.", RestStatus.BAD_REQUEST)
+                );
+            }
+            QueryBuilder existingQuery = searchSource.query();
+            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
+            boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, request.tenantId()));
+            searchSource.query(boolQuery);
+        }
+        log.info("Searching {}", Arrays.toString(request.indices()));
+        ActionFuture<SearchResponse> searchResponseFuture = AccessController
+            .doPrivileged((PrivilegedAction<ActionFuture<SearchResponse>>) () -> {
+                return client.search(new SearchRequest(request.indices(), searchSource));
+            });
+        return CompletableFuture.supplyAsync(searchResponseFuture::actionGet, executor).thenApply(searchResponse -> {
             log.info("Search returned {} hits", searchResponse.getHits().getTotalHits());
             try {
                 return SearchDataObjectResponse.builder().parser(createParser(searchResponse)).build();
@@ -200,7 +245,7 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        });
     }
 
     private XContentParser createParser(ToXContent obj) throws IOException {
