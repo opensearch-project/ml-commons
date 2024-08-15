@@ -187,7 +187,6 @@ public class EncryptorImpl implements Encryptor {
         AtomicReference<Exception> exceptionRef,
         CountDownLatch latch
     ) {
-        context.restore();
         log.debug("Completed Get MASTER_KEY Request, for tenant id:{}", tenantId);
 
         if (throwable != null) {
@@ -195,6 +194,7 @@ public class EncryptorImpl implements Encryptor {
         } else {
             handleGetDataObjectSuccess(response, tenantId, exceptionRef, latch, context);
         }
+        context.restore();
     }
 
     private void handleGetDataObjectFailure(Throwable throwable, AtomicReference<Exception> exceptionRef, CountDownLatch latch) {

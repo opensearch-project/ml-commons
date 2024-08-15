@@ -99,9 +99,9 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
             sdkClient
                 .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
-                    context.restore();
                     log.debug("Completed Get Agent Request, Agent id:{}", agentId);
                     if (throwable != null) {
+                        context.restore();
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (cause instanceof IndexNotFoundException) {
                             log.info("Failed to get Agent index", cause);
@@ -124,6 +124,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                     if (TenantAwareHelper
                                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlAgent.getTenantId(), actionListener)) {
                                         if (mlAgent.getIsHidden() && !isSuperAdmin) {
+                                            context.restore();
                                             actionListener
                                                 .onFailure(
                                                     new OpenSearchStatusException(
@@ -144,15 +145,12 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                                             .build(),
                                                         client.threadPool().executor(GENERAL_THREAD_POOL)
                                                     )
-                                                    .whenComplete(
-                                                        (response, delThrowable) -> handleDeleteResponse(
-                                                            response,
-                                                            delThrowable,
-                                                            tenantId,
-                                                            actionListener
-                                                        )
-                                                    );
+                                                    .whenComplete((response, delThrowable) -> {
+                                                        context.restore();
+                                                        handleDeleteResponse(response, delThrowable, tenantId, actionListener);
+                                                    });
                                             } catch (Exception e) {
+                                                context.restore();
                                                 log.error("Failed to delete ML agent: {}", agentId, e);
                                                 actionListener.onFailure(e);
                                             }
