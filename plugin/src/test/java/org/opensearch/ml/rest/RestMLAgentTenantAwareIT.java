@@ -57,7 +57,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         // Register a remote model to use
         RestRequest registerModelRequest = getRestRequestWithHeadersAndContent(
             tenantId,
-            registerRemoteModelContent("test model", connectorId)
+            registerRemoteModelContent("test model", connectorId, null)
         );
         response = makeRequest(registerModelRequest, POST, MODELS_PATH + "_register");
         assertOK(response);

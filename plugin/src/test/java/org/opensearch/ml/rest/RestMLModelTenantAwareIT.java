@@ -53,7 +53,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         // Register a remote model with a tenant id
         RestRequest registerModelRequest = getRestRequestWithHeadersAndContent(
             tenantId,
-            registerRemoteModelContent("test model", connectorId)
+            registerRemoteModelContent("test model", connectorId, null)
         );
         response = makeRequest(registerModelRequest, POST, MODELS_PATH + "_register");
         assertOK(response);
@@ -172,7 +172,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         // Attempt to register a second remote model using otherTenantId but tenantId-owned connector
         RestRequest wrongTenantModelRequest = getRestRequestWithHeadersAndContent(
             otherTenantId,
-            registerRemoteModelContent("other test model", connectorId)
+            registerRemoteModelContent("other test model", connectorId, null)
         );
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
@@ -191,7 +191,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         // Now register a model with correct connector
         RestRequest otherModelRequest = getRestRequestWithHeadersAndContent(
             otherTenantId,
-            registerRemoteModelContent("other test model", otherConnectorId)
+            registerRemoteModelContent("other test model", otherConnectorId, null)
         );
         response = makeRequest(otherModelRequest, POST, MODELS_PATH + "_register");
         assertOK(response);
