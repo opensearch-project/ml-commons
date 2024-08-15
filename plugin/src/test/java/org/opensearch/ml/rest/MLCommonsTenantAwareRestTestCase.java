@@ -49,6 +49,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected static final String CONNECTOR_ID = "connector_id";
     protected static final String CONNECTORS_PATH = "/_plugins/_ml/connectors/";
     protected static final String MODELS_PATH = "/_plugins/_ml/models/";
+    protected static final String MODEL_GROUPS_PATH = "/_plugins/_ml/model_groups/";
 
     // REST body
     protected static final String MATCH_ALL_QUERY = "{\"query\":{\"match_all\":{}}}";
@@ -175,12 +176,15 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         assertEquals(RestStatus.UNAUTHORIZED.getStatus(), response.getStatusLine().getStatusCode());
     }
 
-    protected static String registerRemoteModelContent(String description, String connectorId) {
+    protected static String registerRemoteModelContent(String description, String connectorId, String modelGroupId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
         sb.append("  \"name\": \"remote model for connector_id ").append(connectorId).append("\",\n");
         sb.append("  \"function_name\": \"remote\",\n");
         sb.append("  \"description\": \"").append(description).append("\",\n");
+        if (modelGroupId != null) {
+            sb.append("  \"model_group_id\": \"").append(modelGroupId).append("\",\n");
+        }
         sb.append("  \"connector_id\": \"").append(connectorId).append("\"\n");
         sb.append("}");
         return sb.toString();
