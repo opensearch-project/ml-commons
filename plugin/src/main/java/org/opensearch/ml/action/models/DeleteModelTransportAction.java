@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.common.MLModel.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
@@ -17,6 +18,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -42,6 +44,7 @@ import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -73,14 +76,14 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     static final String BULK_FAILURE_MSG = "Bulk failure while deleting model of ";
     static final String SEARCH_FAILURE_MSG = "Search failure while deleting model of ";
     static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks";
-    Client client;
-    SdkClient sdkClient;
-    NamedXContentRegistry xContentRegistry;
-    ClusterService clusterService;
+    final Client client;
+    final SdkClient sdkClient;
+    final NamedXContentRegistry xContentRegistry;
+    final ClusterService clusterService;
 
     Settings settings;
 
-    ModelAccessControlHelper modelAccessControlHelper;
+    final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
@@ -124,7 +127,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             sdkClient
                 .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
@@ -143,8 +146,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     String algorithmName = "";
                                     Map<String, Object> source = r.source();
-                                    if (source != null && source.get(ALGORITHM_FIELD) != null) {
-                                        algorithmName = source.get(ALGORITHM_FIELD).toString();
+                                    if (source != null) {
+                                        if (source.get(FUNCTION_NAME_FIELD) != null) {
+                                            algorithmName = source.get(FUNCTION_NAME_FIELD).toString();
+                                        } else if (source.get(ALGORITHM_FIELD) != null) {
+                                            algorithmName = source.get(ALGORITHM_FIELD).toString();
+                                        }
                                     }
                                     MLModel mlModel = MLModel.parse(parser, algorithmName);
                                     if (!TenantAwareHelper
@@ -164,7 +171,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 );
                                         } else {
                                             if (isModelNotDeployed(mlModelState)) {
-                                                deleteModel(modelId, isHidden, actionListener);
+                                                deleteModel(modelId, algorithmName, isHidden, actionListener);
                                             } else {
                                                 wrappedListener
                                                     .onFailure(
@@ -191,7 +198,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                                 )
                                                             );
                                                     } else if (isModelNotDeployed(mlModelState)) {
-                                                        deleteModel(modelId, isHidden, actionListener);
+                                                        deleteModel(modelId, mlModel.getAlgorithm().name(), isHidden, actionListener);
                                                     } else {
                                                         wrappedListener
                                                             .onFailure(
@@ -208,7 +215,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                             );
                                     }
                                 } catch (Exception e) {
-                                    log.error("Failed to parse ml model " + r.id(), e);
+                                    log.error("Failed to parse ml model {}", r.id(), e);
                                     wrappedListener.onFailure(e);
                                 }
                             } else {
@@ -216,7 +223,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                 // return
                                 // success
                                 // response
-                                deleteModelChunksAndController(wrappedListener, modelId, false, null);
+                                // as we can't see the metadata we are providing functionName as null. In this way,
+                                // code will try to remove model chunks for any models other than remote. As remote
+                                // model doesn't have any model chunks.
+                                deleteModelChunksAndController(wrappedListener, modelId, null, false, null);
                             }
                         } catch (Exception e) {
                             wrappedListener.onFailure(e);
@@ -226,7 +236,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                     }
                 });
         } catch (Exception e) {
-            log.error("Failed to delete ML model " + modelId, e);
+            log.error("Failed to delete ML model {}", modelId, e);
             actionListener.onFailure(e);
         }
     }
@@ -237,8 +247,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
 
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
-            if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
-                && (r.getSearchFailures() == null || r.getSearchFailures().size() == 0)) {
+            if ((r.getBulkFailures() == null || r.getBulkFailures().isEmpty())
+                && (r.getSearchFailures() == null || r.getSearchFailures().isEmpty())) {
                 log.debug(getErrorMessage("All model chunks are deleted for the provided model.", modelId, isHidden));
                 actionListener.onResponse(true);
             } else {
@@ -251,7 +261,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void returnFailure(BulkByScrollResponse response, String modelId, ActionListener<Boolean> actionListener) {
-        String errorMessage = "";
+        String errorMessage;
         if (response.isTimedOut()) {
             errorMessage = OS_STATUS_EXCEPTION_MESSAGE + ", " + TIMEOUT_MSG + modelId;
         } else if (!response.getBulkFailures().isEmpty()) {
@@ -263,7 +273,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
+    private void deleteModel(String modelId, String functionName, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest.builder().index(ML_MODEL_INDEX).id(modelId).build();
         sdkClient
             .deleteDataObjectAsync(deleteDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
@@ -271,14 +281,14 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 if (throwable == null) {
                     try {
                         DeleteResponse deleteResponse = DeleteResponse.fromXContent(r.parser());
-                        deleteModelChunksAndController(actionListener, modelId, isHidden, deleteResponse);
+                        deleteModelChunksAndController(actionListener, modelId, functionName, isHidden, deleteResponse);
                     } catch (Exception e) {
                         actionListener.onFailure(e);
                     }
                 } else {
                     Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (e instanceof ResourceNotFoundException) {
-                        deleteModelChunksAndController(actionListener, modelId, isHidden, null);
+                        deleteModelChunksAndController(actionListener, modelId, functionName, isHidden, null);
                     } else {
                         log.error(getErrorMessage("Model is not all cleaned up, please try again.", modelId, isHidden), e);
                         actionListener.onFailure(e);
@@ -290,6 +300,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void deleteModelChunksAndController(
         ActionListener<DeleteResponse> actionListener,
         String modelId,
+        String functionName,
         Boolean isHidden,
         DeleteResponse deleteResponse
     ) {
@@ -332,7 +343,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         });
         // TODO: this uses DeleteByQuery which isn't on SdkClient
         // evaluate if it's safe to leave as is
-        deleteModelChunks(modelId, isHidden, countDownActionListener);
+        if (!Objects.equals(functionName, FunctionName.REMOTE.name())) {
+            deleteModelChunks(modelId, isHidden, countDownActionListener);
+        } else {
+            // for remote model we don't need to delete model chunks so reducing one latch countdown.
+            countDownLatch.countDown();
+        }
         deleteController(modelId, isHidden, countDownActionListener);
     }
 

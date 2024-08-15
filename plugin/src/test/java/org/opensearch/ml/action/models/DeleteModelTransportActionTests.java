@@ -211,13 +211,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         future.onResponse(deleteResponse);
         when(client.delete(any())).thenReturn(future);
 
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
-
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
         getFuture.onResponse(getResponse);
@@ -689,6 +682,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             .modelState(mlModelState)
             .modelGroupId(modelGroupID)
             .isHidden(isHidden)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
             .build();
         return buildResponse(mlModel);
     }
