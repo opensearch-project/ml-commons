@@ -101,6 +101,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                 .whenComplete((r, throwable) -> {
                     log.debug("Completed Get Agent Request, Agent id:{}", agentId);
                     if (throwable != null) {
+                        context.restore();
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (cause instanceof IndexNotFoundException) {
                             log.info("Failed to get Agent index", cause);
@@ -152,6 +153,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                                         handleDeleteResponse(response, delThrowable, tenantId, wrappedListener);
                                                     });
                                             } catch (Exception e) {
+                                                context.restore();
                                                 log.error("Failed to delete ML agent: {}", agentId, e);
                                                 wrappedListener.onFailure(e);
                                             }
