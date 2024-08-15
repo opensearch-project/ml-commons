@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
@@ -189,7 +190,9 @@ public interface RemoteConnectorExecutor {
         // override again to always prioritize the input parameter
         parameters.putAll(inputParameters);
         String payload = connector.createPayload(action, parameters);
-        connector.validatePayload(payload);
+        if (!Boolean.parseBoolean(parameters.getOrDefault(SKIP_VALIDATE_MISSING_PARAMETERS, "false"))) {
+            connector.validatePayload(payload);
+        }
         String userStr = getClient()
             .threadPool()
             .getThreadContext()
