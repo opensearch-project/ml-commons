@@ -41,6 +41,8 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -245,8 +247,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     @VisibleForTesting
     void deleteModelChunks(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
-        deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
-
+        deleteModelsRequest
+            .setQuery(
+                new BoolQueryBuilder()
+                    .must(new TermsQueryBuilder(MODEL_ID_FIELD, modelId)) // Match documents with the same model_id
+                    .mustNot(new TermQueryBuilder("_id", modelId)) // exclude the document just deleted
+            );
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
             if ((r.getBulkFailures() == null || r.getBulkFailures().isEmpty())
                 && (r.getSearchFailures() == null || r.getSearchFailures().isEmpty())) {
