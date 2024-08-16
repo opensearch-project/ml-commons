@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -164,13 +165,18 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                     responseListener,
                     hits
                 );
-
+                AtomicBoolean isOneHitListenerFailed = new AtomicBoolean(false);
+                ;
                 for (SearchHit hit : hits) {
                     SearchHit[] newHits = new SearchHit[1];
                     newHits[0] = hit;
                     SearchResponse oneHitResponse = SearchResponseUtil.replaceHits(newHits, response);
-                    ActionListener<SearchResponse> oneHitListener = getOneHitListener(combineResponseListener);
+                    ActionListener<SearchResponse> oneHitListener = getOneHitListener(combineResponseListener, isOneHitListenerFailed);
                     rewriteResponseDocuments(oneHitResponse, oneHitListener);
+                    // if any OneHitListener failure, try stop the rest of the predictions
+                    if (isOneHitListenerFailed.get()) {
+                        break;
+                    }
                 }
             }
 
@@ -189,12 +195,16 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * onResponse and onFailure callbacks to a GroupedActionListener.
      *
      * @param combineResponseListener The GroupedActionListener to which the
-     *                                 onResponse and onFailure callbacks will be
-     *                                 delegated.
+     *                                onResponse and onFailure callbacks will be
+     *                                delegated.
+     * @param isOneHitListenerFailed
      * @return An ActionListener that delegates its callbacks to the provided
-     *         GroupedActionListener.
+     * GroupedActionListener.
      */
-    private static ActionListener<SearchResponse> getOneHitListener(GroupedActionListener<SearchResponse> combineResponseListener) {
+    private static ActionListener<SearchResponse> getOneHitListener(
+        GroupedActionListener<SearchResponse> combineResponseListener,
+        AtomicBoolean isOneHitListenerFailed
+    ) {
         ActionListener<SearchResponse> oneHitListener = new ActionListener<>() {
             @Override
             public void onResponse(SearchResponse response) {
@@ -203,6 +213,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
             @Override
             public void onFailure(Exception e) {
+                // if any OneHitListener failure, try stop the rest of the predictions and return
+                isOneHitListenerFailed.compareAndSet(false, true);
                 combineResponseListener.onFailure(e);
             }
         };
@@ -239,11 +251,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
             @Override
             public void onFailure(Exception e) {
-                // when one hit failed and ignoreFailure return original response
                 if (ignoreFailure) {
                     responseListener.onResponse(response);
                 } else {
-                    responseListener.onFailure(e);
+                    responseListener
+                        .onFailure(new OpenSearchStatusException("Failed to process response: " + e.getMessage(), RestStatus.BAD_REQUEST));
                 }
             }
         }, hits.length);
@@ -265,7 +277,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         // hitCountInPredictions keeps track of the count of hit that have the required input fields for each round of prediction
         Map<Integer, Integer> hitCountInPredictions = new HashMap<>();
 
-        ActionListener<Map<Integer, MLOutput>> rewriteResponseListener = createRewriteResponseListenerManyToOne(
+        ActionListener<Map<Integer, MLOutput>> rewriteResponseListener = createRewriteResponseListener(
             response,
             responseListener,
             processInputMap,
@@ -273,13 +285,13 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             hitCountInPredictions
         );
 
-        GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListenerManyToOne(
+        GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListener(
             rewriteResponseListener,
             inputMapSize
         );
         SearchHit[] hits = response.getHits().getHits();
         for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
-            processPredictionsManyToOne(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
+            processPredictions(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
         }
     }
 
@@ -293,7 +305,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
      * @throws IOException if an I/O error occurs during the prediction process
      */
-    private void processPredictionsManyToOne(
+    private void processPredictions(
         SearchHit[] hits,
         List<Map<String, String>> processInputMap,
         int inputMapIndex,
@@ -356,7 +368,6 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
                     // when not existed in the map, add into the modelInputParameters map
                     updateModelInputParameters(modelInputParameters, modelInputFieldName, documentValue);
-
                 }
             }
         }
@@ -430,7 +441,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param inputMapSize            the size of the input map
      * @return a grouped action listener for batch predictions
      */
-    private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListenerManyToOne(
+    private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListener(
         ActionListener<Map<Integer, MLOutput>> rewriteResponseListener,
         int inputMapSize
     ) {
@@ -462,7 +473,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param hitCountInPredictions a map to keep track of the count of hits that have the required input fields for each round of prediction
      * @return an action listener for rewriting the response with the inference results
      */
-    private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListenerManyToOne(
+    private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListener(
         SearchResponse response,
         ActionListener<SearchResponse> responseListener,
         List<Map<String, String>> processInputMap,
@@ -494,7 +505,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                 Map<String, String> outputMapping = getDefaultOutputMapping(mappingIndex, processOutputMap);
 
                                 boolean isModelInputMissing = false;
-                                if (processInputMap != null) {
+                                if (processInputMap != null && !processInputMap.isEmpty()) {
                                     isModelInputMissing = checkIsModelInputMissing(document, inputMapping);
                                 }
                                 if (!isModelInputMissing) {
