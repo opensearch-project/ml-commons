@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
 import org.opensearch.common.collect.Tuple;
@@ -89,7 +90,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
-                .request(signRequest(request))
+                .request(signRequest(request, parameters))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
@@ -113,13 +114,17 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    private SdkHttpFullRequest signRequest(SdkHttpFullRequest request) {
+    private SdkHttpFullRequest signRequest(SdkHttpFullRequest request, Map<String, String> parameters) {
         String accessKey = connector.getAccessKey();
         String secretKey = connector.getSecretKey();
         String sessionToken = connector.getSessionToken();
         String signingName = connector.getServiceName();
         String region = connector.getRegion();
 
+        if (parameters != null && !parameters.isEmpty()) {
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+            region = substitutor.replace(region);
+        }
         return ConnectorUtils.signRequest(request, accessKey, secretKey, sessionToken, signingName, region);
     }
 }
