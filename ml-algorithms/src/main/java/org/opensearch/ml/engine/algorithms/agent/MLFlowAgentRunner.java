@@ -293,6 +293,9 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
             input = substitutor.replace(input);
             executeParams.put("input", input);
+            // Remove the current input from params to avoid passing it to the following tools.
+            // Otherwise, it will override the default input of the following tools.
+            params.remove("input");
         }
         return executeParams;
     }
