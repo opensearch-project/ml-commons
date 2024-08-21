@@ -41,6 +41,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -184,8 +185,21 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             if (ignoreFailure) {
                 responseListener.onResponse(response);
             } else {
-                responseListener
-                    .onFailure(new OpenSearchStatusException("Failed to process response: " + e.getMessage(), RestStatus.BAD_REQUEST));
+                responseListener.onFailure(e);
+                if (e instanceof OpenSearchStatusException) {
+                    responseListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Failed to process response: " + e.getMessage(),
+                                RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
+                            )
+                        );
+                } else if (e instanceof MLResourceNotFoundException) {
+                    responseListener
+                        .onFailure(new OpenSearchStatusException("Failed to process response: " + e.getMessage(), RestStatus.NOT_FOUND));
+                } else {
+                    responseListener.onFailure(e);
+                }
             }
         }
     }
@@ -254,8 +268,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 if (ignoreFailure) {
                     responseListener.onResponse(response);
                 } else {
-                    responseListener
-                        .onFailure(new OpenSearchStatusException("Failed to process response: " + e.getMessage(), RestStatus.BAD_REQUEST));
+                    responseListener.onFailure(e);
                 }
             }
         }, hits.length);

@@ -36,6 +36,7 @@ import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
@@ -45,9 +46,11 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -553,7 +556,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
             @Override
             public void onFailure(Exception e) {
-                assertEquals("Failed to process response: Prediction Failed", e.getMessage());
+                assertEquals("Prediction Failed", e.getMessage());
             }
 
         };
@@ -842,6 +845,172 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         };
         responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
         verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * test throwing OpenSearchStatusException
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOpenSearchStatusException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        RuntimeException mockException = new OpenSearchStatusException("Mock exception", RestStatus.BAD_REQUEST);
+        AtomicInteger callCount = new AtomicInteger(0);
+        ;
+        when(mockResponse.getHits()).thenAnswer(invocation -> {
+
+            int count = callCount.getAndIncrement();
+
+            if (count == 0) {
+                // throw exception when it reaches processResponseAsync
+                throw mockException;
+            } else {
+                return searchHits;
+            }
+        });
+
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertNotNull(e.getMessage());
+            }
+        };
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+        verify(client, times(0)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * test throwing MLResourceNotFoundException
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseMLResourceNotFoundException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        RuntimeException mockException = new MLResourceNotFoundException("Mock exception");
+        AtomicInteger callCount = new AtomicInteger(0);
+        ;
+        when(mockResponse.getHits()).thenAnswer(invocation -> {
+
+            int count = callCount.getAndIncrement();
+
+            if (count == 0) {
+                // throw exception when it reaches processResponseAsync
+                throw mockException;
+            } else {
+                return searchHits;
+            }
+        });
+
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertNotNull(e.getMessage());
+            }
+        };
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+        verify(client, times(0)).execute(any(), any(), any());
     }
 
     /**
@@ -1358,7 +1527,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             @Override
             public void onFailure(Exception e) {
                 assertEquals(
-                    "Failed to process response: cannot find all required input fields: [text] in hit:{\n"
+                    "cannot find all required input fields: [text] in hit:{\n"
                         + "  \"_id\" : \"doc 0\",\n"
                         + "  \"_score\" : 0.0,\n"
                         + "  \"_source\" : {\n"
@@ -2080,7 +2249,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
-     * Tests the case where one input field is missing, and an exception is expected
+     * Tests the case where one input field is missing, and an IllegalArgumentException is expected
      * when the `ignoreMissing` flag is set to false.
      *
      * @throws Exception if an error occurs during the test
@@ -2149,7 +2318,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             @Override
             public void onFailure(Exception e) {
                 assertEquals(
-                    "Failed to process response: cannot find all required input fields: [text] in hit:{\n"
+                    "cannot find all required input fields: [text] in hit:{\n"
                         + "  \"_id\" : \"doc 2\",\n"
                         + "  \"_score\" : 2.0,\n"
                         + "  \"_source\" : {\n"
@@ -2626,7 +2795,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
             @Override
             public void onFailure(Exception e) {
-                assertEquals("Failed to process response: Mock exception", e.getMessage());
+                assertEquals("Mock exception", e.getMessage());
             }
         };
 
