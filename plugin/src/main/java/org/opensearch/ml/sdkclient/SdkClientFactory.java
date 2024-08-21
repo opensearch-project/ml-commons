@@ -8,6 +8,9 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import java.net.URI;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -15,13 +18,17 @@ import javax.net.ssl.SSLContext;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
 import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.URIScheme;
+import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchException;
+import org.opensearch.SpecialPermission;
 import org.opensearch.client.Client;
 import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
@@ -42,11 +49,15 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -106,6 +117,21 @@ public class SdkClientFactory {
     private static DynamoDbClient createDynamoDbClient(String region) {
         if (region == null) {
             throw new IllegalStateException("REGION environment variable needs to be set!");
+        } else if (region.equals("local")) {
+            return SocketAccess
+                .doPrivileged(
+                    (PrivilegedAction<DynamoDbClient>) () -> DynamoDbClient
+                        .builder()
+                        .overrideConfiguration(ClientOverrideConfiguration.builder().build())
+                        .endpointOverride(URI.create("http://localhost:8000"))
+                        .httpClient(UrlConnectionHttpClient.builder().build())
+                        .region(Region.US_WEST_2)
+                        // Demo only, these are not real credentials anywhere
+                        .credentialsProvider(
+                            StaticCredentialsProvider.create(AwsBasicCredentials.create("fakeAccessKeyId", "fakeSecretAccessKey"))
+                        )
+                        .build()
+                );
         }
 
         AwsCredentialsProviderChain credentialsProviderChain = AwsCredentialsProviderChain
@@ -122,12 +148,12 @@ public class SdkClientFactory {
         try {
             Map<String, String> env = System.getenv();
             String user = env.getOrDefault("user", "admin");
-            String pass = env.getOrDefault("password", "admin");
+            String pass = env.getOrDefault("password", "MySecurePassword123");
             // Endpoint syntax: https://127.0.0.1:9200
-            HttpHost[] hosts = new HttpHost[] { HttpHost.create(remoteMetadataEndpoint) };
+            HttpHost host = HttpHost.create(remoteMetadataEndpoint);
             SSLContext sslContext = SSLContextBuilder.create().loadTrustMaterial(null, (chain, authType) -> true).build();
             ApacheHttpClient5Transport transport = ApacheHttpClient5TransportBuilder
-                .builder(hosts)
+                .builder(host)
                 .setMapper(
                     new JacksonJsonpMapper(
                         new ObjectMapper()
@@ -138,16 +164,21 @@ public class SdkClientFactory {
                 )
                 .setHttpClientConfigCallback(httpClientBuilder -> {
                     BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-                    for (HttpHost host : hosts) {
-                        credentialsProvider.setCredentials(new AuthScope(host), new UsernamePasswordCredentials(user, pass.toCharArray()));
+                    credentialsProvider.setCredentials(new AuthScope(host), new UsernamePasswordCredentials(user, pass.toCharArray()));
+                    if (URIScheme.HTTP.getId().equalsIgnoreCase(host.getSchemeName())) {
+                        // No SSL/TLS
+                        return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
                     }
                     // Disable SSL/TLS verification as our local testing clusters use self-signed certificates
-                    final var tlsStrategy = ClientTlsStrategyBuilder
+                    final TlsStrategy tlsStrategy = ClientTlsStrategyBuilder
                         .create()
                         .setSslContext(sslContext)
                         .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                         .build();
-                    final var connectionManager = PoolingAsyncClientConnectionManagerBuilder.create().setTlsStrategy(tlsStrategy).build();
+                    final PoolingAsyncClientConnectionManager connectionManager = PoolingAsyncClientConnectionManagerBuilder
+                        .create()
+                        .setTlsStrategy(tlsStrategy)
+                        .build();
                     return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider).setConnectionManager(connectionManager);
                 })
                 .build();
@@ -168,5 +199,14 @@ public class SdkClientFactory {
                 AwsSdk2TransportOptions.builder().build()
             )
         );
+    }
+
+    private static final class SocketAccess {
+        private SocketAccess() {}
+
+        public static <T> T doPrivileged(PrivilegedAction<T> operation) {
+            SpecialPermission.check();
+            return AccessController.doPrivileged(operation);
+        }
     }
 }

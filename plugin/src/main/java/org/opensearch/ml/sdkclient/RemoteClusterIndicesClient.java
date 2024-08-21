@@ -228,7 +228,11 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
-                JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
+                String json = request.searchSourceBuilder().toString();
+                log.info("Search query: {}", json);
+                // work around https://github.com/opensearch-project/opensearch-java/issues/1150
+                json = json.replace("\"zero_terms_query\":\"NONE\"", "\"zero_terms_query\":\"none\"");
+                JsonParser parser = mapper.jsonProvider().createParser(new StringReader(json));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
                 if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
                     if (request.tenantId() == null) {
