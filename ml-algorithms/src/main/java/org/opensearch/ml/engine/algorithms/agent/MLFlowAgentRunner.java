@@ -270,9 +270,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @VisibleForTesting
     Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
         Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
         for (String key : params.keySet()) {
             String toBeReplaced = null;
             if (key.startsWith(toolSpec.getType() + ".")) {
@@ -287,15 +284,16 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 executeParams.put(key, params.get(key));
             }
         }
+        // tooSpec parameter may override the parameters in params.
+        if (toolSpec.getParameters() != null) {
+            executeParams.putAll(toolSpec.getParameters());
+        }
 
         if (executeParams.containsKey("input")) {
             String input = executeParams.get("input");
             StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
             input = substitutor.replace(input);
             executeParams.put("input", input);
-            // Remove the current input from params to avoid passing it to the following tools.
-            // Otherwise, it will override the default input of the following tools.
-            params.remove("input");
         }
         return executeParams;
     }
