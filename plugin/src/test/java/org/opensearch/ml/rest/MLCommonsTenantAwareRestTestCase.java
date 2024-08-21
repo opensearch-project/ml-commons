@@ -81,7 +81,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         Response response = TestHelper
             .makeRequest(
                 client(),
-                "PUT",
+                PUT,
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.multi_tenancy_enabled\":" + multiTenancyEnabled + "}}",
