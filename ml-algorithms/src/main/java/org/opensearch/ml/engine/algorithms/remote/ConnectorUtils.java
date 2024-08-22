@@ -58,6 +58,8 @@ import software.amazon.awssdk.regions.Region;
 public class ConnectorUtils {
 
     private static final Aws4Signer signer;
+    public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
+
     static {
         signer = Aws4Signer.create();
     }
