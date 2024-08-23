@@ -292,7 +292,7 @@ public class MLFlowAgentRunnerTest {
 
         Map<String, String> params = Map.of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = AgentUtils.getToolExecuteParams(toolSpec, params);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -322,7 +322,7 @@ public class MLFlowAgentRunnerTest {
             );
 
         // Execute the method
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = AgentUtils.getToolExecuteParams(toolSpec, params);
 
         // Assertions
         assertEquals("value1", result.get("param1"));
@@ -331,6 +331,33 @@ public class MLFlowAgentRunnerTest {
         assertFalse(result.containsKey("toolType.param2"));
 
         // Asserting substitution in 'input'
+        String expectedInput = "Input contains value1, value4";
+        assertEquals(expectedInput, result.get("input"));
+    }
+
+    @Test
+    public void testGetToolExecuteParamsWithInputConflict() {
+        // Setup ToolSpec with parameters
+        MLToolSpec toolSpec = mock(MLToolSpec.class);
+        when(toolSpec.getParameters())
+            .thenReturn(Map.of("param1", "value1", "input", "Input contains ${parameters.param1}, ${parameters.param4}"));
+        when(toolSpec.getType()).thenReturn("toolType");
+        when(toolSpec.getName()).thenReturn("toolName");
+
+        // Setup params with a special 'input' key for substitution
+        Map<String, String> params = Map
+            .of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4", "input", "Input In Params");
+
+        // Execute the method
+        Map<String, String> result = AgentUtils.getToolExecuteParams(toolSpec, params);
+
+        // Assertions
+        assertEquals("value1", result.get("param1"));
+        assertEquals("value3", result.get("param3"));
+        assertEquals("value4", result.get("param4"));
+        assertFalse(result.containsKey("toolType.param2"));
+
+        // The input parameter from params won't override the input parameter from ToolSpec
         String expectedInput = "Input contains value1, value4";
         assertEquals(expectedInput, result.get("input"));
     }

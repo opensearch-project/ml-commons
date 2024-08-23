@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolExecuteParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 
 import java.io.IOException;
@@ -18,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -265,36 +265,5 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             tool.setDescription(toolSpec.getDescription());
         }
         return tool;
-    }
-
-    @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
-        Map<String, String> executeParams = new HashMap<>();
-        for (String key : params.keySet()) {
-            String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getType() + ".")) {
-                toBeReplaced = toolSpec.getType() + ".";
-            }
-            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName() + ".";
-            }
-            if (toBeReplaced != null) {
-                executeParams.put(key.replace(toBeReplaced, ""), params.get(key));
-            } else {
-                executeParams.put(key, params.get(key));
-            }
-        }
-        // tooSpec parameter may override the parameters in params.
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-
-        if (executeParams.containsKey("input")) {
-            String input = executeParams.get("input");
-            StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
-            input = substitutor.replace(input);
-            executeParams.put("input", input);
-        }
-        return executeParams;
     }
 }

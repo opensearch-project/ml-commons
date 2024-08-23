@@ -14,6 +14,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolExecuteParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
@@ -22,13 +23,11 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -405,35 +404,5 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 return StringUtils.toJson(output);
             }
         }
-    }
-
-    @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
-        Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-        for (String key : params.keySet()) {
-            String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getType() + ".")) {
-                toBeReplaced = toolSpec.getType() + ".";
-            }
-            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName() + ".";
-            }
-            if (toBeReplaced != null) {
-                executeParams.put(key.replace(toBeReplaced, ""), params.get(key));
-            } else {
-                executeParams.put(key, params.get(key));
-            }
-        }
-
-        if (executeParams.containsKey("input")) {
-            String input = executeParams.get("input");
-            StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
-            input = substitutor.replace(input);
-            executeParams.put("input", input);
-        }
-        return executeParams;
     }
 }

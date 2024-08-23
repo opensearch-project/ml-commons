@@ -480,4 +480,37 @@ public class AgentUtils {
         }
         return toolParams;
     }
+
+    public static Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
+        Map<String, String> executeParams = new HashMap<>();
+        // tooSpec parameter may override the parameters in params.
+        if (toolSpec.getParameters() != null) {
+            executeParams.putAll(toolSpec.getParameters());
+        }
+        for (String key : params.keySet()) {
+            // To avoid overriding the default "input" parameter, skip put if it already exists.
+            if (key.equals("input") && executeParams.containsKey("input"))
+                continue;
+            String toBeReplaced = null;
+            if (key.startsWith(toolSpec.getType() + ".")) {
+                toBeReplaced = toolSpec.getType() + ".";
+            }
+            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
+                toBeReplaced = toolSpec.getName() + ".";
+            }
+            if (toBeReplaced != null) {
+                executeParams.put(key.replace(toBeReplaced, ""), params.get(key));
+            } else {
+                executeParams.put(key, params.get(key));
+            }
+        }
+
+        if (executeParams.containsKey("input")) {
+            String input = executeParams.get("input");
+            StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
+            input = substitutor.replace(input);
+            executeParams.put("input", input);
+        }
+        return executeParams;
+    }
 }
