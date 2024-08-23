@@ -483,7 +483,7 @@ public class AgentUtils {
 
     public static Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
         Map<String, String> executeParams = new HashMap<>();
-        // tooSpec parameter may override the parameters in params.
+        // toolSpec parameter may be overridden by the parameters from params.
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
