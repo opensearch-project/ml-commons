@@ -28,6 +28,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class PromptUtilTests extends OpenSearchTestCase {
@@ -72,7 +73,48 @@ public class PromptUtilTests extends OpenSearchTestCase {
             );
         contexts.add("context 1");
         contexts.add("context 2");
-        String parameter = PromptUtil.buildMessageParameter(systemPrompt, userInstructions, question, chatHistory, contexts);
+        String parameter = PromptUtil.buildMessageParameter(Llm.ModelProvider.BEDROCK_CONVERSE, systemPrompt, userInstructions, question, chatHistory, contexts);
+        Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
+        assertTrue(isJson(parameter));
+    }
+
+    public void testBuildMessageParameterForOpenAI() {
+        String systemPrompt = "You are the best.";
+        String userInstructions = null;
+        String question = "Who am I";
+        List<String> contexts = new ArrayList<>();
+        List<Interaction> chatHistory = List
+            .of(
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 1",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer1"
+                            )
+                    ),
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 2",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer2"
+                            )
+                    )
+            );
+        contexts.add("context 1");
+        contexts.add("context 2");
+        String parameter = PromptUtil.buildMessageParameter(Llm.ModelProvider.OPENAI, systemPrompt, userInstructions, question, chatHistory, contexts);
         Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
         assertTrue(isJson(parameter));
     }

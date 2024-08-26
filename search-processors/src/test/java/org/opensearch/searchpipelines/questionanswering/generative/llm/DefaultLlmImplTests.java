@@ -93,7 +93,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
                             )
                     )
             );
-        String parameter = PromptUtil.getChatCompletionPrompt(question, chatHistory, contexts);
+        String parameter = PromptUtil.getChatCompletionPrompt(Llm.ModelProvider.BEDROCK_CONVERSE, question, chatHistory, contexts);
         Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
         assertTrue(isJson(parameter));
     }
@@ -164,6 +164,54 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.BEDROCK,
+            null
+        );
+        doAnswer(invocation -> {
+            ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertEquals("answer", output.getAnswers().get(0));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+            }
+        });
+        verify(mlClient, times(1)).predict(any(), captor.capture(), any());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+    }
+
+    public void testMessageApiForBedrockConverse() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        Map<String, String> messageMap = Map.of("role", "agent", "content", "answer");
+        Map<String, String> text = Map.of("text", "answer");
+        List<Map> list = List.of(text);
+        Map<String, ?> content = Map.of("content", list);
+        Map<String, ?> message = Map.of("message", content);
+        Map<String, ?> dataAsMap = Map.of("output", message);
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "bedrock-converse/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK_CONVERSE,
             null
         );
         doAnswer(invocation -> {

@@ -47,6 +47,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompl
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionOutput;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ModelLocator;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 
@@ -179,7 +180,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                         chatHistory,
                         searchResults,
                         timeout,
-                        params.getLlmResponseField()
+                        params.getLlmResponseField(),
+                        params.getLlmMessages()
                     ),
                 null,
                 llmQuestion,
@@ -202,7 +204,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                             chatHistory,
                             searchResults,
                             timeout,
-                            params.getLlmResponseField()
+                            params.getLlmResponseField(),
+                            params.getLlmMessages()
                         ),
                     conversationId,
                     llmQuestion,
@@ -238,7 +241,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                         .createInteraction(
                             conversationId,
                             llmQuestion,
-                            PromptUtil.getPromptTemplate(systemPrompt, userInstructions),
+                            PromptUtil.getPromptTemplate(input.getModelProvider(), systemPrompt, userInstructions),
                             answer,
                             GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
                             Collections.singletonMap("metadata", jsonArrayToString(searchResults)),

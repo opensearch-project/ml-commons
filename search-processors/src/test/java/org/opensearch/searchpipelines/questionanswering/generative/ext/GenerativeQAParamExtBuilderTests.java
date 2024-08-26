@@ -25,6 +25,8 @@ import static org.mockito.Mockito.when;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
@@ -33,9 +35,21 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentHelper;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
+
+    private List<MessageBlock> messageList = null;
+
+    public GenerativeQAParamExtBuilderTests() {
+        Map<String, ?> imageMap = Map.of("image", Map.of("format", "jpg", "url", "https://xyz.com/file.jpg"));
+        Map<String, ?> textMap = Map.of("text", "what is this");
+        Map<String, ?> contentMap = Map.of();
+        Map<String, ?> map = Map.of("role", "user", "content", List.of(textMap, imageMap));
+        MessageBlock mb = new MessageBlock(map);
+        messageList = List.of(mb);
+    }
 
     public void testCtor() throws IOException {
         GenerativeQAParamExtBuilder builder = new GenerativeQAParamExtBuilder();
@@ -115,7 +129,18 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters(
+            "a",
+            "b",
+            "c",
+            "s",
+            "u",
+            null,
+            null,
+            null,
+            null,
+            messageList
+        );
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());

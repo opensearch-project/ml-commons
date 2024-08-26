@@ -19,9 +19,12 @@ package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 
+import com.google.common.base.Preconditions;
+import com.google.gson.JsonElement;
 import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.conversation.Interaction;
@@ -34,6 +37,8 @@ import com.google.gson.JsonPrimitive;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 /**
  * A utility class for producing prompts for LLMs.
@@ -61,20 +66,21 @@ public class PromptUtil {
         return null;
     }
 
-    public static String getChatCompletionPrompt(String question, List<Interaction> chatHistory, List<String> contexts) {
-        return getChatCompletionPrompt(DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
+    public static String getChatCompletionPrompt(Llm.ModelProvider provider, String question, List<Interaction> chatHistory, List<String> contexts) {
+        return getChatCompletionPrompt(provider, DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
     }
 
     // TODO Currently, this is OpenAI specific. Change this to indicate as such or address it as part of
     // future prompt template management work.
     public static String getChatCompletionPrompt(
+        Llm.ModelProvider provider,
         String systemPrompt,
         String userInstructions,
         String question,
         List<Interaction> chatHistory,
         List<String> contexts
     ) {
-        return buildMessageParameter(systemPrompt, userInstructions, question, chatHistory, contexts);
+        return buildMessageParameter(provider, systemPrompt, userInstructions, question, chatHistory, contexts);
     }
 
     enum ChatRole {
@@ -134,53 +140,152 @@ public class PromptUtil {
         return bldr.toString();
     }
 
+    /**
+     * Message APIs such as OpenAI's Chat Completion API and Anthropic's Messages API
+     * use an array of messages as input to the LLM and they are better suited for
+     * multi-modal interactions using text and images.
+     *
+     * @param provider
+     * @param systemPrompt
+     * @param userInstructions
+     * @param question
+     * @param chatHistory
+     * @param contexts
+     * @return
+     */
     @VisibleForTesting
     static String buildMessageParameter(
+        Llm.ModelProvider provider,
         String systemPrompt,
         String userInstructions,
         String question,
         List<Interaction> chatHistory,
         List<String> contexts
     ) {
+        return buildMessageParameter(provider, systemPrompt, userInstructions, question, chatHistory, contexts, null);
+    }
+
+    static String buildMessageParameter(
+        Llm.ModelProvider provider,
+        String systemPrompt,
+        String userInstructions,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts,
+        List<MessageBlock> llmMessages
+    ) {
 
         // TODO better prompt template management is needed here.
 
         if (Strings.isNullOrEmpty(systemPrompt) && Strings.isNullOrEmpty(userInstructions)) {
-            systemPrompt = DEFAULT_SYSTEM_PROMPT;
+            // Some model providers such as Anthropic do not allow the system prompt as part of the message body.
+            userInstructions = DEFAULT_SYSTEM_PROMPT;
         }
 
-        JsonArray messageArray = new JsonArray();
+        // JsonArray messageArray = new JsonArray();
 
-        messageArray.addAll(getPromptTemplateAsJsonArray(systemPrompt, userInstructions));
+        MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
+
+        // Build the system prompt (only one per conversation/session)
+        if (!Strings.isNullOrEmpty(systemPrompt)) {
+            bldr.startMessage(ChatRole.SYSTEM);
+            bldr.addTextContent(systemPrompt);
+            bldr.endMessage();
+        }
+
+        // Anthropic does not allow two consecutive messages of the same role
+        // so we combine all user messages and an array of contents.
+        bldr.startMessage(ChatRole.USER);
+        boolean lastRoleIsAssistant = false;
+        if (!Strings.isNullOrEmpty(userInstructions)) {
+            bldr.addTextContent(userInstructions);
+        }
+
         for (int i = 0; i < contexts.size(); i++) {
-            messageArray.add(new Message(ChatRole.USER, "SEARCH RESULT " + (i + 1) + ": " + contexts.get(i)).toJson());
+            bldr.addTextContent("SEARCH RESULT " + (i + 1) + ": " + contexts.get(i));
         }
+
         if (!chatHistory.isEmpty()) {
             // The oldest interaction first
-            List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
-            Collections.reverse(messages);
-            messages.forEach(m -> messageArray.add(m.toJson()));
+            // Collections.reverse(chatHistory);
+            int idx = chatHistory.size() - 1;
+            Interaction firstInteraction = chatHistory.get(idx);
+            bldr.addTextContent(firstInteraction.getInput());
+            bldr.endMessage();
+            bldr.startMessage(ChatRole.ASSISTANT, firstInteraction.getResponse());
+            bldr.endMessage();
+
+            if (chatHistory.size() > 1) {
+                for (int i = --idx; i >= 0; i--) {
+                    Interaction interaction = chatHistory.get(i);
+                    bldr.startMessage(ChatRole.USER, interaction.getInput());
+                    bldr.endMessage();
+                    bldr.startMessage(ChatRole.ASSISTANT, interaction.getResponse());
+                    bldr.endMessage();
+                }
+            }
+
+            lastRoleIsAssistant = true;
         }
-        messageArray.add(new Message(ChatRole.USER, "QUESTION: " + question).toJson());
-        messageArray.add(new Message(ChatRole.USER, "ANSWER:").toJson());
 
-        return messageArray.toString();
+        if (llmMessages != null && !llmMessages.isEmpty()) {
+            // TODO MessageBlock can have assistant roles for few-shot prompting.
+            if (lastRoleIsAssistant) {
+                bldr.startMessage(ChatRole.USER);
+            }
+            for (MessageBlock message : llmMessages) {
+                List<MessageBlock.AbstractBlock> blockList = message.getBlockList();
+                for (MessageBlock.Block block : blockList) {
+                    switch (block.getType()) {
+                        case "text":
+                            bldr.addTextContent(((MessageBlock.TextBlock) block).getText());
+                            break;
+                        case "image":
+                            MessageBlock.ImageBlock ib = (MessageBlock.ImageBlock) block;
+                            if (ib.getData() != null) {
+                                bldr.addImageData(ib.getFormat(), ib.getData());
+                            } else if (ib.getUrl() != null) {
+                                bldr.addImageUrl(ib.getFormat(), ib.getUrl());
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+        } else {
+            if (lastRoleIsAssistant) {
+                bldr.startMessage(ChatRole.USER, "QUESTION: " + question + "\n");
+            } else {
+                bldr.addTextContent("QUESTION: " + question + "\n");
+            }
+            bldr.addTextContent("ANSWER:");
+        }
+
+        bldr.endMessage();
+
+        return bldr.toJsonArray().toString();
     }
 
-    public static String getPromptTemplate(String systemPrompt, String userInstructions) {
-        return getPromptTemplateAsJsonArray(systemPrompt, userInstructions).toString();
+    public static String getPromptTemplate(Llm.ModelProvider provider, String systemPrompt, String userInstructions) {
+        return getPromptTemplateAsJsonArray(provider, systemPrompt, userInstructions).toString();
     }
 
-    static JsonArray getPromptTemplateAsJsonArray(String systemPrompt, String userInstructions) {
-        JsonArray messageArray = new JsonArray();
+    static JsonArray getPromptTemplateAsJsonArray(Llm.ModelProvider provider, String systemPrompt, String userInstructions) {
+
+        MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
 
         if (!Strings.isNullOrEmpty(systemPrompt)) {
-            messageArray.add(new Message(ChatRole.SYSTEM, systemPrompt).toJson());
+            bldr.startMessage(ChatRole.SYSTEM);
+            bldr.addTextContent(systemPrompt);
+            bldr.endMessage();
         }
         if (!Strings.isNullOrEmpty(userInstructions)) {
-            messageArray.add(new Message(ChatRole.USER, userInstructions).toJson());
+            bldr.startMessage(ChatRole.USER);
+            bldr.addTextContent(userInstructions);
+            bldr.endMessage();
         }
-        return messageArray;
+        return bldr.toJsonArray();
     }
 
     @Getter
@@ -206,6 +311,197 @@ public class PromptUtil {
             }
 
             return new Messages(messages);
+        }
+
+        /*
+        public static Messages fromInteractions(Llm.ModelProvider provider, final List<Interaction> interactions) {
+            MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
+
+            for (Interaction interaction : interactions) {
+                bldr.startMessage(ChatRole.USER, interaction.getInput());
+                bldr.endMessage();
+                bldr.startMessage(ChatRole.ASSISTANT, interaction.getResponse());
+                bldr.endMessage();
+            }
+
+            return bldr.toMessages();
+        }*/
+    }
+
+    interface Content {
+
+        // All content blocks accept text
+        void addText(String text);
+        JsonElement toJson();
+    }
+
+    interface ImageContent extends Content {
+
+        void addImageData(String format, String data);
+        void addImageUrl(String format, String url);
+    }
+
+    interface DocumentContent extends Content {
+        void addDocument(String format, String name, String data);
+    }
+
+    private final static String CONTENT_FIELD_TEXT = "text";
+    private final static String CONTENT_FIELD_TYPE = "type";
+    static class OpenAIContent implements ImageContent {
+
+        private JsonArray json;
+
+        public OpenAIContent() {
+            this.json = new JsonArray();
+        }
+
+        @Override
+        public void addText(String text) {
+            JsonObject content = new JsonObject();
+            content.add(CONTENT_FIELD_TYPE, new JsonPrimitive(CONTENT_FIELD_TEXT));
+            content.add(CONTENT_FIELD_TEXT, new JsonPrimitive(text));
+            json.add(content);
+        }
+
+        @Override
+        public void addImageData(String format, String data) {
+            JsonObject content = new JsonObject();
+            content.add("type", new JsonPrimitive("image_url"));
+            JsonObject urlContent = new JsonObject();
+            String imageData = String.format(Locale.ROOT, "data:image/%s;base64,%s", format, data);
+            urlContent.add("url", new JsonPrimitive(imageData));
+            content.add("image_url", urlContent);
+            json.add(content);
+        }
+
+        @Override
+        public void addImageUrl(String format, String url) {
+            JsonObject content = new JsonObject();
+            content.add("type", new JsonPrimitive("image_url"));
+            JsonObject urlContent = new JsonObject();
+            urlContent.add("url", new JsonPrimitive(url));
+            content.add("image_url", urlContent);
+            json.add(content);
+        }
+
+        @Override
+        public JsonElement toJson() {
+            return this.json;
+        }
+    }
+
+    static class BedrockContent implements ImageContent, DocumentContent {
+
+        private JsonArray json;
+
+        public BedrockContent() {
+            this.json = new JsonArray();
+        }
+
+        public BedrockContent(String type, String value) {
+            this.json = new JsonArray();
+            if (type.equals("text")) {
+                addText(value);
+            }
+        }
+
+        @Override
+        public void addText(String text) {
+            JsonObject content = new JsonObject();
+            content.add(CONTENT_FIELD_TEXT, new JsonPrimitive(text));
+            json.add(content);
+        }
+
+        @Override
+        public JsonElement toJson() {
+            return this.json;
+        }
+
+        @Override
+        public void addImageData(String format, String data) {
+
+        }
+
+        @Override
+        public void addImageUrl(String format, String url) {
+
+        }
+
+        @Override
+        public void addDocument(String format, String name, String data) {
+
+        }
+    }
+
+    static class MessageArrayBuilder {
+
+        private final Llm.ModelProvider provider;
+        private List<Message> messages = new ArrayList<>();
+        private Message message = null;
+        private ImageContent content = null;
+
+        public MessageArrayBuilder(Llm.ModelProvider provider) {
+            // OpenAI or Bedrock
+            if (!EnumSet.of(Llm.ModelProvider.OPENAI, Llm.ModelProvider.BEDROCK_CONVERSE).contains(provider)) {
+                throw new IllegalArgumentException("Unsupported provider: " + provider);
+            }
+            this.provider = provider;
+        }
+
+        public void startMessage(ChatRole role) {
+            this.message = new Message();
+            this.message.setChatRole(role);
+            if (this.provider == Llm.ModelProvider.OPENAI) {
+                content = new OpenAIContent();
+            } else if (this.provider == Llm.ModelProvider.BEDROCK_CONVERSE) {
+                content = new BedrockContent();
+            }
+        }
+
+        public void startMessage(ChatRole role, String text) {
+            startMessage(role);
+            addTextContent(text);
+        }
+
+        public void endMessage() {
+            this.message.setContent(this.content);
+            this.messages.add(this.message);
+            message = null;
+            content = null;
+        }
+
+        public void addTextContent(String content) {
+            if (this.message == null || this.content == null) {
+                throw new RuntimeException("You must call startMessage before calling addTextContent !!");
+            }
+            this.content.addText(content);
+        }
+
+        public void addImageData(String format, String data) {
+            this.content.addImageData(format, data);
+        }
+
+        public void addImageUrl(String format, String url) {
+            this.content.addImageUrl(format, url);
+        }
+
+        /*
+        public Messages toMessages() {
+            Preconditions.checkState(this.message == null && this.content == null,
+                "You must call endMessage before calling toMessages !!");
+
+            return new Messages(this.messages);
+        }*/
+
+        public JsonArray toJsonArray() {
+            Preconditions.checkState(this.message == null && this.content == null,
+                "You must call endMessage before calling toJsonArray !!");
+
+            JsonArray ja = new JsonArray();
+            for (Message message : messages) {
+                ja.add(message.toJson());
+            }
+            return ja;
         }
     }
 
@@ -233,6 +529,12 @@ public class PromptUtil {
             setContent(content);
         }
 
+        public Message(ChatRole chatRole, Content content) {
+            this();
+            setChatRole(chatRole);
+            setContent(content);
+        }
+
         public void setChatRole(ChatRole chatRole) {
             this.chatRole = chatRole;
             json.remove(MESSAGE_FIELD_ROLE);
@@ -243,6 +545,11 @@ public class PromptUtil {
             this.content = StringEscapeUtils.escapeJson(content);
             json.remove(MESSAGE_FIELD_CONTENT);
             json.add(MESSAGE_FIELD_CONTENT, new JsonPrimitive(this.content));
+        }
+
+        public void setContent(Content content) {
+            json.remove(MESSAGE_FIELD_CONTENT);
+            json.add(MESSAGE_FIELD_CONTENT, content.toJson());
         }
 
         public JsonObject toJson() {

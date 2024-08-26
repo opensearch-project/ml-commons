@@ -22,10 +22,13 @@ import static org.opensearch.ml.utils.TestHelper.toHttpEntity;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.message.BasicHeader;
@@ -33,6 +36,7 @@ import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
 
@@ -70,10 +74,40 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "    ]\n"
         + "}";
 
+    private static final String OPENAI_4o_CONNECTOR_BLUEPRINT = "{\n"
+        + "    \"name\": \"OpenAI Chat Connector\",\n"
+        + "    \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
+        + "    \"version\": 2,\n"
+        + "    \"protocol\": \"http\",\n"
+        + "    \"parameters\": {\n"
+        + "        \"endpoint\": \"api.openai.com\",\n"
+        + "        \"model\": \"gpt-4o-mini\",\n"
+        + "        \"temperature\": 0\n"
+        + "    },\n"
+        + "    \"credential\": {\n"
+        + "        \"openAI_key\": \""
+        + OPENAI_KEY
+        + "\"\n"
+        + "    },\n"
+        + "    \"actions\": [\n"
+        + "        {\n"
+        + "            \"action_type\": \"predict\",\n"
+        + "            \"method\": \"POST\",\n"
+        + "            \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
+        + "            \"headers\": {\n"
+        + "                \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
+        + "            },\n"
+        + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages}, \\\"temperature\\\": ${parameters.temperature} }\"\n"
+        + "        }\n"
+        + "    ]\n"
+        + "}";
+
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
+
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20240620-v1:0";
 
     private static final String BEDROCK_CONNECTOR_BLUEPRINT1 = "{\n"
         + "  \"name\": \"Bedrock Connector: claude2\",\n"
@@ -145,9 +179,51 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "    ]\n"
         + "}";
 
+    private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
+        + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+        + "  \"version\": 1,\n"
+        + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"parameters\": {\n"
+        + "    \"region\": \""
+        + GITHUB_CI_AWS_REGION
+        + "\",\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"model\": \""
+        + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+        + "\",\n"
+        + "    \"system_prompt\": \"You are a helpful assistant.\"\n"
+        + "  },\n"
+        + "  \"credential\": {\n"
+        + "    \"access_key\": \""
+        + AWS_ACCESS_KEY_ID
+        + "\",\n"
+        + "    \"secret_key\": \""
+        + AWS_SECRET_ACCESS_KEY
+        + "\"\n"
+        + "  },\n"
+        + "  \"actions\": [\n"
+        + "        {\n"
+        + "            \"action_type\": \"predict\",\n"
+        + "            \"method\": \"POST\",\n"
+        + "            \"headers\": {\n"
+        + "                \"content-type\": \"application/json\"\n"
+        + "            },\n"
+        + "            \"url\": \"https://bedrock-runtime."
+        + GITHUB_CI_AWS_REGION
+        + ".amazonaws.com/model/" + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET + "/converse\",\n"
+        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+        + "        }\n"
+        + "    ]\n"
+        + "}";
+
     private static final String BEDROCK_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
         ? BEDROCK_CONNECTOR_BLUEPRINT2
         : BEDROCK_CONNECTOR_BLUEPRINT1;
+
+    private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
+                                                              ? BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2
+                                                              : BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
 
     private static final String COHERE_KEY = System.getenv("COHERE_KEY");
     private static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
@@ -210,6 +286,25 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "  }\n"
         + "}";
 
+    private static final String BM25_SEARCH_REQUEST_WITH_IMAGE_TEMPLATE = "{\n"
+        + "  \"_source\": [\"%s\"],\n"
+        + "  \"query\" : {\n"
+        + "    \"match\": {\"%s\": \"%s\"}\n"
+        + "  },\n"
+        + "   \"ext\": {\n"
+        + "      \"generative_qa_parameters\": {\n"
+        + "        \"llm_model\": \"%s\",\n"
+        + "        \"llm_question\": \"%s\",\n"
+        + "        \"system_prompt\": \"%s\",\n"
+        + "        \"user_instructions\": \"%s\",\n"
+        + "        \"context_size\": %d,\n"
+        + "        \"message_size\": %d,\n"
+        + "        \"timeout\": %d,\n"
+        + "        \"llm_messages\": [{ \"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"%s\"}, {\"image\": {\"format\": \"jpeg\", \"url\": \"%s\"}}] }]\n"
+        + "      }\n"
+        + "  }\n"
+        + "}";
+
     private static final String BM25_SEARCH_REQUEST_WITH_CONVO_TEMPLATE = "{\n"
         + "  \"_source\": [\"%s\"],\n"
         + "  \"query\" : {\n"
@@ -248,6 +343,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
 
     private static final String OPENAI_MODEL = "gpt-3.5-turbo";
     private static final String BEDROCK_ANTHROPIC_CLAUDE = "bedrock/anthropic-claude";
+    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET;
     private static final String TEST_DOC_PATH = "org/opensearch/ml/rest/test_data/";
     private static Set<String> testDocs = Set.of("qa_doc1.json", "qa_doc2.json", "qa_doc3.json");
     private static final String DEFAULT_USER_AGENT = "Kibana";
@@ -353,6 +449,64 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         assertNotNull(answer);
     }
 
+    public void testBM25WithOpenAIWithImage() throws Exception {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("openAI-GPT-4o-mini completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        PipelineParameters pipelineParameters = new PipelineParameters();
+        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.description = "desc";
+        pipelineParameters.modelId = modelId;
+        pipelineParameters.systemPrompt = "You are a helpful assistant";
+        pipelineParameters.userInstructions = "none";
+        pipelineParameters.context_field = "text";
+        Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
+        assertEquals(200, response1.getStatusLine().getStatusCode());
+
+        byte[] rawImage = FileUtils.readFileToByteArray(Path.of(classLoader.getResource(TEST_DOC_PATH + "openai_boardwalk.jpg").toURI()).toFile());
+        String imageContent = Base64.getEncoder().encodeToString(rawImage);
+
+        SearchRequestParameters requestParameters = new SearchRequestParameters();
+        requestParameters.source = "text";
+        requestParameters.match = "president";
+        requestParameters.llmModel = OPENAI_MODEL;
+        requestParameters.llmQuestion = "what is this image";
+        requestParameters.systemPrompt = "You are great at answering questions";
+        requestParameters.userInstructions = "Follow my instructions as best you can";
+        requestParameters.contextSize = 5;
+        requestParameters.interactionSize = 5;
+        requestParameters.timeout = 60;
+        requestParameters.imageData = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"; // imageContent;
+        Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
+        assertEquals(200, response2.getStatusLine().getStatusCode());
+
+        Map responseMap2 = parseResponseToMap(response2);
+        Map ext = (Map) responseMap2.get("ext");
+        assertNotNull(ext);
+        Map rag = (Map) ext.get("retrieval_augmented_generation");
+        assertNotNull(rag);
+
+        // TODO handle errors such as throttling
+        String answer = (String) rag.get("answer");
+        assertNotNull(answer);
+    }
+
     public void testBM25WithBedrock() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
@@ -391,6 +545,111 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
         requestParameters.timeout = 60;
+        Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
+        assertEquals(200, response2.getStatusLine().getStatusCode());
+
+        Map responseMap2 = parseResponseToMap(response2);
+        Map ext = (Map) responseMap2.get("ext");
+        assertNotNull(ext);
+        Map rag = (Map) ext.get("retrieval_augmented_generation");
+        assertNotNull(rag);
+
+        // TODO handle errors such as throttling
+        String answer = (String) rag.get("answer");
+        assertNotNull(answer);
+    }
+
+    public void testBM25WithBedrockConverse() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null) {
+            return;
+        }
+        Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("Bedrock Anthropic Claude", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        PipelineParameters pipelineParameters = new PipelineParameters();
+        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.description = "desc";
+        pipelineParameters.modelId = modelId;
+        pipelineParameters.systemPrompt = "You are a helpful assistant";
+        pipelineParameters.userInstructions = "none";
+        pipelineParameters.context_field = "text";
+        Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
+        assertEquals(200, response1.getStatusLine().getStatusCode());
+
+        SearchRequestParameters requestParameters = new SearchRequestParameters();
+        requestParameters.source = "text";
+        requestParameters.match = "president";
+        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE;
+        requestParameters.llmQuestion = "who is lincoln";
+        requestParameters.contextSize = 5;
+        requestParameters.interactionSize = 5;
+        requestParameters.timeout = 60;
+        Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
+        assertEquals(200, response2.getStatusLine().getStatusCode());
+
+        Map responseMap2 = parseResponseToMap(response2);
+        Map ext = (Map) responseMap2.get("ext");
+        assertNotNull(ext);
+        Map rag = (Map) ext.get("retrieval_augmented_generation");
+        assertNotNull(rag);
+
+        // TODO handle errors such as throttling
+        String answer = (String) rag.get("answer");
+        assertNotNull(answer);
+    }
+
+    public void testBM25WithBedrockConverseUsingLlmMessages() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null) {
+            return;
+        }
+        Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModel("Bedrock Anthropic Claude", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+
+        PipelineParameters pipelineParameters = new PipelineParameters();
+        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.description = "desc";
+        pipelineParameters.modelId = modelId;
+        pipelineParameters.systemPrompt = "You are a helpful assistant";
+        pipelineParameters.userInstructions = "none";
+        pipelineParameters.context_field = "text";
+        Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
+        assertEquals(200, response1.getStatusLine().getStatusCode());
+
+        SearchRequestParameters requestParameters = new SearchRequestParameters();
+        requestParameters.source = "text";
+        requestParameters.match = "president";
+        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE;
+        requestParameters.llmQuestion = "who is lincoln";
+        requestParameters.contextSize = 5;
+        requestParameters.interactionSize = 5;
+        requestParameters.timeout = 60;
+        requestParameters.imageData = "what year was lincoln born?";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -665,6 +924,24 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                     requestParameters.timeout,
                     requestParameters.llmResponseField
                 )
+            : requestParameters.imageData != null ?
+              String
+                  .format(
+                      Locale.ROOT,
+                      BM25_SEARCH_REQUEST_WITH_IMAGE_TEMPLATE,
+                      requestParameters.source,
+                      requestParameters.source,
+                      requestParameters.match,
+                      requestParameters.llmModel,
+                      requestParameters.llmQuestion,
+                      requestParameters.systemPrompt,
+                      requestParameters.userInstructions,
+                      requestParameters.contextSize,
+                      requestParameters.interactionSize,
+                      requestParameters.timeout,
+                      requestParameters.llmQuestion,
+                      requestParameters.imageData
+                  )
             : (requestParameters.conversationId == null)
                 ? String
                     .format(
@@ -741,5 +1018,6 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         String conversationId;
 
         String llmResponseField;
+        String imageData;
     }
 }
