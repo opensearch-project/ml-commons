@@ -35,6 +35,7 @@ public class ModelInterfaceUtils {
         + "    ]\n"
         + "}";
 
+    // It will fail when invoked for the first time
     private static final String GENERAL_EMBEDDING_MODEL_INTERFACE_INPUT = "{\n"
         + "    \"type\": \"object\",\n"
         + "    \"properties\": {\n"
@@ -42,10 +43,7 @@ public class ModelInterfaceUtils {
         + "            \"type\": \"object\",\n"
         + "            \"properties\": {\n"
         + "                \"texts\": {\n"
-        + "                    \"type\": \"array\",\n"
-        + "                    \"items\": {\n"
-        + "                        \"type\": \"string\"\n"
-        + "                    }\n"
+        + "                    \"type\": \"string\"\n"
         + "                }\n"
         + "            },\n"
         + "            \"required\": [\n"
