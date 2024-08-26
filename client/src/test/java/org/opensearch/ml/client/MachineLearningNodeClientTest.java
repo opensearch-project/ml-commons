@@ -131,6 +131,9 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
+import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
+import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
+import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -205,6 +208,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<ToolMetadata> getToolActionListener;
+
+    @Mock
+    ActionListener<CreateConversationResponse> createConversationResponseActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -949,6 +955,26 @@ public class MachineLearningNodeClientTest {
         verify(listToolsActionListener).onResponse(argumentCaptor.capture());
         assertEquals("WikipediaTool", argumentCaptor.getValue().get(0).getName());
         assertEquals("Use this tool to search general knowledge on wikipedia.", argumentCaptor.getValue().get(0).getDescription());
+    }
+
+    @Test
+    public void createConversation() {
+        String name = "Conversation for a RAG pipeline";
+        String conversationId = "conversationId";
+
+        doAnswer(invocation -> {
+            ActionListener<CreateConversationResponse> actionListener = invocation.getArgument(2);
+            CreateConversationResponse output = new CreateConversationResponse(conversationId);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(CreateConversationAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<CreateConversationResponse> argumentCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
+        machineLearningNodeClient.createConversation(name, createConversationResponseActionListener);
+
+        verify(client).execute(eq(CreateConversationAction.INSTANCE), isA(CreateConversationRequest.class), any());
+        verify(createConversationResponseActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(conversationId, argumentCaptor.getValue().getId());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
