@@ -117,7 +117,8 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getUserInstructions(),
                     chatCompletionInput.getQuestion(),
                     chatCompletionInput.getChatHistory(),
-                    chatCompletionInput.getContexts()
+                    chatCompletionInput.getContexts(),
+                    chatCompletionInput.getLlmMessages()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
             // log.info("Messages to LLM: {}", messages);
@@ -146,7 +147,8 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getUserInstructions(),
                     chatCompletionInput.getQuestion(),
                     chatCompletionInput.getChatHistory(),
-                    chatCompletionInput.getContexts()
+                    chatCompletionInput.getContexts(),
+                    chatCompletionInput.getLlmMessages()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
         } else {

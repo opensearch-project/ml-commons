@@ -67,7 +67,7 @@ public class PromptUtil {
     }
 
     public static String getChatCompletionPrompt(Llm.ModelProvider provider, String question, List<Interaction> chatHistory, List<String> contexts) {
-        return getChatCompletionPrompt(provider, DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
+        return getChatCompletionPrompt(provider, DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts, null);
     }
 
     // TODO Currently, this is OpenAI specific. Change this to indicate as such or address it as part of
@@ -78,9 +78,10 @@ public class PromptUtil {
         String userInstructions,
         String question,
         List<Interaction> chatHistory,
-        List<String> contexts
+        List<String> contexts,
+        List<MessageBlock> llmMessages
     ) {
-        return buildMessageParameter(provider, systemPrompt, userInstructions, question, chatHistory, contexts);
+        return buildMessageParameter(provider, systemPrompt, userInstructions, question, chatHistory, contexts, llmMessages);
     }
 
     enum ChatRole {
@@ -264,7 +265,11 @@ public class PromptUtil {
 
         bldr.endMessage();
 
-        return bldr.toJsonArray().toString();
+        String tmp = bldr.toJsonArray().toString();
+        //if (tmp != null) {
+        //   throw new RuntimeException(tmp);
+        //}
+        return tmp;
     }
 
     public static String getPromptTemplate(Llm.ModelProvider provider, String systemPrompt, String userInstructions) {

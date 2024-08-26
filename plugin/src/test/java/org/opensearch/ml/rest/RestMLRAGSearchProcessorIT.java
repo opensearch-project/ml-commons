@@ -97,7 +97,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "            \"headers\": {\n"
         + "                \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "            },\n"
-        + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages}, \\\"temperature\\\": ${parameters.temperature} }\"\n"
+        + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages}, \\\"temperature\\\": ${parameters.temperature} , \\\"max_tokens\\\": 300 }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
@@ -342,6 +342,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "}";
 
     private static final String OPENAI_MODEL = "gpt-3.5-turbo";
+    private static final String OPENAI_40_MODEL = "gpt-4o-mini";
     private static final String BEDROCK_ANTHROPIC_CLAUDE = "bedrock/anthropic-claude";
     private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET;
     private static final String TEST_DOC_PATH = "org/opensearch/ml/rest/test_data/";
@@ -485,7 +486,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         SearchRequestParameters requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_MODEL;
+        requestParameters.llmModel = OPENAI_40_MODEL;
         requestParameters.llmQuestion = "what is this image";
         requestParameters.systemPrompt = "You are great at answering questions";
         requestParameters.userInstructions = "Follow my instructions as best you can";
