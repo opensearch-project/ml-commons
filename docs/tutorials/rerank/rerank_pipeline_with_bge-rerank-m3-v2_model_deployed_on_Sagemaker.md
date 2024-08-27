@@ -558,7 +558,7 @@ POST my-test-data/_search?search_pipeline=rerank_pipeline_sagemaker
   "ext": {
     "rerank": {
       "query_context": {
-         "query_text": "What is the capital city of America?"
+         "query_text_path": "query.match.passage_text.query"
       }
     }
   },
