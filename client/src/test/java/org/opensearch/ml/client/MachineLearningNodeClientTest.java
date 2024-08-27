@@ -55,8 +55,10 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -84,6 +86,9 @@ import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.config.MLConfigGetAction;
+import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
+import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -205,6 +210,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<ToolMetadata> getToolActionListener;
+
+    @Mock
+    ActionListener<MLConfig> getMlConfigListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -949,6 +957,26 @@ public class MachineLearningNodeClientTest {
         verify(listToolsActionListener).onResponse(argumentCaptor.capture());
         assertEquals("WikipediaTool", argumentCaptor.getValue().get(0).getName());
         assertEquals("Use this tool to search general knowledge on wikipedia.", argumentCaptor.getValue().get(0).getDescription());
+    }
+
+    @Test
+    public void getConfig() {
+        MLConfig mlConfig = MLConfig.builder().type("type").configuration(Configuration.builder().agentId("agentId").build()).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLConfigGetResponse> actionListener = invocation.getArgument(2);
+            MLConfigGetResponse output = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLConfig> argumentCaptor = ArgumentCaptor.forClass(MLConfig.class);
+        machineLearningNodeClient.getConfig("agentId", getMlConfigListener);
+
+        verify(client).execute(eq(MLConfigGetAction.INSTANCE), isA(MLConfigGetRequest.class), any());
+        verify(getMlConfigListener).onResponse(argumentCaptor.capture());
+        assertEquals("agentId", argumentCaptor.getValue().getConfiguration().getAgentId());
+        assertEquals("type", argumentCaptor.getValue().getType());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
