@@ -63,4 +63,34 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
         String json = "{\"key1\": \"foo\", \"key2\": 123}";
         MLNodeUtils.validateSchema(schema, json);
     }
+
+    @Test
+    public void testProcessRemoteInferenceInputDataSetParametersValueNoParameters() throws IOException {
+        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true}";
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        assertEquals(json, processedJson);
+    }
+
+    @Test
+    public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersProcessArray() throws IOException {
+        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"texts\":\"[\\\"Hello\\\",\\\"world\\\"]\"}}";
+        String expectedJson = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"texts\":[\"Hello\",\"world\"]}}";
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        assertEquals(expectedJson, processedJson);
+    }
+
+    @Test
+    public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersProcessObject() throws IOException {
+        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":\"{\\\"role\\\":\\\"system\\\",\\\"foo\\\":\\\"{\\\\\\\"a\\\\\\\": \\\\\\\"b\\\\\\\"}\\\",\\\"content\\\":{\\\"a\\\":\\\"b\\\"}}\"}}}";
+        String expectedJson = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":{\"role\":\"system\",\"foo\":\"{\\\"a\\\": \\\"b\\\"}\",\"content\":{\"a\":\"b\"}}}}";
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        assertEquals(expectedJson, processedJson);
+    }
+
+    @Test
+    public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersNoProcess() throws IOException {
+        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true}}";
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        assertEquals(json, processedJson);
+    }
 }

@@ -29,6 +29,7 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
@@ -87,6 +88,41 @@ public class MLNodeUtils {
                     + schemaString
             );
         }
+    }
+
+    /**
+     * This method processes the input JSON string and replaces the string values of the parameters with JSON objects if the string is a valid JSON.
+     * @param inputJson The input JSON string
+     * @return The processed JSON string
+     */
+    public static String processRemoteInferenceInputDataSetParametersValue(String inputJson) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode = mapper.readTree(inputJson);
+
+        if (rootNode.has("parameters") && rootNode.get("parameters").isObject()) {
+            ObjectNode parametersNode = (ObjectNode) rootNode.get("parameters");
+
+            parametersNode.fields().forEachRemaining(entry -> {
+                String key = entry.getKey();
+                System.out.println(key);
+                JsonNode value = entry.getValue();
+
+                if (value.isTextual()) {
+                    String textValue = value.asText();
+                    System.out.println(textValue);
+                    try {
+                        // Try to parse the string as JSON
+                        JsonNode parsedValue = mapper.readTree(textValue);
+                        // If successful, replace the string with the parsed JSON
+                        parametersNode.set(key, parsedValue);
+                    } catch (IOException e) {
+                        // If parsing fails, it's not a valid JSON string, so keep it as is
+                        parametersNode.set(key, value);
+                    }
+                }
+            });
+        }
+        return mapper.writeValueAsString(rootNode);
     }
 
     public static void checkOpenCircuitBreaker(MLCircuitBreakerService mlCircuitBreakerService, MLStats mlStats) {
