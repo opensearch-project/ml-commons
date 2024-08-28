@@ -166,7 +166,7 @@ public class S3DataIngestion implements Ingestable {
     private void processFieldMapping(Map<String, Object> jsonMap, Map<String, String> fieldMapping) {
         List<List> smOutput = (List<List>) jsonMap.get("SageMakerOutput");
         List<String> smInput = (List<String>) jsonMap.get("content");
-        if (smInput.size() == smInput.size() && smInput.size() == fieldMapping.size()) {
+        if (smInput.size() == smOutput.size() && smInput.size() == fieldMapping.size()) {
             int index = 0;
             for (Map.Entry<String, String> mapping : fieldMapping.entrySet()) {
                 // key is the field name for input String, value is the field name for embedded output
