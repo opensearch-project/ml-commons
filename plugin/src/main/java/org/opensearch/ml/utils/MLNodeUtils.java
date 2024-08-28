@@ -104,12 +104,10 @@ public class MLNodeUtils {
 
             parametersNode.fields().forEachRemaining(entry -> {
                 String key = entry.getKey();
-                System.out.println(key);
                 JsonNode value = entry.getValue();
 
                 if (value.isTextual()) {
                     String textValue = value.asText();
-                    System.out.println(textValue);
                     try {
                         // Try to parse the string as JSON
                         JsonNode parsedValue = mapper.readTree(textValue);
