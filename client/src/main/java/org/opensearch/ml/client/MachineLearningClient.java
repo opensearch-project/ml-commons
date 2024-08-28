@@ -16,6 +16,7 @@ import org.opensearch.common.Nullable;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
@@ -428,4 +429,20 @@ public interface MachineLearningClient {
      */
     void getTool(String toolName, ActionListener<ToolMetadata> listener);
 
+    /**
+     * Get config
+     * @param configId ML config id
+     */
+    default ActionFuture<MLConfig> getConfig(String configId) {
+        PlainActionFuture<MLConfig> actionFuture = PlainActionFuture.newFuture();
+        getConfig(configId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Get config
+     * @param configId ML config id
+     * @param listener a listener to be notified of the result
+     */
+    void getConfig(String configId, ActionListener<MLConfig> listener);
 }

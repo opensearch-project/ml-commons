@@ -25,6 +25,7 @@ import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
@@ -39,6 +40,9 @@ import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.config.MLConfigGetAction;
+import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
+import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -309,6 +313,13 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLGetToolAction.INSTANCE, mlToolGetRequest, getMlGetToolResponseActionListener(listener));
     }
 
+    @Override
+    public void getConfig(String configId, ActionListener<MLConfig> listener) {
+        MLConfigGetRequest mlConfigGetRequest = MLConfigGetRequest.builder().configId(configId).build();
+
+        client.execute(MLConfigGetAction.INSTANCE, mlConfigGetRequest, getMlGetConfigResponseActionListener(listener));
+    }
+
     private ActionListener<MLToolsListResponse> getMlListToolsResponseActionListener(ActionListener<List<ToolMetadata>> listener) {
         ActionListener<MLToolsListResponse> internalListener = ActionListener.wrap(mlModelListResponse -> {
             listener.onResponse(mlModelListResponse.getToolMetadataList());
@@ -326,6 +337,17 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         }, listener::onFailure);
         ActionListener<MLToolGetResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLToolGetResponse getResponse = MLToolGetResponse.fromActionResponse(res);
+            return getResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLConfigGetResponse> getMlGetConfigResponseActionListener(ActionListener<MLConfig> listener) {
+        ActionListener<MLConfigGetResponse> internalListener = ActionListener.wrap(mlConfigGetResponse -> {
+            listener.onResponse(mlConfigGetResponse.getMlConfig());
+        }, listener::onFailure);
+        ActionListener<MLConfigGetResponse> actionListener = wrapActionListener(internalListener, res -> {
+            MLConfigGetResponse getResponse = MLConfigGetResponse.fromActionResponse(res);
             return getResponse;
         });
         return actionListener;
