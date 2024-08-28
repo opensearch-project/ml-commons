@@ -129,18 +129,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters(
-            "a",
-            "b",
-            "c",
-            "s",
-            "u",
-            null,
-            null,
-            null,
-            null,
-            messageList
-        );
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null, messageList);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());

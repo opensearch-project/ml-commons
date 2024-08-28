@@ -23,22 +23,22 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 
-import com.google.common.base.Preconditions;
-import com.google.gson.JsonElement;
 import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
-import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 /**
  * A utility class for producing prompts for LLMs.
@@ -66,7 +66,12 @@ public class PromptUtil {
         return null;
     }
 
-    public static String getChatCompletionPrompt(Llm.ModelProvider provider, String question, List<Interaction> chatHistory, List<String> contexts) {
+    public static String getChatCompletionPrompt(
+        Llm.ModelProvider provider,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts
+    ) {
         return getChatCompletionPrompt(provider, DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts, null);
     }
 
@@ -183,8 +188,6 @@ public class PromptUtil {
             userInstructions = DEFAULT_SYSTEM_PROMPT;
         }
 
-        // JsonArray messageArray = new JsonArray();
-
         MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
 
         // Build the system prompt (only one per conversation/session)
@@ -208,7 +211,6 @@ public class PromptUtil {
 
         if (!chatHistory.isEmpty()) {
             // The oldest interaction first
-            // Collections.reverse(chatHistory);
             int idx = chatHistory.size() - 1;
             Interaction firstInteraction = chatHistory.get(idx);
             bldr.addTextContent(firstInteraction.getInput());
@@ -249,6 +251,10 @@ public class PromptUtil {
                                 bldr.addImageUrl(ib.getFormat(), ib.getUrl());
                             }
                             break;
+                        case "document":
+                            MessageBlock.DocumentBlock db = (MessageBlock.DocumentBlock) block;
+                            bldr.addDocumentContent(db.getFormat(), db.getName(), db.getData());
+                            break;
                         default:
                             break;
                     }
@@ -265,21 +271,30 @@ public class PromptUtil {
 
         bldr.endMessage();
 
-        String tmp = bldr.toJsonArray().toString();
-        //if (tmp != null) {
-        //   throw new RuntimeException(tmp);
-        //}
-        return tmp;
+        return bldr.toJsonArray().toString();
     }
 
-    public static String getPromptTemplate(Llm.ModelProvider provider, String systemPrompt, String userInstructions) {
-        return getPromptTemplateAsJsonArray(provider, systemPrompt, userInstructions).toString();
+    public static String getPromptTemplate(String systemPrompt, String userInstructions) {
+        return getPromptTemplateAsJsonArray(systemPrompt, userInstructions).toString();
     }
 
+    static JsonArray getPromptTemplateAsJsonArray(String systemPrompt, String userInstructions) {
+        JsonArray messageArray = new JsonArray();
+
+        if (!Strings.isNullOrEmpty(systemPrompt)) {
+            messageArray.add(new Message(ChatRole.SYSTEM, systemPrompt).toJson());
+        }
+        if (!Strings.isNullOrEmpty(userInstructions)) {
+            messageArray.add(new Message(ChatRole.USER, userInstructions).toJson());
+        }
+        return messageArray;
+    }
+
+    /*
     static JsonArray getPromptTemplateAsJsonArray(Llm.ModelProvider provider, String systemPrompt, String userInstructions) {
-
+    
         MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
-
+    
         if (!Strings.isNullOrEmpty(systemPrompt)) {
             bldr.startMessage(ChatRole.SYSTEM);
             bldr.addTextContent(systemPrompt);
@@ -291,7 +306,7 @@ public class PromptUtil {
             bldr.endMessage();
         }
         return bldr.toJsonArray();
-    }
+    }*/
 
     @Getter
     static class Messages {
@@ -317,32 +332,20 @@ public class PromptUtil {
 
             return new Messages(messages);
         }
-
-        /*
-        public static Messages fromInteractions(Llm.ModelProvider provider, final List<Interaction> interactions) {
-            MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
-
-            for (Interaction interaction : interactions) {
-                bldr.startMessage(ChatRole.USER, interaction.getInput());
-                bldr.endMessage();
-                bldr.startMessage(ChatRole.ASSISTANT, interaction.getResponse());
-                bldr.endMessage();
-            }
-
-            return bldr.toMessages();
-        }*/
     }
 
     interface Content {
 
         // All content blocks accept text
         void addText(String text);
+
         JsonElement toJson();
     }
 
     interface ImageContent extends Content {
 
         void addImageData(String format, String data);
+
         void addImageUrl(String format, String url);
     }
 
@@ -350,8 +353,13 @@ public class PromptUtil {
         void addDocument(String format, String name, String data);
     }
 
+    interface MultimodalContent extends ImageContent, DocumentContent {
+
+    }
+
     private final static String CONTENT_FIELD_TEXT = "text";
     private final static String CONTENT_FIELD_TYPE = "type";
+
     static class OpenAIContent implements ImageContent {
 
         private JsonArray json;
@@ -395,7 +403,7 @@ public class PromptUtil {
         }
     }
 
-    static class BedrockContent implements ImageContent, DocumentContent {
+    static class BedrockContent implements MultimodalContent {
 
         private JsonArray json;
 
@@ -424,17 +432,32 @@ public class PromptUtil {
 
         @Override
         public void addImageData(String format, String data) {
-
+            JsonObject imageData = new JsonObject();
+            imageData.add("bytes", new JsonPrimitive(data));
+            JsonObject image = new JsonObject();
+            image.add("format", new JsonPrimitive(format));
+            image.add("source", imageData);
+            JsonObject content = new JsonObject();
+            content.add("image", image);
+            json.add(content);
         }
 
         @Override
         public void addImageUrl(String format, String url) {
-
+            // Bedrock does not support image URLs.
         }
 
         @Override
         public void addDocument(String format, String name, String data) {
-
+            JsonObject documentData = new JsonObject();
+            documentData.add("bytes", new JsonPrimitive(data));
+            JsonObject document = new JsonObject();
+            document.add("format", new JsonPrimitive(format));
+            document.add("name", new JsonPrimitive(name));
+            document.add("source", documentData);
+            JsonObject content = new JsonObject();
+            content.add("document", document);
+            json.add(content);
         }
     }
 
@@ -443,10 +466,10 @@ public class PromptUtil {
         private final Llm.ModelProvider provider;
         private List<Message> messages = new ArrayList<>();
         private Message message = null;
-        private ImageContent content = null;
+        private Content content = null;
 
         public MessageArrayBuilder(Llm.ModelProvider provider) {
-            // OpenAI or Bedrock
+            // OpenAI or Bedrock Converse API
             if (!EnumSet.of(Llm.ModelProvider.OPENAI, Llm.ModelProvider.BEDROCK_CONVERSE).contains(provider)) {
                 throw new IllegalArgumentException("Unsupported provider: " + provider);
             }
@@ -483,24 +506,26 @@ public class PromptUtil {
         }
 
         public void addImageData(String format, String data) {
-            this.content.addImageData(format, data);
+            if (this.content != null && this.content instanceof ImageContent) {
+                ((ImageContent) this.content).addImageData(format, data);
+            }
         }
 
         public void addImageUrl(String format, String url) {
-            this.content.addImageUrl(format, url);
+            if (this.content != null && this.content instanceof ImageContent) {
+                ((ImageContent) this.content).addImageUrl(format, url);
+            }
         }
 
-        /*
-        public Messages toMessages() {
-            Preconditions.checkState(this.message == null && this.content == null,
-                "You must call endMessage before calling toMessages !!");
-
-            return new Messages(this.messages);
-        }*/
+        public void addDocumentContent(String format, String name, String data) {
+            if (this.content != null && this.content instanceof DocumentContent) {
+                ((DocumentContent) this.content).addDocument(format, name, data);
+            }
+        }
 
         public JsonArray toJsonArray() {
-            Preconditions.checkState(this.message == null && this.content == null,
-                "You must call endMessage before calling toJsonArray !!");
+            Preconditions
+                .checkState(this.message == null && this.content == null, "You must call endMessage before calling toJsonArray !!");
 
             JsonArray ja = new JsonArray();
             for (Message message : messages) {

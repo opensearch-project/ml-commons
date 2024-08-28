@@ -120,6 +120,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.OPENAI,
+            null,
             null
         );
         doAnswer(invocation -> {
@@ -164,6 +165,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.BEDROCK,
+            null,
             null
         );
         doAnswer(invocation -> {
@@ -212,6 +214,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.BEDROCK_CONVERSE,
+            null,
             null
         );
         doAnswer(invocation -> {
@@ -256,6 +259,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.COHERE,
+            null,
             null
         );
         doAnswer(invocation -> {
@@ -301,6 +305,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.COHERE,
+            null,
             null
         );
         doAnswer(invocation -> {
@@ -348,7 +353,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             null,
-            llmRespondField
+            llmRespondField,
+            null
         );
         doAnswer(invocation -> {
             ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
@@ -395,7 +401,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             null,
-            llmRespondField
+            llmRespondField,
+            null
         );
         doAnswer(invocation -> {
             ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
@@ -443,7 +450,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             null,
-            llmRespondField
+            llmRespondField,
+            null
         );
         doAnswer(invocation -> {
             ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
@@ -491,7 +499,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             null,
-            llmRespondField
+            llmRespondField,
+            null
         );
         doAnswer(invocation -> {
             ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
@@ -537,6 +546,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.OPENAI,
+            null,
             null
         );
 
@@ -584,6 +594,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.BEDROCK,
+            null,
             null
         );
         doAnswer(invocation -> {
@@ -632,6 +643,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             0,
             "prompt",
             "instructions",
+            null,
             null,
             null
         );

@@ -26,13 +26,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import com.google.protobuf.Message;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentGenerator;
-import org.opensearch.index.analysis.NameOrDefinition;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 import org.opensearch.test.OpenSearchTestCase;
@@ -72,8 +70,6 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
 
     public void testGenerativeQAParametersWithLlmMessages() {
 
-        // NameOrDefinition definition = new NameOrDefinition(map);
-        // List<NameOrDefinition> definitions = List.of(definition);
         GenerativeQAParameters params = new GenerativeQAParameters(
             "conversation_id",
             "llm_model",

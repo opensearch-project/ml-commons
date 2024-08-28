@@ -17,9 +17,13 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import com.google.common.base.Preconditions;
-import lombok.Getter;
-import lombok.Setter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -27,15 +31,11 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParseException;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.analysis.NameOrDefinition;
 
-import javax.print.Doc;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import com.google.common.base.Preconditions;
+
+import lombok.Getter;
+import lombok.Setter;
 
 public class MessageBlock implements Writeable, ToXContent {
 
@@ -70,10 +70,7 @@ public class MessageBlock implements Writeable, ToXContent {
         if (parser.currentToken() == XContentParser.Token.START_OBJECT) {
             return new MessageBlock(parser.map());
         }
-        throw new XContentParseException(
-            parser.getTokenLocation(),
-            "Expected [VALUE_STRING] or [START_OBJECT], got " + parser.currentToken()
-        );
+        throw new XContentParseException(parser.getTokenLocation(), "Expected [START_OBJECT], got " + parser.currentToken());
     }
 
     @Override
@@ -129,7 +126,7 @@ public class MessageBlock implements Writeable, ToXContent {
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
-            out.writeString("text");
+            out.writeString(this.type);
             out.writeString(this.text);
         }
 
@@ -175,6 +172,7 @@ public class MessageBlock implements Writeable, ToXContent {
             }
 
         }
+
         public ImageBlock(String format, String data, String url) {
             Preconditions.checkNotNull(format, "format cannot be null.");
             if (data == null && url == null) {
@@ -193,7 +191,7 @@ public class MessageBlock implements Writeable, ToXContent {
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
-            out.writeString("image");
+            out.writeString(this.type);
             out.writeString(this.format);
             out.writeOptionalString(this.data);
             out.writeOptionalString(this.url);
@@ -215,7 +213,7 @@ public class MessageBlock implements Writeable, ToXContent {
         }
     }
 
-    static class DocumentBlock extends AbstractBlock {
+    public static class DocumentBlock extends AbstractBlock {
 
         @Getter
         String type = "document";
@@ -260,6 +258,7 @@ public class MessageBlock implements Writeable, ToXContent {
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
+            out.writeString(this.type);
             out.writeString(this.format);
             out.writeString(this.name);
             out.writeString(this.data);
@@ -279,9 +278,11 @@ public class MessageBlock implements Writeable, ToXContent {
     }
 
     @Getter
+    @Setter
     private String role;
 
     @Getter
+    @Setter
     private List<AbstractBlock> blockList = new ArrayList<>();
 
     public MessageBlock() {}
@@ -290,13 +291,9 @@ public class MessageBlock implements Writeable, ToXContent {
         setMessageBlock(map);
     }
 
-    // public <T extends AbstractBlock> T get(int index) {
-    //    return (T) this.blockList.get(index);
-    // }
-
     public void setMessageBlock(Map<String, ?> message) {
         Preconditions.checkNotNull(message, "message cannot be null.");
-        Preconditions.checkState(message.containsKey("role"),"message must have role." );
+        Preconditions.checkState(message.containsKey("role"), "message must have role.");
         Preconditions.checkState(message.containsKey("content"), "message must have content.");
 
         this.role = (String) message.get("role");
@@ -326,7 +323,3 @@ public class MessageBlock implements Writeable, ToXContent {
         return Objects.hashCode(this.role) + Objects.hashCode(this.blockList);
     }
 }
-
-
-
-

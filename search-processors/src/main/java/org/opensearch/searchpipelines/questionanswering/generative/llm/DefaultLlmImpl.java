@@ -121,7 +121,6 @@ public class DefaultLlmImpl implements Llm {
                     chatCompletionInput.getLlmMessages()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
-            // log.info("Messages to LLM: {}", messages);
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK
             || chatCompletionInput.getModelProvider() == ModelProvider.COHERE
             || chatCompletionInput.getLlmResponseField() != null) {
@@ -138,7 +137,6 @@ public class DefaultLlmImpl implements Llm {
                         )
                 );
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK_CONVERSE) {
-            // inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
             // Bedrock Converse API does not include the system prompt as part of the Messages block.
             String messages = PromptUtil
                 .getChatCompletionPrompt(
@@ -159,7 +157,6 @@ public class DefaultLlmImpl implements Llm {
             );
         }
 
-        // log.info("LLM input parameters: {}", inputParameters.toString());
         return inputParameters;
     }
 
@@ -208,6 +205,9 @@ public class DefaultLlmImpl implements Llm {
                 answers.add(answer);
             } else {
                 Map error = (Map) output.get("error");
+                if (error == null) {
+                    throw new RuntimeException("Unexpected output: " + output);
+                }
                 errors.add((String) error.get("message"));
             }
         } else {

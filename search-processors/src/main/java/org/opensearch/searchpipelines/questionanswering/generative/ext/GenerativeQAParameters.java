@@ -20,10 +20,8 @@ package org.opensearch.searchpipelines.questionanswering.generative.ext;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
-import org.opensearch.common.settings.Settings;
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -33,15 +31,14 @@ import org.opensearch.core.xcontent.ObjectParser;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.analysis.NameOrDefinition;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 import com.google.common.base.Preconditions;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 /**
  * Defines parameters for generative QA search pipelines.
@@ -93,7 +90,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     static {
         PARSER = new ObjectParser<>("generative_qa_parameters", GenerativeQAParameters::new);
-        // ObjectParser<MessageBlock, Void> objectParser = new ObjectParser<>("llm_message_parser",  MessageBlock::new);
         PARSER.declareString(GenerativeQAParameters::setConversationId, CONVERSATION_ID);
         PARSER.declareString(GenerativeQAParameters::setLlmModel, LLM_MODEL);
         PARSER.declareString(GenerativeQAParameters::setLlmQuestion, LLM_QUESTION);
@@ -146,8 +142,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     @Getter
     private List<MessageBlock> llmMessages = new ArrayList<>();
 
-    // private List<MessageBlock> blockList = null;
-
     public GenerativeQAParameters(
         String conversationId,
         String llmModel,
@@ -159,7 +153,18 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         Integer timeout,
         String llmResponseField
     ) {
-        this(conversationId, llmModel, llmQuestion, systemPrompt, userInstructions, contextSize, interactionSize, timeout, llmResponseField, null);
+        this(
+            conversationId,
+            llmModel,
+            llmQuestion,
+            systemPrompt,
+            userInstructions,
+            contextSize,
+            interactionSize,
+            timeout,
+            llmResponseField,
+            null
+        );
     }
 
     public GenerativeQAParameters(
@@ -263,9 +268,5 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     public void setMessageBlock(List<MessageBlock> blockList) {
         this.llmMessages = blockList;
-    }
-
-    public MessageBlock getMessageBlock() {
-        return null;
     }
 }
