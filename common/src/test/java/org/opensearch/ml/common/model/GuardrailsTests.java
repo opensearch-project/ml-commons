@@ -83,4 +83,24 @@ public class GuardrailsTests {
         Assert.assertEquals(guardrails.getInputGuardrail(), inputLocalRegexGuardrail);
         Assert.assertEquals(guardrails.getOutputGuardrail(), outputLocalRegexGuardrail);
     }
+
+    @Test
+    public void parseNonType() throws IOException {
+        String jsonStr = "{"
+            + "\"input_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]},"
+            + "\"output_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        Guardrails guardrails = Guardrails.parse(parser);
+
+        Assert.assertEquals(guardrails.getType(), "local_regex");
+        Assert.assertEquals(guardrails.getInputGuardrail(), inputLocalRegexGuardrail);
+        Assert.assertEquals(guardrails.getOutputGuardrail(), outputLocalRegexGuardrail);
+    }
 }
