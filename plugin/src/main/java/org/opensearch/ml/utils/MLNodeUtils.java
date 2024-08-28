@@ -29,8 +29,8 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion.VersionFlag;
