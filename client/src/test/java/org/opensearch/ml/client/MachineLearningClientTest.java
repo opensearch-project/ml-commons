@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.input.Constants.ALGORITHM;
 import static org.opensearch.ml.common.input.Constants.KMEANS;
 import static org.opensearch.ml.common.input.Constants.TRAIN;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -28,8 +29,10 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
@@ -46,6 +49,7 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -99,9 +103,13 @@ public class MachineLearningClientTest {
     @Mock
     MLRegisterAgentResponse registerAgentResponse;
 
+    @Mock
+    MLConfigGetResponse configGetResponse;
+
     private String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
+    private MLConfig mlConfig;
     private ToolMetadata toolMetadata;
     private List<ToolMetadata> toolsList = new ArrayList<>();
 
@@ -123,6 +131,14 @@ public class MachineLearningClientTest {
             .version(null)
             .build();
         toolsList.add(toolMetadata);
+
+        mlConfig = MLConfig
+            .builder()
+            .type("dummyType")
+            .configuration(Configuration.builder().agentId("agentId").build())
+            .createTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .build();
 
         machineLearningClient = new MachineLearningClient() {
             @Override
@@ -230,6 +246,11 @@ public class MachineLearningClientTest {
             @Override
             public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void getConfig(String configId, ActionListener<MLConfig> listener) {
+                listener.onResponse(mlConfig);
             }
         };
     }
@@ -502,5 +523,10 @@ public class MachineLearningClientTest {
     @Test
     public void listTools() {
         assertEquals(toolMetadata, machineLearningClient.listTools().actionGet().get(0));
+    }
+
+    @Test
+    public void getConfig() {
+        assertEquals(mlConfig, machineLearningClient.getConfig("configId").actionGet());
     }
 }
