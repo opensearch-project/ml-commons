@@ -446,7 +446,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         assertEquals(TEST_INDEX, updateItemRequest.tableName());
         assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
         assertEquals(TENANT_ID, updateItemRequest.key().get(CommonValue.TENANT_ID).s());
-        assertEquals("foo", updateItemRequest.attributeUpdates().get("_source").value().m().get("data").s());
+        assertEquals("foo", updateItemRequest.expressionAttributeValues().get(":source").m().get("data").s());
 
     }
 
@@ -458,6 +458,8 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .index(TEST_INDEX)
             .tenantId(TENANT_ID)
             .dataObject(Map.of("foo", "bar"))
+            .ifSeqNo(10)
+            .ifPrimaryTerm(10)
             .build();
         Mockito
             .when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture()))
@@ -471,7 +473,13 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         assertEquals(TEST_INDEX, updateItemRequest.tableName());
         assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
         assertEquals(TENANT_ID, updateItemRequest.key().get(CommonValue.TENANT_ID).s());
-        assertEquals("bar", updateItemRequest.attributeUpdates().get("_source").value().m().get("foo").s());
+        assertTrue(updateItemRequest.expressionAttributeNames().containsKey("#seqNo"));
+        assertTrue(updateItemRequest.expressionAttributeNames().containsKey("#source"));
+        assertTrue(updateItemRequest.expressionAttributeValues().containsKey(":incr"));
+        assertTrue(updateItemRequest.expressionAttributeValues().containsKey(":source"));
+        assertEquals("bar", updateItemRequest.expressionAttributeValues().get(":source").m().get("foo").s());
+        assertTrue(updateItemRequest.expressionAttributeValues().containsKey(":currentSeqNo"));
+        assertNotNull(updateItemRequest.conditionExpression());
         UpdateResponse response = UpdateResponse.fromXContent(updateResponse.parser());
         Assert.assertEquals(5, response.getSeqNo());
     }
@@ -558,7 +566,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Mockito
             .verify(remoteClusterIndicesClient)
             .searchDataObjectAsync(searchDataObjectRequestArgumentCaptor.capture(), Mockito.any(), Mockito.anyBoolean());
-        Assert.assertEquals(".test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
+        Assert.assertEquals("test_index", searchDataObjectRequestArgumentCaptor.getValue().indices()[0]);
     }
 
     private Map<String, AttributeValue> getComplexDataSource() {

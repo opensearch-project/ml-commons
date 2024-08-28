@@ -57,9 +57,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.AttributeAction;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemResponse;
@@ -134,7 +132,10 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 item.put(SOURCE, AttributeValue.builder().m(sourceMap).build());
                 item.put(SEQ_NO_KEY, AttributeValue.builder().n(sequenceNumber.toString()).build());
                 Builder builder = PutItemRequest.builder().tableName(tableName).item(item);
-                if (!request.overwriteIfExists() && getItemResponse != null && getItemResponse.item() != null) {
+                if (!request.overwriteIfExists()
+                    && getItemResponse != null
+                    && getItemResponse.item() != null
+                    && !getItemResponse.item().isEmpty()) {
                     throw new OpenSearchStatusException("Existing data object for ID: " + request.id(), RestStatus.CONFLICT);
                 }
                 final PutItemRequest putItemRequest = builder.build();
@@ -230,37 +231,25 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
                 updateItem.remove(TENANT_ID);
                 updateItem.remove(RANGE_KEY);
-                Map<String, AttributeValueUpdate> updateAttributeValue = new HashMap<>();
-                updateAttributeValue
-                    .put(
-                        SOURCE,
-                        AttributeValueUpdate
-                            .builder()
-                            .action(AttributeAction.PUT)
-                            .value(AttributeValue.builder().m(updateItem).build())
-                            .build()
-                    );
                 Map<String, AttributeValue> updateKey = new HashMap<>();
                 updateKey.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
-                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest
-                    .builder()
-                    .tableName(request.index())
-                    .key(updateKey)
-                    .attributeUpdates(updateAttributeValue);
-                updateItemRequestBuilder
-                    .updateExpression("SET #seqNo = #seqNo + :incr")
-                    .expressionAttributeNames(Map.of("#seqNo", SEQ_NO_KEY))
-                    .expressionAttributeValues(Map.of(":incr", AttributeValue.builder().n("1").build()));
+                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest.builder().tableName(request.index()).key(updateKey);
+                Map<String, String> expressionAttributeNames = new HashMap<>();
+                expressionAttributeNames.put("#seqNo", SEQ_NO_KEY);
+                expressionAttributeNames.put("#source", SOURCE);
+                Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+                expressionAttributeValues.put(":incr", AttributeValue.builder().n("1").build());
+                expressionAttributeValues.put(":source", AttributeValue.builder().m(updateItem).build());
+                updateItemRequestBuilder.updateExpression("SET #seqNo = #seqNo + :incr, #source = :source ");
                 if (request.ifSeqNo() != null) {
                     // Get current document version and put in attribute map. Ignore primary term on DDB.
-                    updateItemRequestBuilder
-                        .conditionExpression("#seqNo = :currentSeqNo")
-                        .expressionAttributeNames(Map.of("#seqNo", SEQ_NO_KEY))
-                        .expressionAttributeValues(
-                            Map.of(":currentSeqNo", AttributeValue.builder().n(Long.toString(request.ifSeqNo())).build())
-                        );
+                    updateItemRequestBuilder.conditionExpression("#seqNo = :currentSeqNo");
+                    expressionAttributeValues.put(":currentSeqNo", AttributeValue.builder().n(Long.toString(request.ifSeqNo())).build());
                 }
+                updateItemRequestBuilder
+                    .expressionAttributeNames(expressionAttributeNames)
+                    .expressionAttributeValues(expressionAttributeValues);
                 UpdateItemRequest updateItemRequest = updateItemRequestBuilder.build();
                 UpdateItemResponse updateItemResponse = dynamoDbClient.updateItem(updateItemRequest);
                 Long sequenceNumber = null;
@@ -352,7 +341,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        List<String> indices = Arrays.stream(request.indices()).collect(Collectors.toList());
+        List<String> indices = Arrays.stream(request.indices()).map(this::getIndexName).collect(Collectors.toList());
 
         SearchDataObjectRequest searchDataObjectRequest = new SearchDataObjectRequest(
             indices.toArray(new String[0]),
@@ -360,6 +349,11 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             request.searchSourceBuilder()
         );
         return this.remoteClusterIndicesClient.searchDataObjectAsync(searchDataObjectRequest, executor, isMultiTenancyEnabled);
+    }
+
+    private String getIndexName(String index) {
+        // System index is not supported in remote index. Replacing '.' from index name.
+        return index.replaceAll("\\.", "");
     }
 
     private XContentParser createParser(String json) throws IOException {
