@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.Version;
@@ -26,6 +25,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
+
+import com.fasterxml.jackson.core.JsonParseException;
 
 public class MLNodeUtilsTests extends OpenSearchTestCase {
 
@@ -119,7 +120,8 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
 
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersInvalidJson() throws IOException {
-        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"texts\":\"[\\\"Hello\\\",\\\"world\\\"\"}}";
+        String json =
+            "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"texts\":\"[\\\"Hello\\\",\\\"world\\\"\"}}";
         String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
         assertEquals(json, processedJson);
     }
