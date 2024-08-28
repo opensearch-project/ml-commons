@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.input.Constants.ACTION;
 import static org.opensearch.ml.common.input.Constants.ALGORITHM;
 import static org.opensearch.ml.common.input.Constants.KMEANS;
@@ -40,6 +41,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -51,6 +53,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -977,6 +980,23 @@ public class MachineLearningNodeClientTest {
         verify(getMlConfigListener).onResponse(argumentCaptor.capture());
         assertEquals("agentId", argumentCaptor.getValue().getConfiguration().getAgentId());
         assertEquals("type", argumentCaptor.getValue().getType());
+    }
+
+    @Test
+    public void getConfigRejectedMasterKey() {
+        doAnswer(invocation -> {
+            ActionListener<MLConfigGetResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new OpenSearchStatusException("You are not allowed to access this config doc", RestStatus.FORBIDDEN));
+            return null;
+        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        machineLearningNodeClient.getConfig(MASTER_KEY, getMlConfigListener);
+
+        verify(client).execute(eq(MLConfigGetAction.INSTANCE), isA(MLConfigGetRequest.class), any());
+        verify(getMlConfigListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.FORBIDDEN, argumentCaptor.getValue().status());
+        assertEquals("You are not allowed to access this config doc", argumentCaptor.getValue().getLocalizedMessage());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
