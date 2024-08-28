@@ -72,6 +72,13 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testProcessRemoteInferenceInputDataSetParametersValueParametersWrongType() throws IOException {
+        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":[\"Hello\",\"world\"]}";
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        assertEquals(json, processedJson);
+    }
+
+    @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersProcessArray() throws IOException {
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"texts\":\"[\\\"Hello\\\",\\\"world\\\"]\"}}";
         String expectedJson = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"texts\":[\"Hello\",\"world\"]}}";
