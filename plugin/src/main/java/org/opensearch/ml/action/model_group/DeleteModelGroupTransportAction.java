@@ -96,7 +96,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
+            modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, sdkClient, ActionListener.wrap(access -> {
                 if (!access) {
                     wrappedListener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
                 } else {
@@ -109,6 +109,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                     SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                         .builder()
                         .indices(ML_MODEL_INDEX)
+                        .tenantId(tenantId)
                         .searchSourceBuilder(searchSourceBuilder)
                         .build();
 

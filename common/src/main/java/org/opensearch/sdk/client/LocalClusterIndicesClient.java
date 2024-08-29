@@ -51,6 +51,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
@@ -216,18 +217,26 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        log.info("Searching {}", Arrays.toString(request.indices()));
         SearchSourceBuilder searchSource = request.searchSourceBuilder();
         if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
             if (request.tenantId() == null) {
-                return CompletableFuture.failedFuture(
-                    new OpenSearchStatusException("Tenant ID is required when multitenancy is enabled.", RestStatus.BAD_REQUEST)
-                );
+                return CompletableFuture
+                    .failedFuture(
+                        new OpenSearchStatusException("Tenant ID is required when multitenancy is enabled.", RestStatus.BAD_REQUEST)
+                    );
             }
             QueryBuilder existingQuery = searchSource.query();
-            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(existingQuery == null ? new MatchAllQueryBuilder() : existingQuery);
-            boolQuery.filter(QueryBuilders.termQuery(CommonValue.TENANT_ID, request.tenantId()));
-            searchSource.query(boolQuery);
+            TermQueryBuilder tenantIdTermQuery = QueryBuilders.termQuery(CommonValue.TENANT_ID, request.tenantId());
+            if (existingQuery == null) {
+                searchSource.query(tenantIdTermQuery);
+            } else {
+                BoolQueryBuilder boolQuery = existingQuery instanceof BoolQueryBuilder
+                    ? (BoolQueryBuilder) existingQuery
+                    : QueryBuilders.boolQuery().must(existingQuery);
+                boolQuery.filter(tenantIdTermQuery);
+                searchSource.query(boolQuery);
+            }
+            log.debug("Adding tenant id to search query", Arrays.toString(request.indices()));
         }
         log.info("Searching {}", Arrays.toString(request.indices()));
         ActionFuture<SearchResponse> searchResponseFuture = AccessController
