@@ -6,7 +6,9 @@
 package org.opensearch.ml.engine.encryptor;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.ml.common.CommonValue.*;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
 
 import java.nio.charset.StandardCharsets;
@@ -284,7 +286,7 @@ public class EncryptorImpl implements Encryptor {
             byte[] hashBytes = digest.digest(input.getBytes());
 
             // Convert the byte array to a Base64 encoded string
-            return Base64.getEncoder().encodeToString(hashBytes);
+            return Base64.getUrlEncoder().encodeToString(hashBytes);
 
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Error: Unable to compute hash", e);
