@@ -103,10 +103,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -188,10 +188,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         MLRegisterModelMetaRequest actionRequest = prepareRequest(null);
         action.doExecute(task, actionRequest, actionListener);
@@ -208,10 +208,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         MLRegisterModelMetaRequest actionRequest = prepareRequest(null);
         action.doExecute(task, actionRequest, actionListener);
@@ -225,10 +225,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
 
     public void test_FailureWhenSearchingModelGroupName() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Runtime exception"));
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         MLRegisterModelMetaRequest actionRequest = prepareRequest(null);
         action.doExecute(task, actionRequest, actionListener);

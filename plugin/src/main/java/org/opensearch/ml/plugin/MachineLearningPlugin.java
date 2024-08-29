@@ -494,7 +494,7 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
-        mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
+        mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
         mlModelManager = new MLModelManager(
             clusterService,

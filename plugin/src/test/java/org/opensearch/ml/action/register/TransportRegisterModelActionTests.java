@@ -249,18 +249,18 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
 
         when(clusterService.localNode()).thenReturn(node2);
         when(node2.getId()).thenReturn("node2Id");
 
-        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any());
-        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLRemoteModel(any(), any(), any(), any());
+        doAnswer(invocation -> null).when(mlModelManager).registerMLModel(any(), any());
+        doAnswer(invocation -> null).when(mlModelManager).registerMLRemoteModel(any(), any(), any(), any());
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -625,10 +625,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(transportService).sendRequest(any(), any(), any(), any());
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", null), actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
@@ -638,10 +638,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     public void test_FailureWhenPreBuildModelNameAlreadyExists() throws IOException, InterruptedException {
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(4);
@@ -672,10 +672,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     public void test_FailureWhenSearchingModelGroupName() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Runtime exception"));
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("Test URL", null), actionListener);
 
@@ -688,10 +688,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(4);

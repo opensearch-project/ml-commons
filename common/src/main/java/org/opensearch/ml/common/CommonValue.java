@@ -64,7 +64,7 @@ public class CommonValue {
         public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
         public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 3;
         public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
-        public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
+        public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 3;
         public static final String ML_CONTROLLER_INDEX = ".plugins-ml-controller";
         public static final Integer ML_CONTROLLER_INDEX_SCHEMA_VERSION = 1;
         public static final String ML_MAP_RESPONSE_KEY = "response";
@@ -420,6 +420,9 @@ public class CommonValue {
                         + "\": {\"type\": \"keyword\"},\n"
                         + "      \""
                         + MLConfig.TYPE_FIELD
+                        + "\" : {\"type\":\"keyword\"},\n"
+                        + "      \""
+                        + TENANT_ID
                         + "\" : {\"type\":\"keyword\"},\n"
                         + "      \""
                         + MLConfig.CONFIGURATION_FIELD

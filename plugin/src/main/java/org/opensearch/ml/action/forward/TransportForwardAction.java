@@ -60,10 +60,10 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class TransportForwardAction extends HandledTransportAction<ActionRequest, MLForwardResponse> {
     private final ClusterService clusterService;
-    MLTaskManager mlTaskManager;
-    Client client;
-    MLModelManager mlModelManager;
-    DiscoveryNodeHelper nodeHelper;
+    final MLTaskManager mlTaskManager;
+    final Client client;
+    final MLModelManager mlModelManager;
+    final DiscoveryNodeHelper nodeHelper;
 
     private final Settings settings;
 
@@ -131,7 +131,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         syncModelWorkerNodes(modelId, functionName);
                     }
 
-                    if (workNodes == null || workNodes.size() == 0) {
+                    if (workNodes == null || workNodes.isEmpty()) {
                         int currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
                         MLTaskState taskState = mlTaskCache.hasError() ? MLTaskState.COMPLETED_WITH_ERROR : MLTaskState.COMPLETED;
                         if (mlTaskCache.allNodeFailed()) {
@@ -147,7 +147,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
-                        mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
+                        mlTaskManager.updateMLTask(taskId, null, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
                         if (!mlTaskCache.allNodeFailed()) {

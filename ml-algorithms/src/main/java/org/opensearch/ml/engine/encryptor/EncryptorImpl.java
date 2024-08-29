@@ -6,11 +6,12 @@
 package org.opensearch.ml.engine.encryptor;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.*;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
@@ -43,7 +44,6 @@ import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -158,10 +158,14 @@ public class EncryptorImpl implements Encryptor {
     }
 
     private GetDataObjectRequest createGetDataObjectRequest(String tenantId, FetchSourceContext fetchSourceContext) {
+        String masterKeyId = MASTER_KEY;
+        if (tenantId != null) {
+            masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
+        }
         return GetDataObjectRequest
             .builder()
             .index(ML_CONFIG_INDEX)
-            .id(MASTER_KEY)
+            .id(masterKeyId)
             .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
@@ -247,14 +251,44 @@ public class EncryptorImpl implements Encryptor {
     }
 
     private PutDataObjectRequest createPutDataObjectRequest(String tenantId, String generatedMasterKey) {
+        String masterKeyId = MASTER_KEY;
+        if (tenantId != null) {
+            masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
+        }
         return PutDataObjectRequest
             .builder()
             .tenantId(tenantId)
             .index(ML_CONFIG_INDEX)
-            .id(MASTER_KEY)
+            .id(masterKeyId)
             .overwriteIfExists(false)
-            .dataObject(ImmutableMap.of(MASTER_KEY, generatedMasterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()))
+            .dataObject(
+                Map
+                    .of(
+                        MASTER_KEY,
+                        generatedMasterKey,
+                        CREATE_TIME_FIELD,
+                        Instant.now().toEpochMilli(),
+                        TENANT_ID,
+                        Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)
+                    )
+            )
             .build();
+    }
+
+    private String hashString(String input) {
+        try {
+            // Create a MessageDigest instance for SHA-256
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            // Perform the hashing and get the byte array
+            byte[] hashBytes = digest.digest(input.getBytes());
+
+            // Convert the byte array to a Base64 encoded string
+            return Base64.getEncoder().encodeToString(hashBytes);
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error: Unable to compute hash", e);
+        }
     }
 
     private void handlePutDataObjectResponse(

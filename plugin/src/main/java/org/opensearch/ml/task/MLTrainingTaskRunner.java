@@ -126,7 +126,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     mlTask.setModelId(modelId);
                     handleAsyncMLTaskComplete(mlTask);
                 }, ex -> {
-                    log.error("Failed to train ML model for task " + taskId);
+                    log.error("Failed to train ML model for task {}", taskId);
                     handleAsyncMLTaskFailure(mlTask, ex);
                 });
                 startTrainingTask(mlTask, request.getMlInput(), internalListener);
@@ -179,7 +179,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     }
 
     private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
-        ActionListener<MLTaskResponse> listener = ActionListener.wrap(r -> actionListener.onResponse(r), e -> {
+        ActionListener<MLTaskResponse> listener = ActionListener.wrap(actionListener::onResponse, e -> {
             mlStats
                 .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
                 .increment();
@@ -188,7 +188,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         });
         try {
             // run training
-            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
+            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), null, mlTask.isAsync());
             MLModel mlModel = mlEngine.train(mlInput);
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {
@@ -202,12 +202,12 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                         String returnedTaskId = mlTask.isAsync() ? mlTask.getTaskId() : null;
                         MLTrainingOutput output = new MLTrainingOutput(r.getId(), returnedTaskId, MLTaskState.COMPLETED.name());
                         listener.onResponse(MLTaskResponse.builder().output(output).build());
-                    }, e -> { listener.onFailure(e); });
+                    }, listener::onFailure);
 
                     IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                     indexRequest.source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                    client.index(indexRequest, ActionListener.runBefore(indexResponseListener, () -> context.restore()));
+                    client.index(indexRequest, ActionListener.runBefore(indexResponseListener, context::restore));
                 } catch (Exception e) {
                     log.error("Failed to save ML model", e);
                     listener.onFailure(e);
@@ -218,7 +218,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             }));
         } catch (Exception e) {
             // todo need to specify what exception
-            log.error("Failed to train " + mlInput.getAlgorithm(), e);
+            log.error("Failed to train {}", mlInput.getAlgorithm(), e);
             listener.onFailure(e);
         }
     }

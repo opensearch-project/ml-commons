@@ -143,12 +143,12 @@ public class TransportSyncUpOnNodeAction extends
         // and all values in this map is false.
         Map<String, Boolean> deployToAllNodes = syncUpInput.getDeployToAllNodes();
 
-        if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
+        if (addedWorkerNodes != null && !addedWorkerNodes.isEmpty()) {
             for (Map.Entry<String, String[]> entry : addedWorkerNodes.entrySet()) {
                 mlModelManager.addModelWorkerNode(entry.getKey(), entry.getValue());
             }
         }
-        if (removedWorkerNodes != null && removedWorkerNodes.size() > 0) {
+        if (removedWorkerNodes != null && !removedWorkerNodes.isEmpty()) {
             for (Map.Entry<String, String[]> entry : removedWorkerNodes.entrySet()) {
                 mlModelManager
                     .removeModelWorkerNode(
@@ -222,6 +222,7 @@ public class TransportSyncUpOnNodeAction extends
                 mlTaskManager
                     .updateMLTask(
                         taskId,
+                        null,
                         ImmutableMap
                             .of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, "timeout after " + mlTaskTimeout + " seconds"),
                         10_000,
@@ -236,7 +237,7 @@ public class TransportSyncUpOnNodeAction extends
         Path deployModelRootPath = mlEngine.getDeployModelRootPath();
         Path modelCacheRootPath = mlEngine.getModelCacheRootPath();
         Set<String> modelsInCacheFolder = FileUtils.getFileNames(registerModelRootPath, deployModelRootPath, modelCacheRootPath);
-        if (modelsInCacheFolder.size() > 0) {
+        if (!modelsInCacheFolder.isEmpty()) {
             log
                 .debug(
                     "Found {} models in cache folder: {}",

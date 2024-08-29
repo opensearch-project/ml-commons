@@ -546,7 +546,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUpdateModelDeployStatusAndTriggerOnNodesAction_success() throws NoSuchFieldException, IllegalAccessException {
@@ -584,7 +584,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 Arrays.asList(discoveryNode),
                 true
             );
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(mlModelManager).updateModel(anyString(), captor.capture(), any());
@@ -597,7 +597,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(Map.class), isA(ActionListener.class));
         transportDeployModelAction
             .updateModelDeployStatusAndTriggerOnNodesAction(modelId, "mock_task_id", mlModel, localNodeId, mlTask, eligibleNodes, false);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
 }
