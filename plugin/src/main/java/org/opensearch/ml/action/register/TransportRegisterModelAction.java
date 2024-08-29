@@ -99,7 +99,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportRegisterModelAction(
@@ -170,20 +170,25 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
         registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
-            mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
-                if (modelGroups != null
-                    && modelGroups.getHits().getTotalHits() != null
-                    && modelGroups.getHits().getTotalHits().value != 0) {
-                    String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
-                    registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
-                    checkUserAccess(registerModelInput, listener, true);
-                } else {
-                    doRegister(registerModelInput, listener);
-                }
-            }, e -> {
-                log.error("Failed to search model group index", e);
-                listener.onFailure(e);
-            }));
+            mlModelGroupManager
+                .validateUniqueModelGroupName(
+                    registerModelInput.getModelName(),
+                    registerModelInput.getTenantId(),
+                    ActionListener.wrap(modelGroups -> {
+                        if (modelGroups != null
+                            && modelGroups.getHits().getTotalHits() != null
+                            && modelGroups.getHits().getTotalHits().value != 0) {
+                            String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
+                            registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
+                            checkUserAccess(registerModelInput, listener, true);
+                        } else {
+                            doRegister(registerModelInput, listener);
+                        }
+                    }, e -> {
+                        log.error("Failed to search model group index", e);
+                        listener.onFailure(e);
+                    })
+                );
         } else {
             checkUserAccess(registerModelInput, listener, false);
         }
@@ -377,6 +382,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     mlTaskManager
                         .updateMLTask(
                             taskId,
+                            registerModelInput.getTenantId(),
                             ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
                             TASK_SEMAPHORE_TIMEOUT,
                             true

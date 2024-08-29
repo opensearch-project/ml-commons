@@ -187,7 +187,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             }
                             mlTaskDispatcher.dispatchPredictTask(planningWorkerNodes, actionListener);
                         }, e -> {
-                            log.error("Failed to get model " + modelId, e);
+                            log.error("Failed to get model {}", modelId, e);
                             listener.onFailure(e);
                         }), context::restore));
                     }
@@ -203,7 +203,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             }
             mlTaskDispatcher.dispatchPredictTask(workerNodes, actionListener);
         } catch (Exception e) {
-            log.error("Failed to predict model " + modelId, e);
+            log.error("Failed to predict model {}", modelId, e);
             listener.onFailure(e);
         }
     }
@@ -300,7 +300,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             mlModelManager.deployModel(modelId, tenantId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
                 runPredict(modelId, tenantId, mlTask, mlInput, functionName, internalListener);
             }, e -> {
-                log.error("Failed to auto deploy model " + modelId, e);
+                log.error("Failed to auto deploy model {}", modelId, e);
                 internalListener.onFailure(e);
             }));
             return;
@@ -350,7 +350,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     }
                     return;
                 } catch (Exception e) {
-                    log.error("Failed to predict model " + modelId, e);
+                    log.error("Failed to predict model {}", modelId, e);
                     handlePredictFailure(mlTask, internalListener, e, false, modelId);
                     return;
                 }
@@ -378,7 +378,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }
                         // run predict
                         if (mlTaskManager.contains(mlTask.getTaskId())) {
-                            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
+                            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), tenantId, mlTask.isAsync());
                         }
                         MLOutput output = mlEngine.predict(mlInput, mlModel);
                         if (output instanceof MLPredictionOutput) {
@@ -392,25 +392,22 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
                         internalListener.onResponse(response);
                     } catch (Exception e) {
-                        log.error("Failed to predict model " + modelId, e);
+                        log.error("Failed to predict model {}", modelId, e);
                         internalListener.onFailure(e);
                     }
 
                 }, e -> {
-                    log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
+                    log.error("Failed to predict {}, modelId: {}", mlInput.getAlgorithm(), mlTask.getModelId(), e);
                     handlePredictFailure(mlTask, internalListener, e, true, modelId);
                 });
                 mlModelManager
                     .getModel(
                         mlTask.getModelId(),
                         tenantId,
-                        threadedActionListener(
-                            mlTask.getFunctionName(),
-                            ActionListener.runBefore(getModelListener, () -> context.restore())
-                        )
+                        threadedActionListener(mlTask.getFunctionName(), ActionListener.runBefore(getModelListener, context::restore))
                     );
             } catch (Exception e) {
-                log.error("Failed to get model " + mlTask.getModelId(), e);
+                log.error("Failed to get model {}", mlTask.getModelId(), e);
                 handlePredictFailure(mlTask, internalListener, e, true, modelId);
             }
         } else {

@@ -179,10 +179,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(client.threadPool()).thenReturn(threadPool);
@@ -536,10 +536,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
         CountDownLatch latch = new CountDownLatch(1);

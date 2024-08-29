@@ -170,7 +170,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
         verify(mlTaskManager).addNodeError(eq(taskId), eq(nodeId1), eq(error));
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_NoError() {
@@ -198,7 +198,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(listener).onResponse(response.capture());
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_successDeploy_ratio_exceed_configuration() {
@@ -228,7 +228,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(listener).onResponse(response.capture());
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
-        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_Error_NullTaskWorkerNodes() {
@@ -284,7 +284,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(client, never()).execute(eq(MLSyncUpAction.INSTANCE), any(), any());
         verify(mlTaskManager).addNodeError(eq(taskId), eq(nodeId1), eq(error));
         ArgumentCaptor<Map<String, Object>> updatedFields = ArgumentCaptor.forClass(Map.class);
-        verify(mlTaskManager).updateMLTask(anyString(), updatedFields.capture(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), updatedFields.capture(), anyLong(), anyBoolean());
         assertEquals(FAILED, (MLTaskState) updatedFields.getValue().get(MLTask.STATE_FIELD));
     }
 

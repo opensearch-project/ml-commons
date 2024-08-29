@@ -314,6 +314,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 mlTaskManager
                     .updateMLTask(
                         taskId,
+                        tenantId,
                         Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
                         TASK_SEMAPHORE_TIMEOUT,
                         true
@@ -358,6 +359,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         ActionListener<MLDeployModelNodesResponse> actionListener = deployModelNodesResponseListener(
             mlTask.getTaskId(),
             mlModel.getModelId(),
+            mlModel.getTenantId(),
             mlModel.getIsHidden(),
             listener
         );
@@ -387,12 +389,13 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     private ActionListener<MLDeployModelNodesResponse> deployModelNodesResponseListener(
         String taskId,
         String modelId,
+        String tenantId,
         Boolean isHidden,
         ActionListener<MLDeployModelResponse> listener
     ) {
         return ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {
-                mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+                mlTaskManager.updateMLTask(taskId, tenantId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
             listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.COMPLETED.name()));
         }, e -> {
@@ -400,6 +403,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    tenantId,
                     Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -434,13 +438,15 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         );
         ActionListener<MLDeployModelNodesResponse> actionListener = ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {
-                mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+                mlTaskManager
+                    .updateMLTask(taskId, mlModel.getTenantId(), Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
         }, e -> {
             log.error("Failed to deploy model {}", modelId, e);
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    mlModel.getTenantId(),
                     Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
                     TASK_SEMAPHORE_TIMEOUT,
                     true

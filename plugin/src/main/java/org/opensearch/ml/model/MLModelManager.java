@@ -402,7 +402,12 @@ public class MLModelManager {
                                     } else {
                                         Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
                                         log.error("Failed to update model group {}", modelGroupId, e);
-                                        handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                                        handleException(
+                                            mlRegisterModelInput.getFunctionName(),
+                                            mlTask.getTaskId(),
+                                            mlRegisterModelInput.getTenantId(),
+                                            e
+                                        );
                                         listener.onFailure(e);
                                     }
                                 });
@@ -411,6 +416,7 @@ public class MLModelManager {
                                 handleException(
                                     mlRegisterModelInput.getFunctionName(),
                                     mlTask.getTaskId(),
+                                    mlRegisterModelInput.getTenantId(),
                                     new MLValidationException("Model group not found")
                                 );
                                 listener.onFailure(new MLResourceNotFoundException("Model Group Response is empty for " + modelGroupId));
@@ -425,19 +431,25 @@ public class MLModelManager {
                             handleException(
                                 mlRegisterModelInput.getFunctionName(),
                                 mlTask.getTaskId(),
+                                mlRegisterModelInput.getTenantId(),
                                 new MLResourceNotFoundException("Failed to get model group due to index missing")
                             );
                             listener.onFailure(e);
                         } else {
                             log.error("Failed to get model group", e);
-                            handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                            handleException(
+                                mlRegisterModelInput.getFunctionName(),
+                                mlTask.getTaskId(),
+                                mlRegisterModelInput.getTenantId(),
+                                e
+                            );
                             listener.onFailure(e);
                         }
                     }
                 });
         } catch (Exception e) {
             log.error("Failed to register remote model", e);
-            handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), e);
+            handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), mlRegisterModelInput.getTenantId(), e);
             listener.onFailure(e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
@@ -479,7 +491,12 @@ public class MLModelManager {
                                     updateModelGroupRequest,
                                     ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, updatedVersion + ""); }, e -> {
                                         log.error("Failed to update model group", e);
-                                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                                        handleException(
+                                            registerModelInput.getFunctionName(),
+                                            mlTask.getTaskId(),
+                                            registerModelInput.getTenantId(),
+                                            e
+                                        );
                                     })
                                 );
                         }
@@ -488,6 +505,7 @@ public class MLModelManager {
                         handleException(
                             registerModelInput.getFunctionName(),
                             mlTask.getTaskId(),
+                            registerModelInput.getTenantId(),
                             new MLValidationException("Model group not found")
                         );
                     }
@@ -496,19 +514,20 @@ public class MLModelManager {
                         handleException(
                             registerModelInput.getFunctionName(),
                             mlTask.getTaskId(),
+                            registerModelInput.getTenantId(),
                             new MLResourceNotFoundException("Failed to get model group")
                         );
                     } else {
                         log.error("Failed to get model group", e);
-                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), registerModelInput.getTenantId(), e);
                     }
                 }), context::restore));
             } catch (Exception e) {
                 log.error("Failed to register model", e);
-                handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), registerModelInput.getTenantId(), e);
             }
         } catch (Exception e) {
-            handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+            handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), registerModelInput.getTenantId(), e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
         }
@@ -595,14 +614,21 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlTaskManager.updateMLTask(taskId, Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    mlTaskManager
+                        .updateMLTask(
+                            taskId,
+                            registerModelInput.getTenantId(),
+                            Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED),
+                            5000,
+                            true
+                        );
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
                     }
                     listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name(), modelId));
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
-                    handleException(functionName, taskId, e);
+                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
                     listener.onFailure(e);
                 });
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
@@ -624,7 +650,7 @@ public class MLModelManager {
             }, error -> {
                 // failed to initialize the model index
                 log.error("Failed to init model index", error);
-                handleException(functionName, taskId, error);
+                handleException(functionName, taskId, registerModelInput.getTenantId(), error);
                 listener.onFailure(error);
             }));
         }
@@ -675,22 +701,29 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlTaskManager.updateMLTask(taskId, Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    mlTaskManager
+                        .updateMLTask(
+                            taskId,
+                            registerModelInput.getTenantId(),
+                            Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED),
+                            5000,
+                            true
+                        );
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
                     }
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
-                    handleException(functionName, taskId, e);
+                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
                 });
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, indexListener));
             }, e -> {
                 log.error("Failed to init model index", e);
-                handleException(functionName, taskId, e);
+                handleException(functionName, taskId, registerModelInput.getTenantId(), e);
             }), context::restore));
         } catch (Exception e) {
             logException("Failed to upload model", e, log);
-            handleException(functionName, taskId, e);
+            handleException(functionName, taskId, registerModelInput.getTenantId(), e);
         }
     }
 
@@ -749,16 +782,16 @@ public class MLModelManager {
                     registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
-                    handleException(functionName, taskId, e);
+                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
                 });
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, listener));
             }, e -> {
                 log.error("Failed to init model index", e);
-                handleException(functionName, taskId, e);
+                handleException(functionName, taskId, registerModelInput.getTenantId(), e);
             }), context::restore));
         } catch (Exception e) {
             logException("Failed to register model", e, log);
-            handleException(functionName, taskId, e);
+            handleException(functionName, taskId, registerModelInput.getTenantId(), e);
         }
     }
 
@@ -844,7 +877,7 @@ public class MLModelManager {
                         }, e -> {
                             log.error("Failed to index model chunk " + chunkId, e);
                             failedToUploadChunk.set(true);
-                            handleException(functionName, taskId, e);
+                            handleException(functionName, taskId, registerModelInput.getTenantId(), e);
                             deleteFileQuietly(file);
                             // remove model doc as failed to upload model
                             deleteModel(modelId, registerModelInput, version);
@@ -856,7 +889,7 @@ public class MLModelManager {
                     log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                     deleteModel(modelId, registerModelInput, version);
-                    handleException(functionName, taskId, e);
+                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
                 })
             );
     }
@@ -871,11 +904,17 @@ public class MLModelManager {
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
             mlTask.setFunctionName(mlRegisterModelInput.getFunctionName());
             mlTaskManager
-                .updateMLTask(taskId, Map.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()), TIMEOUT_IN_MILLIS, false);
+                .updateMLTask(
+                    taskId,
+                    registerModelInput.getTenantId(),
+                    Map.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()),
+                    TIMEOUT_IN_MILLIS,
+                    false
+                );
             registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
-            handleException(registerModelInput.getFunctionName(), taskId, e);
+            handleException(registerModelInput.getFunctionName(), taskId, registerModelInput.getTenantId(), e);
         }));
     }
 
@@ -920,13 +959,20 @@ public class MLModelManager {
             );
         log.info("Model registered successfully, model id: {}, task id: {}", modelId, taskId);
         updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
-            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    registerModelInput.getTenantId(),
+                    Map.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId),
+                    TIMEOUT_IN_MILLIS,
+                    true
+                );
             if (registerModelInput.isDeployModel()) {
                 deployModelAfterRegistering(registerModelInput, modelId);
             }
         }, e -> {
             log.error("Failed to update model", e);
-            handleException(functionName, taskId, e);
+            handleException(functionName, taskId, registerModelInput.getTenantId(), e);
             deleteModel(modelId, registerModelInput, version);
         }));
     }
@@ -985,7 +1031,7 @@ public class MLModelManager {
         }
     }
 
-    private void handleException(FunctionName functionName, String taskId, Exception e) {
+    private void handleException(FunctionName functionName, String taskId, String tenantId, Exception e) {
         if (!(e instanceof MLLimitExceededException)
             && !(e instanceof MLResourceNotFoundException)
             && !(e instanceof IllegalArgumentException)) {
@@ -993,7 +1039,7 @@ public class MLModelManager {
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         Map<String, Object> updated = Map.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
-        mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
+        mlTaskManager.updateMLTask(taskId, tenantId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
     /**

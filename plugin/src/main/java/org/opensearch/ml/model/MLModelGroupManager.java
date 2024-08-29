@@ -84,7 +84,7 @@ public class MLModelGroupManager {
             User user = RestActionUtils.getUserContext(client);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
-                validateUniqueModelGroupName(input.getName(), ActionListener.wrap(modelGroups -> {
+                validateUniqueModelGroupName(input.getName(), input.getTenantId(), ActionListener.wrap(modelGroups -> {
                     if (modelGroups != null
                         && modelGroups.getHits().getTotalHits() != null
                         && modelGroups.getHits().getTotalHits().value != 0) {
@@ -217,7 +217,8 @@ public class MLModelGroupManager {
         }
     }
 
-    public void validateUniqueModelGroupName(String name, ActionListener<SearchResponse> listener) throws IllegalArgumentException {
+    public void validateUniqueModelGroupName(String name, String tenantId, ActionListener<SearchResponse> listener)
+        throws IllegalArgumentException {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             BoolQueryBuilder query = new BoolQueryBuilder();
             query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
@@ -229,6 +230,7 @@ public class MLModelGroupManager {
                 .builder()
                 .indices(searchRequest.indices())
                 .searchSourceBuilder(searchRequest.source())
+                .tenantId(tenantId)
                 .build();
 
             sdkClient

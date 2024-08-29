@@ -23,19 +23,15 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -43,6 +39,9 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.sdk.PutDataObjectRequest;
+import org.opensearch.sdk.SdkClient;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
@@ -58,6 +57,7 @@ public class MLTaskManager {
     public static int TASK_SEMAPHORE_TIMEOUT = 5000; // 5 seconds
     private final Map<String, MLTaskCache> taskCaches;
     private final Client client;
+    private final SdkClient sdkClient;
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
@@ -71,8 +71,9 @@ public class MLTaskManager {
      * @param client client
      * @param mlIndicesHandler ML indices handler
      */
-    public MLTaskManager(Client client, ThreadPool threadPool, MLIndicesHandler mlIndicesHandler) {
+    public MLTaskManager(Client client, SdkClient sdkClient, ThreadPool threadPool, MLIndicesHandler mlIndicesHandler) {
         this.client = client;
+        this.sdkClient = sdkClient;
         this.threadPool = threadPool;
         this.mlIndicesHandler = mlIndicesHandler;
         taskCaches = new ConcurrentHashMap<>();
@@ -87,7 +88,7 @@ public class MLTaskManager {
         log.debug("Task id: {}, current running task {}: {}", mlTask.getTaskId(), mlTask.getTaskType(), runningTaskCount.get());
         if (runningTaskCount.get() >= limit) {
             String error = "exceed max running task limit";
-            log.warn(error + " for task " + mlTask.getTaskId());
+            log.warn("{} for task {}", error, mlTask.getTaskId());
             throw new MLLimitExceededException(error);
         }
         if (contains(mlTask.getTaskId())) {
@@ -230,31 +231,47 @@ public class MLTaskManager {
                 listener.onFailure(new RuntimeException("No response to create ML task index"));
                 return;
             }
-            IndexRequest request = new IndexRequest(ML_TASK_INDEX);
-            try (
-                XContentBuilder builder = XContentFactory.jsonBuilder();
-                ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()
-            ) {
-                request.source(mlTask.toXContent(builder, ToXContent.EMPTY_PARAMS)).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(request, ActionListener.runBefore(listener, context::restore));
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+
+                sdkClient
+                    .putDataObjectAsync(
+                        PutDataObjectRequest.builder().index(ML_TASK_INDEX).dataObject(mlTask).build(),
+                        client.threadPool().executor(GENERAL_THREAD_POOL)
+                    )
+                    .whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to index ML task", cause);
+                            listener.onFailure(cause);
+                        } else {
+                            try {
+                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                log.info("Task creation result: {}, Task id: {}", indexResponse.getResult(), indexResponse.getId());
+                                listener.onResponse(indexResponse);
+                            } catch (Exception e) {
+                                listener.onFailure(e);
+                            }
+                        }
+                    });
             } catch (Exception e) {
-                log.error("Failed to create AD task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
+                log.error("Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
                 listener.onFailure(e);
             }
         }, e -> {
-            log.error("Failed to create ML index", e);
+            log.error("Failed to create ML task index", e);
             listener.onFailure(e);
         }));
     }
 
-    public void updateTaskStateAsRunning(String taskId, boolean isAsyncTask) {
+    public void updateTaskStateAsRunning(String taskId, String tenantId, boolean isAsyncTask) {
         if (!contains(taskId)) {
             throw new IllegalArgumentException("Task not found");
         }
         MLTask task = getMLTask(taskId);
         task.setState(MLTaskState.RUNNING);
         if (isAsyncTask) {
-            updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+            updateMLTask(taskId, tenantId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
         }
     }
 
@@ -265,7 +282,13 @@ public class MLTaskManager {
      * @param timeoutInMillis time out waiting for updating task semaphore, zero or negative means don't wait at all
      * @param removeFromCache remove ML task from cache
      */
-    public void updateMLTask(String taskId, Map<String, Object> updatedFields, long timeoutInMillis, boolean removeFromCache) {
+    public void updateMLTask(
+        String taskId,
+        String tenantId,
+        Map<String, Object> updatedFields,
+        long timeoutInMillis,
+        boolean removeFromCache
+    ) {
         ActionListener<UpdateResponse> internalListener = ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
                 log.debug("Updated ML task successfully: {}, taskId: {}, updatedFields: {}", response.status(), taskId, updatedFields);
@@ -273,7 +296,7 @@ public class MLTaskManager {
                 log.error("Failed to update ML task {}, status: {}, updatedFields: {}", taskId, response.status(), updatedFields);
             }
         }, e -> logException("Failed to update ML task: " + taskId, e, log));
-        updateMLTask(taskId, updatedFields, internalListener, timeoutInMillis, removeFromCache);
+        updateMLTask(taskId, tenantId, updatedFields, internalListener, timeoutInMillis, removeFromCache);
     }
 
     /**
@@ -286,6 +309,7 @@ public class MLTaskManager {
      */
     public void updateMLTask(
         String taskId,
+        String tenantId,
         Map<String, Object> updatedFields,
         ActionListener<UpdateResponse> listener,
         long timeoutInMillis,

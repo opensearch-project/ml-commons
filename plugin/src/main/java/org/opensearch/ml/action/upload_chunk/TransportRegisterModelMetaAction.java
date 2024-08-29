@@ -64,7 +64,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         MLRegisterModelMetaInput mlUploadInput = registerModelMetaRequest.getMlRegisterModelMetaInput();
 
         if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
-            mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), ActionListener.wrap(modelGroups -> {
+            mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), null, ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null
                     && modelGroups.getHits().getTotalHits() != null
                     && modelGroups.getHits().getTotalHits().value != 0) {
