@@ -123,6 +123,9 @@ public class Guardrails implements ToXContentObject {
                     break;
             }
         }
+        if (type == null) {
+            type = "local_regex";
+        }
         if (!validateType(type)) {
             throw new IllegalArgumentException("The type of guardrails is required, can not be null.");
         }
