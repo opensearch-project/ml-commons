@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
@@ -245,36 +246,35 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             map = responseToMap(response);
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         }
-        /*-
+
         // Now actually do the deletions. Same result whether multi-tenancy is enabled.
         // Delete from tenant
         response = makeRequest(tenantRequest, DELETE, CONNECTORS_PATH + connectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(connectorId, map.get(DOC_ID).toString());
-        
+
         // Verify the deletion
         ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(tenantRequest, GET, CONNECTORS_PATH + connectorId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find connector with the provided connector id: " + connectorId, getErrorReasonFromResponseMap(map));
-        
+
         // Delete from other tenant
         response = makeRequest(otherTenantRequest, DELETE, CONNECTORS_PATH + otherConnectorId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(otherConnectorId, map.get(DOC_ID).toString());
-        
+
         // Verify the deletion
         ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + otherConnectorId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find connector with the provided connector id: " + otherConnectorId, getErrorReasonFromResponseMap(map));
-        
+
         // Cleanup (since deletions may linger in search results)
         deleteIndexWithAdminClient(ML_CONNECTOR_INDEX);
-            */
     }
 }

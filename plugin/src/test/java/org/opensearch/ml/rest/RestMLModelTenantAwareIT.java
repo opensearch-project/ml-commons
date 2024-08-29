@@ -210,8 +210,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertOK(response);
         SearchResponse searchResponse = searchResponseFromResponse(response);
         if (multiTenancyEnabled) {
-            // TODO Change to 1 when https://github.com/opensearch-project/ml-commons/pull/2803 is merged
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
+            assertEquals(1, searchResponse.getHits().getTotalHits().value);
             assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
         } else {
             assertEquals(3, searchResponse.getHits().getTotalHits().value);
@@ -224,10 +223,8 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertOK(response);
         searchResponse = searchResponseFromResponse(response);
         if (multiTenancyEnabled) {
-            // TODO Change to 1 when https://github.com/opensearch-project/ml-commons/pull/2803 is merged
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
-            // TODO change [1] to [0]
-            assertEquals(otherTenantId, searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            assertEquals(1, searchResponse.getHits().getTotalHits().value);
+            assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
         } else {
             assertEquals(3, searchResponse.getHits().getTotalHits().value);
             assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
