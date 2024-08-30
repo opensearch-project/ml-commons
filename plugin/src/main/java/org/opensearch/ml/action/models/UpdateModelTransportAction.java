@@ -160,6 +160,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 modelAccessControlHelper
                                     .validateModelGroupAccess(
                                         user,
+                                        mlFeatureEnabledSetting,
+                                        tenantId,
                                         mlModel.getModelGroupId(),
                                         client,
                                         sdkClient,
