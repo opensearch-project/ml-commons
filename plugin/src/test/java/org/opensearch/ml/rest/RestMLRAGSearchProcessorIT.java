@@ -199,6 +199,9 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "\",\n"
         + "    \"secret_key\": \""
         + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
         + "\"\n"
         + "  },\n"
         + "  \"actions\": [\n"
@@ -239,6 +242,9 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "\",\n"
         + "    \"secret_key\": \""
         + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
         + "\"\n"
         + "  },\n"
         + "  \"actions\": [\n"
