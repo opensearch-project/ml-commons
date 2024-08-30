@@ -129,6 +129,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                 .builder()
                 .indices(ML_MODEL_INDEX)
+                .tenantId(tenantId)
                 .searchSourceBuilder(sourceBuilder)
                 .build();
             sdkClient
