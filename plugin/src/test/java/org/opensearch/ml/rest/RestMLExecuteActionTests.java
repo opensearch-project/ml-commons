@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
@@ -279,6 +280,61 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, response.status());
         String expectedError =
             "{\"error\":{\"reason\":\"System Error\",\"details\":\"System Exception\",\"type\":\"RuntimeException\"},\"status\":500}";
+        assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testAgentExecutionResponseXContent() throws Exception {
+        RestRequest request = getExecuteAgentRestRequest();
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener
+                .onFailure(
+                    new RemoteTransportException("Remote Transport Exception", new IllegalArgumentException("Illegal Argument Exception"))
+                );
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        when(channel.newBuilder()).thenReturn(XContentFactory.jsonBuilder());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, response.status());
+        assertEquals("application/json; charset=UTF-8", response.contentType());
+        String expectedError =
+            "{\"status\":400,\"error\":{\"type\":\"IllegalArgumentException\",\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\"}}";
+        assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testAgentExecutionResponsePlainText() throws Exception {
+        RestRequest request = getExecuteAgentRestRequest();
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener
+                .onFailure(
+                    new RemoteTransportException("Remote Transport Exception", new IllegalArgumentException("Illegal Argument Exception"))
+                );
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, response.status());
+        assertEquals("text/plain; charset=UTF-8", response.contentType());
+        String expectedError =
+            "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
         assertEquals(expectedError, response.content().utf8ToString());
     }
 }
