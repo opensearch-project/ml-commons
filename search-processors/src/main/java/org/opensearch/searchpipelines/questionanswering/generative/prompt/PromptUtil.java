@@ -188,43 +188,43 @@ public class PromptUtil {
             userInstructions = DEFAULT_SYSTEM_PROMPT;
         }
 
-        MessageArrayBuilder bldr = new MessageArrayBuilder(provider);
+        MessageArrayBuilder messageArrayBuilder = new MessageArrayBuilder(provider);
 
         // Build the system prompt (only one per conversation/session)
         if (!Strings.isNullOrEmpty(systemPrompt)) {
-            bldr.startMessage(ChatRole.SYSTEM);
-            bldr.addTextContent(systemPrompt);
-            bldr.endMessage();
+            messageArrayBuilder.startMessage(ChatRole.SYSTEM);
+            messageArrayBuilder.addTextContent(systemPrompt);
+            messageArrayBuilder.endMessage();
         }
 
         // Anthropic does not allow two consecutive messages of the same role
         // so we combine all user messages and an array of contents.
-        bldr.startMessage(ChatRole.USER);
+        messageArrayBuilder.startMessage(ChatRole.USER);
         boolean lastRoleIsAssistant = false;
         if (!Strings.isNullOrEmpty(userInstructions)) {
-            bldr.addTextContent(userInstructions);
+            messageArrayBuilder.addTextContent(userInstructions);
         }
 
         for (int i = 0; i < contexts.size(); i++) {
-            bldr.addTextContent("SEARCH RESULT " + (i + 1) + ": " + contexts.get(i));
+            messageArrayBuilder.addTextContent("SEARCH RESULT " + (i + 1) + ": " + contexts.get(i));
         }
 
         if (!chatHistory.isEmpty()) {
             // The oldest interaction first
             int idx = chatHistory.size() - 1;
             Interaction firstInteraction = chatHistory.get(idx);
-            bldr.addTextContent(firstInteraction.getInput());
-            bldr.endMessage();
-            bldr.startMessage(ChatRole.ASSISTANT, firstInteraction.getResponse());
-            bldr.endMessage();
+            messageArrayBuilder.addTextContent(firstInteraction.getInput());
+            messageArrayBuilder.endMessage();
+            messageArrayBuilder.startMessage(ChatRole.ASSISTANT, firstInteraction.getResponse());
+            messageArrayBuilder.endMessage();
 
             if (chatHistory.size() > 1) {
                 for (int i = --idx; i >= 0; i--) {
                     Interaction interaction = chatHistory.get(i);
-                    bldr.startMessage(ChatRole.USER, interaction.getInput());
-                    bldr.endMessage();
-                    bldr.startMessage(ChatRole.ASSISTANT, interaction.getResponse());
-                    bldr.endMessage();
+                    messageArrayBuilder.startMessage(ChatRole.USER, interaction.getInput());
+                    messageArrayBuilder.endMessage();
+                    messageArrayBuilder.startMessage(ChatRole.ASSISTANT, interaction.getResponse());
+                    messageArrayBuilder.endMessage();
                 }
             }
 
@@ -234,26 +234,26 @@ public class PromptUtil {
         if (llmMessages != null && !llmMessages.isEmpty()) {
             // TODO MessageBlock can have assistant roles for few-shot prompting.
             if (lastRoleIsAssistant) {
-                bldr.startMessage(ChatRole.USER);
+                messageArrayBuilder.startMessage(ChatRole.USER);
             }
             for (MessageBlock message : llmMessages) {
                 List<MessageBlock.AbstractBlock> blockList = message.getBlockList();
                 for (MessageBlock.Block block : blockList) {
                     switch (block.getType()) {
                         case "text":
-                            bldr.addTextContent(((MessageBlock.TextBlock) block).getText());
+                            messageArrayBuilder.addTextContent(((MessageBlock.TextBlock) block).getText());
                             break;
                         case "image":
                             MessageBlock.ImageBlock ib = (MessageBlock.ImageBlock) block;
                             if (ib.getData() != null) {
-                                bldr.addImageData(ib.getFormat(), ib.getData());
+                                messageArrayBuilder.addImageData(ib.getFormat(), ib.getData());
                             } else if (ib.getUrl() != null) {
-                                bldr.addImageUrl(ib.getFormat(), ib.getUrl());
+                                messageArrayBuilder.addImageUrl(ib.getFormat(), ib.getUrl());
                             }
                             break;
                         case "document":
                             MessageBlock.DocumentBlock db = (MessageBlock.DocumentBlock) block;
-                            bldr.addDocumentContent(db.getFormat(), db.getName(), db.getData());
+                            messageArrayBuilder.addDocumentContent(db.getFormat(), db.getName(), db.getData());
                             break;
                         default:
                             break;
@@ -262,16 +262,16 @@ public class PromptUtil {
             }
         } else {
             if (lastRoleIsAssistant) {
-                bldr.startMessage(ChatRole.USER, "QUESTION: " + question + "\n");
+                messageArrayBuilder.startMessage(ChatRole.USER, "QUESTION: " + question + "\n");
             } else {
-                bldr.addTextContent("QUESTION: " + question + "\n");
+                messageArrayBuilder.addTextContent("QUESTION: " + question + "\n");
             }
-            bldr.addTextContent("ANSWER:");
+            messageArrayBuilder.addTextContent("ANSWER:");
         }
 
-        bldr.endMessage();
+        messageArrayBuilder.endMessage();
 
-        return bldr.toJsonArray().toString();
+        return messageArrayBuilder.toJsonArray().toString();
     }
 
     public static String getPromptTemplate(String systemPrompt, String userInstructions) {
