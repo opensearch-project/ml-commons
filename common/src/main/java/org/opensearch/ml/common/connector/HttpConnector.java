@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -322,6 +323,7 @@ public class HttpConnector extends AbstractConnector {
         if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
             String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
+            parseParameters(parameters);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
             if (!isJson(payload)) {

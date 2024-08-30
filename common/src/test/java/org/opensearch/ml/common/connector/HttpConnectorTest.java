@@ -198,6 +198,53 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayloadWithInferenceProcessor() {
+        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+
+        parameters
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        parameters.put("context", "[\"value 0\",\"value 1\",\"value 2\",\"value 3\",\"value 4\"]");
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+        Assert
+            .assertEquals(
+                "{\"prompt\": \"\\\\n\\\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: [\\\"value 0\\\",\\\"value 1\\\",\\\"value 2\\\",\\\"value 3\\\",\\\"value 4\\\"]. \\\\n\\\\n Human: please summarize the documents \\\\n\\\\n Assistant:\"}",
+                predictPayload
+            );
+    }
+
+    @Test
+    public void createPayloadWithInferenceProcessorContextInList() {
+        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+
+        parameters
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        ArrayList<String> listOfDocuments = new ArrayList<>();
+        listOfDocuments.add("document1");
+        ArrayList<String> NestedListOfDocuments = new ArrayList<>();
+        NestedListOfDocuments.add("document2");
+        listOfDocuments.add(toJson(NestedListOfDocuments));
+        parameters.put("context", toJson(listOfDocuments));
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+        Assert
+            .assertEquals(
+                "{\"prompt\": \"\\\\n\\\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: [\\\"document1\\\",\\\"[\\\\\\\"document2\\\\\\\"]\\\"]. \\\\n\\\\n Human: please summarize the documents \\\\n\\\\n Assistant:\"}",
+                predictPayload
+            );
+    }
+
+    @Test
     public void createPayloadWithList() {
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
@@ -216,7 +263,7 @@ public class HttpConnectorTest {
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
+        parameters.put("prompt", "please replace \"\n\" with abc: ${parameters.context}");
         ArrayList<String> listOfDocuments = new ArrayList<>();
         listOfDocuments.add("document1");
         ArrayList<String> NestedListOfDocuments = new ArrayList<>();

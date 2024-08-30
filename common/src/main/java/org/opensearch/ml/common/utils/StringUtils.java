@@ -19,15 +19,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.lang3.BooleanUtils;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import org.apache.commons.lang3.BooleanUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -50,6 +49,7 @@ public class StringUtils {
     static {
         gson = new Gson();
     }
+    public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
     public static boolean isValidJsonString(String Json) {
         try {
@@ -233,4 +233,49 @@ public class StringUtils {
             return errorMessage + " Model ID: " + modelId;
         }
     }
+
+    /**
+     * Collects the prefixes of the toString() method calls present in the values of the given map.
+     *
+     * @param map A map containing key-value pairs where the values may contain toString() method calls.
+     * @return A list of prefixes for the toString() method calls found in the map values.
+     */
+    public static List<String> collectToStringPrefixes(Map<String, String> map) {
+        List<String> prefixes = new ArrayList<>();
+        for (String key : map.keySet()) {
+            String value = map.get(key);
+            if (value != null) {
+                Pattern pattern = Pattern.compile("\\$\\{(\\w+\\.\\w+)\\.toString\\(\\)\\}");
+                Matcher matcher = pattern.matcher(value);
+                while (matcher.find()) {
+                    String prefix = matcher.group(1);
+                    prefixes.add(prefix.substring(prefix.lastIndexOf('.') + 1));
+                }
+            }
+        }
+        return prefixes;
+    }
+
+    /**
+     * Parses the given parameters map and processes the values containing toString() method calls.
+     *
+     * @param parameters A map containing key-value pairs where the values may contain toString() method calls.
+     * @return A new map with the processed values for the toString() method calls.
+     */
+    public static Map<String, String> parseParameters(Map<String, String> parameters) {
+        if (parameters != null) {
+            List<String> toStringParametersPrefixes = collectToStringPrefixes(parameters);
+
+            if (!toStringParametersPrefixes.isEmpty()) {
+                for (String prefix : toStringParametersPrefixes) {
+                    String value = parameters.get(prefix);
+                    if (value != null) {
+                        parameters.put(prefix + TO_STRING_FUNCTION_NAME, processTextDoc(value));
+                    }
+                }
+            }
+        }
+        return parameters;
+    }
+
 }
