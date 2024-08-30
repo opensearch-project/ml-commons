@@ -17,6 +17,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -308,20 +309,21 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public  <T> T createPayload(String action, Map<String, String> parameters) {
+    public <T> T createPayload(String action, Map<String, String> parameters) {
         Optional<ConnectorAction> connectorAction = findAction(action);
         if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
             String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
+            parseParameters(parameters);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
-
             if (!isJson(payload)) {
                 throw new IllegalArgumentException("Invalid payload: " + payload);
             }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+
     }
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
