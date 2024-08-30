@@ -1,4 +1,14 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.ingest;
+
+import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
+import static org.opensearch.ml.engine.ingest.S3DataIngestion.INGESTFIELDS;
+import static org.opensearch.ml.engine.ingest.S3DataIngestion.OUTPUT;
+import static org.opensearch.ml.engine.ingest.S3DataIngestion.OUTPUTIELDS;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -14,8 +24,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
@@ -26,18 +34,20 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.engine.annotation.Ingester;
 
+import com.jayway.jsonpath.JsonPath;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Ingester("openai")
-public class openAIDataIngestion implements Ingestable {
+public class OpenAIDataIngestion implements Ingestable {
     private static final String API_KEY = "openAI_key";
     private static final String API_URL = "https://api.openai.com/v1/files/";
 
     public static final String SOURCE = "source";
     private final Client client;
 
-    public openAIDataIngestion(Client client) {
+    public OpenAIDataIngestion(Client client) {
         this.client = client;
     }
 
@@ -133,11 +143,7 @@ public class openAIDataIngestion implements Ingestable {
     ) {
         BulkRequest bulkRequest = new BulkRequest();
         sourceLines.stream().forEach(jsonStr -> {
-            JSONObject jsonObject = new JSONObject(jsonStr);
-            String customId = jsonObject.getString("custom_id");
-            JSONObject responseBody = jsonObject.getJSONObject("response").getJSONObject("body");
-            JSONArray dataArray = responseBody.getJSONArray("data");
-            Map<String, Object> jsonMap = processFieldMapping(customId, dataArray, mlBatchIngestionInput.getFieldMapping());
+            Map<String, Object> jsonMap = processFieldMapping(jsonStr, mlBatchIngestionInput.getFieldMapping());
             IndexRequest indexRequest = new IndexRequest(mlBatchIngestionInput.getIndexName()).source(jsonMap);
 
             bulkRequest.add(indexRequest);
@@ -145,20 +151,24 @@ public class openAIDataIngestion implements Ingestable {
         client.bulk(bulkRequest, bulkResponseListener);
     }
 
-    private Map<String, Object> processFieldMapping(String customId, JSONArray dataArray, Map<String, String> fieldMapping) {
+    private Map<String, Object> processFieldMapping(String jsonStr, Map<String, Object> fieldMapping) {
+        String outputJsonPath = (String) fieldMapping.get(OUTPUT);
+        List<List> outputs = (List<List>) JsonPath.read(jsonStr, outputJsonPath);
+        List<String> outputFields = (List<String>) fieldMapping.get(OUTPUTIELDS);
+        List<String> ingestFieldsJsonPath = (List<String>) fieldMapping.get(INGESTFIELDS);
+
         Map<String, Object> jsonMap = new HashMap<>();
-        if (dataArray.length() == fieldMapping.size()) {
-            int index = 0;
-            for (Map.Entry<String, String> mapping : fieldMapping.entrySet()) {
-                // key is the field name for input String, value is the field name for embedded output
-                JSONObject dataItem = dataArray.getJSONObject(index);
-                jsonMap.put(mapping.getValue(), dataItem.getJSONArray("embedding"));
-                index++;
-            }
-            jsonMap.put("id", customId);
-        } else {
+        if (outputs.size() != outputFields.size()) {
             throw new IllegalArgumentException("the fieldMapping and source data do not match");
         }
+        for (int index = 0; index < outputs.size(); index++) {
+            jsonMap.put(outputFields.get(index), outputs.get(index));
+        }
+
+        for (String fieldPath : ingestFieldsJsonPath) {
+            jsonMap.put(obtainFieldNameFromJsonPath(fieldPath), JsonPath.read(jsonStr, fieldPath));
+        }
+
         return jsonMap;
     }
 }

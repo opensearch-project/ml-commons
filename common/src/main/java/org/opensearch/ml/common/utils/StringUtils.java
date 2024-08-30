@@ -301,4 +301,10 @@ public class StringUtils {
         return parameters;
     }
 
+    public static String obtainFieldNameFromJsonPath(String jsonPath) {
+        String[] parts = jsonPath.split("\\.");
+
+        // Get the last part which is the field name
+        return parts[parts.length - 1];
+    }
 }

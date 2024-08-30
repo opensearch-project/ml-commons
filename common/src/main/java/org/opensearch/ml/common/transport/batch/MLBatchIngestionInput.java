@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.transport.batch;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getOrderedMap;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -28,13 +27,13 @@ import lombok.Getter;
 public class MLBatchIngestionInput implements ToXContentObject, Writeable {
 
     public static final String INDEX_NAME_FIELD = "index_name";
-    public static final String TEXT_EMBEDDING_FIELD_MAP_FIELD = "text_embedding_field_map";
+    public static final String FIELD_MAP_FIELD = "field_map";
     public static final String DATA_SOURCE_FIELD = "data_source";
     public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
     @Getter
     private String indexName;
     @Getter
-    private Map<String, String> fieldMapping;
+    private Map<String, Object> fieldMapping;
     @Getter
     private Map<String, String> dataSources;
     @Getter
@@ -43,10 +42,16 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     @Builder(toBuilder = true)
     public MLBatchIngestionInput(
         String indexName,
-        Map<String, String> fieldMapping,
+        Map<String, Object> fieldMapping,
         Map<String, String> dataSources,
         Map<String, String> credential
     ) {
+        if (indexName == null) {
+            throw new IllegalArgumentException("index name for ingestion is null");
+        }
+        if (dataSources == null) {
+            throw new IllegalArgumentException("dataSources for ingestion is null");
+        }
         this.indexName = indexName;
         this.fieldMapping = fieldMapping;
         this.dataSources = dataSources;
@@ -55,7 +60,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
 
     public static MLBatchIngestionInput parse(XContentParser parser) throws IOException {
         String indexName = null;
-        Map<String, String> fieldMapping = null;
+        Map<String, Object> fieldMapping = null;
         Map<String, String> dataSources = null;
         Map<String, String> credential = new HashMap<>();
 
@@ -68,8 +73,8 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
                 case INDEX_NAME_FIELD:
                     indexName = parser.text();
                     break;
-                case TEXT_EMBEDDING_FIELD_MAP_FIELD:
-                    fieldMapping = getOrderedMap(parser.mapOrdered());
+                case FIELD_MAP_FIELD:
+                    fieldMapping = parser.map();
                     break;
                 case CONNECTOR_CREDENTIAL_FIELD:
                     credential = parser.mapStrings();
@@ -92,7 +97,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
             builder.field(INDEX_NAME_FIELD, indexName);
         }
         if (fieldMapping != null) {
-            builder.field(TEXT_EMBEDDING_FIELD_MAP_FIELD, fieldMapping);
+            builder.field(FIELD_MAP_FIELD, fieldMapping);
         }
         if (dataSources != null) {
             builder.field(DATA_SOURCE_FIELD, dataSources);
@@ -109,7 +114,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         output.writeOptionalString(indexName);
         if (fieldMapping != null) {
             output.writeBoolean(true);
-            output.writeMap(fieldMapping, StreamOutput::writeString, StreamOutput::writeString);
+            output.writeMap(fieldMapping, StreamOutput::writeString, StreamOutput::writeGenericValue);
         } else {
             output.writeBoolean(false);
         }
@@ -132,7 +137,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     public MLBatchIngestionInput(StreamInput input) throws IOException {
         indexName = input.readOptionalString();
         if (input.readBoolean()) {
-            fieldMapping = input.readMap(s -> s.readString(), s -> s.readString());
+            fieldMapping = input.readMap(s -> s.readString(), s -> s.readGenericValue());
         }
         if (input.readBoolean()) {
             dataSources = input.readMap(s -> s.readString(), s -> s.readString());
