@@ -11,7 +11,6 @@ import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
@@ -21,8 +20,11 @@ import org.opensearch.rest.RestRequest;
 public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
     public void testConnectorCRUD() throws IOException, InterruptedException {
-        boolean multiTenancyEnabled = Optional.ofNullable(System.getProperty("multitenancy")).map("true"::equalsIgnoreCase).orElse(false);
+        testConnectorCRUDMultitenancyEnabled(true);
+        testConnectorCRUDMultitenancyEnabled(false);
+    }
 
+    public void testConnectorCRUDMultitenancyEnabled(boolean multiTenancyEnabled) throws IOException, InterruptedException {
         enableMultiTenancy(multiTenancyEnabled);
 
         /*
@@ -175,8 +177,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         assertOK(response);
         SearchResponse searchResponse = searchResponseFromResponse(response);
         if (multiTenancyEnabled) {
-            // TODO Change to 1 when https://github.com/opensearch-project/ml-commons/pull/2803 is merged
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
+            assertEquals(1, searchResponse.getHits().getTotalHits().value);
             assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
         } else {
             assertEquals(2, searchResponse.getHits().getTotalHits().value);
@@ -189,10 +190,8 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         assertOK(response);
         searchResponse = searchResponseFromResponse(response);
         if (multiTenancyEnabled) {
-            // TODO Change to 1 when https://github.com/opensearch-project/ml-commons/pull/2803 is merged
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
-            // TODO change [1] to [0]
-            assertEquals(otherTenantId, searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            assertEquals(1, searchResponse.getHits().getTotalHits().value);
+            assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
         } else {
             assertEquals(2, searchResponse.getHits().getTotalHits().value);
             assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
