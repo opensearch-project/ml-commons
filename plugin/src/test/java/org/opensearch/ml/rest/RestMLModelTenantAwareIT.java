@@ -21,13 +21,8 @@ import org.opensearch.rest.RestRequest;
 
 public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
-    public void testModelCRUD() throws IOException, InterruptedException {
-        testModelCRUDMultitenancyEnabled(true);
-        testModelCRUDMultitenancyEnabled(false);
-    }
-
-    private void testModelCRUDMultitenancyEnabled(boolean multiTenancyEnabled) throws IOException, InterruptedException {
-        enableMultiTenancy(multiTenancyEnabled);
+    public void testModelCRUD() throws IOException {
+        boolean multiTenancyEnabled = isMultiTenancyEnabled();
 
         /*
          * Setup
