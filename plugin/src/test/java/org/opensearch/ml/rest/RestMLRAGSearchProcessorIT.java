@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.text.StringEscapeUtils;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.message.BasicHeader;
@@ -36,7 +35,6 @@ import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
 
@@ -212,7 +210,9 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "            },\n"
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
-        + ".amazonaws.com/model/" + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET + "/converse\",\n"
+        + ".amazonaws.com/model/"
+        + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+        + "/converse\",\n"
         + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
@@ -250,7 +250,9 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "            },\n"
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
-        + ".amazonaws.com/model/" + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET + "/converse\",\n"
+        + ".amazonaws.com/model/"
+        + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET
+        + "/converse\",\n"
         + "            \"request_body\": \"{ \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
@@ -261,8 +263,8 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         : BEDROCK_CONNECTOR_BLUEPRINT1;
 
     private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
-                                                              ? BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2
-                                                              : BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
+        ? BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2
+        : BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
 
     private static final String COHERE_KEY = System.getenv("COHERE_KEY");
     private static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
@@ -315,7 +317,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "        \"tag\": \"%s\",\n"
         + "        \"description\": \"%s\",\n"
         + "        \"model_id\": \"%s\",\n"
-        // + "        \"system_prompt\": \"%s\",\n"
+        // + " \"system_prompt\": \"%s\",\n"
         + "        \"user_instructions\": \"%s\",\n"
         + "        \"context_field_list\": [\"%s\"]\n"
         + "      }\n"
@@ -369,7 +371,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "      \"generative_qa_parameters\": {\n"
         + "        \"llm_model\": \"%s\",\n"
         + "        \"llm_question\": \"%s\",\n"
-        // + "        \"system_prompt\": \"%s\",\n"
+        // + " \"system_prompt\": \"%s\",\n"
         + "        \"user_instructions\": \"%s\",\n"
         + "        \"context_size\": %d,\n"
         + "        \"message_size\": %d,\n"
@@ -594,7 +596,8 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
         assertEquals(200, response1.getStatusLine().getStatusCode());
 
-        byte[] rawImage = FileUtils.readFileToByteArray(Path.of(classLoader.getResource(TEST_DOC_PATH + "openai_boardwalk.jpg").toURI()).toFile());
+        byte[] rawImage = FileUtils
+            .readFileToByteArray(Path.of(classLoader.getResource(TEST_DOC_PATH + "openai_boardwalk.jpg").toURI()).toFile());
         String imageContent = Base64.getEncoder().encodeToString(rawImage);
 
         SearchRequestParameters requestParameters = new SearchRequestParameters();
@@ -635,7 +638,8 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         requestParameters.timeout = 60;
         requestParameters.imageFormat = "jpeg";
         requestParameters.imageType = "url";
-        requestParameters.imageData = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"; // imageContent;
+        requestParameters.imageData =
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"; // imageContent;
         Response response3 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -783,9 +787,9 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         Response response1 = createSearchPipeline("pipeline_test", pipelineParameters);
         assertEquals(200, response1.getStatusLine().getStatusCode());
 
-        byte[] rawImage = FileUtils.readFileToByteArray(Path.of(classLoader.getResource(TEST_DOC_PATH + "openai_boardwalk.jpg").toURI()).toFile());
+        byte[] rawImage = FileUtils
+            .readFileToByteArray(Path.of(classLoader.getResource(TEST_DOC_PATH + "openai_boardwalk.jpg").toURI()).toFile());
         String imageContent = Base64.getEncoder().encodeToString(rawImage);
-
 
         SearchRequestParameters requestParameters = new SearchRequestParameters();
 
@@ -971,7 +975,8 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         requestParameters.conversationId = conversationId;
         requestParameters.imageFormat = "jpeg";
         requestParameters.imageType = "url";
-        requestParameters.imageData = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg";
+        requestParameters.imageData =
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -1217,29 +1222,29 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                     requestParameters.llmResponseField
                 )
             : (requestParameters.documentData != null && requestParameters.imageType != null)
-              ? String
-                  .format(
-                      Locale.ROOT,
-                      BM25_SEARCH_REQUEST_WITH_IMAGE_AND_DOCUMENT_TEMPLATE,
-                      requestParameters.source,
-                      requestParameters.source,
-                      requestParameters.match,
-                      requestParameters.llmModel,
-                      requestParameters.llmQuestion,
-                      requestParameters.systemPrompt,
-                      requestParameters.userInstructions,
-                      requestParameters.contextSize,
-                      requestParameters.interactionSize,
-                      requestParameters.timeout,
-                      requestParameters.llmQuestion,
-                      requestParameters.imageFormat,
-                      requestParameters.imageType,
-                      requestParameters.imageData,
-                      requestParameters.documentFormat,
-                      requestParameters.documentName,
-                      requestParameters.documentData
-                  )
-              : (requestParameters.documentData != null)
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_WITH_IMAGE_AND_DOCUMENT_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout,
+                        requestParameters.llmQuestion,
+                        requestParameters.imageFormat,
+                        requestParameters.imageType,
+                        requestParameters.imageData,
+                        requestParameters.documentFormat,
+                        requestParameters.documentName,
+                        requestParameters.documentData
+                    )
+            : (requestParameters.documentData != null)
                 ? String
                     .format(
                         Locale.ROOT,
@@ -1260,46 +1265,46 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                         requestParameters.documentData
                     )
             : (requestParameters.conversationId != null && requestParameters.imageType != null)
-              ? String
-                  .format(
-                    Locale.ROOT,
-                    BM25_SEARCH_REQUEST_WITH_CONVO_AND_IMAGE_TEMPLATE,
-                    requestParameters.source,
-                    requestParameters.source,
-                    requestParameters.match,
-                    requestParameters.llmModel,
-                    requestParameters.llmQuestion,
-                    requestParameters.conversationId,
-                    requestParameters.systemPrompt,
-                    requestParameters.userInstructions,
-                    requestParameters.contextSize,
-                    requestParameters.interactionSize,
-                    requestParameters.timeout,
-                    requestParameters.llmQuestion,
-                    requestParameters.imageFormat,
-                    requestParameters.imageType,
-                    requestParameters.imageData
-                )
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_WITH_CONVO_AND_IMAGE_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.conversationId,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout,
+                        requestParameters.llmQuestion,
+                        requestParameters.imageFormat,
+                        requestParameters.imageType,
+                        requestParameters.imageData
+                    )
             : (requestParameters.imageType != null)
-              ? String
-                  .format(
-                      Locale.ROOT,
-                      BM25_SEARCH_REQUEST_WITH_IMAGE_TEMPLATE,
-                      requestParameters.source,
-                      requestParameters.source,
-                      requestParameters.match,
-                      requestParameters.llmModel,
-                      requestParameters.llmQuestion,
-                      requestParameters.systemPrompt,
-                      requestParameters.userInstructions,
-                      requestParameters.contextSize,
-                      requestParameters.interactionSize,
-                      requestParameters.timeout,
-                      requestParameters.llmQuestion,
-                      requestParameters.imageFormat,
-                      requestParameters.imageType,
-                      requestParameters.imageData
-                  )
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_WITH_IMAGE_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout,
+                        requestParameters.llmQuestion,
+                        requestParameters.imageFormat,
+                        requestParameters.imageType,
+                        requestParameters.imageData
+                    )
             : (requestParameters.conversationId == null)
                 ? String
                     .format(
