@@ -177,6 +177,31 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         predictRemoteModel(modelId, predictInput);
     }
 
+    public void testPredictRemoteModelFailedNonType() throws IOException, InterruptedException {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("guardrails triggered for user input");
+        Response response = createConnector(completionModelConnectorEntity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModelNonTypeGuardrails("openAI-GPT-3.5 completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test of stop word.\"\n" + "  }\n" + "}";
+        predictRemoteModel(modelId, predictInput);
+    }
+
     public void testPredictRemoteModelSuccessWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -424,6 +449,66 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             + "      \"regex\": [\"regex1\", \"regex2\"]\n"
             + "    }\n"
             + "  }\n"
+            + "}";
+        return TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
+    }
+
+    protected Response registerRemoteModelNonTypeGuardrails(String name, String connectorId) throws IOException {
+        String registerModelGroupEntity = "{\n"
+            + "  \"name\": \"remote_model_group\",\n"
+            + "  \"description\": \"This is an example description\"\n"
+            + "}";
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_plugins/_ml/model_groups/_register",
+                null,
+                TestHelper.toHttpEntity(registerModelGroupEntity),
+                null
+            );
+        Map responseMap = parseResponseToMap(response);
+        assertEquals((String) responseMap.get("status"), "CREATED");
+        String modelGroupId = (String) responseMap.get("model_group_id");
+
+        String registerModelEntity = "{\n"
+            + "  \"name\": \""
+            + name
+            + "\",\n"
+            + "  \"function_name\": \"remote\",\n"
+            + "  \"model_group_id\": \""
+            + modelGroupId
+            + "\",\n"
+            + "  \"version\": \"1.0.0\",\n"
+            + "  \"description\": \"test model\",\n"
+            + "  \"connector_id\": \""
+            + connectorId
+            + "\",\n"
+            + "  \"guardrails\": {\n"
+            + "    \"input_guardrail\": {\n"
+            + "      \"stop_words\": [\n"
+            + "        {"
+            + "          \"index_name\": \"stop_words\",\n"
+            + "          \"source_fields\": [\"title\"]\n"
+            + "        }"
+            + "      ],\n"
+            + "      \"regex\": [\"regex1\", \"regex2\"]\n"
+            + "    },\n"
+            + "    \"output_guardrail\": {\n"
+            + "      \"stop_words\": [\n"
+            + "        {"
+            + "          \"index_name\": \"stop_words\",\n"
+            + "          \"source_fields\": [\"title\"]\n"
+            + "        }"
+            + "      ],\n"
+            + "      \"regex\": [\"regex1\", \"regex2\"]\n"
+            + "    }\n"
+            + "},\n"
+            + "  \"interface\": {\n"
+            + "    \"input\": {},\n"
+            + "    \"output\": {}\n"
+            + "    }\n"
             + "}";
         return TestHelper
             .makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, TestHelper.toHttpEntity(registerModelEntity), null);
