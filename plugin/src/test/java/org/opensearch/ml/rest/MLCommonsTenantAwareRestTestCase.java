@@ -33,8 +33,6 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.rest.FakeRestRequest;
 
-import com.google.common.collect.ImmutableList;
-
 public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTestCase {
 
     protected static final String DOC_ID = "_id";
@@ -46,7 +44,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected static final String DELETE = RestRequest.Method.DELETE.name();
 
     // REST paths; some subclasses need multiple of these
-    protected static final String CONNECTOR_ID = "connector_id";
+    protected static final String AGENTS_PATH = "/_plugins/_ml/agents/";
     protected static final String CONNECTORS_PATH = "/_plugins/_ml/connectors/";
     protected static final String MODELS_PATH = "/_plugins/_ml/models/";
     protected static final String MODEL_GROUPS_PATH = "/_plugins/_ml/model_groups/";
@@ -59,9 +57,11 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing";
     protected static final String NO_PERMISSION_REASON = "You don't have permission to access this resource";
 
-    // Common constants used in subclasses
-    protected String tenantId = "123:abc";
-    protected String otherTenantId = "789:xyz";
+    // Common constants and fields used in subclasses
+    protected static final String CONNECTOR_ID = "connector_id";
+
+    protected String tenantId = randomAlphaOfLength(5);
+    protected String otherTenantId = randomAlphaOfLength(6);
 
     protected final RestRequest tenantRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
         .withHeaders(Map.of(TENANT_ID_HEADER, singletonList(tenantId)))
@@ -77,15 +77,25 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected final RestRequest otherTenantMatchAllRequest = getRestRequestWithHeadersAndContent(otherTenantId, MATCH_ALL_QUERY);
     protected final RestRequest nullTenantMatchAllRequest = getRestRequestWithHeadersAndContent(null, MATCH_ALL_QUERY);
 
-    protected static void enableMultiTenancy(boolean multiTenancyEnabled) throws IOException {
+    protected static boolean isMultiTenancyEnabled() throws IOException {
+        // pass -Dtests.rest.tenantaware on gradle command line to enable
+        boolean enabled = Boolean.parseBoolean(System.getProperty("tests.rest.tenantaware"));
+        // TODO: remove this as a changeable setting and load from opensearch.yml
+        if (enabled) {
+            enableMultiTenancy();
+        }
+        return enabled;
+    }
+
+    protected static void enableMultiTenancy() throws IOException {
         Response response = TestHelper
             .makeRequest(
                 client(),
                 PUT,
                 "_cluster/settings",
                 null,
-                "{\"persistent\":{\"plugins.ml_commons.multi_tenancy_enabled\":" + multiTenancyEnabled + "}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+                "{\"persistent\":{\"plugins.ml_commons.multi_tenancy_enabled\":true}}",
+                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
