@@ -146,23 +146,16 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         String sameGroupModelGroupId = map.get(MODEL_GROUP_ID_FIELD).toString();
 
         // Attempt to register a remote model with other tenant and specify same model group ID
-        /*-
-         * TODO: BROKEN
-        
         RestRequest registerModelInSameGroupOtherTenantRequest = getRestRequestWithHeadersAndContent(
             otherTenantId,
             registerRemoteModelContent("test model", otherConnectorId, sameGroupModelGroupId)
         );
         if (multiTenancyEnabled) {
-            response = makeRequest(registerModelInSameGroupOtherTenantRequest, POST, MODELS_PATH + "_register");
-            assertEquals("", TestHelper.httpEntityToString(response.getEntity()));
-        
             ResponseException ex = assertThrows(
                 ResponseException.class,
                 () -> makeRequest(registerModelInSameGroupOtherTenantRequest, POST, MODELS_PATH + "_register")
             );
             response = ex.getResponse();
-            assertEquals("", TestHelper.httpEntityToString(response.getEntity()));
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
@@ -170,7 +163,6 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
             response = makeRequest(registerModelInSameGroupOtherTenantRequest, POST, MODELS_PATH + "_register");
             assertOK(response);
         }
-         */
 
         /*
          * Update
@@ -312,7 +304,6 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         // Delete the models
         // First test that we can't delete other tenant model groups
         if (multiTenancyEnabled) {
-            /* TODO: This is currently failing!
             ResponseException ex = assertThrows(
                 ResponseException.class,
                 () -> makeRequest(tenantRequest, DELETE, MODEL_GROUPS_PATH + otherModelGroupId)
@@ -321,19 +312,15 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
-            
+
             ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, DELETE, MODEL_GROUPS_PATH + modelGroupId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
             assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
-            */
 
             // and can't delete without a tenant ID either
-            ResponseException ex = assertThrows(
-                ResponseException.class,
-                () -> makeRequest(nullTenantRequest, DELETE, MODEL_GROUPS_PATH + modelGroupId)
-            );
+            ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantRequest, DELETE, MODEL_GROUPS_PATH + modelGroupId));
             response = ex.getResponse();
             assertForbidden(response);
             map = responseToMap(response);
