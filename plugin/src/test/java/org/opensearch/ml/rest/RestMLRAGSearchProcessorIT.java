@@ -149,7 +149,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         ? BEDROCK_CONNECTOR_BLUEPRINT2
         : BEDROCK_CONNECTOR_BLUEPRINT1;
 
-    private static final String COHERE_API_KEY = System.getenv("COHERE_API_KEY");
+    private static final String COHERE_KEY = System.getenv("COHERE_KEY");
     private static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
         + "    \"name\": \"Cohere Chat Model\",\n"
         + "    \"description\": \"The connector to Cohere's public chat API\",\n"
@@ -157,7 +157,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
         + "    \"protocol\": \"http\",\n"
         + "    \"credential\": {\n"
         + "        \"cohere_key\": \""
-        + COHERE_API_KEY
+        + COHERE_KEY
         + "\"\n"
         + "    },\n"
         + "    \"parameters\": {\n"
@@ -521,7 +521,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
 
     public void testBM25WithCohere() throws Exception {
         // Skip test if key is null
-        if (COHERE_API_KEY == null) {
+        if (COHERE_KEY == null) {
             return;
         }
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
@@ -573,7 +573,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
 
     public void testBM25WithCohereUsingLlmResponseField() throws Exception {
         // Skip test if key is null
-        if (COHERE_API_KEY == null) {
+        if (COHERE_KEY == null) {
             return;
         }
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
@@ -660,8 +660,6 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
                     requestParameters.match,
                     requestParameters.llmModel,
                     requestParameters.llmQuestion,
-                    requestParameters.systemPrompt,
-                    requestParameters.userInstructions,
                     requestParameters.contextSize,
                     requestParameters.interactionSize,
                     requestParameters.timeout,
