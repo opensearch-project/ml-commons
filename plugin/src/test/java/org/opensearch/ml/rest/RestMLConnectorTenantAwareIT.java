@@ -20,12 +20,7 @@ import org.opensearch.rest.RestRequest;
 public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
     public void testConnectorCRUD() throws IOException, InterruptedException {
-        testConnectorCRUDMultitenancyEnabled(true);
-        testConnectorCRUDMultitenancyEnabled(false);
-    }
-
-    public void testConnectorCRUDMultitenancyEnabled(boolean multiTenancyEnabled) throws IOException, InterruptedException {
-        enableMultiTenancy(multiTenancyEnabled);
+        boolean multiTenancyEnabled = isMultiTenancyEnabled();
 
         /*
          * Create

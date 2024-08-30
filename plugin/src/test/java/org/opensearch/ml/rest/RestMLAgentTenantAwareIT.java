@@ -24,25 +24,8 @@ import org.opensearch.rest.RestRequest;
 
 public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
-    private static final String AGENTS_PATH = "/_plugins/_ml/agents/";
-    private static final String EXECUTE_AGENT_BODY = "{\n"
-        + "  \"parameters\": {\n"
-        + "    \"question\": \"what's the population increase of Seattle from 2021 to 2023\",\n"
-        + "    \"inputs\": \""
-        + "      The current metro area population of Seattle in 2024 is 3,549,000, a 0.85% increase from 2023."
-        + "      The metro area population of Seattle in 2023 was 3,519,000, a 0.86% increase from 2022."
-        + "      The metro area population of Seattle in 2022 was 3,489,000, a 0.81% increase from 2021."
-        + "      The metro area population of Seattle in 2021 was 3,461,000, a 0.82% increase from 2020.\"\n"
-        + "  }\n"
-        + "}";
-
-    public void testAgentCRUD() throws IOException, InterruptedException {
-        testAgentCRUDMultitenancyEnabled(true);
-        testAgentCRUDMultitenancyEnabled(false);
-    }
-
-    private void testAgentCRUDMultitenancyEnabled(boolean multiTenancyEnabled) throws IOException, InterruptedException {
-        enableMultiTenancy(multiTenancyEnabled);
+    public void testAgentCRUD() throws IOException {
+        boolean multiTenancyEnabled = isMultiTenancyEnabled();
 
         /*
          * Setup
@@ -126,7 +109,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         /*
          * Execute
          */
-        RestRequest executeAgentRequest = getRestRequestWithHeadersAndContent(tenantId, EXECUTE_AGENT_BODY);
+        RestRequest executeAgentRequest = getRestRequestWithHeadersAndContent(tenantId, executeAgentContent());
         try {
             // This test relies on the correct api key in the environment variable COHERE_API_KEY
             // If the correct key is present, this call will succeed and produce an LLM response
@@ -144,7 +127,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         }
 
         // Now try again with an other ID
-        RestRequest otherTenantExecuteAgentRequest = getRestRequestWithHeadersAndContent(otherTenantId, EXECUTE_AGENT_BODY);
+        RestRequest otherTenantExecuteAgentRequest = getRestRequestWithHeadersAndContent(otherTenantId, executeAgentContent());
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
@@ -169,7 +152,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         }
 
         // Now try again with a null ID
-        RestRequest nullTenantExecuteAgentRequest = getRestRequestWithHeadersAndContent(null, EXECUTE_AGENT_BODY);
+        RestRequest nullTenantExecuteAgentRequest = getRestRequestWithHeadersAndContent(null, executeAgentContent());
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
@@ -341,5 +324,18 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         sb.append("  ]");
         sb.append("}");
         return sb.toString();
+    }
+
+    private static String executeAgentContent() {
+        return "{\n"
+            + "  \"parameters\": {\n"
+            + "    \"question\": \"what's the population increase of Seattle from 2021 to 2023\",\n"
+            + "    \"inputs\": \""
+            + "      The current metro area population of Seattle in 2024 is 3,549,000, a 0.85% increase from 2023."
+            + "      The metro area population of Seattle in 2023 was 3,519,000, a 0.86% increase from 2022."
+            + "      The metro area population of Seattle in 2022 was 3,489,000, a 0.81% increase from 2021."
+            + "      The metro area population of Seattle in 2021 was 3,461,000, a 0.82% increase from 2020.\"\n"
+            + "  }\n"
+            + "}";
     }
 }
