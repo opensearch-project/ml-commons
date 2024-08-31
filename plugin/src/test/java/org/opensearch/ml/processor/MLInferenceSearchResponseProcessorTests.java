@@ -209,7 +209,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         String fieldName = "text";
         SearchResponse response = getSearchResponse(5, true, fieldName);
 
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there are 1 values")).build();
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there is 1 value")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
 

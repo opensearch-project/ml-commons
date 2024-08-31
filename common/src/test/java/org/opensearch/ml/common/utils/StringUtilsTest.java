@@ -263,13 +263,11 @@ public class StringUtilsTest {
         parameters.put("context", toJson(listOfDocuments));
 
         parseParameters(parameters);
-        System.out.println(parameters);
         assertEquals(parameters.get("context" + TO_STRING_FUNCTION_NAME), "[\\\"document1\\\"]");
 
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         requestBody = substitutor.replace(requestBody);
-        System.out.println(requestBody);
         assertEquals(requestBody, "{\"prompt\": \"answer question based on context: [\\\"document1\\\"]\"}");
     }
 
@@ -292,14 +290,41 @@ public class StringUtilsTest {
         parameters.put("context", toJson(listOfDocuments));
 
         parseParameters(parameters);
-        System.out.println(parameters.get("context" + TO_STRING_FUNCTION_NAME));
-        System.out.println(parameters);
         assertEquals(parameters.get("context" + TO_STRING_FUNCTION_NAME), "[\\\"document1\\\"]");
 
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         requestBody = substitutor.replace(requestBody);
-        System.out.println(requestBody);
+        assertEquals(
+            requestBody,
+            "{\"prompt\": \"\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: [\\\"document1\\\"]. \\n\\n Human: please summarize the documents \\n\\n Assistant:\"}"
+        );
+    }
+
+    /**
+     * Tests the parseParameters method with a map containing a list of strings as the value
+     * for the "context" key, and the "prompt" value containing escaped characters. Verifies
+     * that the method correctly processes the list and adds the processed value to the map
+     * with the expected key. Also tests the string substitution using the processed values.
+     */
+    @Test
+    public void testParseParametersListToStringModelConfig() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.model_config.context.toString()}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        ArrayList<String> listOfDocuments = new ArrayList<>();
+        listOfDocuments.add("document1");
+        parameters.put("model_config.context", toJson(listOfDocuments));
+
+        parseParameters(parameters);
+        assertEquals(parameters.get("model_config.context" + TO_STRING_FUNCTION_NAME), "[\\\"document1\\\"]");
+
+        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
+        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+        requestBody = substitutor.replace(requestBody);
         assertEquals(
             requestBody,
             "{\"prompt\": \"\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: [\\\"document1\\\"]. \\n\\n Human: please summarize the documents \\n\\n Assistant:\"}"
@@ -324,13 +349,11 @@ public class StringUtilsTest {
         parameters.put("context", toJson(listOfDocuments));
 
         parseParameters(parameters);
-        System.out.println(parameters);
         assertEquals(parameters.get("context" + TO_STRING_FUNCTION_NAME), "[\\\"document1\\\",\\\"[\\\\\\\"document2\\\\\\\"]\\\"]");
 
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         requestBody = substitutor.replace(requestBody);
-        System.out.println(requestBody);
         assertEquals(
             requestBody,
             "{\"prompt\": \"answer question based on context: [\\\"document1\\\",\\\"[\\\\\\\"document2\\\\\\\"]\\\"]\"}"
@@ -356,12 +379,10 @@ public class StringUtilsTest {
         parameters.put("context", toJson(mapOfDocuments));
         parameters.put("history", "hello\n");
         parseParameters(parameters);
-        System.out.println(parameters);
         assertEquals(parameters.get("context" + TO_STRING_FUNCTION_NAME), "{\\\"name\\\":\\\"John\\\"}");
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         requestBody = substitutor.replace(requestBody);
-        System.out.println(requestBody);
         assertEquals(
             requestBody,
             "{\"prompt\": \"answer question based on context: {\\\"name\\\":\\\"John\\\"} and conversation history based on history: hello\\n\"}"
@@ -390,7 +411,6 @@ public class StringUtilsTest {
         parameters.put("context", toJson(mapOfDocuments));
         parameters.put("history", "hello\n");
         parseParameters(parameters);
-        System.out.println(parameters);
         assertEquals(
             parameters.get("context" + TO_STRING_FUNCTION_NAME),
             "{\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"}"
@@ -398,7 +418,6 @@ public class StringUtilsTest {
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         requestBody = substitutor.replace(requestBody);
-        System.out.println(requestBody);
         assertEquals(
             requestBody,
             "{\"prompt\": \"answer question based on context: {\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"} and conversation history based on history: hello\\n\"}"

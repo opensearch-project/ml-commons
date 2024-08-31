@@ -19,14 +19,15 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonSyntaxException;
 import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -245,11 +246,11 @@ public class StringUtils {
         for (String key : map.keySet()) {
             String value = map.get(key);
             if (value != null) {
-                Pattern pattern = Pattern.compile("\\$\\{(\\w+\\.\\w+)\\.toString\\(\\)\\}");
+                Pattern pattern = Pattern.compile("\\$\\{parameters\\.(.+?)\\.toString\\(\\)\\}");
                 Matcher matcher = pattern.matcher(value);
                 while (matcher.find()) {
                     String prefix = matcher.group(1);
-                    prefixes.add(prefix.substring(prefix.lastIndexOf('.') + 1));
+                    prefixes.add(prefix);
                 }
             }
         }
