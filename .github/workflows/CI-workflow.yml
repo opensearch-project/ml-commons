@@ -67,7 +67,8 @@ jobs:
                                echo "::add-mask::$COHERE_KEY" &&
                                echo "build and run tests" && ./gradlew build &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3'
+                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 &&
+                               echo "Tenant Aware Integration Testing" && ./gradlew integTest -PnumNodes=3 -Dtests.rest.tenantaware=true'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
@@ -212,6 +213,9 @@ jobs:
           echo "::add-mask::$OPENAI_KEY"
           echo "::add-mask::$COHERE_KEY"
           ./gradlew.bat build
+      - name: Tenant Aware Tests
+        shell: bash
+        run: ./gradlew.bat integTest -Dtests.rest.tenantaware=true
       - name: Publish to Maven Local
         run: |
           ./gradlew publishToMavenLocal
