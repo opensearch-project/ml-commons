@@ -189,8 +189,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         PREDICT,
         EXECUTE,
         BATCH_PREDICT,
-        CANCEL_BATCH,
-        BATCH_STATUS;
+        CANCEL_BATCH_PREDICT,
+        BATCH_PREDICT_STATUS;
 
         public static ActionType from(String value) {
             try {

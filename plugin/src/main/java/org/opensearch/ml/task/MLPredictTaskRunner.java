@@ -352,7 +352,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 validateOutputSchema(modelId, (ModelTensorOutput) output.getOutput());
                             }
                             if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
-                                Map<String, Object> transformJob = new HashMap<>();
+                                Map<String, Object> remoteJob = new HashMap<>();
                                 ModelTensorOutput tensorOutput = (ModelTensorOutput) output.getOutput();
                                 if (tensorOutput != null
                                     && tensorOutput.getMlModelOutputs() != null
@@ -365,8 +365,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                             .getDataAsMap();
                                         if (dataAsMap != null
                                             && (dataAsMap.containsKey("TransformJobArn") || dataAsMap.containsKey("id"))) {
-                                            transformJob.putAll(dataAsMap);
-                                            mlTask.setTransformJob(transformJob);
+                                            remoteJob.putAll(dataAsMap);
+                                            mlTask.setRemoteJob(remoteJob);
                                             mlTask.setTaskId(null);
                                             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                                                 String taskId = response.getId();

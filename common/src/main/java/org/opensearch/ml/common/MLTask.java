@@ -51,7 +51,7 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
     public static final String ERROR_FIELD = "error";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
-    public static final String TRANSFORM_JOB_FIELD = "transform_job";
+    public static final String REMOTE_JOB_FIELD = "remote_job";
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB = CommonValue.VERSION_2_16_0;
 
     @Setter
@@ -75,7 +75,7 @@ public class MLTask implements ToXContentObject, Writeable {
     private User user; // TODO: support document level access control later
     private boolean async;
     @Setter
-    private Map<String, Object> transformJob;
+    private Map<String, Object> remoteJob;
 
     @Builder(toBuilder = true)
     public MLTask(
@@ -93,7 +93,7 @@ public class MLTask implements ToXContentObject, Writeable {
         String error,
         User user,
         boolean async,
-        Map<String, Object> transformJob
+        Map<String, Object> remoteJob
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -109,7 +109,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.error = error;
         this.user = user;
         this.async = async;
-        this.transformJob = transformJob;
+        this.remoteJob = remoteJob;
     }
 
     public MLTask(StreamInput input) throws IOException {
@@ -139,7 +139,7 @@ public class MLTask implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB)) {
             if (input.readBoolean()) {
                 String mapStr = input.readString();
-                this.transformJob = gson.fromJson(mapStr, Map.class);
+                this.remoteJob = gson.fromJson(mapStr, Map.class);
             }
         }
     }
@@ -171,11 +171,11 @@ public class MLTask implements ToXContentObject, Writeable {
         }
         out.writeBoolean(async);
         if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB)) {
-            if (transformJob != null) {
+            if (remoteJob != null) {
                 out.writeBoolean(true);
                 try {
                     AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                        out.writeString(gson.toJson(transformJob));
+                        out.writeString(gson.toJson(remoteJob));
                         return null;
                     });
                 } catch (PrivilegedActionException e) {
@@ -230,8 +230,8 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(USER, user);
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
-        if (transformJob != null) {
-            builder.field(TRANSFORM_JOB_FIELD, transformJob);
+        if (remoteJob != null) {
+            builder.field(REMOTE_JOB_FIELD, remoteJob);
         }
         return builder.endObject();
     }
@@ -256,7 +256,7 @@ public class MLTask implements ToXContentObject, Writeable {
         String error = null;
         User user = null;
         boolean async = false;
-        Map<String, Object> transformJob = null;
+        Map<String, Object> remoteJob = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -314,8 +314,8 @@ public class MLTask implements ToXContentObject, Writeable {
                 case IS_ASYNC_TASK_FIELD:
                     async = parser.booleanValue();
                     break;
-                case TRANSFORM_JOB_FIELD:
-                    transformJob = parser.map();
+                case REMOTE_JOB_FIELD:
+                    remoteJob = parser.map();
                     break;
                 default:
                     parser.skipChildren();
@@ -338,7 +338,7 @@ public class MLTask implements ToXContentObject, Writeable {
             .error(error)
             .user(user)
             .async(async)
-            .transformJob(transformJob)
+            .remoteJob(remoteJob)
             .build();
     }
 }

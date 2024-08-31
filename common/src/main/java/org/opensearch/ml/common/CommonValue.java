@@ -394,7 +394,7 @@ public class CommonValue {
         + USER_FIELD_MAPPING
         + "    }\n"
         + "}"
-        + MLTask.TRANSFORM_JOB_FIELD
+        + MLTask.REMOTE_JOB_FIELD
         + "\" : {\"type\": \"flat_object\"}\n"
         + "    }\n"
         + "}";
