@@ -222,7 +222,7 @@ integTest {
     // The 'doFirst' delays till execution time.
     doFirst {
         // TODO this properly uses the remote client factory but needs a remote cluster set up
-        if (System.getProperty("tests.rest.tenantaware.remote") != null) {
+        if (System.getProperty("tests.rest.cluster") != null && System.getProperty("tests.rest.tenantaware") != null) {
             def ymlFile = file("$buildDir/testclusters/integTest-0/config/opensearch.yml")
             if (ymlFile.exists()) {
                 ymlFile.withWriterAppend { writer ->

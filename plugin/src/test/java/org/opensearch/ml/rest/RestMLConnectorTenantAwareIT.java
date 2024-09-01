@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
@@ -267,8 +266,5 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find connector with the provided connector id: " + otherConnectorId, getErrorReasonFromResponseMap(map));
-
-        // Cleanup (since deletions may linger in search results)
-        deleteIndexWithAdminClient(ML_CONNECTOR_INDEX);
     }
 }
