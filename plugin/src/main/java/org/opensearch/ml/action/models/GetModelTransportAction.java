@@ -118,13 +118,12 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         try {
                             GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
                             if (gr != null && gr.isExists()) {
+                                // MLModel old version field is named version in the code and returns quoted in the Remote client
+                                String sourceAsString = SdkClientUtils
+                                    .unwrapQuotedInteger(MLModel.OLD_MODEL_VERSION_FIELD, gr.getSourceAsString());
                                 try (
                                     XContentParser parser = jsonXContent
-                                        .createParser(
-                                            NamedXContentRegistry.EMPTY,
-                                            LoggingDeprecationHandler.INSTANCE,
-                                            gr.getSourceAsString()
-                                        )
+                                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, sourceAsString)
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
