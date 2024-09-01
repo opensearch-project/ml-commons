@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLModelGroup.MODEL_GROUP_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
@@ -355,12 +352,6 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
             "Failed to find model group with the provided model group id: " + otherModelGroupId,
             getErrorReasonFromResponseMap(map)
         );
-
-        // Cleanup (since deletions may linger in search results)
-        deleteIndexWithAdminClient(ML_MODEL_GROUP_INDEX);
-        // We test model and connector deletion elsewhere, just wipe the index
-        deleteIndexWithAdminClient(ML_MODEL_INDEX);
-        deleteIndexWithAdminClient(ML_CONNECTOR_INDEX);
     }
 
     private static String registerModelGroupContent(String name) {

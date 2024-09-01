@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
@@ -301,10 +299,5 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find model with the provided model id: " + otherModelId, getErrorReasonFromResponseMap(map));
-
-        // Cleanup (since deletions may linger in search results)
-        deleteIndexWithAdminClient(ML_MODEL_INDEX);
-        // We test connector deletion elsewhere, just wipe the index
-        deleteIndexWithAdminClient(ML_CONNECTOR_INDEX);
     }
 }
