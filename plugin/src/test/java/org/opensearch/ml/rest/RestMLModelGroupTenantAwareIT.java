@@ -40,7 +40,7 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         /*
          * Get
          */
-        // Now try to get that model grouop
+        // Now try to get that model group
         response = makeRequest(tenantRequest, GET, MODEL_GROUPS_PATH + modelGroupId);
         assertOK(response);
         map = responseToMap(response);
@@ -244,6 +244,9 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         assertOK(response);
         map = responseToMap(response);
         assertEquals("other test model group", map.get("name"));
+
+        // Refresh before searching to avoid race conditions
+        refreshBeforeSearch();
 
         // Search should show only the model groups for tenant (explicit and auto)
         response = makeRequest(tenantMatchAllRequest, GET, MODEL_GROUPS_PATH + "_search");
