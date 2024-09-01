@@ -18,7 +18,7 @@ import org.opensearch.rest.RestRequest;
 
 public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
-    public void testConnectorCRUD() throws IOException, InterruptedException {
+    public void testConnectorCRUD() throws IOException {
         boolean multiTenancyEnabled = isMultiTenancyEnabled();
 
         /*
@@ -163,8 +163,8 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         map = responseToMap(response);
         assertEquals("Cohere Chat Model", map.get("name"));
 
-        // Pause to avoid race condition
-        Thread.sleep(1000);
+        // Refresh before searching to avoid race conditions
+        refreshBeforeSearch();
 
         // Search should show only the connector for tenant
         response = makeRequest(tenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");

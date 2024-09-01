@@ -120,7 +120,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                             if (gr != null && gr.isExists()) {
                                 // MLModel old version field is named version in the code and returns quoted in the Remote client
                                 String sourceAsString = SdkClientUtils
-                                    .unwrapQuotedInteger(MLModel.OLD_MODEL_VERSION_FIELD, gr.getSourceAsString());
+                                    .renameField(MLModel.OLD_MODEL_VERSION_FIELD, MLModel.MODEL_VERSION_FIELD, gr.getSourceAsString());
                                 try (
                                     XContentParser parser = jsonXContent
                                         .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, sourceAsString)
