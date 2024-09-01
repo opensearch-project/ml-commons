@@ -8,9 +8,12 @@
  */
 package org.opensearch.sdk;
 
+import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.common.action.ActionFuture;
@@ -50,5 +53,33 @@ public class SdkClientUtils {
             return throwable.getCause().getCause();
         }
         return throwable;
+    }
+
+    /**
+     * If an internal variable name matches a field name not assigned to that field, Jackson's ObjectMapper can parse the wrong type. This method removes quotes around numeric fields to work around these cases.
+     * @param field The JSON field to remove the quotes from its value
+     * @param json The full JSON to process
+     * @return The JSON with the quotes removed from a numeric value in the specified field
+     */
+    public static String unwrapQuotedInteger(String field, String json) {
+        String regex = "(\"" + Pattern.quote(field) + "\"):\"(\\d+)\"";
+        return json.replaceAll(regex, "$1:$2");
+    }
+
+    /**
+     * If an internal variable is an enum represented by all upper case, the Remote client may have it mapped in lower case. This method lowercases these enum values 
+     * @param field The JSON field to lowercase the value
+     * @param json The full JSON to process
+     * @return The JSON with the value lowercased
+     */
+    public static String lowerCaseEnumValues(String field, String json) {
+        // Use a matcher to find and replace the field value in lowercase
+        Matcher matcher = Pattern.compile("(\"" + Pattern.quote(field) + "\"):(\"[A-Z_]+\")").matcher(json);
+        StringBuffer sb = new StringBuffer();        
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, matcher.group(1) + ":" + matcher.group(2).toLowerCase(Locale.ROOT));
+        }
+        matcher.appendTail(sb);        
+        return sb.toString();
     }
 }
