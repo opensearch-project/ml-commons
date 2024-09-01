@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.input.execute.agent.AgentMLInput.AGENT_ID_FIELD;
@@ -297,12 +294,6 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find agent with the provided agent id: " + otherAgentId, getErrorReasonFromResponseMap(map));
-
-        // Cleanup (since deletions may linger in search results)
-        deleteIndexWithAdminClient(ML_AGENT_INDEX);
-        // We test model and connector deletion elsewhere, just wipe the index
-        deleteIndexWithAdminClient(ML_MODEL_INDEX);
-        deleteIndexWithAdminClient(ML_CONNECTOR_INDEX);
     }
 
     private static String registerFlowAgentContent(String name, String modelId) {
