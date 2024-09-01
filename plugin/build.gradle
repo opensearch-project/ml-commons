@@ -63,7 +63,11 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
 
+    // Java client dependencies
     implementation "org.opensearch.client:opensearch-java:2.10.2"
+    api "org.apache.httpcomponents.client5:httpclient5:5.3.1"
+    api "org.apache.httpcomponents.core5:httpcore5:5.2.5"
+    
     // Dynamo dependencies
     implementation("software.amazon.awssdk:sdk-core:2.25.40")
     implementation("software.amazon.awssdk:aws-core:2.25.40")
