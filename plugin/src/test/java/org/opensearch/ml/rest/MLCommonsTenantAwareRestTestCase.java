@@ -186,6 +186,15 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         assertEquals(RestStatus.UNAUTHORIZED.getStatus(), response.getStatusLine().getStatusCode());
     }
 
+    protected void refreshBeforeSearch() {
+        try {
+            refreshAllIndices();
+            Thread.sleep(2000);
+        } catch (IOException | InterruptedException e) {
+            // ignore
+        }
+    }
+
     protected static String registerRemoteModelContent(String description, String connectorId, String modelGroupId) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
