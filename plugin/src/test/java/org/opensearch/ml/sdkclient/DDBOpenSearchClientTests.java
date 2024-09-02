@@ -237,6 +237,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         Assert.assertEquals("hello", putItemRequest.item().get("_source").m().get("testList").l().get(1).s());
         Assert.assertEquals(null, putItemRequest.item().get("_source").m().get("testList").l().get(2).s());
         Assert.assertEquals("foo", putItemRequest.item().get("_source").m().get("testObject").m().get("data").s());
+        Assert.assertEquals(TENANT_ID, putItemRequest.item().get("_source").m().get(CommonValue.TENANT_ID).s());
     }
 
     @Test
@@ -248,6 +249,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
         PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
         Assert.assertEquals("DEFAULT_TENANT", putItemRequest.item().get(CommonValue.TENANT_ID).s());
+        Assert.assertNull(putItemRequest.item().get("_source").m().get(CommonValue.TENANT_ID));
     }
 
     @Test
