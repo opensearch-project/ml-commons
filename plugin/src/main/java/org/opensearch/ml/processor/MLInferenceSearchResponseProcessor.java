@@ -384,8 +384,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 }
             }
         }
-
-        modelParameters = StringUtils.getParameterMap(modelInputParameters);
+        Map<String, String> modelParametersInString = StringUtils.getParameterMap(modelInputParameters);
+        modelParameters.putAll(modelParametersInString);
 
         Set<String> inputMapKeys = new HashSet<>(modelParameters.keySet());
         inputMapKeys.removeAll(modelConfigs.keySet());

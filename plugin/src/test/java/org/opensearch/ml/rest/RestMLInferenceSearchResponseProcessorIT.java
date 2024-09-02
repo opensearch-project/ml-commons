@@ -36,6 +36,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     private String openAIChatModelId;
     private String bedrockEmbeddingModelId;
     private String localModelId;
+    private String bedrockClaudeModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -106,6 +107,47 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  ]\n"
         + "}";
 
+    private final String bedrockClaudeModelConnectorEntity = "{\n"
+        + "  \"name\": \"BedRock Claude instant-v1 Connector\",\n"
+        + "  \"description\": \"The connector to bedrock for claude model\",\n"
+        + "  \"version\": 1,\n"
+        + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"parameters\": {\n"
+        + "    \"region\": \""
+        + GITHUB_CI_AWS_REGION
+        + "\",\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"anthropic_version\": \"bedrock-2023-05-31\",\n"
+        + "    \"max_tokens_to_sample\": 8000,\n"
+        + "    \"temperature\": 0.0001,\n"
+        + "    \"response_filter\": \"$.completion\",\n"
+        + "    \"stop_sequences\": [\"\\n\\nHuman:\",\"\\nObservation:\",\"\\n\\tObservation:\",\"\\nObservation\",\"\\n\\tObservation\",\"\\n\\nQuestion\"]\n"
+        + "  },\n"
+        + "  \"credential\": {\n"
+        + "    \"access_key\": \""
+        + AWS_ACCESS_KEY_ID
+        + "\",\n"
+        + "    \"secret_key\": \""
+        + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
+        + "\"\n"
+        + "  },\n"
+        + "  \"actions\": [\n"
+        + "    {\n"
+        + "      \"action_type\": \"predict\",\n"
+        + "      \"method\": \"POST\",\n"
+        + "      \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/anthropic.claude-instant-v1/invoke\",\n"
+        + "      \"headers\": {\n"
+        + "        \"content-type\": \"application/json\",\n"
+        + "        \"x-amz-content-sha256\": \"required\"\n"
+        + "      },\n"
+        + "      \"request_body\": \"{\\\"prompt\\\":\\\"${parameters.prompt}\\\", \\\"stop_sequences\\\": ${parameters.stop_sequences}, \\\"max_tokens_to_sample\\\":${parameters.max_tokens_to_sample}, \\\"temperature\\\":${parameters.temperature},  \\\"anthropic_version\\\":\\\"${parameters.anthropic_version}\\\" }\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
     /**
      * Registers two remote models and creates an index and documents before running the tests.
      *
@@ -119,7 +161,8 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
         this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
-
+        String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
+        this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, true);
         String index_name = "daily_index";
         String createIndexRequestBody = "{\n"
             + "  \"mappings\": {\n"
@@ -152,13 +195,14 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     /**
      * Tests the MLInferenceSearchResponseProcessor with a remote model and an object field as input.
      * It creates a search pipeline with the processor configured to use the remote model,
-     * performs a search using the pipeline, and verifies the inference results.
-     *
+     * performs a search using the pipeline, gathering search documents into context and added in a custom prompt
+     * Using a toString() in placeholder to specify the context needs to cast as string
+     * and verifies the inference results.
      * @throws Exception if any error occurs during the test
      */
-    public void testMLInferenceProcessorRemoteModelObjectField() throws Exception {
+    public void testMLInferenceProcessorRemoteModelCustomPrompt() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        if (AWS_ACCESS_KEY_ID == null) {
             return;
         }
         String createPipelineRequestBody = "{\n"
@@ -168,20 +212,26 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
             + "        \"tag\": \"ml_inference\",\n"
             + "        \"description\": \"This processor is going to run ml inference during search request\",\n"
             + "        \"model_id\": \""
-            + this.openAIChatModelId
+            + this.bedrockClaudeModelId
             + "\",\n"
+            + "        \"function_name\": \"REMOTE\",\n"
             + "        \"input_map\": [\n"
             + "          {\n"
-            + "            \"input\": \"weather\"\n"
+            + "            \"context\": \"weather\"\n"
             + "          }\n"
             + "        ],\n"
             + "        \"output_map\": [\n"
             + "          {\n"
-            + "            \"weather_embedding\": \"data[*].embedding\"\n"
+            + "            \"llm_response\":\"$.response\"\n"
+            + "            \n"
             + "          }\n"
             + "        ],\n"
-            + "        \"ignore_missing\": false,\n"
+            + "        \"model_config\": {\n"
+            + "          \"prompt\":\"\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context.toString()}. \\n\\n Human: please summarize the documents \\n\\n Assistant:\"\n"
+            + "        },\n"
+            + "        \"ignore_missing\":false,\n"
             + "        \"ignore_failure\": false\n"
+            + "        \n"
             + "      }\n"
             + "    }\n"
             + "  ]\n"
@@ -190,18 +240,13 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         String query = "{\"query\":{\"term\":{\"weather\":{\"value\":\"sunny\"}}}}";
 
         String index_name = "daily_index";
-        String pipelineName = "weather_embedding_pipeline";
+        String pipelineName = "qa_pipeline";
         createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
 
         Map response = searchWithPipeline(client(), index_name, pipelineName, query);
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size"), "1536");
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.weather"), "sunny");
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[0]"), "happy");
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[1]"), "first day at school");
-        List embeddingList = (List) JsonPath.parse(response).read("$.hits.hits[0]._source.weather_embedding");
-        Assert.assertEquals(embeddingList.size(), 1536);
-        Assert.assertEquals((Double) embeddingList.get(0), 0.00020525085, 0.005);
-        Assert.assertEquals((Double) embeddingList.get(1), -0.0071890163, 0.005);
+        System.out.println(response);
+        Assert.assertNotNull(JsonPath.parse(response).read("$.hits.hits[0]._source.llm_response"));
+        Assert.assertNotNull(JsonPath.parse(response).read("$.hits.hits[1]._source.llm_response"));
     }
 
     /**
@@ -310,6 +355,61 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         Assert.assertEquals(embeddingList.size(), 1536);
         Assert.assertEquals((Double) embeddingList.get(0), -0.011842756, 0.005);
         Assert.assertEquals((Double) embeddingList.get(1), -0.012508746, 0.005);
+    }
+
+    /**
+     * Tests the MLInferenceSearchResponseProcessor with a remote model and an object field as input.
+     * It creates a search pipeline with the processor configured to use the remote model,
+     * performs a search using the pipeline, and verifies the inference results.
+     *
+     * @throws Exception if any error occurs during the test
+     */
+    public void testMLInferenceProcessorRemoteModelObjectField() throws Exception {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        String createPipelineRequestBody = "{\n"
+            + "  \"response_processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"tag\": \"ml_inference\",\n"
+            + "        \"description\": \"This processor is going to run ml inference during search request\",\n"
+            + "        \"model_id\": \""
+            + this.openAIChatModelId
+            + "\",\n"
+            + "        \"input_map\": [\n"
+            + "          {\n"
+            + "            \"input\": \"weather\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"weather_embedding\": \"data[*].embedding\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"ignore_missing\": false,\n"
+            + "        \"ignore_failure\": false\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+        String query = "{\"query\":{\"term\":{\"weather\":{\"value\":\"sunny\"}}}}";
+
+        String index_name = "daily_index";
+        String pipelineName = "weather_embedding_pipeline";
+        createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        Map response = searchWithPipeline(client(), index_name, pipelineName, query);
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size"), "1536");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.weather"), "sunny");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[0]"), "happy");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[1]"), "first day at school");
+        List embeddingList = (List) JsonPath.parse(response).read("$.hits.hits[0]._source.weather_embedding");
+        Assert.assertEquals(embeddingList.size(), 1536);
+        Assert.assertEquals((Double) embeddingList.get(0), 0.00020525085, 0.005);
+        Assert.assertEquals((Double) embeddingList.get(1), -0.0071890163, 0.005);
     }
 
     /**

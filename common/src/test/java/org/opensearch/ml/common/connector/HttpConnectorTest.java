@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
-import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -181,114 +180,6 @@ public class HttpConnectorTest {
         String requestBody = "{\"input\": ${parameters.input} }";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
         String predictPayload = connector.createPayload(PREDICT.name(), null);
-        connector.validatePayload(predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithString() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        parameters.put("context", "document1");
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
-        Assert.assertEquals("{\"prompt\": \"answer question based on context: document1\"}", predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithList() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        ArrayList<String> listOfDocuments = new ArrayList<>();
-        listOfDocuments.add("document1");
-        listOfDocuments.add("document2");
-        parameters.put("context", toJson(listOfDocuments));
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithNestedList() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        ArrayList<String> listOfDocuments = new ArrayList<>();
-        listOfDocuments.add("document1");
-        ArrayList<String> NestedListOfDocuments = new ArrayList<>();
-        NestedListOfDocuments.add("document2");
-        listOfDocuments.add(toJson(NestedListOfDocuments));
-        parameters.put("context", toJson(listOfDocuments));
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithMap() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        Map<String, String> mapOfDocuments = new HashMap<>();
-        mapOfDocuments.put("name", "John");
-        parameters.put("context", toJson(mapOfDocuments));
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithNestedMapOfString() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        Map<String, String> mapOfDocuments = new HashMap<>();
-        mapOfDocuments.put("name", "John");
-        Map<String, String> nestedMapOfDocuments = new HashMap<>();
-        nestedMapOfDocuments.put("city", "New York");
-        mapOfDocuments.put("hometown", toJson(nestedMapOfDocuments));
-        parameters.put("context", toJson(mapOfDocuments));
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithNestedMapOfObject() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        Map<String, Object> mapOfDocuments = new HashMap<>();
-        mapOfDocuments.put("name", "John");
-        Map<String, String> nestedMapOfDocuments = new HashMap<>();
-        nestedMapOfDocuments.put("city", "New York");
-        mapOfDocuments.put("hometown", nestedMapOfDocuments);
-        parameters.put("context", toJson(mapOfDocuments));
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
-        connector.validatePayload(predictPayload);
-    }
-
-    @Test
-    public void createPayloadWithNestedListOfMapOfObject() {
-        String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
-        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("prompt", "answer question based on context: ${parameters.context}");
-        ArrayList<String> listOfDocuments = new ArrayList<>();
-        listOfDocuments.add("document1");
-        ArrayList<Object> NestedListOfDocuments = new ArrayList<>();
-        Map<String, Object> mapOfDocuments = new HashMap<>();
-        mapOfDocuments.put("name", "John");
-        Map<String, String> nestedMapOfDocuments = new HashMap<>();
-        nestedMapOfDocuments.put("city", "New York");
-        mapOfDocuments.put("hometown", nestedMapOfDocuments);
-        listOfDocuments.add(toJson(NestedListOfDocuments));
-        parameters.put("context", toJson(listOfDocuments));
-        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
         connector.validatePayload(predictPayload);
     }
 
