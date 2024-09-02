@@ -86,7 +86,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            connector.getDecryptedCredential();
             SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()

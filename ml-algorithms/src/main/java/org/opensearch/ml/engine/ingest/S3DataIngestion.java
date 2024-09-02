@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FI
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
-import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -18,23 +17,17 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.bulk.BulkRequest;
-import org.opensearch.action.bulk.BulkResponse;
-import org.opensearch.action.index.IndexRequest;
 import org.opensearch.client.Client;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.engine.annotation.Ingester;
-
-import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -50,28 +43,41 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Log4j2
 @Ingester("s3")
-public class S3DataIngestion implements Ingestable {
+public class S3DataIngestion extends AbstractIngestion {
     public static final String SOURCE = "source";
-    public static final String OUTPUT = "output";
-    public static final String INPUT = "input";
-    public static final String OUTPUTIELDS = "output_fields";
-    public static final String INPUTFIELDS = "input_fields";
-    public static final String INGESTFIELDS = "ingest_fields";
-    private final Client client;
 
     public S3DataIngestion(Client client) {
-        this.client = client;
+        super(client);
     }
 
     @Override
     public double ingest(MLBatchIngestionInput mlBatchIngestionInput) {
         S3Client s3 = initS3Client(mlBatchIngestionInput);
-        double successRate = 0;
 
-        String s3Uri = mlBatchIngestionInput.getDataSources().get(SOURCE);
+        List<String> s3Uris = (List<String>) mlBatchIngestionInput.getDataSources().get(SOURCE);
+        if (Objects.isNull(s3Uris) || s3Uris.isEmpty()) {
+            return 100;
+        }
+        boolean isSoleSource = s3Uris.size() == 1;
+        List<Double> successRates = Collections.synchronizedList(new ArrayList<>());
+        for (int sourceIndex = 0; sourceIndex < s3Uris.size(); sourceIndex++) {
+            successRates.add(ingestSingleSource(s3, s3Uris.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource));
+        }
+
+        return calcualteSuccessRate(successRates);
+    }
+
+    private double ingestSingleSource(
+        S3Client s3,
+        String s3Uri,
+        MLBatchIngestionInput mlBatchIngestionInput,
+        int sourceIndex,
+        boolean isSoleSource
+    ) {
         String bucketName = getS3BucketName(s3Uri);
         String keyName = getS3KeyName(s3Uri);
         GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucketName).key(keyName).build();
+        double successRate = 0;
 
         try {
             ResponseInputStream<GetObjectResponse> s3is = AccessController
@@ -95,7 +101,13 @@ public class S3DataIngestion implements Ingestable {
                 if (lineCount == 100) {
                     // Create a CompletableFuture that will be completed by the bulkResponseListener
                     CompletableFuture<Void> future = new CompletableFuture<>();
-                    batchIngest(linesBuffer, mlBatchIngestionInput, getBulkResponseListener(successfulBatches, failedBatches, future));
+                    batchIngest(
+                        linesBuffer,
+                        mlBatchIngestionInput,
+                        getBulkResponseListener(successfulBatches, failedBatches, future),
+                        sourceIndex,
+                        isSoleSource
+                    );
 
                     futures.add(future);
                     linesBuffer.clear();
@@ -105,7 +117,13 @@ public class S3DataIngestion implements Ingestable {
             // Process any remaining lines in the buffer
             if (!linesBuffer.isEmpty()) {
                 CompletableFuture<Void> future = new CompletableFuture<>();
-                batchIngest(linesBuffer, mlBatchIngestionInput, getBulkResponseListener(successfulBatches, failedBatches, future));
+                batchIngest(
+                    linesBuffer,
+                    mlBatchIngestionInput,
+                    getBulkResponseListener(successfulBatches, failedBatches, future),
+                    sourceIndex,
+                    isSoleSource
+                );
                 futures.add(future);
             }
 
@@ -132,68 +150,6 @@ public class S3DataIngestion implements Ingestable {
         }
 
         return successRate;
-    }
-
-    private ActionListener<BulkResponse> getBulkResponseListener(
-        AtomicInteger successfulBatches,
-        AtomicInteger failedBatches,
-        CompletableFuture<Void> future
-    ) {
-        return ActionListener.wrap(bulkResponse -> {
-            if (bulkResponse.hasFailures()) {
-                failedBatches.incrementAndGet();
-                future.completeExceptionally(new RuntimeException(bulkResponse.buildFailureMessage()));  // Mark the future as completed
-                                                                                                         // with an exception
-            }
-            log.debug("Batch Ingestion successfully");
-            successfulBatches.incrementAndGet();
-            future.complete(null); // Mark the future as completed successfully
-        }, e -> {
-            log.error("Failed to bulk update model state", e);
-            failedBatches.incrementAndGet();
-            future.completeExceptionally(e);  // Mark the future as completed with an exception
-        });
-    }
-
-    private void batchIngest(
-        List<String> sourceLines,
-        MLBatchIngestionInput mlBatchIngestionInput,
-        ActionListener<BulkResponse> bulkResponseListener
-    ) {
-        BulkRequest bulkRequest = new BulkRequest();
-        sourceLines.stream().forEach(jsonStr -> {
-            // Map<String, Object> jsonMap = fromJson(jsonStr, outputFieldName);
-            Map<String, Object> jsonMap = processFieldMapping(jsonStr, mlBatchIngestionInput.getFieldMapping());
-            IndexRequest indexRequest = new IndexRequest(mlBatchIngestionInput.getIndexName()).source(jsonMap);
-
-            bulkRequest.add(indexRequest);
-        });
-        client.bulk(bulkRequest, bulkResponseListener);
-    }
-
-    private Map<String, Object> processFieldMapping(String jsonStr, Map<String, Object> fieldMapping) {
-        String outputJsonPath = (String) fieldMapping.get(OUTPUT);
-        String inputJsonPath = (String) fieldMapping.get(INPUT);
-        List<List> smOutput = (List<List>) JsonPath.read(jsonStr, outputJsonPath);
-        List<String> smInput = (List<String>) JsonPath.read(jsonStr, inputJsonPath);
-        List<String> inputFields = (List<String>) fieldMapping.get(INPUTFIELDS);
-        List<String> outputFields = (List<String>) fieldMapping.get(OUTPUTIELDS);
-        List<String> ingestFieldsJsonPath = (List<String>) fieldMapping.get(INGESTFIELDS);
-
-        if (smInput.size() != smOutput.size() || inputFields.size() != outputFields.size() || smInput.size() != inputFields.size()) {
-            throw new IllegalArgumentException("the fieldMapping and source data do not match");
-        }
-        Map<String, Object> jsonMap = new HashMap<>();
-
-        for (int index = 0; index < smInput.size(); index++) {
-            jsonMap.put(inputFields.get(index), smInput.get(index));
-            jsonMap.put(outputFields.get(index), smOutput.get(index));
-        }
-
-        for (String fieldPath : ingestFieldsJsonPath) {
-            jsonMap.put(obtainFieldNameFromJsonPath(fieldPath), JsonPath.read(jsonStr, fieldPath));
-        }
-        return jsonMap;
     }
 
     private String getS3BucketName(String s3Uri) {

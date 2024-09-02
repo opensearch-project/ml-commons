@@ -35,7 +35,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     @Getter
     private Map<String, Object> fieldMapping;
     @Getter
-    private Map<String, String> dataSources;
+    private Map<String, Object> dataSources;
     @Getter
     private Map<String, String> credential;
 
@@ -43,7 +43,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     public MLBatchIngestionInput(
         String indexName,
         Map<String, Object> fieldMapping,
-        Map<String, String> dataSources,
+        Map<String, Object> dataSources,
         Map<String, String> credential
     ) {
         if (indexName == null) {
@@ -61,7 +61,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     public static MLBatchIngestionInput parse(XContentParser parser) throws IOException {
         String indexName = null;
         Map<String, Object> fieldMapping = null;
-        Map<String, String> dataSources = null;
+        Map<String, Object> dataSources = null;
         Map<String, String> credential = new HashMap<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -80,7 +80,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
                     credential = parser.mapStrings();
                     break;
                 case DATA_SOURCE_FIELD:
-                    dataSources = parser.mapStrings();
+                    dataSources = parser.map();
                     break;
                 default:
                     parser.skipChildren();
@@ -99,11 +99,11 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         if (fieldMapping != null) {
             builder.field(FIELD_MAP_FIELD, fieldMapping);
         }
-        if (dataSources != null) {
-            builder.field(DATA_SOURCE_FIELD, dataSources);
-        }
         if (credential != null) {
             builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
+        }
+        if (dataSources != null) {
+            builder.field(DATA_SOURCE_FIELD, dataSources);
         }
         builder.endObject();
         return builder;
@@ -118,17 +118,15 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
-
-        if (dataSources != null) {
-            output.writeBoolean(true);
-            output.writeMap(dataSources, StreamOutput::writeString, StreamOutput::writeString);
-        } else {
-            output.writeBoolean(false);
-        }
-
         if (credential != null) {
             output.writeBoolean(true);
             output.writeMap(credential, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            output.writeBoolean(false);
+        }
+        if (dataSources != null) {
+            output.writeBoolean(true);
+            output.writeMap(dataSources, StreamOutput::writeString, StreamOutput::writeGenericValue);
         } else {
             output.writeBoolean(false);
         }
@@ -140,10 +138,10 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
             fieldMapping = input.readMap(s -> s.readString(), s -> s.readGenericValue());
         }
         if (input.readBoolean()) {
-            dataSources = input.readMap(s -> s.readString(), s -> s.readString());
+            credential = input.readMap(s -> s.readString(), s -> s.readString());
         }
         if (input.readBoolean()) {
-            credential = input.readMap(s -> s.readString(), s -> s.readString());
+            dataSources = input.readMap(s -> s.readString(), s -> s.readGenericValue());
         }
     }
 

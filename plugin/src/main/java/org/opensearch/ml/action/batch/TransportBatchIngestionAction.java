@@ -12,8 +12,10 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -83,8 +85,8 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                     mlTask.setTaskId(taskId);
                     mlTaskManager.add(mlTask);
                     listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
-                    Ingestable ingestable = MLEngineClassLoader
-                        .initInstance(mlBatchIngestionInput.getDataSources().get(TYPE).toLowerCase(), client, Client.class);
+                    String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
+                    Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
                     double successRate = ingestable.ingest(mlBatchIngestionInput);
                     if (successRate == 100) {
                         mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED), 5000, true);
@@ -140,18 +142,25 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             || mlBatchIngestionInput.getDataSources().isEmpty()) {
             throw new IllegalArgumentException("The batch ingest input data source cannot be null");
         }
-        Map<String, String> dataSources = mlBatchIngestionInput.getDataSources();
+        Map<String, Object> dataSources = mlBatchIngestionInput.getDataSources();
         if (dataSources.get(TYPE) == null || dataSources.get(SOURCE) == null) {
             throw new IllegalArgumentException("The batch ingest input data source is missing data type or source");
         }
-        if (dataSources.get(TYPE).toLowerCase() == "s3") {
-            String s3Uri = dataSources.get(SOURCE);
-            if (s3Uri == null || s3Uri.isEmpty()) {
-                throw new IllegalArgumentException("The batch ingest input s3Uri is empty");
+        if (((String) dataSources.get(TYPE)).toLowerCase() == "s3") {
+            List<String> s3Uris = (List<String>) dataSources.get(SOURCE);
+            if (s3Uris == null || s3Uris.isEmpty()) {
+                throw new IllegalArgumentException("The batch ingest input s3Uris is empty");
             }
 
-            if (!S3_URI_PATTERN.matcher(s3Uri).matches()) {
-                throw new IllegalArgumentException("The batch ingest input s3Uri is invalid");
+            // Partition the list into valid and invalid URIs
+            Map<Boolean, List<String>> partitionedUris = s3Uris
+                .stream()
+                .collect(Collectors.partitioningBy(uri -> S3_URI_PATTERN.matcher(uri).matches()));
+
+            List<String> invalidUris = partitionedUris.get(false);
+
+            if (!invalidUris.isEmpty()) {
+                throw new IllegalArgumentException("The following batch ingest input S3 URIs are invalid: " + invalidUris);
             }
         }
     }
