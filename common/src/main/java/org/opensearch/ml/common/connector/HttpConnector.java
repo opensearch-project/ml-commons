@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -322,40 +323,16 @@ public class HttpConnector extends AbstractConnector {
         if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
             String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
+            parseParameters(parameters);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
+
             if (!isJson(payload)) {
-                String payloadAfterEscape = connectorAction.get().getRequestBody();
-                Map<String, String> escapedParameters = escapeMapValues(parameters);
-                StringSubstitutor escapedSubstitutor = new StringSubstitutor(escapedParameters, "${parameters.", "}");
-                payloadAfterEscape = escapedSubstitutor.replace(payloadAfterEscape);
-                if (!isJson(payloadAfterEscape)) {
-                    throw new IllegalArgumentException("Invalid payload: " + payload);
-                } else {
-                    payload = payloadAfterEscape;
-                }
+                throw new IllegalArgumentException("Invalid payload: " + payload);
             }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
-
-    }
-
-    public static Map<String, String> escapeMapValues(Map<String, String> parameters) {
-        Map<String, String> escapedMap = new HashMap<>();
-        if (parameters != null) {
-            for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                String key = entry.getKey();
-                String value = entry.getValue();
-                String escapedValue = escapeValue(value);
-                escapedMap.put(key, escapedValue);
-            }
-        }
-        return escapedMap;
-    }
-
-    private static String escapeValue(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
