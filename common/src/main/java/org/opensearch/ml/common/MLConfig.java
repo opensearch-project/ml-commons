@@ -42,54 +42,92 @@ public class MLConfig implements ToXContentObject, Writeable {
     @Setter
     private String type;
 
+    @Setter
+    private String configType;
+
     private Configuration configuration;
+    private Configuration mlConfiguration;
     private final Instant createTime;
     private Instant lastUpdateTime;
+    private Instant lastUpdatedTime;
 
     @Builder(toBuilder = true)
-    public MLConfig(String type, Configuration configuration, Instant createTime, Instant lastUpdateTime) {
+    public MLConfig(
+        String type,
+        String configType,
+        Configuration configuration,
+        Configuration mlConfiguration,
+        Instant createTime,
+        Instant lastUpdateTime,
+        Instant lastUpdatedTime
+    ) {
         this.type = type;
+        this.configType = configType;
         this.configuration = configuration;
+        this.mlConfiguration = mlConfiguration;
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
+        this.lastUpdatedTime = lastUpdatedTime;
     }
 
     public MLConfig(StreamInput input) throws IOException {
         this.type = input.readOptionalString();
+        this.configType = input.readOptionalString();
         if (input.readBoolean()) {
             configuration = new Configuration(input);
         }
+        if (input.readBoolean()) {
+            mlConfiguration = new Configuration(input);
+        }
         createTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
+        lastUpdatedTime = input.readOptionalInstant();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(type);
+        out.writeOptionalString(configType);
         if (configuration != null) {
             out.writeBoolean(true);
             configuration.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
+        if (mlConfiguration != null) {
+            out.writeBoolean(true);
+            mlConfiguration.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalInstant(createTime);
         out.writeOptionalInstant(lastUpdateTime);
+        out.writeOptionalInstant(lastUpdatedTime);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
         XContentBuilder builder = xContentBuilder.startObject();
         if (type != null) {
-            builder.field(CONFIG_TYPE_FIELD, type);
+            builder.field(TYPE_FIELD, type);
+        }
+        if (configType != null) {
+            builder.field(CONFIG_TYPE_FIELD, configType);
         }
         if (configuration != null) {
-            builder.field(ML_CONFIGURATION_FIELD, configuration);
+            builder.field(CONFIGURATION_FIELD, configuration);
+        }
+        if (mlConfiguration != null) {
+            builder.field(ML_CONFIGURATION_FIELD, mlConfiguration);
         }
         if (createTime != null) {
             builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
         }
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
+        if (lastUpdatedTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
         return builder.endObject();
     }
@@ -142,10 +180,13 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         return MLConfig
             .builder()
-            .type(configType == null ? type : configType)
-            .configuration(mlConfiguration == null ? configuration : mlConfiguration)
+            .type(type)
+            .configType(configType)
+            .configuration(configuration)
+            .mlConfiguration(mlConfiguration)
             .createTime(createTime)
-            .lastUpdateTime(lastUpdatedTime == null ? lastUpdateTime : lastUpdatedTime)
+            .lastUpdateTime(lastUpdateTime)
+            .lastUpdatedTime(lastUpdatedTime)
             .build();
     }
 }
