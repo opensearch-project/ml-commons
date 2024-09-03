@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
 import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
+import static org.opensearch.ml.common.utils.StringUtils.isValidJSONPath;
 import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
@@ -456,5 +457,36 @@ public class StringUtilsTest {
         String input = "$.response.body.data[*].embedding";
         String result = getJsonPath(input);
         assertEquals("$.response.body.data[*].embedding", result);
+    }
+
+    @Test
+    public void testisValidJSONPath_ValidInputs() {
+        Assert.assertTrue(isValidJSONPath("foo"));
+        Assert.assertTrue(isValidJSONPath("foo.bar"));
+        Assert.assertTrue(isValidJSONPath("foo.bar.baz"));
+        Assert.assertTrue(isValidJSONPath("foo.bar.baz.qux"));
+        Assert.assertTrue(isValidJSONPath(".foo"));
+        Assert.assertTrue(isValidJSONPath("$.foo"));
+        Assert.assertTrue(isValidJSONPath(".foo.bar"));
+        Assert.assertTrue(isValidJSONPath("$.foo.bar"));
+    }
+
+    @Test
+    public void testisValidJSONPath_InvalidInputs() {
+        Assert.assertFalse(isValidJSONPath("..bar"));
+        Assert.assertFalse(isValidJSONPath("."));
+        Assert.assertFalse(isValidJSONPath(".."));
+        Assert.assertFalse(isValidJSONPath("foo.bar."));
+        Assert.assertFalse(isValidJSONPath(".foo.bar."));
+    }
+
+    @Test
+    public void testisValidJSONPath_NullInput() {
+        Assert.assertFalse(isValidJSONPath(null));
+    }
+
+    @Test
+    public void testisValidJSONPath_EmptyInput() {
+        Assert.assertFalse(isValidJSONPath(""));
     }
 }
