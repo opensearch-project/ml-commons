@@ -35,6 +35,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -153,11 +154,9 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         );
         assertNotNull(transportUpdateModelGroupAction);
 
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(), any());
+        PlainActionFuture<UpdateResponse> updateFuture = PlainActionFuture.newFuture();
+        updateFuture.onResponse(updateResponse);
+        when(client.update(any(UpdateRequest.class))).thenReturn(updateFuture);
 
         MLModelGroup mlModelGroup = MLModelGroup
             .builder()
@@ -173,9 +172,9 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult(indexName, "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
 
-        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(getResponse);
-        when(client.get(any(GetRequest.class))).thenReturn(future);
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        getFuture.onResponse(getResponse);
+        when(client.get(any(GetRequest.class))).thenReturn(getFuture);
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
@@ -499,11 +498,9 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_FailedToUpdatetModelGroupException() throws InterruptedException {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new MLException("Failed to update Model Group"));
-            return null;
-        }).when(client).update(any(), any());
+        PlainActionFuture<UpdateResponse> updateFuture = PlainActionFuture.newFuture();
+        updateFuture.onFailure(new MLException("Failed to update Model Group"));
+        when(client.update(any(UpdateRequest.class))).thenReturn(updateFuture);
 
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
