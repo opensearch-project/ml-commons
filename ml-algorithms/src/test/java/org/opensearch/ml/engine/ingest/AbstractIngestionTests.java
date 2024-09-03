@@ -15,12 +15,12 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.IDFIELD;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INGESTFIELDS;
+import static org.opensearch.ml.engine.ingest.AbstractIngestion.ID_FIELD;
+import static org.opensearch.ml.engine.ingest.AbstractIngestion.INGEST_FIELDS;
 import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUT;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUTFIELDS;
+import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUT_FIELD_NAMES;
 import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUT;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUTIELDS;
+import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUT_FIELD_NAMES;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -61,9 +61,9 @@ public class AbstractIngestionTests {
         fieldMap = new HashMap<>();
         fieldMap.put(INPUT, "source[1].$.content");
         fieldMap.put(OUTPUT, "source[1].$.SageMakerOutput");
-        fieldMap.put(INPUTFIELDS, Arrays.asList("chapter", "title"));
-        fieldMap.put(OUTPUTIELDS, Arrays.asList("chapter_embedding", "title_embedding"));
-        fieldMap.put(INGESTFIELDS, Arrays.asList("source[1].$.id"));
+        fieldMap.put(INPUT_FIELD_NAMES, Arrays.asList("chapter", "title"));
+        fieldMap.put(OUTPUT_FIELD_NAMES, Arrays.asList("chapter_embedding", "title_embedding"));
+        fieldMap.put(INGEST_FIELDS, Arrays.asList("source[1].$.id"));
     }
 
     @Test
@@ -170,9 +170,9 @@ public class AbstractIngestionTests {
         assertEquals(5, result.size());
         assertEquals("source[1].$.content", result.get(INPUT));
         assertEquals("source[1].$.SageMakerOutput", result.get(OUTPUT));
-        assertEquals(Arrays.asList("chapter", "title"), result.get(INPUTFIELDS));
-        assertEquals(Arrays.asList("chapter_embedding", "title_embedding"), result.get(OUTPUTIELDS));
-        assertEquals(Arrays.asList("source[1].$.id"), result.get(INGESTFIELDS));
+        assertEquals(Arrays.asList("chapter", "title"), result.get(INPUT_FIELD_NAMES));
+        assertEquals(Arrays.asList("chapter_embedding", "title_embedding"), result.get(OUTPUT_FIELD_NAMES));
+        assertEquals(Arrays.asList("source[1].$.id"), result.get(INGEST_FIELDS));
     }
 
     @Test
@@ -214,7 +214,7 @@ public class AbstractIngestionTests {
         String jsonStr =
             "{\"SageMakerOutput\":[[-0.017166402, 0.055771016],[-0.004301484,-0.042826906]],\"content\":[\"this is chapter 1\",\"harry potter\"],\"id\":1}";
         // Arrange
-        fieldMap.put(IDFIELD, null);
+        fieldMap.put(ID_FIELD, null);
 
         // Act
         s3DataIngestion.processFieldMapping(jsonStr, fieldMap);

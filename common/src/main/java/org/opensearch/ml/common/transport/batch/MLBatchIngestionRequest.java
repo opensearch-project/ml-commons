@@ -52,13 +52,13 @@ public class MLBatchIngestionRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (mlBatchIngestionInput == null) {
-            exception = addValidationError("ML batch ingestion input can't be null", exception);
+            exception = addValidationError("The input for ML batch ingestion cannot be null.", exception);
         }
         if (mlBatchIngestionInput != null && mlBatchIngestionInput.getCredential() == null) {
-            exception = addValidationError("ML batch ingestion credentials can't be null", exception);
+            exception = addValidationError("The credential for ML batch ingestion cannot be null", exception);
         }
         if (mlBatchIngestionInput != null && mlBatchIngestionInput.getDataSources() == null) {
-            exception = addValidationError("ML batch ingestion data sources can't be null", exception);
+            exception = addValidationError("The data sources for ML batch ingestion cannot be null", exception);
         }
 
         return exception;

@@ -36,10 +36,10 @@ import lombok.extern.log4j.Log4j2;
 public class AbstractIngestion implements Ingestable {
     public static final String OUTPUT = "output";
     public static final String INPUT = "input";
-    public static final String OUTPUTIELDS = "output_names";
-    public static final String INPUTFIELDS = "input_names";
-    public static final String INGESTFIELDS = "ingest_fields";
-    public static final String IDFIELD = "id_field";
+    public static final String OUTPUT_FIELD_NAMES = "output_names";
+    public static final String INPUT_FIELD_NAMES = "input_names";
+    public static final String INGEST_FIELDS = "ingest_fields";
+    public static final String ID_FIELD = "id_field";
 
     private final Client client;
 
@@ -112,10 +112,10 @@ public class AbstractIngestion implements Ingestable {
         }));
 
         if (filteredFieldMap.containsKey(OUTPUT)) {
-            filteredFieldMap.put(OUTPUTIELDS, fieldMap.get(OUTPUTIELDS));
+            filteredFieldMap.put(OUTPUT_FIELD_NAMES, fieldMap.get(OUTPUT_FIELD_NAMES));
         }
         if (filteredFieldMap.containsKey(INPUT)) {
-            filteredFieldMap.put(INPUTFIELDS, fieldMap.get(INPUTFIELDS));
+            filteredFieldMap.put(INPUT_FIELD_NAMES, fieldMap.get(INPUT_FIELD_NAMES));
         }
         return filteredFieldMap;
     }
@@ -130,14 +130,14 @@ public class AbstractIngestion implements Ingestable {
     protected Map<String, Object> processFieldMapping(String jsonStr, Map<String, Object> fieldMapping) {
         String inputJsonPath = fieldMapping.containsKey(INPUT) ? getJsonPath((String) fieldMapping.get(INPUT)) : null;
         List<String> remoteModelInput = inputJsonPath != null ? (List<String>) JsonPath.read(jsonStr, inputJsonPath) : null;
-        List<String> inputFieldNames = inputJsonPath != null ? (List<String>) fieldMapping.get(INPUTFIELDS) : null;
+        List<String> inputFieldNames = inputJsonPath != null ? (List<String>) fieldMapping.get(INPUT_FIELD_NAMES) : null;
 
         String outputJsonPath = fieldMapping.containsKey(OUTPUT) ? getJsonPath((String) fieldMapping.get(OUTPUT)) : null;
         List<List> remoteModelOutput = outputJsonPath != null ? (List<List>) JsonPath.read(jsonStr, outputJsonPath) : null;
-        List<String> outputFieldNames = outputJsonPath != null ? (List<String>) fieldMapping.get(OUTPUTIELDS) : null;
+        List<String> outputFieldNames = outputJsonPath != null ? (List<String>) fieldMapping.get(OUTPUT_FIELD_NAMES) : null;
 
         List<String> ingestFieldsJsonPath = Optional
-            .ofNullable((List<String>) fieldMapping.get(INGESTFIELDS))
+            .ofNullable((List<String>) fieldMapping.get(INGEST_FIELDS))
             .stream()
             .flatMap(Collection::stream)
             .map(StringUtils::getJsonPath)
@@ -152,9 +152,9 @@ public class AbstractIngestion implements Ingestable {
             jsonMap.put(obtainFieldNameFromJsonPath(fieldPath), JsonPath.read(jsonStr, fieldPath));
         }
 
-        if (fieldMapping.containsKey(IDFIELD)) {
+        if (fieldMapping.containsKey(ID_FIELD)) {
             List<String> docIdJsonPath = Optional
-                .ofNullable((List<String>) fieldMapping.get(IDFIELD))
+                .ofNullable((List<String>) fieldMapping.get(ID_FIELD))
                 .stream()
                 .flatMap(Collection::stream)
                 .map(StringUtils::getJsonPath)

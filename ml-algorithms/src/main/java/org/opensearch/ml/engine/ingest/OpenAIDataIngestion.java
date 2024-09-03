@@ -54,11 +54,11 @@ public class OpenAIDataIngestion extends AbstractIngestion {
         return calculateSuccessRate(successRates);
     }
 
-    private double ingestSingleSource(String fildId, MLBatchIngestionInput mlBatchIngestionInput, int sourceIndex, boolean isSoleSource) {
+    private double ingestSingleSource(String fileId, MLBatchIngestionInput mlBatchIngestionInput, int sourceIndex, boolean isSoleSource) {
         double successRate = 0;
         try {
             String apiKey = mlBatchIngestionInput.getCredential().get(API_KEY);
-            URL url = new URL(API_URL + fildId + "/content");
+            URL url = new URL(API_URL + fileId + "/content");
 
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");

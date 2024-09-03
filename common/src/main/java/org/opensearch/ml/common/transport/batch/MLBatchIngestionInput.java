@@ -47,10 +47,14 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         Map<String, String> credential
     ) {
         if (indexName == null) {
-            throw new IllegalArgumentException("index name for ingestion is null");
+            throw new IllegalArgumentException(
+                "The index name for data ingestion is missing. Please provide a valid index name to proceed."
+            );
         }
         if (dataSources == null) {
-            throw new IllegalArgumentException("dataSources for ingestion is null");
+            throw new IllegalArgumentException(
+                "No data sources were provided for ingestion. Please specify at least one valid data source to proceed."
+            );
         }
         this.indexName = indexName;
         this.fieldMapping = fieldMapping;

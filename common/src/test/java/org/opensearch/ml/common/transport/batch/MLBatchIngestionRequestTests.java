@@ -69,7 +69,7 @@ public class MLBatchIngestionRequestTests {
     public void validateWithNullInputException() {
         MLBatchIngestionRequest mlBatchIngestionRequest1 = MLBatchIngestionRequest.builder().build();
         ActionRequestValidationException exception = mlBatchIngestionRequest1.validate();
-        assertEquals("Validation Failed: 1: ML batch ingestion input can't be null;", exception.getMessage());
+        assertEquals("Validation Failed: 1: The input for ML batch ingestion cannot be null.;", exception.getMessage());
     }
 
     @Test

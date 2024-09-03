@@ -75,7 +75,7 @@ public class MLBatchIngestionInputTests {
     @Test
     public void constructorMLBatchIngestionInput_NullName() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("index name for ingestion is null");
+        exceptionRule.expectMessage("The index name for data ingestion is missing. Please provide a valid index name to proceed.");
 
         MLBatchIngestionInput.builder().indexName(null).dataSources(dataSource).build();
     }
@@ -83,7 +83,8 @@ public class MLBatchIngestionInputTests {
     @Test
     public void constructorMLBatchIngestionInput_NullSource() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("dataSources for ingestion is null");
+        exceptionRule
+            .expectMessage("No data sources were provided for ingestion. Please specify at least one valid data source to proceed.");
         MLBatchIngestionInput.builder().indexName("test index").dataSources(null).build();
     }
 
