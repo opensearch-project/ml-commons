@@ -368,12 +368,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 String modelConfigKey = entry.getKey();
                 String modelConfigValue = entry.getValue();
                 if (StringUtils.isValidJSONPath(modelConfigValue)) {
-                    Object queryJson = JsonPath.parse(queryString).read("$");
-                    Configuration configuration = Configuration
-                        .builder()
-                        .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
-                        .build();
-                    Object querySubString = JsonPath.using(configuration).parse(queryJson).read(modelConfigValue);
+                    Object querySubString = JsonPath.using(suppressExceptionConfiguration).parse(queryString).read(modelConfigValue);
                     if (querySubString != null) {
                         modelConfigMapsInput.put(modelConfigKey, toJson(querySubString));
                     }
