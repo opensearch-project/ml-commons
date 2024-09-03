@@ -17,6 +17,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -42,15 +43,21 @@ public class MLBatchIngestionRequest extends ActionRequest {
     }
 
     @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        this.mlBatchIngestionInput.writeTo(out);
+    }
+
+    @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (mlBatchIngestionInput == null) {
             exception = addValidationError("ML batch ingestion input can't be null", exception);
         }
-        if (mlBatchIngestionInput.getCredential() == null) {
+        if (mlBatchIngestionInput != null && mlBatchIngestionInput.getCredential() == null) {
             exception = addValidationError("ML batch ingestion credentials can't be null", exception);
         }
-        if (mlBatchIngestionInput.getDataSources() == null) {
+        if (mlBatchIngestionInput != null && mlBatchIngestionInput.getDataSources() == null) {
             exception = addValidationError("ML batch ingestion data sources can't be null", exception);
         }
 

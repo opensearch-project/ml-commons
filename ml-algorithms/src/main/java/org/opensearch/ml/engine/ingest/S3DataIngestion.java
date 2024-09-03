@@ -29,6 +29,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.engine.annotation.Ingester;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -64,10 +66,10 @@ public class S3DataIngestion extends AbstractIngestion {
             successRates.add(ingestSingleSource(s3, s3Uris.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource));
         }
 
-        return calcualteSuccessRate(successRates);
+        return calculateSuccessRate(successRates);
     }
 
-    private double ingestSingleSource(
+    public double ingestSingleSource(
         S3Client s3,
         String s3Uri,
         MLBatchIngestionInput mlBatchIngestionInput,
@@ -177,7 +179,8 @@ public class S3DataIngestion extends AbstractIngestion {
         return uriWithoutPrefix.substring(slashIndex + 1);
     }
 
-    private S3Client initS3Client(MLBatchIngestionInput mlBatchIngestionInput) {
+    @VisibleForTesting
+    public S3Client initS3Client(MLBatchIngestionInput mlBatchIngestionInput) {
         String accessKey = mlBatchIngestionInput.getCredential().get(ACCESS_KEY_FIELD);
         String secretKey = mlBatchIngestionInput.getCredential().get(SECRET_KEY_FIELD);
         String sessionToken = mlBatchIngestionInput.getCredential().get(SESSION_TOKEN_FIELD);

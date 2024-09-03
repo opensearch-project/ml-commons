@@ -57,6 +57,7 @@ public class AbstractIngestion implements Ingestable {
                 failedBatches.incrementAndGet();
                 future.completeExceptionally(new RuntimeException(bulkResponse.buildFailureMessage()));  // Mark the future as completed
                 // with an exception
+                return;
             }
             log.debug("Batch Ingestion successfully");
             successfulBatches.incrementAndGet();
@@ -68,7 +69,7 @@ public class AbstractIngestion implements Ingestable {
         });
     }
 
-    protected double calcualteSuccessRate(List<Double> successRates) {
+    protected double calculateSuccessRate(List<Double> successRates) {
         return successRates
             .stream()
             .min(Double::compare)
@@ -152,8 +153,10 @@ public class AbstractIngestion implements Ingestable {
         }
 
         if (fieldMapping.containsKey(IDFIELD)) {
-            List<String> docIdJsonPath = ((List<String>) fieldMapping.get(IDFIELD))
+            List<String> docIdJsonPath = Optional
+                .ofNullable((List<String>) fieldMapping.get(IDFIELD))
                 .stream()
+                .flatMap(Collection::stream)
                 .map(StringUtils::getJsonPath)
                 .collect(Collectors.toList());
             if (docIdJsonPath.size() != 1) {

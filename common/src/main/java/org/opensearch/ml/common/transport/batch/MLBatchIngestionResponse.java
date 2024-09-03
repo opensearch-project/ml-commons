@@ -20,6 +20,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTaskType;
 
+import lombok.Getter;
+
+@Getter
 public class MLBatchIngestionResponse extends ActionResponse implements ToXContentObject {
     public static final String TASK_ID_FIELD = "task_id";
     public static final String TASK_TYPE_FIELD = "task_type";

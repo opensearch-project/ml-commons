@@ -51,7 +51,7 @@ public class OpenAIDataIngestion extends AbstractIngestion {
             successRates.add(ingestSingleSource(sources.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource));
         }
 
-        return calcualteSuccessRate(successRates);
+        return calculateSuccessRate(successRates);
     }
 
     private double ingestSingleSource(String fildId, MLBatchIngestionInput mlBatchIngestionInput, int sourceIndex, boolean isSoleSource) {

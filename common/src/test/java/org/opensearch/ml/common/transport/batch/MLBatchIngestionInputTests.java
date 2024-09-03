@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,22 +35,22 @@ public class MLBatchIngestionInputTests {
 
     private MLBatchIngestionInput mlBatchIngestionInput;
 
-    private Map<String, String> dataSource;
+    private Map<String, Object> dataSource;
 
     @Rule
     public final ExpectedException exceptionRule = ExpectedException.none();
 
     private final String expectedInputStr = "{"
         + "\"index_name\":\"test index\","
-        + "\"text_embedding_field_map\":{"
+        + "\"field_map\":{"
         + "\"chapter\":\"chapter_embedding\""
-        + "},"
-        + "\"data_source\":{"
-        + "\"source\":\"s3://samplebucket/output/sampleresults.json.out\","
-        + "\"type\":\"s3\""
         + "},"
         + "\"credential\":{"
         + "\"region\":\"test region\""
+        + "},"
+        + "\"data_source\":{"
+        + "\"source\":[\"s3://samplebucket/output/sampleresults.json.out\"],"
+        + "\"type\":\"s3\""
         + "}"
         + "}";
 
@@ -57,10 +58,10 @@ public class MLBatchIngestionInputTests {
     public void setUp() {
         dataSource = new HashMap<>();
         dataSource.put("type", "s3");
-        dataSource.put("source", "s3://samplebucket/output/sampleresults.json.out");
+        dataSource.put("source", Arrays.asList("s3://samplebucket/output/sampleresults.json.out"));
 
         Map<String, String> credentials = Map.of("region", "test region");
-        Map<String, String> fieldMapping = Map.of("chapter", "chapter_embedding");
+        Map<String, Object> fieldMapping = Map.of("chapter", "chapter_embedding");
 
         mlBatchIngestionInput = MLBatchIngestionInput
             .builder()
