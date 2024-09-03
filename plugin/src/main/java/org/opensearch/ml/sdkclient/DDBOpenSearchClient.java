@@ -126,6 +126,9 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> sourceMap = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
+                if (request.tenantId() != null) {
+                    sourceMap.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
+                }
                 Map<String, AttributeValue> item = new HashMap<>();
                 item.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
