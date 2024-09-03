@@ -484,23 +484,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -565,23 +565,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -1976,23 +1976,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -2056,23 +2056,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
