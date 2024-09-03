@@ -96,6 +96,7 @@ public class MLUndeployModelsRequest extends MLTaskRequest {
                     break;
                 case TENANT_ID:
                     tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

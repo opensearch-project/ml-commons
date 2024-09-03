@@ -132,6 +132,7 @@ public class HttpConnector extends AbstractConnector {
                     break;
                 case TENANT_ID:
                     tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

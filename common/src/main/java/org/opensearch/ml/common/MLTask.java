@@ -288,6 +288,7 @@ public class MLTask implements ToXContentObject, Writeable {
                     break;
                 case TENANT_ID:
                     tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
