@@ -8,10 +8,10 @@ package org.opensearch.ml.common.utils;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
 import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
-import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
-import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
+import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -401,10 +401,10 @@ public class StringUtilsTest {
     public void testParseParametersNestedMapToString() {
         Map<String, String> parameters = new HashMap<>();
         parameters
-                .put(
-                        "prompt",
-                        "answer question based on context: ${parameters.context.toString()} and conversation history based on history: ${parameters.history.toString()}"
-                );
+            .put(
+                "prompt",
+                "answer question based on context: ${parameters.context.toString()} and conversation history based on history: ${parameters.history.toString()}"
+            );
         Map<String, String> mapOfDocuments = new HashMap<>();
         mapOfDocuments.put("name", "John");
         Map<String, String> nestedMapOfDocuments = new HashMap<>();
@@ -414,15 +414,15 @@ public class StringUtilsTest {
         parameters.put("history", "hello\n");
         parseParameters(parameters);
         assertEquals(
-                parameters.get("context" + TO_STRING_FUNCTION_NAME),
-                "{\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"}"
+            parameters.get("context" + TO_STRING_FUNCTION_NAME),
+            "{\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"}"
         );
         String requestBody = "{\"prompt\": \"${parameters.prompt}\"}";
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         requestBody = substitutor.replace(requestBody);
         assertEquals(
-                requestBody,
-                "{\"prompt\": \"answer question based on context: {\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"} and conversation history based on history: hello\\n\"}"
+            requestBody,
+            "{\"prompt\": \"answer question based on context: {\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"} and conversation history based on history: hello\\n\"}"
         );
     }
 

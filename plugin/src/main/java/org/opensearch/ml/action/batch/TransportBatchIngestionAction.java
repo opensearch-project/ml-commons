@@ -88,25 +88,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                     String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
                     Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
                     double successRate = ingestable.ingest(mlBatchIngestionInput);
-                    if (successRate == 100) {
-                        mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED), 5000, true);
-                    } else if (successRate > 0) {
-                        mlTaskManager
-                            .updateMLTask(
-                                taskId,
-                                Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is " + successRate),
-                                TASK_SEMAPHORE_TIMEOUT,
-                                true
-                            );
-                    } else {
-                        mlTaskManager
-                            .updateMLTask(
-                                taskId,
-                                Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is 0"),
-                                TASK_SEMAPHORE_TIMEOUT,
-                                true
-                            );
-                    }
+                    handleSuccessRate(successRate, taskId);
                 } catch (Exception ex) {
                     log.error("Failed in batch ingestion", ex);
                     mlTaskManager
@@ -133,6 +115,28 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                 );
         } catch (Exception e) {
             listener.onFailure(e);
+        }
+    }
+
+    protected void handleSuccessRate(double successRate, String taskId) {
+        if (successRate == 100) {
+            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED), 5000, true);
+        } else if (successRate > 0) {
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is " + successRate),
+                    TASK_SEMAPHORE_TIMEOUT,
+                    true
+                );
+        } else {
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is 0"),
+                    TASK_SEMAPHORE_TIMEOUT,
+                    true
+                );
         }
     }
 
