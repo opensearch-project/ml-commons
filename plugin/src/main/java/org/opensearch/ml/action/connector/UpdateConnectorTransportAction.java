@@ -104,25 +104,20 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             return;
         }
         String connectorId = mlUpdateConnectorAction.getConnectorId();
+        String tenantId = mlCreateConnectorInput.getTenantId();
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
             .index(ML_CONNECTOR_INDEX)
             .id(connectorId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
-
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             connectorAccessControlHelper
                 .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
                     // context is already restored here
-                    if (TenantAwareHelper
-                        .validateTenantResource(
-                            mlFeatureEnabledSetting,
-                            mlCreateConnectorInput.getTenantId(),
-                            connector.getTenantId(),
-                            listener
-                        )) {
+                    if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
                             connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
@@ -131,6 +126,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 .builder()
                                 .index(ML_CONNECTOR_INDEX)
                                 .id(connectorId)
+                                .tenantId(tenantId)
                                 .dataObject(connector)
                                 .build();
                             try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
@@ -173,6 +169,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
             .builder()
             .indices(ML_MODEL_INDEX)
+            .tenantId(updateDataObjectRequest.tenantId())
             .searchSourceBuilder(sourceBuilder)
             .build();
         sdkClient
@@ -211,7 +208,6 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     }
                 } else {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
-                    log.error("Failed to update ML connector: " + connectorId, cause);
                     if (cause instanceof IndexNotFoundException) {
                         sdkClient
                             .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
@@ -220,6 +216,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             });
                         return;
                     } else {
+                        log.error("Failed to update ML connector: " + connectorId, cause);
                         listener.onFailure(cause);
                     }
                 }
