@@ -41,6 +41,8 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -221,10 +223,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                 }
                             } else {
                                 // when model metadata is not found, model chunk and controller might still there, delete them here and
-                                // return
-                                // success
-                                // response
-                                // as we can't see the metadata we are providing functionName as null. In this way,
+                                // return success response as we can't see the metadata we are providing functionName as null. In this way,
                                 // code will try to remove model chunks for any models other than remote. As remote
                                 // model doesn't have any model chunks.
                                 deleteModelChunksAndController(wrappedListener, modelId, null, false, null);
@@ -245,8 +244,16 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     @VisibleForTesting
     void deleteModelChunks(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
-        deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
-
+        deleteModelsRequest
+            .setQuery(
+                new BoolQueryBuilder()
+                    .must(new TermsQueryBuilder(MODEL_ID_FIELD, modelId)) // Match documents with the same model_id
+                    // The just deleted model document does not have the same fields as the model chunks and can result in parsing errors if
+                    // it is read. OpenSearch is eventually consistent on search, so a search may return deleted documents until the next
+                    // merge. A force merge between deletions would have performance impact. A more robust solution is just to make sure the
+                    // model document does not appear in the search results.
+                    .mustNot(new TermQueryBuilder("_id", modelId)) // exclude the document just deleted
+            );
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
             if ((r.getBulkFailures() == null || r.getBulkFailures().isEmpty())
                 && (r.getSearchFailures() == null || r.getSearchFailures().isEmpty())) {
@@ -342,8 +349,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                     );
             }
         });
-        // TODO: this uses DeleteByQuery which isn't on SdkClient
-        // evaluate if it's safe to leave as is
         if (!Objects.equals(functionName, FunctionName.REMOTE.name())) {
             deleteModelChunks(modelId, isHidden, countDownActionListener);
         } else {
