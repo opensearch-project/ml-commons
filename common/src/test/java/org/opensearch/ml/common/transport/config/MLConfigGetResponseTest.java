@@ -60,7 +60,7 @@ public class MLConfigGetResponseTest {
     @Test
     public void writeTo() throws IOException {
         // create ml agent using mlConfig and mlConfigGetResponse
-        mlConfig = new MLConfig("olly_agent", new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH);
+        mlConfig = new MLConfig("olly_agent", null, new Configuration("agent_id"), null, Instant.EPOCH, Instant.EPOCH, Instant.EPOCH);
         MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
         // use write out for both agents
         BytesStreamOutput output = new BytesStreamOutput();
@@ -76,7 +76,7 @@ public class MLConfigGetResponseTest {
 
     @Test
     public void toXContent() throws IOException {
-        mlConfig = new MLConfig(null, null, null, null);
+        mlConfig = new MLConfig(null, null, null, null, null, null, null);
         MLConfigGetResponse mlConfigGetResponse = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         ToXContent.Params params = EMPTY_PARAMS;
