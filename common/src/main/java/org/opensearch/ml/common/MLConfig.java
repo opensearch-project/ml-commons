@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import java.io.IOException;
 import java.time.Instant;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -28,43 +29,74 @@ public class MLConfig implements ToXContentObject, Writeable {
 
     public static final String TYPE_FIELD = "type";
 
-    public static final String CONFIG_TYPE_FIELD = "config_type";
-
     public static final String CONFIGURATION_FIELD = "configuration";
-
-    public static final String ML_CONFIGURATION_FIELD = "ml_configuration";
 
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
 
+    // Adding below three new fields since the original fields, type, configuration, and last_update_time
+    // are not created with correct data types in config index due to missing schema version bump.
+    // Starting 2.15, it is suggested that below fields be used for creating new documents in config index
+
+    public static final String CONFIG_TYPE_FIELD = "config_type";
+
+    public static final String ML_CONFIGURATION_FIELD = "ml_configuration";
+
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_NEW_CONFIG_FIELDS = CommonValue.VERSION_2_15_0;
 
     @Setter
     private String type;
 
+    @Setter
+    private String configType;
+
     private Configuration configuration;
+    private Configuration mlConfiguration;
     private final Instant createTime;
     private Instant lastUpdateTime;
+    private Instant lastUpdatedTime;
 
     @Builder(toBuilder = true)
-    public MLConfig(String type, Configuration configuration, Instant createTime, Instant lastUpdateTime) {
+    public MLConfig(
+        String type,
+        String configType,
+        Configuration configuration,
+        Configuration mlConfiguration,
+        Instant createTime,
+        Instant lastUpdateTime,
+        Instant lastUpdatedTime
+    ) {
         this.type = type;
+        this.configType = configType;
         this.configuration = configuration;
+        this.mlConfiguration = mlConfiguration;
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
+        this.lastUpdatedTime = lastUpdatedTime;
     }
 
     public MLConfig(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         this.type = input.readOptionalString();
         if (input.readBoolean()) {
             configuration = new Configuration(input);
         }
         createTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_NEW_CONFIG_FIELDS)) {
+            this.configType = input.readOptionalString();
+            if (input.readBoolean()) {
+                mlConfiguration = new Configuration(input);
+            }
+            lastUpdatedTime = input.readOptionalInstant();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(type);
         if (configuration != null) {
             out.writeBoolean(true);
@@ -74,22 +106,41 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         out.writeOptionalInstant(createTime);
         out.writeOptionalInstant(lastUpdateTime);
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_NEW_CONFIG_FIELDS)) {
+            out.writeOptionalString(configType);
+            if (mlConfiguration != null) {
+                out.writeBoolean(true);
+                mlConfiguration.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+            out.writeOptionalInstant(lastUpdatedTime);
+        }
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
         XContentBuilder builder = xContentBuilder.startObject();
         if (type != null) {
-            builder.field(CONFIG_TYPE_FIELD, type);
+            builder.field(TYPE_FIELD, type);
+        }
+        if (configType != null) {
+            builder.field(CONFIG_TYPE_FIELD, configType);
         }
         if (configuration != null) {
-            builder.field(ML_CONFIGURATION_FIELD, configuration);
+            builder.field(CONFIGURATION_FIELD, configuration);
+        }
+        if (mlConfiguration != null) {
+            builder.field(ML_CONFIGURATION_FIELD, mlConfiguration);
         }
         if (createTime != null) {
             builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
         }
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
+        if (lastUpdatedTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
         return builder.endObject();
     }
@@ -142,10 +193,13 @@ public class MLConfig implements ToXContentObject, Writeable {
         }
         return MLConfig
             .builder()
-            .type(configType == null ? type : configType)
-            .configuration(mlConfiguration == null ? configuration : mlConfiguration)
+            .type(type)
+            .configType(configType)
+            .configuration(configuration)
+            .mlConfiguration(mlConfiguration)
             .createTime(createTime)
-            .lastUpdateTime(lastUpdatedTime == null ? lastUpdateTime : lastUpdatedTime)
+            .lastUpdateTime(lastUpdateTime)
+            .lastUpdatedTime(lastUpdatedTime)
             .build();
     }
 }
