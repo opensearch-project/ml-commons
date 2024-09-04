@@ -525,4 +525,27 @@ public class TestHelper {
         FileUtils.copyFile(new File(sourceFile), new File(destFile));
     }
 
+    public static RestRequest getBatchIngestionRestRequest() {
+        final String requestContent = "{\n"
+            + "    \"index_name\": \"test batch index\",\n"
+            + "    \"field_map\": {\n"
+            + "        \"input\": \"$.content\",\n"
+            + "        \"output\": \"$.SageMakerOutput\",\n"
+            + "        \"input_names\": [\"chapter\", \"title\"],\n"
+            + "        \"output_names\": [\"chapter_embedding\", \"title_embedding\"],\n"
+            + "        \"ingest_fields\": [\"$.id\"]\n"
+            + "    },\n"
+            + "    \"credential\": {\n"
+            + "        \"region\": \"xxxxxxxx\"\n"
+            + "    },\n"
+            + "    \"data_source\": {\n"
+            + "        \"type\": \"s3\",\n"
+            + "        \"source\": [\"s3://offlinebatch/output/sagemaker_djl_batch_input.json.out\"]\n"
+            + "    }\n"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
 }

@@ -279,4 +279,18 @@ public class StringUtils {
         return parameters;
     }
 
+    public static String obtainFieldNameFromJsonPath(String jsonPath) {
+        String[] parts = jsonPath.split("\\.");
+
+        // Get the last part which is the field name
+        return parts[parts.length - 1];
+    }
+
+    public static String getJsonPath(String jsonPathWithSource) {
+        // Find the index of the first occurrence of "$."
+        int startIndex = jsonPathWithSource.indexOf("$.");
+
+        // Extract the substring from the startIndex to the end of the input string
+        return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
+    }
 }
