@@ -5,11 +5,12 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
-import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
@@ -18,8 +19,13 @@ import org.opensearch.rest.RestRequest;
 
 public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
-    public void testConnectorCRUD() throws IOException {
+    public void testConnectorCRUD() throws Exception {
         boolean multiTenancyEnabled = isMultiTenancyEnabled();
+        // ensure local ml config has been deleted
+        // see https://github.com/opensearch-project/ml-commons/issues/2888
+        if (indexExistsWithAdminClient(ML_CONFIG_INDEX)) {
+            assertBusy(() -> assertFalse(indexExistsWithAdminClient(ML_CONFIG_INDEX)), 10, TimeUnit.SECONDS);
+        }
 
         /*
          * Create
