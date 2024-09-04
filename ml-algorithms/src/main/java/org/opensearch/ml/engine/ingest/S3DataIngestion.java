@@ -81,11 +81,11 @@ public class S3DataIngestion extends AbstractIngestion {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucketName).key(keyName).build();
         double successRate = 0;
 
-        try {
+        try (
             ResponseInputStream<GetObjectResponse> s3is = AccessController
                 .doPrivileged((PrivilegedExceptionAction<ResponseInputStream<GetObjectResponse>>) () -> s3.getObject(getObjectRequest));
-            BufferedReader reader = new BufferedReader(new InputStreamReader(s3is, StandardCharsets.UTF_8));
-
+            BufferedReader reader = new BufferedReader(new InputStreamReader(s3is, StandardCharsets.UTF_8))
+        ) {
             List<String> linesBuffer = new ArrayList<>();
             String line;
             int lineCount = 0;
@@ -100,7 +100,7 @@ public class S3DataIngestion extends AbstractIngestion {
                 lineCount++;
 
                 // Process every 100 lines
-                if (lineCount == 100) {
+                if (lineCount % 100 == 0) {
                     // Create a CompletableFuture that will be completed by the bulkResponseListener
                     CompletableFuture<Void> future = new CompletableFuture<>();
                     batchIngest(
@@ -113,7 +113,6 @@ public class S3DataIngestion extends AbstractIngestion {
 
                     futures.add(future);
                     linesBuffer.clear();
-                    lineCount = 0;
                 }
             }
             // Process any remaining lines in the buffer
@@ -138,7 +137,7 @@ public class S3DataIngestion extends AbstractIngestion {
             allFutures.join();
 
             int totalBatches = successfulBatches.get() + failedBatches.get();
-            successRate = (double) successfulBatches.get() / totalBatches * 100;
+            successRate = (totalBatches == 0) ? 100 : (double) successfulBatches.get() / totalBatches * 100;
         } catch (S3Exception e) {
             log.error("Error reading from S3: " + e.awsErrorDetails().errorMessage());
             throw e;

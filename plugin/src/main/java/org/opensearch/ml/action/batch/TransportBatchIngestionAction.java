@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
@@ -37,6 +38,7 @@ import org.opensearch.ml.engine.ingest.Ingestable;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.tasks.Task;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import lombok.extern.log4j.Log4j2;
@@ -50,18 +52,21 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
     TransportService transportService;
     MLTaskManager mlTaskManager;
     private final Client client;
+    private ThreadPool threadPool;
 
     @Inject
     public TransportBatchIngestionAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        MLTaskManager mlTaskManager
+        MLTaskManager mlTaskManager,
+        ThreadPool threadPool
     ) {
         super(MLBatchIngestionAction.NAME, transportService, actionFilters, MLBatchIngestionRequest::new);
         this.transportService = transportService;
         this.client = client;
         this.mlTaskManager = mlTaskManager;
+        this.threadPool = threadPool;
     }
 
     @Override
@@ -87,8 +92,10 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                     listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
                     String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
                     Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
-                    double successRate = ingestable.ingest(mlBatchIngestionInput);
-                    handleSuccessRate(successRate, taskId);
+                    threadPool.executor(TRAIN_THREAD_POOL).execute(() -> {
+                        double successRate = ingestable.ingest(mlBatchIngestionInput);
+                        handleSuccessRate(successRate, taskId);
+                    });
                 } catch (Exception ex) {
                     log.error("Failed in batch ingestion", ex);
                     mlTaskManager

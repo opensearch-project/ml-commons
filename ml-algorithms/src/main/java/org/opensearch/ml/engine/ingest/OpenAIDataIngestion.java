@@ -64,26 +64,42 @@ public class OpenAIDataIngestion extends AbstractIngestion {
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Authorization", "Bearer " + apiKey);
 
-            InputStreamReader inputStreamReader = AccessController
-                .doPrivileged((PrivilegedExceptionAction<InputStreamReader>) () -> new InputStreamReader(connection.getInputStream()));
-            BufferedReader reader = new BufferedReader(inputStreamReader);
+            try (
+                InputStreamReader inputStreamReader = AccessController
+                    .doPrivileged((PrivilegedExceptionAction<InputStreamReader>) () -> new InputStreamReader(connection.getInputStream()));
+                BufferedReader reader = new BufferedReader(inputStreamReader)
+            ) {
+                List<String> linesBuffer = new ArrayList<>();
+                String line;
+                int lineCount = 0;
+                // Atomic counters for tracking success and failure
+                AtomicInteger successfulBatches = new AtomicInteger(0);
+                AtomicInteger failedBatches = new AtomicInteger(0);
+                // List of CompletableFutures to track batch ingestion operations
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-            List<String> linesBuffer = new ArrayList<>();
-            String line;
-            int lineCount = 0;
-            // Atomic counters for tracking success and failure
-            AtomicInteger successfulBatches = new AtomicInteger(0);
-            AtomicInteger failedBatches = new AtomicInteger(0);
-            // List of CompletableFutures to track batch ingestion operations
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+                while ((line = reader.readLine()) != null) {
+                    linesBuffer.add(line);
+                    lineCount++;
 
-            while ((line = reader.readLine()) != null) {
-                linesBuffer.add(line);
-                lineCount++;
+                    // Process every 100 lines
+                    if (lineCount % 100 == 0) {
+                        // Create a CompletableFuture that will be completed by the bulkResponseListener
+                        CompletableFuture<Void> future = new CompletableFuture<>();
+                        batchIngest(
+                            linesBuffer,
+                            mlBatchIngestionInput,
+                            getBulkResponseListener(successfulBatches, failedBatches, future),
+                            sourceIndex,
+                            isSoleSource
+                        );
 
-                // Process every 100 lines
-                if (lineCount == 100) {
-                    // Create a CompletableFuture that will be completed by the bulkResponseListener
+                        futures.add(future);
+                        linesBuffer.clear();
+                    }
+                }
+                // Process any remaining lines in the buffer
+                if (!linesBuffer.isEmpty()) {
                     CompletableFuture<Void> future = new CompletableFuture<>();
                     batchIngest(
                         linesBuffer,
@@ -92,32 +108,17 @@ public class OpenAIDataIngestion extends AbstractIngestion {
                         sourceIndex,
                         isSoleSource
                     );
-
                     futures.add(future);
-                    linesBuffer.clear();
-                    lineCount = 0;
                 }
-            }
-            // Process any remaining lines in the buffer
-            if (!linesBuffer.isEmpty()) {
-                CompletableFuture<Void> future = new CompletableFuture<>();
-                batchIngest(
-                    linesBuffer,
-                    mlBatchIngestionInput,
-                    getBulkResponseListener(successfulBatches, failedBatches, future),
-                    sourceIndex,
-                    isSoleSource
-                );
-                futures.add(future);
-            }
 
-            reader.close();
-            // Combine all futures and wait for completion
-            CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-            // Wait for all tasks to complete
-            allFutures.join();
-            int totalBatches = successfulBatches.get() + failedBatches.get();
-            successRate = (double) successfulBatches.get() / totalBatches * 100;
+                reader.close();
+                // Combine all futures and wait for completion
+                CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+                // Wait for all tasks to complete
+                allFutures.join();
+                int totalBatches = successfulBatches.get() + failedBatches.get();
+                successRate = (totalBatches == 0) ? 100 : (double) successfulBatches.get() / totalBatches * 100;
+            }
         } catch (PrivilegedActionException e) {
             throw new RuntimeException("Failed to read from OpenAI file API: ", e);
         } catch (Exception e) {

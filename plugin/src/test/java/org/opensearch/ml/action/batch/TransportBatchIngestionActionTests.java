@@ -45,6 +45,7 @@ import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
@@ -62,6 +63,8 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     ActionListener<MLBatchIngestionResponse> actionListener;
+    @Mock
+    ThreadPool threadPool;
 
     private TransportBatchIngestionAction batchAction;
     private MLBatchIngestionInput batchInput;
@@ -69,7 +72,7 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        batchAction = new TransportBatchIngestionAction(transportService, actionFilters, client, mlTaskManager);
+        batchAction = new TransportBatchIngestionAction(transportService, actionFilters, client, mlTaskManager, threadPool);
 
         Map<String, Object> fieldMap = new HashMap<>();
         fieldMap.put("input", "$.content");
