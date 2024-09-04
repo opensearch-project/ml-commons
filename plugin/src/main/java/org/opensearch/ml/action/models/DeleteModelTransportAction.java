@@ -136,12 +136,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         try {
                             GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
                             if (gr != null && gr.isExists()) {
-                                // MLModel old version field is named version in the code and returns quoted in the Remote client
-                                String sourceAsString = SdkClientUtils
-                                    .renameField(MLModel.OLD_MODEL_VERSION_FIELD, MLModel.MODEL_VERSION_FIELD, gr.getSourceAsString());
                                 try (
                                     XContentParser parser = jsonXContent
-                                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, sourceAsString)
+                                        .createParser(
+                                            NamedXContentRegistry.EMPTY,
+                                            LoggingDeprecationHandler.INSTANCE,
+                                            gr.getSourceAsString()
+                                        )
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     String algorithmName = "";

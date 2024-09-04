@@ -56,17 +56,6 @@ public class SdkClientUtils {
     }
 
     /**
-     * If an internal variable name matches a field name not assigned to that field, Jackson's ObjectMapper can assign it to the wrong name. This will align with XContent parsing.
-     * @param field The JSON field to remove the quotes from its value
-     * @param newField The JSON field that it's supposed to be
-     * @param json The full JSON to process
-     * @return The JSON with the field renamed
-     */
-    public static String renameField(String field, String newField, String json) {
-        return json.replaceAll("\"" + Pattern.quote(field) + "\"", "\"" + Pattern.quote(newField) + "\"");
-    }
-
-    /**
      * If an internal variable is an enum represented by all upper case, the Remote client may have it mapped in lower case. This method lowercases these enum values 
      * @param field The JSON field to lowercase the value
      * @param json The full JSON to process
