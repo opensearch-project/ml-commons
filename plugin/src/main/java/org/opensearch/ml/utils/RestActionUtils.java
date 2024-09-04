@@ -319,7 +319,6 @@ public class RestActionUtils {
      */
     public static String getActionTypeFromRestRequest(RestRequest request) {
         String path = request.path();
-        System.out.println("path is " + path);
         String[] segments = path.split("/");
         String methodName = segments[segments.length - 1];
         methodName = methodName.startsWith("_") ? methodName.substring(1) : methodName;
