@@ -8,13 +8,15 @@ package org.opensearch.ml.action.tasks;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
-import org.apache.http.HttpStatus;
+import org.apache.hc.core5.http.HttpStatus;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
@@ -153,12 +155,14 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         }
 
         // In sagemaker, to retrieve batch transform job details, we need transformJob name. So retrieving name from the arn
-        if (parameters.containsKey("TransformJobArn") && parameters.get("TransformJobArn") != null) {
-            String jobArn = parameters.get("TransformJobArn");
-            String transformJobName = jobArn.substring(jobArn.lastIndexOf("/") + 1);
-            parameters.put("TransformJobName", transformJobName);
-            parameters.remove("TransformJobArn");
-        }
+        parameters
+            .computeIfAbsent(
+                "TransformJobName",
+                key -> Optional
+                    .ofNullable(parameters.get("TransformJobArn"))
+                    .map(jobArn -> jobArn.substring(jobArn.lastIndexOf("/") + 1))
+                    .orElse(null)
+            );
 
         RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(parameters, ActionType.BATCH_PREDICT_STATUS);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inferenceInputDataSet).build();
@@ -184,24 +188,33 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                 }
             }, e -> {
                 log.error("Failed to retrieve the ML model with the given ID", e);
-                actionListener.onFailure(e);
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException("Failed to retrieve the ML model for the given task ID", RestStatus.NOT_FOUND)
+                    );
             }));
         } catch (Exception e) {
-            // fetch the connector
-            log.error("Unable to fetch status for ml task ", e);
+            log.error("Unable to fetch cancel batch job in ml task ", e);
+            throw new OpenSearchException("Unable to fetch cancel batch job in ml task " + e.getMessage());
         }
     }
 
     private void executeConnector(Connector connector, MLInput mlInput, ActionListener<MLCancelBatchJobResponse> actionListener) {
-        connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential) -> encryptor.decrypt(credential));
-        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
-        connectorExecutor.setScriptService(scriptService);
-        connectorExecutor.setClusterService(clusterService);
-        connectorExecutor.setClient(client);
-        connectorExecutor.setXContentRegistry(xContentRegistry);
-        connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
-            processTaskResponse(taskResponse, actionListener);
-        }, e -> { actionListener.onFailure(e); }));
+        if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
+            connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential) -> encryptor.decrypt(credential));
+            RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                .initInstance(connector.getProtocol(), connector, Connector.class);
+            connectorExecutor.setScriptService(scriptService);
+            connectorExecutor.setClusterService(clusterService);
+            connectorExecutor.setClient(client);
+            connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                processTaskResponse(taskResponse, actionListener);
+            }, e -> { actionListener.onFailure(e); }));
+        } else {
+            actionListener
+                .onFailure(new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN));
+        }
     }
 
     private void processTaskResponse(MLTaskResponse taskResponse, ActionListener<MLCancelBatchJobResponse> actionListener) {
@@ -213,7 +226,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     actionListener.onResponse(new MLCancelBatchJobResponse(RestStatus.OK));
                 } else {
                     log.debug("The status code from remote service is: " + modelOutput.getStatusCode());
-                    actionListener.onFailure(new ResourceNotFoundException("Couldn't cancel the transform job. Please try again"));
+                    actionListener.onFailure(new OpenSearchException("Couldn't cancel the transform job. Please try again"));
                 }
             } else {
                 log.debug("ML Model Outputs are null or empty.");

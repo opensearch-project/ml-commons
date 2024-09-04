@@ -7,12 +7,8 @@ package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +48,7 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String ERROR_FIELD = "error";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
     public static final String REMOTE_JOB_FIELD = "remote_job";
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB = CommonValue.VERSION_2_16_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB = CommonValue.VERSION_2_17_0;
 
     @Setter
     private String taskId;
@@ -136,10 +132,9 @@ public class MLTask implements ToXContentObject, Writeable {
             this.user = null;
         }
         this.async = input.readBoolean();
-        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB)) {
+        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
             if (input.readBoolean()) {
-                String mapStr = input.readString();
-                this.remoteJob = gson.fromJson(mapStr, Map.class);
+                this.remoteJob = input.readMap(s -> s.readString(), s -> s.readGenericValue());
             }
         }
     }
@@ -170,17 +165,10 @@ public class MLTask implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeBoolean(async);
-        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_TRANSFORM_JOB)) {
+        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
             if (remoteJob != null) {
                 out.writeBoolean(true);
-                try {
-                    AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                        out.writeString(gson.toJson(remoteJob));
-                        return null;
-                    });
-                } catch (PrivilegedActionException e) {
-                    throw new RuntimeException(e);
-                }
+                out.writeMap(remoteJob, StreamOutput::writeString, StreamOutput::writeGenericValue);
             } else {
                 out.writeBoolean(false);
             }

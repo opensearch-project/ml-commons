@@ -51,7 +51,7 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.PredictMode;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -418,11 +418,22 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
     public void testValidateBatchPredictionSuccess() throws IOException {
         setupMocks(true, false, false, false);
-        RemoteInferenceInputDataSet remoteInputDataSet = RemoteInferenceInputDataSet.builder().predictMode(PredictMode.BATCH).build();
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .build();
         MLPredictionTaskRequest remoteInputRequest = MLPredictionTaskRequest
             .builder()
             .modelId("test_model")
-            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInputDataSet).build())
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build())
             .build();
         Predictable predictor = mock(Predictable.class);
         when(predictor.isModelReady()).thenReturn(true);
@@ -466,11 +477,22 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
     public void testValidateBatchPredictionFailure() throws IOException {
         setupMocks(true, false, false, false);
-        RemoteInferenceInputDataSet remoteInputDataSet = RemoteInferenceInputDataSet.builder().predictMode(PredictMode.BATCH).build();
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .build();
         MLPredictionTaskRequest remoteInputRequest = MLPredictionTaskRequest
             .builder()
             .modelId("test_model")
-            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInputDataSet).build())
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build())
             .build();
         Predictable predictor = mock(Predictable.class);
         when(predictor.isModelReady()).thenReturn(true);
