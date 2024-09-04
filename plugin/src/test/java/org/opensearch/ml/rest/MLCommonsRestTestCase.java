@@ -257,7 +257,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     @SuppressWarnings("unchecked")
     @After
-    protected void wipeAllODFEIndices() throws IOException {
+    protected void wipeAllODFEIndices() throws Exception {
         Response response = adminClient().performRequest(new Request("GET", "/_cat/indices?format=json&expand_wildcards=all"));
         MediaType xContentType = MediaType.fromMediaType(response.getEntity().getContentType());
         try (
@@ -280,7 +280,15 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             for (Map<String, Object> index : parserList) {
                 String indexName = (String) index.get("index");
                 if (indexName != null && !".opendistro_security".equals(indexName)) {
-                    adminClient().performRequest(new Request("DELETE", "/" + indexName));
+                    deleteIndexWithAdminClient(indexName);
+                }
+            }
+            // Deletions process asynchronously and could impact future tests
+            // Ensure cluster state is up to date with the deletions before ending
+            for (Map<String, Object> index : parserList) {
+                String indexName = (String) index.get("index");
+                if (indexName != null && !".opendistro_security".equals(indexName) && indexExistsWithAdminClient(indexName)) {
+                    assertBusy(() -> assertFalse(indexExistsWithAdminClient(indexName)), 10, TimeUnit.SECONDS);
                 }
             }
         }
