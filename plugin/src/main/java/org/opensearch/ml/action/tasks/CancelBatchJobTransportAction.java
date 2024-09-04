@@ -33,6 +33,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
@@ -168,8 +169,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inferenceInputDataSet).build();
         String modelId = mlTask.getModelId();
 
-        try {
-            mlModelManager.getModel(modelId, null, null, ActionListener.wrap(model -> {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
                 if (model.getConnector() != null) {
                     Connector connector = model.getConnector();
                     executeConnector(connector, mlInput, actionListener);
@@ -192,7 +193,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     .onFailure(
                         new OpenSearchStatusException("Failed to retrieve the ML model for the given task ID", RestStatus.NOT_FOUND)
                     );
-            }));
+            });
+            mlModelManager.getModel(modelId, null, null, ActionListener.runBefore(getModelListener, context::restore));
         } catch (Exception e) {
             log.error("Unable to fetch cancel batch job in ml task ", e);
             throw new OpenSearchException("Unable to fetch cancel batch job in ml task " + e.getMessage());
