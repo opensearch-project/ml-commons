@@ -162,9 +162,32 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLConfigGetResponse.class));
     }
 
+    @Test
+    public void testDoExecute_Success_ForNewFields() throws IOException {
+        String configID = "config_id";
+        MLConfig mlConfig = new MLConfig(null, "olly_agent", null, new Configuration("agent_id"), Instant.EPOCH, null, Instant.EPOCH);
+
+        XContentBuilder content = mlConfig.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", configID, 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
+        MLConfigGetRequest request = new MLConfigGetRequest(configID);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getConfigTransportAction.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLConfigGetResponse.class));
+    }
+
     public GetResponse prepareMLConfig(String configID) throws IOException {
 
-        MLConfig mlConfig = new MLConfig("olly_agent", new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH);
+        MLConfig mlConfig = new MLConfig("olly_agent", null, new Configuration("agent_id"), null, Instant.EPOCH, Instant.EPOCH, null);
 
         XContentBuilder content = mlConfig.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
