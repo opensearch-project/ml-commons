@@ -114,8 +114,8 @@ public class MLConfig implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+            out.writeOptionalInstant(lastUpdatedTime);
         }
-        out.writeOptionalInstant(lastUpdatedTime);
     }
 
     @Override
