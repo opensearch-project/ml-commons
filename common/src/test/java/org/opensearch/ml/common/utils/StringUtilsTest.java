@@ -8,6 +8,8 @@ package org.opensearch.ml.common.utils;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
 import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
+import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
+import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
@@ -422,5 +424,37 @@ public class StringUtilsTest {
             requestBody,
             "{\"prompt\": \"answer question based on context: {\\\"hometown\\\":\\\"{\\\\\\\"city\\\\\\\":\\\\\\\"New York\\\\\\\"}\\\",\\\"name\\\":\\\"John\\\"} and conversation history based on history: hello\\n\"}"
         );
+    }
+
+    @Test
+    public void testObtainFieldNameFromJsonPath_ValidJsonPath() {
+        // Test with a typical JSONPath
+        String jsonPath = "$.response.body.data[*].embedding";
+        String fieldName = obtainFieldNameFromJsonPath(jsonPath);
+        assertEquals("embedding", fieldName);
+    }
+
+    @Test
+    public void testObtainFieldNameFromJsonPath_WithPrefix() {
+        // Test with JSONPath that has a prefix
+        String jsonPath = "source[1].$.response.body.data[*].embedding";
+        String fieldName = obtainFieldNameFromJsonPath(jsonPath);
+        assertEquals("embedding", fieldName);
+    }
+
+    @Test
+    public void testGetJsonPath_ValidJsonPathWithSource() {
+        // Test with a JSONPath that includes a source prefix
+        String input = "source[1].$.response.body.data[*].embedding";
+        String result = getJsonPath(input);
+        assertEquals("$.response.body.data[*].embedding", result);
+    }
+
+    @Test
+    public void testGetJsonPath_ValidJsonPathWithoutSource() {
+        // Test with a JSONPath that does not include a source prefix
+        String input = "$.response.body.data[*].embedding";
+        String result = getJsonPath(input);
+        assertEquals("$.response.body.data[*].embedding", result);
     }
 }
