@@ -475,6 +475,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     protected ClassLoader classLoader = RestMLRAGSearchProcessorIT.class.getClassLoader();
     private static final String INDEX_NAME = "test";
 
+    private static final String ML_RAG_REMOTE_MODEL_GROUP = "rag_remote_model_group";
+
     // "client" gets initialized by the test framework at the instance level
     // so we perform this per test case, not via @BeforeClass.
     @Before
@@ -528,7 +530,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(OPENAI_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "openAI-GPT-3.5 completions", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -582,7 +584,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("openAI-GPT-4o-mini completions", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "openAI-GPT-4o-mini completions", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -595,7 +597,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithOpenAIWithImage";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -669,7 +671,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(BEDROCK_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Bedrock Anthropic Claude", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Bedrock Anthropic Claude", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -682,7 +684,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithBedrock";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -721,7 +723,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Bedrock Anthropic Claude", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Bedrock Anthropic Claude", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -734,7 +736,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithBedrockConverse";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -773,7 +775,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Bedrock Anthropic Claude", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Bedrock Anthropic Claude", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -786,7 +788,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithBedrockConverseUsingLlmMessages";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -833,7 +835,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(BEDROCK_DOCUMENT_CONVERSE_CONNECTOR_BLUEPRINT2);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Bedrock Anthropic Claude", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Bedrock Anthropic Claude", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -846,7 +848,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithBedrockConverseUsingLlmMessagesForDocumentChat";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         // pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -892,7 +894,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(OPENAI_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "openAI-GPT-3.5 completions", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -905,7 +907,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithOpenAIWithConversation";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -949,7 +951,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("openAI-GPT-4 completions", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "openAI-GPT-4 completions", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -962,7 +964,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithOpenAI";
+        pipelineParameters.tag = "testBM25WithOpenAIWithConversationAndImage";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -1010,7 +1012,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(BEDROCK_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Bedrock", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Bedrock", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -1023,7 +1025,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithBedrock";
+        pipelineParameters.tag = "testBM25WithBedrockWithConversation";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
@@ -1067,7 +1069,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Cohere Chat Completion v1", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Cohere Chat Completion v1", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -1119,7 +1121,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
-        response = RestMLRemoteInferenceIT.registerRemoteModel("Cohere Chat Completion v1", connectorId);
+        response = RestMLRemoteInferenceIT.registerRemoteModel(ML_RAG_REMOTE_MODEL_GROUP, "Cohere Chat Completion v1", connectorId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -1132,7 +1134,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
 
         PipelineParameters pipelineParameters = new PipelineParameters();
-        pipelineParameters.tag = "testBM25WithCohereLlmResponseField";
+        pipelineParameters.tag = "testBM25WithCohereUsingLlmResponseField";
         pipelineParameters.description = "desc";
         pipelineParameters.modelId = modelId;
         pipelineParameters.systemPrompt = "You are a helpful assistant";
