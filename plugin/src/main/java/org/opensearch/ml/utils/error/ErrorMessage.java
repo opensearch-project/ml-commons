@@ -44,7 +44,7 @@ public class ErrorMessage {
     }
 
     private String fetchType() {
-        return exception.getClass().getSimpleName();
+        return exception == null ? "NULL" : exception.getClass().getSimpleName();
     }
 
     protected String fetchReason() {
@@ -52,6 +52,10 @@ public class ErrorMessage {
     }
 
     protected String fetchDetails() {
+        if (exception == null) {
+            return "NULL";
+        }
+
         final String msg;
         // Prevent the method from exposing internal information such as internal ip address etc. that is a security concern.
         if (hasInternalInformation(exception)) {

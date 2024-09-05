@@ -144,4 +144,12 @@ public class ErrorMessageTests {
 
         assertEquals(errorMessage.getDetails(), "illegal state");
     }
+
+    @Test
+    public void ConstructNullException() {
+        ErrorMessage errorMessage = new ErrorMessage(null, SERVICE_UNAVAILABLE.getStatus());
+
+        assertEquals(errorMessage.getType(), "NULL");
+        assertEquals(errorMessage.getDetails(), "NULL");
+    }
 }
