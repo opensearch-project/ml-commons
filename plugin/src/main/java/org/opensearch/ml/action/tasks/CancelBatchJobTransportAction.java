@@ -8,18 +8,14 @@ package org.opensearch.ml.action.tasks;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.MLTask.REMOTE_JOB_FIELD;
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTaskState.CANCELLED;
-import static org.opensearch.ml.common.MLTaskState.COMPLETED;
-import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.hc.core5.http.HttpStatus;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
@@ -48,9 +44,9 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.task.MLTaskGetAction;
-import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
-import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -65,7 +61,7 @@ import org.opensearch.transport.TransportService;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class GetTaskTransportAction extends HandledTransportAction<ActionRequest, MLTaskGetResponse> {
+public class CancelBatchJobTransportAction extends HandledTransportAction<ActionRequest, MLCancelBatchJobResponse> {
 
     Client client;
     NamedXContentRegistry xContentRegistry;
@@ -81,7 +77,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     MLModelCacheHelper modelCacheHelper;
 
     @Inject
-    public GetTaskTransportAction(
+    public CancelBatchJobTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
@@ -93,7 +89,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         MLTaskManager mlTaskManager,
         MLModelManager mlModelManager
     ) {
-        super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
+        super(MLCancelBatchJobAction.NAME, transportService, actionFilters, MLCancelBatchJobRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -105,9 +101,9 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskGetResponse> actionListener) {
-        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.fromActionRequest(request);
-        String taskId = mlTaskGetRequest.getTaskId();
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLCancelBatchJobResponse> actionListener) {
+        MLCancelBatchJobRequest mlCancelBatchJobRequest = MLCancelBatchJobRequest.fromActionRequest(request);
+        String taskId = mlCancelBatchJobRequest.getTaskId();
         GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -121,9 +117,10 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
 
                         // check if function is remote and task is of type batch prediction
                         if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
-                            processRemoteBatchPrediction(mlTask, taskId, actionListener);
+                            processRemoteBatchPrediction(mlTask, actionListener);
                         } else {
-                            actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
+                            actionListener
+                                .onFailure(new IllegalArgumentException("The task ID you provided does not have any associated batch job"));
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml task " + r.getId(), e);
@@ -146,7 +143,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
     }
 
-    private void processRemoteBatchPrediction(MLTask mlTask, String taskId, ActionListener<MLTaskGetResponse> actionListener) {
+    private void processRemoteBatchPrediction(MLTask mlTask, ActionListener<MLCancelBatchJobResponse> actionListener) {
         Map<String, Object> remoteJob = mlTask.getRemoteJob();
 
         Map<String, String> parameters = new HashMap<>();
@@ -176,14 +173,13 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
                 if (model.getConnector() != null) {
                     Connector connector = model.getConnector();
-                    executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
+                    executeConnector(connector, mlInput, actionListener);
                 } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
-                    ActionListener<Connector> listener = ActionListener.wrap(connector -> {
-                        executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
-                    }, e -> {
-                        log.error("Failed to get connector " + model.getConnectorId(), e);
-                        actionListener.onFailure(e);
-                    });
+                    ActionListener<Connector> listener = ActionListener
+                        .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
+                            log.error("Failed to get connector " + model.getConnectorId(), e);
+                            actionListener.onFailure(e);
+                        });
                     try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                         connectorAccessControlHelper
                             .getConnector(client, model.getConnectorId(), ActionListener.runBefore(listener, threadContext::restore));
@@ -192,7 +188,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
                 }
             }, e -> {
-                log.error("Failed to retrieve the ML model for the given task ID", e);
+                log.error("Failed to retrieve the ML model with the given ID", e);
                 actionListener
                     .onFailure(
                         new OpenSearchStatusException("Failed to retrieve the ML model for the given task ID", RestStatus.NOT_FOUND)
@@ -200,29 +196,22 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             });
             mlModelManager.getModel(modelId, null, null, ActionListener.runBefore(getModelListener, context::restore));
         } catch (Exception e) {
-            log.error("Unable to fetch status for ml task ", e);
-            throw new OpenSearchException("Unable to fetch status for ml task " + e.getMessage());
+            log.error("Unable to fetch cancel batch job in ml task ", e);
+            throw new OpenSearchException("Unable to fetch cancel batch job in ml task " + e.getMessage());
         }
     }
 
-    private void executeConnector(
-        Connector connector,
-        MLInput mlInput,
-        String taskId,
-        MLTask mlTask,
-        Map<String, Object> transformJob,
-        ActionListener<MLTaskGetResponse> actionListener
-    ) {
+    private void executeConnector(Connector connector, MLInput mlInput, ActionListener<MLCancelBatchJobResponse> actionListener) {
         if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
-            connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential) -> encryptor.decrypt(credential));
+            connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential) -> encryptor.decrypt(credential));
             RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                 .initInstance(connector.getProtocol(), connector, Connector.class);
             connectorExecutor.setScriptService(scriptService);
             connectorExecutor.setClusterService(clusterService);
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
-            connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
-                processTaskResponse(mlTask, taskId, taskResponse, transformJob, actionListener);
+            connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                processTaskResponse(taskResponse, actionListener);
             }, e -> { actionListener.onFailure(e); }));
         } else {
             actionListener
@@ -230,47 +219,16 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
     }
 
-    private void processTaskResponse(
-        MLTask mlTask,
-        String taskId,
-        MLTaskResponse taskResponse,
-        Map<String, Object> remoteJob,
-        ActionListener<MLTaskGetResponse> actionListener
-    ) {
+    private void processTaskResponse(MLTaskResponse taskResponse, ActionListener<MLCancelBatchJobResponse> actionListener) {
         try {
             ModelTensorOutput tensorOutput = (ModelTensorOutput) taskResponse.getOutput();
             if (tensorOutput != null && tensorOutput.getMlModelOutputs() != null && !tensorOutput.getMlModelOutputs().isEmpty()) {
                 ModelTensors modelOutput = tensorOutput.getMlModelOutputs().get(0);
-                if (modelOutput.getMlModelTensors() != null && !modelOutput.getMlModelTensors().isEmpty()) {
-                    Map<String, Object> remoteJobStatus = (Map<String, Object>) modelOutput.getMlModelTensors().get(0).getDataAsMap();
-                    if (remoteJobStatus != null) {
-                        remoteJob.putAll(remoteJobStatus);
-                        Map<String, Object> updatedTask = new HashMap<>();
-                        updatedTask.put(REMOTE_JOB_FIELD, remoteJob);
-
-                        if ((remoteJob.containsKey("status") && remoteJob.get("status").equals("completed"))
-                            || (remoteJob.containsKey("TransformJobStatus") && remoteJob.get("TransformJobStatus").equals("Completed"))) {
-                            updatedTask.put(STATE_FIELD, COMPLETED);
-                            mlTask.setState(COMPLETED);
-
-                        } else if ((remoteJob.containsKey("status") && remoteJob.get("status").equals("cancelled"))
-                            || (remoteJob.containsKey("TransformJobStatus") && remoteJob.get("TransformJobStatus").equals("Stopped"))) {
-                            updatedTask.put(STATE_FIELD, CANCELLED);
-                            mlTask.setState(CANCELLED);
-                        }
-                        mlTaskManager.updateMLTaskDirectly(taskId, updatedTask, ActionListener.wrap(response -> {
-                            actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
-                        }, e -> {
-                            logException("Failed to update task for batch predict model", e, log);
-                            actionListener.onFailure(e);
-                        }));
-                    } else {
-                        log.debug("Transform job status is null.");
-                        actionListener.onFailure(new ResourceNotFoundException("Couldn't fetch status of the transform job"));
-                    }
+                if (modelOutput.getStatusCode() != null && modelOutput.getStatusCode().equals(HttpStatus.SC_OK)) {
+                    actionListener.onResponse(new MLCancelBatchJobResponse(RestStatus.OK));
                 } else {
-                    log.debug("ML Model Tensors are null or empty.");
-                    actionListener.onFailure(new ResourceNotFoundException("Couldn't fetch status of the transform job"));
+                    log.debug("The status code from remote service is: " + modelOutput.getStatusCode());
+                    actionListener.onFailure(new OpenSearchException("Couldn't cancel the transform job. Please try again"));
                 }
             } else {
                 log.debug("ML Model Outputs are null or empty.");

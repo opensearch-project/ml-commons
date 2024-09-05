@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -286,7 +287,9 @@ public class ConnectorUtils {
         } else {
             requestBody = RequestBody.empty();
         }
-        if (SdkHttpMethod.POST == method && 0 == requestBody.optionalContentLength().get()) {
+        if (SdkHttpMethod.POST == method
+            && 0 == requestBody.optionalContentLength().get()
+            && !action.equals(CANCEL_BATCH_PREDICT.toString())) {
             log.error("Content length is 0. Aborting request to remote model");
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }

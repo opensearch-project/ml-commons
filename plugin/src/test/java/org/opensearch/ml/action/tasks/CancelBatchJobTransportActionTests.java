@@ -56,8 +56,8 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
-import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -67,7 +67,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-public class GetTaskTransportActionTests extends OpenSearchTestCase {
+public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
@@ -99,7 +99,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     private EncryptorImpl encryptor;
 
     @Mock
-    ActionListener<MLTaskGetResponse> actionListener;
+    ActionListener<MLCancelBatchJobResponse> actionListener;
     @Mock
     private MLModelManager mlModelManager;
 
@@ -109,14 +109,14 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    GetTaskTransportAction getTaskTransportAction;
-    MLTaskGetRequest mlTaskGetRequest;
+    CancelBatchJobTransportAction cancelBatchJobTransportAction;
+    MLCancelBatchJobRequest mlCancelBatchJobRequest;
     ThreadContext threadContext;
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlTaskGetRequest = MLTaskGetRequest.builder().taskId("test_id").build();
+        mlCancelBatchJobRequest = MLCancelBatchJobRequest.builder().taskId("test_id").build();
 
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -128,8 +128,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
         doReturn(true).when(metaData).hasIndex(anyString());
 
-        getTaskTransportAction = spy(
-            new GetTaskTransportAction(
+        cancelBatchJobTransportAction = spy(
+            new CancelBatchJobTransportAction(
                 transportService,
                 actionFilters,
                 client,
@@ -191,7 +191,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
@@ -203,7 +203,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("errorMessage"));
             return null;
         }).when(client).get(any(), any());
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
@@ -215,14 +215,14 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             listener.onFailure(new IndexNotFoundException("Index Not Found"));
             return null;
         }).when(client).get(any(), any());
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
     }
 
     @Ignore
-    public void testGetTask_SuccessBatchPredictStatus() throws IOException {
+    public void testGetTask_SuccessBatchPredictCancel() throws IOException {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
@@ -241,11 +241,11 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
             .build();
 
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
-        verify(actionListener).onResponse(any(MLTaskGetResponse.class));
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
+        verify(actionListener).onResponse(any(MLCancelBatchJobResponse.class));
     }
 
-    public void test_BatchPredictStatus_NoConnector() throws IOException {
+    public void test_BatchPredictCancel_NoConnector() throws IOException {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
@@ -260,7 +260,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
 
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
@@ -285,32 +285,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
 
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to get connector", argumentCaptor.getValue().getMessage());
-    }
-
-    public void test_BatchPredictStatus_NoModel() throws IOException {
-        Map<String, Object> remoteJob = new HashMap<>();
-        remoteJob.put("Status", "IN PROGRESS");
-        remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
-
-        doAnswer(invocation -> {
-            ActionListener<Connector> listener = invocation.getArgument(2);
-            listener.onFailure(new ResourceNotFoundException("Failed to get connector"));
-            return null;
-        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
-
-        GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
-
-        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get connector", argumentCaptor.getValue().getMessage());
