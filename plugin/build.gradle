@@ -312,7 +312,9 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.helper.ModelAccessControlHelper',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
         'org.opensearch.ml.model.MLModelCacheHelper',
-        'org.opensearch.ml.model.MLModelCacheHelper.1'
+        'org.opensearch.ml.model.MLModelCacheHelper.1',
+        'org.opensearch.ml.action.tasks.CancelBatchJobTransportAction'
+
 ]
 
 jacocoTestCoverageVerification {

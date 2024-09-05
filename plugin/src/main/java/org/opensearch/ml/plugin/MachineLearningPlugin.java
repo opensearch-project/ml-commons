@@ -83,6 +83,7 @@ import org.opensearch.ml.action.register.TransportRegisterModelAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction;
+import org.opensearch.ml.action.tasks.CancelBatchJobTransportAction;
 import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
 import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
@@ -151,6 +152,7 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
@@ -219,6 +221,7 @@ import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLBatchIngestAction;
+import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
@@ -444,7 +447,8 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
                 new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class),
                 new ActionHandler<>(MLConfigGetAction.INSTANCE, GetConfigTransportAction.class),
-                new ActionHandler<>(MLBatchIngestionAction.INSTANCE, TransportBatchIngestionAction.class)
+                new ActionHandler<>(MLBatchIngestionAction.INSTANCE, TransportBatchIngestionAction.class),
+                new ActionHandler<>(MLCancelBatchJobAction.INSTANCE, CancelBatchJobTransportAction.class)
             );
     }
 
@@ -764,6 +768,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
         RestMLBatchIngestAction restMLBatchIngestAction = new RestMLBatchIngestAction();
+        RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -817,7 +822,8 @@ public class MachineLearningPlugin extends Plugin
                 restMLListToolsAction,
                 restMLGetToolAction,
                 restMLGetConfigAction,
-                restMLBatchIngestAction
+                restMLBatchIngestAction,
+                restMLCancelBatchJobAction
             );
     }
 
