@@ -8,7 +8,6 @@ Compatible with OpenSearch 2.17.0
 
 ### Enhancements
 * Adding additional info for memory metadata (#2750)[https://github.com/opensearch-project/ml-commons/pull/2750]
-* Support list in response body (#2811)[https://github.com/opensearch-project/ml-commons/pull/2811]
 * Support skip_validating_missing_parameters in connector (#2830)[https://github.com/opensearch-project/ml-commons/pull/2830]
 * Support one_to_one in ML Inference Search Response Processor (#2801)[https://github.com/opensearch-project/ml-commons/pull/2801]
 * Expose ML Config API (#2850)[https://github.com/opensearch-project/ml-commons/pull/2850]
