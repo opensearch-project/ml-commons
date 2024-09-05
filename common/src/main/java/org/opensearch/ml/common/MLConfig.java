@@ -121,26 +121,17 @@ public class MLConfig implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
         XContentBuilder builder = xContentBuilder.startObject();
-        if (type != null) {
-            builder.field(TYPE_FIELD, type);
+        if (configType != null || type != null) {
+            builder.field(TYPE_FIELD, configType == null ? type : configType);
         }
-        if (configType != null) {
-            builder.field(CONFIG_TYPE_FIELD, configType);
-        }
-        if (configuration != null) {
-            builder.field(CONFIGURATION_FIELD, configuration);
-        }
-        if (mlConfiguration != null) {
-            builder.field(ML_CONFIGURATION_FIELD, mlConfiguration);
+        if (configuration != null || mlConfiguration != null) {
+            builder.field(CONFIGURATION_FIELD, mlConfiguration == null ? configuration : mlConfiguration);
         }
         if (createTime != null) {
             builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
         }
-        if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
-        }
-        if (lastUpdatedTime != null) {
-            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
+        if (lastUpdateTime != null || lastUpdatedTime != null) {
+            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdatedTime == null ? lastUpdateTime.toEpochMilli() : lastUpdatedTime.toEpochMilli());
         }
         return builder.endObject();
     }
