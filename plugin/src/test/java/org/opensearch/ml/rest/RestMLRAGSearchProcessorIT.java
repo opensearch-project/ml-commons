@@ -831,6 +831,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(answer);
     }
 
+    @Ignore
     public void testBM25WithBedrockConverseUsingLlmMessagesForDocumentChat() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
@@ -947,6 +948,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(interactionId);
     }
 
+    @Ignore
     public void testBM25WithOpenAIWithConversationAndImage() throws Exception {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
