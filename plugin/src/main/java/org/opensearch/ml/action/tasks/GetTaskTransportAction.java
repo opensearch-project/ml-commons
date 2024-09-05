@@ -13,7 +13,6 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.CANCELLED;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.META_INDEX_NAME;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -23,8 +22,6 @@ import java.util.Optional;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.OpenSearchWrapperException;
-import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
