@@ -618,8 +618,7 @@ public class LocalClusterIndicesClientTests {
         verify(mockedClient, times(1)).search(requestCaptor.capture());
         assertEquals(1, requestCaptor.getValue().indices().length);
         assertEquals(TEST_INDEX, requestCaptor.getValue().indices()[0]);
-        assertTrue(requestCaptor.getValue().source().toString().contains("\"query\":{\"bool\":{\"must\":"));
-        assertTrue(requestCaptor.getValue().source().toString().contains("\"filter\":[{\"term\":{\"tenant_id\":{\"value\":\"xyz\""));
+        assertTrue(requestCaptor.getValue().source().toString().contains("{\"term\":{\"tenant_id\":{\"value\":\"xyz\""));
 
         SearchResponse searchActionResponse = SearchResponse.fromXContent(response.parser());
         assertEquals(0, searchActionResponse.getFailedShards());

@@ -34,6 +34,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
@@ -222,6 +223,9 @@ public class MLModelGroupManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             BoolQueryBuilder query = new BoolQueryBuilder();
             query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
+            if (tenantId != null) {
+                query.filter(new TermQueryBuilder(CommonValue.TENANT_ID, tenantId));
+            }
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
@@ -229,6 +233,7 @@ public class MLModelGroupManager {
             SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                 .builder()
                 .indices(searchRequest.indices())
+                .tenantId(tenantId)
                 .searchSourceBuilder(searchRequest.source())
                 .tenantId(tenantId)
                 .build();
@@ -238,10 +243,11 @@ public class MLModelGroupManager {
                 .whenComplete((r, throwable) -> {
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to search model group index", cause);
                         if (cause instanceof IndexNotFoundException) {
+                            log.debug("Model group index does not exist");
                             listener.onResponse(null);
                         } else {
+                            log.error("Failed to search model group index", cause);
                             listener.onFailure(cause);
                         }
                     } else {

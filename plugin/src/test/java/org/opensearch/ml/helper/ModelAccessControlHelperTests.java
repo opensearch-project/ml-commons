@@ -51,6 +51,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
 import org.opensearch.ml.sdkclient.SdkClientFactory;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
@@ -73,6 +74,9 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     @Mock
     ClusterService clusterService;
+
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
     Client client;
@@ -141,7 +145,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     public void test_UndefinedModelGroupID() {
-        modelAccessControlHelper.validateModelGroupAccess(null, null, client, sdkClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(null, mlFeatureEnabledSetting, null, null, client, sdkClient, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -158,7 +162,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     public void test_UndefinedOwner() throws IOException {
         getResponse = modelGroupBuilder(null, null, null);
-        modelAccessControlHelper.validateModelGroupAccess(null, "testGroupID", client, sdkClient, actionListener);
+        modelAccessControlHelper
+            .validateModelGroupAccess(null, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -186,7 +191,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", client, sdkClient, latchedActionListener);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -218,7 +224,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", client, sdkClient, latchedActionListener);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -250,7 +257,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", client, sdkClient, latchedActionListener);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -282,7 +290,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", client, sdkClient, latchedActionListener);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -314,7 +323,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", client, sdkClient, latchedActionListener);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);

@@ -227,10 +227,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertNotNull(transportRegisterModelAction);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT))).thenReturn(mlStat);
@@ -310,10 +310,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_userHasNoAccessException() throws InterruptedException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterModelResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -469,10 +469,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     public void test_ValidationFailedException() throws InterruptedException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterModelResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -644,10 +644,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -694,10 +694,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLRegisterModelResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
