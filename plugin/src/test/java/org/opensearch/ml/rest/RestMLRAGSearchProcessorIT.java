@@ -483,6 +483,11 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     @Before
     public void init() throws Exception {
 
+        RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
+        // TODO Do we really need to wait this long? This adds 20s to every test case run.
+        // Can we instead check the cluster state and move on?
+        Thread.sleep(20000);
+
         Response response = TestHelper
             .makeRequest(
                 client(),
