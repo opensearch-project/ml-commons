@@ -252,7 +252,7 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         assertEquals("other test model group", map.get("name"));
 
         // Refresh before searching to avoid race conditions
-        refreshBeforeSearch();
+        refreshBeforeSearch(DDB);
 
         // Search should show only the model groups for tenant (explicit and auto)
         response = makeRequest(tenantMatchAllRequest, GET, MODEL_GROUPS_PATH + "_search");
