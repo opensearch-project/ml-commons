@@ -179,7 +179,7 @@ integTest {
     dependsOn "bundlePlugin"
     systemProperty 'tests.security.manager', 'false'
     systemProperty 'java.io.tmpdir', opensearch_tmp_dir.absolutePath
-
+    
     systemProperty "https", System.getProperty("https")
     systemProperty "user", System.getProperty("user")
     systemProperty "password", System.getProperty("password")
@@ -241,6 +241,11 @@ integTest {
 }
 
 testClusters.integTest {
+    // Replicate credential environment variables to cluster nodes    
+    environment "AWS_ACCESS_KEY_ID", System.getenv("AWS_ACCESS_KEY_ID");
+    environment "AWS_SECRET_ACCESS_KEY", System.getenv("AWS_SECRET_ACCESS_KEY");
+    environment "AWS_SESSION_TOKEN", System.getenv("AWS_SESSION_TOKEN");
+
     testDistribution = "ARCHIVE"
     // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1
     if (_numNodes > 1) numberOfNodes = _numNodes

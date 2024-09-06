@@ -32,5 +32,4 @@ public class SdkClientSettings {
     public static final Setting<String> REMOTE_METADATA_TYPE = Setting.simpleString(REMOTE_METADATA_TYPE_KEY, Property.NodeScope, Property.Final);
     public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting.simpleString(REMOTE_METADATA_ENDPOINT_KEY, Property.NodeScope, Property.Final);
     public static final Setting<String> REMOTE_METADATA_REGION = Setting.simpleString(REMOTE_METADATA_REGION_KEY, Property.NodeScope, Property.Final);
-    
 }

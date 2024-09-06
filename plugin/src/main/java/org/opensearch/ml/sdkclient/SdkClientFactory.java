@@ -8,7 +8,6 @@
  */
 package org.opensearch.ml.sdkclient;
 
-import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
@@ -50,15 +49,12 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.extern.log4j.Log4j2;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -92,16 +88,20 @@ public class SdkClientFactory {
                     throw new OpenSearchException("AWS Opensearch Service client requires a metadata endpoint and region.");
                 }
                 log.info("Using remote AWS Opensearch Service cluster as metadata store");
-                return new SdkClient(new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region)));
+                return new SdkClient(
+                    new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, "es"))
+                );
             case SdkClientSettings.AWS_DYNAMO_DB:
                 if (Strings.isBlank(remoteMetadataEndpoint) || Strings.isBlank(region)) {
-                    throw new OpenSearchException("AWS Opensearch Service client requires a metadata endpoint and region.");
+                    throw new OpenSearchException(
+                        "AWS DynamoDB and Opensearch Serverless Service client requires a metadata endpoint and region."
+                    );
                 }
                 log.info("Using dynamo DB as metadata store");
                 return new SdkClient(
                     new DDBOpenSearchClient(
                         createDynamoDbClient(region),
-                        new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint))
+                        new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, "aoss"))
                     )
                 );
             default:
@@ -118,38 +118,18 @@ public class SdkClientFactory {
     private static DynamoDbClient createDynamoDbClient(String region) {
         if (region == null) {
             throw new IllegalStateException("REGION environment variable needs to be set!");
-        } else if (region.equals("local")) {
-            return SocketAccess
-                .doPrivileged(
-                    (PrivilegedAction<DynamoDbClient>) () -> DynamoDbClient
-                        .builder()
-                        .overrideConfiguration(ClientOverrideConfiguration.builder().build())
-                        .endpointOverride(URI.create("http://localhost:8000"))
-                        .httpClient(UrlConnectionHttpClient.builder().build())
-                        .region(Region.US_WEST_2)
-                        // Demo only, these are not real credentials anywhere
-                        .credentialsProvider(
-                            StaticCredentialsProvider.create(AwsBasicCredentials.create("fakeAccessKeyId", "fakeSecretAccessKey"))
-                        )
-                        .build()
-                );
         }
-
-        AwsCredentialsProviderChain credentialsProviderChain = AwsCredentialsProviderChain
-            .builder()
-            .addCredentialsProvider(EnvironmentVariableCredentialsProvider.create())
-            .addCredentialsProvider(ContainerCredentialsProvider.builder().build())
-            .addCredentialsProvider(InstanceProfileCredentialsProvider.create())
-            .build();
-
-        return DynamoDbClient.builder().region(Region.of(region)).credentialsProvider(credentialsProviderChain).build();
+        return PrivilegedAccess
+            .doPrivileged(
+                () -> DynamoDbClient.builder().region(Region.of(region)).credentialsProvider(createCredentialsProvider()).build()
+            );
     }
 
     private static OpenSearchClient createOpenSearchClient(String remoteMetadataEndpoint) {
         try {
             Map<String, String> env = System.getenv();
             String user = env.getOrDefault("user", "admin");
-            String pass = env.getOrDefault("password", "MySecurePassword123");
+            String pass = env.getOrDefault("password", "admin");
             // Endpoint syntax: https://127.0.0.1:9200
             HttpHost host = HttpHost.create(remoteMetadataEndpoint);
             SSLContext sslContext = SSLContextBuilder.create().loadTrustMaterial(null, (chain, authType) -> true).build();
@@ -190,21 +170,33 @@ public class SdkClientFactory {
         }
     }
 
-    private static OpenSearchClient createAwsOpenSearchServiceClient(String remoteMetadataEndpoint, String region) {
+    private static OpenSearchClient createAwsOpenSearchServiceClient(String remoteMetadataEndpoint, String region, String signingService) {
         // https://github.com/opensearch-project/opensearch-java/blob/main/guides/auth.md
         return new OpenSearchClient(
-            new AwsSdk2Transport(
-                ApacheHttpClient.builder().build(),
-                remoteMetadataEndpoint.replaceAll("^https?://", ""), // OpenSearch endpoint, without https://
-                "es", // signing service name, use "aoss" for OpenSearch Serverless
-                Region.of(region), // signing service region
-                AwsSdk2TransportOptions.builder().build()
-            )
+            PrivilegedAccess
+                .doPrivileged(
+                    () -> new AwsSdk2Transport(
+                        ApacheHttpClient.builder().build(),
+                        remoteMetadataEndpoint.replaceAll("^https?://", ""), // OpenSearch endpoint, without https://
+                        signingService, // signing service name, use "es" for OpenSearch, "aoss" for OpenSearch Serverless
+                        Region.of(region), // signing service region
+                        AwsSdk2TransportOptions.builder().setCredentials(createCredentialsProvider()).build()
+                    )
+                )
         );
     }
 
-    private static final class SocketAccess {
-        private SocketAccess() {}
+    private static AwsCredentialsProvider createCredentialsProvider() {
+        return AwsCredentialsProviderChain
+            .builder()
+            .addCredentialsProvider(EnvironmentVariableCredentialsProvider.create())
+            .addCredentialsProvider(ContainerCredentialsProvider.builder().build())
+            .addCredentialsProvider(InstanceProfileCredentialsProvider.create())
+            .build();
+    }
+
+    private static final class PrivilegedAccess {
+        private PrivilegedAccess() {}
 
         public static <T> T doPrivileged(PrivilegedAction<T> operation) {
             SpecialPermission.check();
