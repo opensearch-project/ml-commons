@@ -199,7 +199,7 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertEquals("other test agent", map.get("name"));
 
         // Refresh before searching to avoid race conditions
-        refreshBeforeSearch();
+        refreshBeforeSearch(DDB);
 
         // Search should show only the agent for tenant
         response = makeRequest(tenantMatchAllRequest, GET, AGENTS_PATH + "_search");

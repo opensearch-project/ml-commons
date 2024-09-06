@@ -35,6 +35,9 @@ import org.opensearch.test.rest.FakeRestRequest;
 
 public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTestCase {
 
+    // Toggle to run DDB tests
+    protected static final boolean DDB = true;
+
     protected static final String DOC_ID = "_id";
 
     // REST methods
@@ -186,10 +189,10 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         assertEquals(RestStatus.UNAUTHORIZED.getStatus(), response.getStatusLine().getStatusCode());
     }
 
-    protected void refreshBeforeSearch() {
+    protected void refreshBeforeSearch(boolean extraDelay) {
         try {
             refreshAllIndices();
-            Thread.sleep(2000);
+            Thread.sleep(extraDelay ? 60000L : 5000L);
         } catch (IOException | InterruptedException e) {
             // ignore
         }

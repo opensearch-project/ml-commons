@@ -21,11 +21,6 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
 
     public void testConnectorCRUD() throws Exception {
         boolean multiTenancyEnabled = isMultiTenancyEnabled();
-        // ensure local ml config has been deleted
-        // see https://github.com/opensearch-project/ml-commons/issues/2888
-        if (indexExistsWithAdminClient(ML_CONFIG_INDEX)) {
-            assertBusy(() -> assertFalse(indexExistsWithAdminClient(ML_CONFIG_INDEX)), 10, TimeUnit.SECONDS);
-        }
 
         /*
          * Create
@@ -59,9 +54,14 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 () -> makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + connectorId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                assertNotFound(response);
+                assertEquals("Failed to find connector with the provided connector id: " + connectorId, getErrorReasonFromResponseMap(map));
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
         } else {
             response = makeRequest(otherTenantRequest, GET, CONNECTORS_PATH + connectorId);
             assertOK(response);
@@ -76,8 +76,8 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 () -> makeRequest(nullTenantRequest, GET, CONNECTORS_PATH + connectorId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
+            assertForbidden(response);
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         } else {
             response = makeRequest(nullTenantRequest, GET, CONNECTORS_PATH + connectorId);
@@ -110,9 +110,14 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 () -> makeRequest(otherUpdateRequest, PUT, CONNECTORS_PATH + connectorId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                assertNotFound(response);
+                assertEquals("Failed to find connector with the provided connector id: " + connectorId, getErrorReasonFromResponseMap(map));
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
         } else {
             response = makeRequest(otherUpdateRequest, PUT, CONNECTORS_PATH + connectorId);
             assertOK(response);
@@ -131,8 +136,8 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 () -> makeRequest(nullUpdateRequest, PUT, CONNECTORS_PATH + connectorId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
+            assertForbidden(response);
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         } else {
             response = makeRequest(nullUpdateRequest, PUT, CONNECTORS_PATH + connectorId);
@@ -169,34 +174,36 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         map = responseToMap(response);
         assertEquals("Cohere Chat Model", map.get("name"));
 
-        // Refresh before searching to avoid race conditions
-        refreshBeforeSearch();
+        // Retry these tests until they pass. Search may take some time to update, especially on DDB
+        assertBusy(() -> {
+            // Search should show only the connector for tenant
+            Response restResponse = makeRequest(tenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
+            assertOK(restResponse);
+            SearchResponse searchResponse = searchResponseFromResponse(restResponse);
+            if (multiTenancyEnabled) {
+                assertEquals(1, searchResponse.getHits().getTotalHits().value);
+                assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+            } else {
+                assertEquals(2, searchResponse.getHits().getTotalHits().value);
+                assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+                assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            }
+        }, 60, TimeUnit.SECONDS);
 
-        // Search should show only the connector for tenant
-        response = makeRequest(tenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
-        assertOK(response);
-        SearchResponse searchResponse = searchResponseFromResponse(response);
-        if (multiTenancyEnabled) {
-            assertEquals(1, searchResponse.getHits().getTotalHits().value);
-            assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-        } else {
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
-            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
-        }
-
-        // Search should show only the connector for other tenant
-        response = makeRequest(otherTenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
-        assertOK(response);
-        searchResponse = searchResponseFromResponse(response);
-        if (multiTenancyEnabled) {
-            assertEquals(1, searchResponse.getHits().getTotalHits().value);
-            assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-        } else {
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
-            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
-        }
+        assertBusy(() -> {
+            // Search should show only the connector for other tenant
+            Response restResponse = makeRequest(otherTenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
+            assertOK(restResponse);
+            SearchResponse searchResponse = searchResponseFromResponse(restResponse);
+            if (multiTenancyEnabled) {
+                assertEquals(1, searchResponse.getHits().getTotalHits().value);
+                assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+            } else {
+                assertEquals(2, searchResponse.getHits().getTotalHits().value);
+                assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+                assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            }
+        }, 60, TimeUnit.SECONDS);
 
         // Search should fail without a tenant id
         if (multiTenancyEnabled) {
@@ -211,7 +218,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         } else {
             response = makeRequest(nullTenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
             assertOK(response);
-            searchResponse = searchResponseFromResponse(response);
+            SearchResponse searchResponse = searchResponseFromResponse(response);
             assertEquals(2, searchResponse.getHits().getTotalHits().value);
             assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
             assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
@@ -228,21 +235,34 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 () -> makeRequest(tenantRequest, DELETE, CONNECTORS_PATH + otherConnectorId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                assertNotFound(response);
+                assertEquals(
+                    "Failed to find connector with the provided connector id: " + otherConnectorId,
+                    getErrorReasonFromResponseMap(map)
+                );
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
 
             ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, DELETE, CONNECTORS_PATH + connectorId));
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                assertNotFound(response);
+                assertEquals("Failed to find connector with the provided connector id: " + connectorId, getErrorReasonFromResponseMap(map));
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
 
             // and can't delete without a tenant ID either
             ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantRequest, DELETE, CONNECTORS_PATH + connectorId));
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
+            assertForbidden(response);
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         }
 
