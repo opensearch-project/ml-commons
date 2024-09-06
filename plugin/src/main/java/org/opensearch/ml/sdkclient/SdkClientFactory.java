@@ -66,10 +66,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.InstanceProfileCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -91,6 +88,12 @@ public class SdkClientFactory {
         String remoteMetadataEndpoint = REMOTE_METADATA_ENDPOINT.get(settings);
         String region = REMOTE_METADATA_REGION.get(settings);
         String serviceName = REMOTE_METADATA_SERVICE_NAME.get(settings);
+
+        // TODO Temp to force DDB for testing purposes
+        remoteMetadataType = AWS_DYNAMO_DB;
+        remoteMetadataEndpoint = "https://pkg8g8qwyrlggws3v4bk.us-west-2.aoss.amazonaws.com:443";
+        region = Region.US_WEST_2.id();
+        serviceName = "aoss";
 
         switch (remoteMetadataType) {
             case REMOTE_OPENSEARCH:
@@ -163,7 +166,7 @@ public class SdkClientFactory {
         try {
             Map<String, String> env = System.getenv();
             String user = env.getOrDefault("user", "admin");
-            String pass = env.getOrDefault("password", "MySecurePassword123");
+            String pass = env.getOrDefault("password", "admin");
             // Endpoint syntax: https://127.0.0.1:9200
             HttpHost host = HttpHost.create(remoteMetadataEndpoint);
             SSLContext sslContext = SSLContextBuilder.create().loadTrustMaterial(null, (chain, authType) -> true).build();

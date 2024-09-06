@@ -205,7 +205,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertEquals("other test model", map.get("description"));
 
         // Refresh before searching to avoid race conditions
-        refreshBeforeSearch();
+        refreshBeforeSearch(DDB);
 
         // Search should show only the model for tenant
         response = makeRequest(tenantMatchAllRequest, GET, MODELS_PATH + "_search");
