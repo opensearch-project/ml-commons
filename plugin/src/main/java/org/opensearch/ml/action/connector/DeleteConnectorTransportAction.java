@@ -140,7 +140,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                             SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
                             SearchHit[] searchHits = searchResponse.getHits().getHits();
                             if (searchHits.length == 0) {
-                                deleteConnector(connectorId, restoringListener);
+                                deleteConnector(connectorId, tenantId, restoringListener);
                             } else {
                                 handleModelsUsingConnector(searchHits, connectorId, restoringListener);
                             }
@@ -153,7 +153,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                         }
                     } else {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
-                        handleSearchFailure(connectorId, cause, restoringListener);
+                        handleSearchFailure(connectorId, tenantId, cause, restoringListener);
                     }
                 });
         } catch (Exception e) {
@@ -179,21 +179,21 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             );
     }
 
-    private void handleSearchFailure(String connectorId, Exception cause, ActionListener<DeleteResponse> actionListener) {
+    private void handleSearchFailure(String connectorId, String tenantId, Exception cause, ActionListener<DeleteResponse> actionListener) {
         if (cause instanceof IndexNotFoundException) {
-            deleteConnector(connectorId, actionListener);
+            deleteConnector(connectorId, tenantId, actionListener);
             return;
         }
         log.error("Failed to search for models using connector: {}", connectorId, cause);
         actionListener.onFailure(cause);
     }
 
-    private void deleteConnector(String connectorId, ActionListener<DeleteResponse> actionListener) {
+    private void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
         try {
             sdkClient
                 .deleteDataObjectAsync(
-                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
+                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build(),
                     client.threadPool().executor(GENERAL_THREAD_POOL)
                 )
                 .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, connectorId, actionListener));
