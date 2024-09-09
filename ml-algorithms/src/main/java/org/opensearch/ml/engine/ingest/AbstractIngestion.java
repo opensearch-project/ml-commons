@@ -8,11 +8,11 @@ package org.opensearch.ml.engine.ingest;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
 
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -34,12 +34,6 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class AbstractIngestion implements Ingestable {
-    public static final String OUTPUT = "output";
-    public static final String INPUT = "input";
-    public static final String OUTPUT_FIELD_NAMES = "output_names";
-    public static final String INPUT_FIELD_NAMES = "input_names";
-    public static final String INGEST_FIELDS = "ingest_fields";
-    public static final String ID_FIELD = "id_field";
 
     private final Client client;
 
@@ -85,12 +79,11 @@ public class AbstractIngestion implements Ingestable {
      * Filters fields in the map where the value contains the specified source index as a prefix.
      *
      * @param mlBatchIngestionInput The MLBatchIngestionInput.
-     * @param index    The source index to filter by.
-     * @return A new map with only the entries that match the specified source index.
+     * @param indexInFieldMap    The source index to filter by.
+     * @return A new map with only the entries that match the specified source index and correctly mapped to JsonPath.
      */
-    protected Map<String, Object> filterFieldMapping(MLBatchIngestionInput mlBatchIngestionInput, int index) {
+    protected Map<String, Object> filterFieldMapping(MLBatchIngestionInput mlBatchIngestionInput, int indexInFieldMap) {
         Map<String, Object> fieldMap = mlBatchIngestionInput.getFieldMapping();
-        int indexInFieldMap = index + 1;
         String prefix = "source[" + indexInFieldMap + "]";
 
         Map<String, Object> filteredFieldMap = fieldMap.entrySet().stream().filter(entry -> {
@@ -104,19 +97,29 @@ public class AbstractIngestion implements Ingestable {
         }).collect(Collectors.toMap(Map.Entry::getKey, entry -> {
             Object value = entry.getValue();
             if (value instanceof String) {
-                return value;
+                return getJsonPath((String) value);
             } else if (value instanceof List) {
-                return ((List<String>) value).stream().filter(val -> val.contains(prefix)).collect(Collectors.toList());
+                return ((List<String>) value)
+                    .stream()
+                    .filter(val -> val.contains(prefix))
+                    .map(StringUtils::getJsonPath)
+                    .collect(Collectors.toList());
             }
             return null;
         }));
 
-        if (filteredFieldMap.containsKey(OUTPUT)) {
-            filteredFieldMap.put(OUTPUT_FIELD_NAMES, fieldMap.get(OUTPUT_FIELD_NAMES));
+        String[] ingestFields = mlBatchIngestionInput.getIngestFields();
+        if (ingestFields != null) {
+            Arrays
+                .stream(ingestFields)
+                .filter(Objects::nonNull)
+                .filter(val -> val.contains(prefix))
+                .map(StringUtils::getJsonPath)
+                .forEach(jsonPath -> {
+                    filteredFieldMap.put(obtainFieldNameFromJsonPath(jsonPath), jsonPath);
+                });
         }
-        if (filteredFieldMap.containsKey(INPUT)) {
-            filteredFieldMap.put(INPUT_FIELD_NAMES, fieldMap.get(INPUT_FIELD_NAMES));
-        }
+
         return filteredFieldMap;
     }
 
@@ -128,42 +131,21 @@ public class AbstractIngestion implements Ingestable {
      * @return A new map that contains all the fields and data for ingestion.
      */
     protected Map<String, Object> processFieldMapping(String jsonStr, Map<String, Object> fieldMapping) {
-        String inputJsonPath = fieldMapping.containsKey(INPUT) ? getJsonPath((String) fieldMapping.get(INPUT)) : null;
-        List<String> remoteModelInput = inputJsonPath != null ? (List<String>) JsonPath.read(jsonStr, inputJsonPath) : null;
-        List<String> inputFieldNames = inputJsonPath != null ? (List<String>) fieldMapping.get(INPUT_FIELD_NAMES) : null;
-
-        String outputJsonPath = fieldMapping.containsKey(OUTPUT) ? getJsonPath((String) fieldMapping.get(OUTPUT)) : null;
-        List<List> remoteModelOutput = outputJsonPath != null ? (List<List>) JsonPath.read(jsonStr, outputJsonPath) : null;
-        List<String> outputFieldNames = outputJsonPath != null ? (List<String>) fieldMapping.get(OUTPUT_FIELD_NAMES) : null;
-
-        List<String> ingestFieldsJsonPath = Optional
-            .ofNullable((List<String>) fieldMapping.get(INGEST_FIELDS))
-            .stream()
-            .flatMap(Collection::stream)
-            .map(StringUtils::getJsonPath)
-            .collect(Collectors.toList());
-
         Map<String, Object> jsonMap = new HashMap<>();
-
-        populateJsonMap(jsonMap, inputFieldNames, remoteModelInput);
-        populateJsonMap(jsonMap, outputFieldNames, remoteModelOutput);
-
-        for (String fieldPath : ingestFieldsJsonPath) {
-            jsonMap.put(obtainFieldNameFromJsonPath(fieldPath), JsonPath.read(jsonStr, fieldPath));
+        if (fieldMapping == null || fieldMapping.isEmpty()) {
+            return jsonMap;
         }
 
-        if (fieldMapping.containsKey(ID_FIELD)) {
-            List<String> docIdJsonPath = Optional
-                .ofNullable((List<String>) fieldMapping.get(ID_FIELD))
-                .stream()
-                .flatMap(Collection::stream)
-                .map(StringUtils::getJsonPath)
-                .collect(Collectors.toList());
-            if (docIdJsonPath.size() != 1) {
-                throw new IllegalArgumentException("The Id field must contains only 1 jsonPath for each source");
+        fieldMapping.entrySet().stream().forEach(entry -> {
+            Object value = entry.getValue();
+            if (value instanceof String) {
+                String jsonPath = (String) value;
+                jsonMap.put(entry.getKey(), JsonPath.read(jsonStr, jsonPath));
+            } else if (value instanceof List) {
+                ((List<String>) value).stream().forEach(jsonPath -> { jsonMap.put(entry.getKey(), JsonPath.read(jsonStr, jsonPath)); });
             }
-            jsonMap.put("_id", JsonPath.read(jsonStr, docIdJsonPath.get(0)));
-        }
+        });
+
         return jsonMap;
     }
 
@@ -179,13 +161,14 @@ public class AbstractIngestion implements Ingestable {
             Map<String, Object> filteredMapping = isSoleSource
                 ? mlBatchIngestionInput.getFieldMapping()
                 : filterFieldMapping(mlBatchIngestionInput, sourceIndex);
+            System.out.println("filteredMapping is " + filteredMapping);
             Map<String, Object> jsonMap = processFieldMapping(jsonStr, filteredMapping);
-            if (isSoleSource || sourceIndex == 0) {
+            System.out.println("processFieldMapping is " + jsonMap);
+            if (jsonMap.isEmpty()) {
+                return;
+            }
+            if (isSoleSource && !jsonMap.containsKey("_id")) {
                 IndexRequest indexRequest = new IndexRequest(mlBatchIngestionInput.getIndexName());
-                if (jsonMap.containsKey("_id")) {
-                    String id = (String) jsonMap.remove("_id");
-                    indexRequest.id(id);
-                }
                 indexRequest.source(jsonMap);
                 bulkRequest.add(indexRequest);
             } else {
@@ -198,6 +181,13 @@ public class AbstractIngestion implements Ingestable {
                 bulkRequest.add(updateRequest);
             }
         });
+        if (bulkRequest.numberOfActions() == 0) {
+            bulkResponseListener
+                .onFailure(
+                    new IllegalArgumentException("the bulk ingestion is empty: please check your field mapping to match your sources")
+                );
+            return;
+        }
         client.bulk(bulkRequest, bulkResponseListener);
     }
 
