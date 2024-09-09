@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 
+import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -61,22 +62,28 @@ public class RemoteModelTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals(
-            "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\","
-                + "\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\",\"description\":\"test model\","
-                + "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
-                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-                + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
-                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
-                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
-                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
-                + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
-                + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
-                + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-                + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
-                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}}",
-            mlModelContent
-        );
+
+        JSONObject mlModelJsonObject = new JSONObject(mlModelContent);
+        long mlModelCreatedTime = mlModelJsonObject.getJSONObject("connector").getLong("created_time");
+        long mlModelLastUpdatedTime = mlModelJsonObject.getJSONObject("connector").getLong("last_updated_time");
+
+        String expectedConnectorResponseFormat = "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\","
+            + "\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\",\"description\":\"test model\","
+            + "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
+            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+            + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+            + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
+            + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+            + "\"created_time\":%d,\"last_updated_time\":%d,"
+            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}}";
+
+        String expectedConnectorResponse = String.format(expectedConnectorResponseFormat, mlModelCreatedTime, mlModelLastUpdatedTime);
+        assertEquals(expectedConnectorResponse, mlModelContent);
     }
 
     @Test

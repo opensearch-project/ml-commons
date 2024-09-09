@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -18,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
+import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -42,7 +44,7 @@ public class HttpConnectorTest {
     Function<String, String> encryptFunction;
     Function<String, String> decryptFunction;
 
-    String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+    String TEST_CONNECTOR_JSON_STRING_FORMAT = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
         + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
         + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
@@ -51,6 +53,7 @@ public class HttpConnectorTest {
         + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
         + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
         + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+        + "\"created_time\":%d,\"last_updated_time\":%d,"
         + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
@@ -86,18 +89,27 @@ public class HttpConnectorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals(TEST_CONNECTOR_JSON_STRING, content);
+
+        JSONObject connectorJsonObject = new JSONObject(content);
+        long connectorCreatedTime = connectorJsonObject.getLong("created_time");
+        long connectorLastUpdatedTime = connectorJsonObject.getLong("last_updated_time");
+
+        String testConnectorString = String.format(TEST_CONNECTOR_JSON_STRING_FORMAT, connectorCreatedTime, connectorLastUpdatedTime);
+
+        Assert.assertEquals(testConnectorString, content);
     }
 
     @Test
     public void constructor_Parser() throws IOException {
+        long testEpochTime = Instant.now().toEpochMilli();
+        String testConnectorString = String.format(TEST_CONNECTOR_JSON_STRING_FORMAT, testEpochTime, testEpochTime);
 
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
                 new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
                 null,
-                TEST_CONNECTOR_JSON_STRING
+                testConnectorString
             );
         parser.nextToken();
 
@@ -113,6 +125,8 @@ public class HttpConnectorTest {
         Assert.assertEquals(ConnectorAction.ActionType.PREDICT, connector.getActions().get(0).getActionType());
         Assert.assertEquals("POST", connector.getActions().get(0).getMethod());
         Assert.assertEquals("https://test.com", connector.getActions().get(0).getUrl());
+        Assert.assertEquals(testEpochTime, connector.getCreatedTime().toEpochMilli());
+        Assert.assertEquals(testEpochTime, connector.getLastUpdateTime().toEpochMilli());
     }
 
     @Test

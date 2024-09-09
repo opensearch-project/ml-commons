@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.function.Consumer;
 
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -59,6 +60,7 @@ public class MLRegisterModelInputTest {
         + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
         + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
         + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+        + "\"created_time\":1725914397441,\"last_updated_time\":1725914397441,"
         + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
@@ -167,12 +169,50 @@ public class MLRegisterModelInputTest {
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals(expectedInputStr, jsonStr);
+
+        JSONObject connectorJsonObject = new JSONObject(jsonStr);
+        long connectorCreatedTime = connectorJsonObject.getJSONObject("connector").getLong("created_time");
+        long connectorLastUpdatedTime = connectorJsonObject.getJSONObject("connector").getLong("last_updated_time");
+
+        String expectedFunctionInputStrFormat = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\","
+            + "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\","
+            + "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\","
+            + "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\","
+            + "\\\"field2\\\":\\\"value2\\\"}\"},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"],"
+            + "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
+            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+            + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+            + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
+            + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+            + "\"created_time\":%d,\"last_updated_time\":%d,"
+            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
+
+        String expectedFunctionInputStr = String.format(expectedFunctionInputStrFormat, connectorCreatedTime, connectorLastUpdatedTime);
+        assertEquals(expectedFunctionInputStr, jsonStr);
     }
 
     @Test
     public void testToXContent_Incomplete() throws Exception {
-        String expectedIncompleteInputStr = "{\"function_name\":\"LINEAR_REGRESSION\","
+        input.setUrl(null);
+        input.setModelConfig(null);
+        input.setModelFormat(null);
+        input.setModelNodeIds(null);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+
+        String jsonStr = builder.toString();
+        JSONObject connectorJsonObject = new JSONObject(jsonStr);
+        long connectorCreatedTime = connectorJsonObject.getJSONObject("connector").getLong("created_time");
+        long connectorLastUpdatedTime = connectorJsonObject.getJSONObject("connector").getLong("last_updated_time");
+
+        String expectedIncompleteInputStrFormat = "{\"function_name\":\"LINEAR_REGRESSION\","
             + "\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\","
             + "\"description\":\"test description\",\"model_content_hash_value\":\"hash_value_test\","
             + "\"deploy_model\":true,\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
@@ -184,16 +224,11 @@ public class MLRegisterModelInputTest {
             + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
             + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+            + "\"created_time\":%d,\"last_updated_time\":%d,"
             + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
-        input.setUrl(null);
-        input.setModelConfig(null);
-        input.setModelFormat(null);
-        input.setModelNodeIds(null);
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        assertNotNull(builder);
-        String jsonStr = builder.toString();
+
+        String expectedIncompleteInputStr = String.format(expectedIncompleteInputStrFormat, connectorCreatedTime, connectorLastUpdatedTime);
         assertEquals(expectedIncompleteInputStr, jsonStr);
     }
 

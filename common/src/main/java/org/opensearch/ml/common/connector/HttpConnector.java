@@ -283,6 +283,7 @@ public class HttpConnector extends AbstractConnector {
 
     @Override
     public void update(MLCreateConnectorInput updateContent, Function<String, String> function) {
+        this.setLastUpdateTime(Instant.now());
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
