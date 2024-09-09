@@ -34,7 +34,6 @@ import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
@@ -582,7 +581,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(answer);
     }
 
-    @Ignore
     public void testBM25WithOpenAIWithImage() throws Exception {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
@@ -722,7 +720,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(answer);
     }
 
-    @Ignore
     public void testBM25WithBedrockConverse() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
@@ -775,7 +772,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(answer);
     }
 
-    @Ignore
     public void testBM25WithBedrockConverseUsingLlmMessages() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
@@ -836,7 +832,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(answer);
     }
 
-    @Ignore
     public void testBM25WithBedrockConverseUsingLlmMessagesForDocumentChat() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
@@ -953,7 +948,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         assertNotNull(interactionId);
     }
 
-    @Ignore
     public void testBM25WithOpenAIWithConversationAndImage() throws Exception {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
