@@ -472,6 +472,24 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void testisValidJSONPath_WithFilter() {
+        Assert.assertTrue(isValidJSONPath("$.store['book']"));
+        Assert.assertTrue(isValidJSONPath("$['store']['book'][0]['title']"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[0]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[1,2]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[-1:] "));
+        Assert.assertTrue(isValidJSONPath("$.store.book[0:2]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[*]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[?(@.price < 10)]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[?(@.author == 'J.K. Rowling')]"));
+        Assert.assertTrue(isValidJSONPath("$..author"));
+        Assert.assertTrue(isValidJSONPath("$..book[?(@.price > 15)]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[0,1]"));
+        Assert.assertTrue(isValidJSONPath("$['store','warehouse']"));
+        Assert.assertTrue(isValidJSONPath("$..book[?(@.price > 20)].title"));
+    }
+
+    @Test
     public void testisValidJSONPath_InvalidInputs() {
         Assert.assertFalse(isValidJSONPath("..bar"));
         Assert.assertFalse(isValidJSONPath("."));
