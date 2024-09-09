@@ -44,7 +44,7 @@ public class ErrorMessage {
     }
 
     private String fetchType() {
-        return exception == null ? "NULL" : exception.getClass().getSimpleName();
+        return exception == null ? "Unknown Exception" : exception.getClass().getSimpleName();
     }
 
     protected String fetchReason() {
@@ -53,7 +53,7 @@ public class ErrorMessage {
 
     protected String fetchDetails() {
         if (exception == null) {
-            return "NULL";
+            return "No Exception Details";
         }
 
         final String msg;

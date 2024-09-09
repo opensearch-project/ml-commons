@@ -149,7 +149,7 @@ public class ErrorMessageTests {
     public void ConstructNullException() {
         ErrorMessage errorMessage = new ErrorMessage(null, SERVICE_UNAVAILABLE.getStatus());
 
-        assertEquals(errorMessage.getType(), "NULL");
-        assertEquals(errorMessage.getDetails(), "NULL");
+        assertEquals(errorMessage.getType(), "Unknown Exception");
+        assertEquals(errorMessage.getDetails(), "No Exception Details");
     }
 }
