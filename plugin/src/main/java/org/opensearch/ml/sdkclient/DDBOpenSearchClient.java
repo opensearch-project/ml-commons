@@ -80,6 +80,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
     private static final Long DEFAULT_SEQUENCE_NUMBER = 0L;
     private static final Long DEFAULT_PRIMARY_TERM = 1L;
     private static final String RANGE_KEY = "_id";
+    private static final String HASH_KEY = "_tenant_id";
 
     private static final String SOURCE = "_source";
     private static final String SEQ_NO_KEY = "_seq_no";
@@ -130,7 +131,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     sourceMap.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
                 }
                 Map<String, AttributeValue> item = new HashMap<>();
-                item.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
+                item.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
                 item.put(RANGE_KEY, AttributeValue.builder().s(id).build());
                 item.put(SOURCE, AttributeValue.builder().m(sourceMap).build());
                 item.put(SEQ_NO_KEY, AttributeValue.builder().n(sequenceNumber.toString()).build());
@@ -232,10 +233,10 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
                 Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
-                updateItem.remove(TENANT_ID);
+                updateItem.remove(HASH_KEY);
                 updateItem.remove(RANGE_KEY);
                 Map<String, AttributeValue> updateKey = new HashMap<>();
-                updateKey.put(TENANT_ID, AttributeValue.builder().s(tenantId).build());
+                updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
                 updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
                 UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest.builder().tableName(request.index()).key(updateKey);
                 Map<String, String> expressionAttributeNames = new HashMap<>();
@@ -305,7 +306,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             .key(
                 Map
                     .ofEntries(
-                        Map.entry(TENANT_ID, AttributeValue.builder().s(tenantId).build()),
+                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(request.id()).build())
                     )
             )
@@ -371,7 +372,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             .key(
                 Map
                     .ofEntries(
-                        Map.entry(TENANT_ID, AttributeValue.builder().s(tenantId).build()),
+                        Map.entry(HASH_KEY, AttributeValue.builder().s(tenantId).build()),
                         Map.entry(RANGE_KEY, AttributeValue.builder().s(documentId).build())
                     )
             )
