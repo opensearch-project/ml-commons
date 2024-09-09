@@ -44,4 +44,5 @@ public class ChatCompletionInput {
     private String userInstructions;
     private Llm.ModelProvider modelProvider;
     private String llmResponseField;
+    private List<MessageBlock> llmMessages;
 }
