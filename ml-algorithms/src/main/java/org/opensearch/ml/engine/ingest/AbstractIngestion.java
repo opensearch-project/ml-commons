@@ -161,9 +161,7 @@ public class AbstractIngestion implements Ingestable {
             Map<String, Object> filteredMapping = isSoleSource
                 ? mlBatchIngestionInput.getFieldMapping()
                 : filterFieldMapping(mlBatchIngestionInput, sourceIndex);
-            System.out.println("filteredMapping is " + filteredMapping);
             Map<String, Object> jsonMap = processFieldMapping(jsonStr, filteredMapping);
-            System.out.println("processFieldMapping is " + jsonMap);
             if (jsonMap.isEmpty()) {
                 return;
             }
