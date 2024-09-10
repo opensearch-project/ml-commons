@@ -244,7 +244,6 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
 
         Map response = searchWithPipeline(client(), index_name, pipelineName, query);
-        System.out.println(response);
         Assert.assertNotNull(JsonPath.parse(response).read("$.hits.hits[0]._source.llm_response"));
         Assert.assertNotNull(JsonPath.parse(response).read("$.hits.hits[1]._source.llm_response"));
     }

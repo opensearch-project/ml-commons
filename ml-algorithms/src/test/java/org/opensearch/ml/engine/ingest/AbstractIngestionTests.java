@@ -13,14 +13,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.ID_FIELD;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INGEST_FIELDS;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUT;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUT_FIELD_NAMES;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUT;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUT_FIELD_NAMES;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +29,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.bulk.BulkRequest;
@@ -52,6 +48,7 @@ public class AbstractIngestionTests {
     S3DataIngestion s3DataIngestion = new S3DataIngestion(client);
 
     Map<String, Object> fieldMap;
+    String[] ingestFields;
 
     @Before
     public void setUp() {
@@ -59,11 +56,12 @@ public class AbstractIngestionTests {
         s3DataIngestion = new S3DataIngestion(client);
 
         fieldMap = new HashMap<>();
-        fieldMap.put(INPUT, "source[1].$.content");
-        fieldMap.put(OUTPUT, "source[1].$.SageMakerOutput");
-        fieldMap.put(INPUT_FIELD_NAMES, Arrays.asList("chapter", "title"));
-        fieldMap.put(OUTPUT_FIELD_NAMES, Arrays.asList("chapter_embedding", "title_embedding"));
-        fieldMap.put(INGEST_FIELDS, Arrays.asList("source[1].$.id"));
+        fieldMap.put("chapter", "$.content[0]");
+        fieldMap.put("title", "$.content[1]");
+        fieldMap.put("chapter_embedding", "$.SageMakerOutput[0]");
+        fieldMap.put("title_embedding", "$.SageMakerOutput[1]");
+
+        ingestFields = new String[] { "$.id" };
     }
 
     @Test
@@ -161,38 +159,53 @@ public class AbstractIngestionTests {
     }
 
     @Test
-    public void testFilterFieldMapping_ValidInput_MatchingPrefix() {
+    public void testFilterFieldMapping_ValidInput_EmptyPrefix() {
         // Arrange
-        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput("indexName", fieldMap, new HashMap<>(), new HashMap<>());
+        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput(
+            "indexName",
+            fieldMap,
+            ingestFields,
+            new HashMap<>(),
+            new HashMap<>()
+        );
         Map<String, Object> result = s3DataIngestion.filterFieldMapping(mlBatchIngestionInput, 0);
 
         // Assert
-        assertEquals(5, result.size());
-        assertEquals("source[1].$.content", result.get(INPUT));
-        assertEquals("source[1].$.SageMakerOutput", result.get(OUTPUT));
-        assertEquals(Arrays.asList("chapter", "title"), result.get(INPUT_FIELD_NAMES));
-        assertEquals(Arrays.asList("chapter_embedding", "title_embedding"), result.get(OUTPUT_FIELD_NAMES));
-        assertEquals(Arrays.asList("source[1].$.id"), result.get(INGEST_FIELDS));
+        assertEquals(0, result.size());
+        assertEquals(true, result.isEmpty());
     }
 
     @Test
-    public void testFilterFieldMapping_NoMatchingPrefix() {
+    public void testFilterFieldMapping_MatchingPrefix() {
         // Arrange
         Map<String, Object> fieldMap = new HashMap<>();
-        fieldMap.put("field1", "source[3].$.response.body.data[*].embedding");
-        fieldMap.put("field2", "source[4].$.body.input");
+        fieldMap.put("question", "source[1].$.body.input[0]");
+        fieldMap.put("question_embedding", "source[0].$.response.body.data[0].embedding");
+        fieldMap.put("answer", "source[1].$.body.input[1]");
+        fieldMap.put("answer_embedding", "source[0].$.response.body.data[1].embedding");
+        fieldMap.put("_id", Arrays.asList("source[0].$.custom_id", "source[1].$.custom_id"));
 
-        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput("indexName", fieldMap, new HashMap<>(), new HashMap<>());
+        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput(
+            "indexName",
+            fieldMap,
+            ingestFields,
+            new HashMap<>(),
+            new HashMap<>()
+        );
 
         // Act
         Map<String, Object> result = s3DataIngestion.filterFieldMapping(mlBatchIngestionInput, 0);
 
         // Assert
-        assertTrue(result.isEmpty());
+        assertEquals(3, result.size());
+
+        assertEquals("$.response.body.data[0].embedding", result.get("question_embedding"));
+        assertEquals("$.response.body.data[1].embedding", result.get("answer_embedding"));
+        assertEquals(Arrays.asList("$.custom_id"), result.get("_id"));
     }
 
     @Test
-    public void testProcessFieldMapping_ValidInput() {
+    public void testProcessFieldMapping_FromSM() {
         String jsonStr =
             "{\"SageMakerOutput\":[[-0.017166402, 0.055771016],[-0.004301484,-0.042826906]],\"content\":[\"this is chapter 1\",\"harry potter\"],\"id\":1}";
         // Arrange
@@ -203,21 +216,34 @@ public class AbstractIngestionTests {
         // Assert
         assertEquals("this is chapter 1", processedFieldMapping.get("chapter"));
         assertEquals("harry potter", processedFieldMapping.get("title"));
-        assertEquals(1, processedFieldMapping.get("id"));
     }
 
     @Test
-    public void testProcessFieldMapping_NoIdFieldInput() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("The Id field must contains only 1 jsonPath for each source");
+    public void testProcessFieldMapping_FromOpenAI() {
+        String jsonStr =
+            "{\"id\": \"batch_req_pgNqCfERGHOcMwAHGUWSO0nV\", \"custom_id\": \"request-1\", \"response\": {\"status_code\": 200, \"request_id\": \"fca3d548770f1f299d067c64c11a14fd\", \"body\": {\"object\": \"list\", \"data\": [{\"object\": \"embedding\", \"index\": 0, \"embedding\": [0.0044326545, -0.029703418]}, {\"object\": \"embedding\", \"index\": 1, \"embedding\": [0.002297497, -0.009297881]}], \"model\": \"text-embedding-ada-002\", \"usage\": {\"prompt_tokens\": 15, \"total_tokens\": 15}}}, \"error\": null}";
+        // Arrange
+        Map<String, Object> fieldMap = new HashMap<>();
+        fieldMap.put("question_embedding", "$.response.body.data[0].embedding");
+        fieldMap.put("answer_embedding", "$.response.body.data[1].embedding");
+        fieldMap.put("_id", Arrays.asList("$.custom_id"));
 
+        // Act
+        Map<String, Object> processedFieldMapping = s3DataIngestion.processFieldMapping(jsonStr, fieldMap);
+
+        // Assert
+        assertEquals("request-1", processedFieldMapping.get("_id"));
+    }
+
+    @Test
+    public void testProcessFieldMapping_EmptyFieldInput() {
         String jsonStr =
             "{\"SageMakerOutput\":[[-0.017166402, 0.055771016],[-0.004301484,-0.042826906]],\"content\":[\"this is chapter 1\",\"harry potter\"],\"id\":1}";
         // Arrange
-        fieldMap.put(ID_FIELD, null);
 
         // Act
-        s3DataIngestion.processFieldMapping(jsonStr, fieldMap);
+        Map<String, Object> result = s3DataIngestion.processFieldMapping(jsonStr, new HashMap<>());
+        assertEquals(true, result.isEmpty());
     }
 
     @Test
@@ -232,7 +258,13 @@ public class AbstractIngestionTests {
             .asList(
                 "{\"SageMakerOutput\":[[-0.017166402, 0.055771016],[-0.004301484,-0.042826906]],\"content\":[\"this is chapter 1\",\"harry potter\"],\"id\":1}"
             );
-        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput("indexName", fieldMap, new HashMap<>(), new HashMap<>());
+        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput(
+            "indexName",
+            fieldMap,
+            ingestFields,
+            new HashMap<>(),
+            new HashMap<>()
+        );
         ActionListener<BulkResponse> bulkResponseListener = mock(ActionListener.class);
         s3DataIngestion.batchIngest(sourceLines, mlBatchIngestionInput, bulkResponseListener, 0, true);
 
@@ -241,10 +273,7 @@ public class AbstractIngestionTests {
     }
 
     @Test
-    public void testBatchIngestSuccess_NoIdError() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("The id filed must be provided to match documents for multiple sources");
-
+    public void testBatchIngestSuccess_returnForNullJasonMap() {
         doAnswer(invocation -> {
             ActionListener<BulkResponse> bulkResponseListener = invocation.getArgument(1);
             bulkResponseListener.onResponse(mock(BulkResponse.class));
@@ -255,8 +284,22 @@ public class AbstractIngestionTests {
             .asList(
                 "{\"SageMakerOutput\":[[-0.017166402, 0.055771016],[-0.004301484,-0.042826906]],\"content\":[\"this is chapter 1\",\"harry potter\"],\"id\":1}"
             );
-        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput("indexName", fieldMap, new HashMap<>(), new HashMap<>());
+        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput(
+            "indexName",
+            fieldMap,
+            ingestFields,
+            new HashMap<>(),
+            new HashMap<>()
+        );
         ActionListener<BulkResponse> bulkResponseListener = mock(ActionListener.class);
-        s3DataIngestion.batchIngest(sourceLines, mlBatchIngestionInput, bulkResponseListener, 1, false);
+        s3DataIngestion.batchIngest(sourceLines, mlBatchIngestionInput, bulkResponseListener, 0, false);
+
+        verify(client, never()).bulk(isA(BulkRequest.class), isA(ActionListener.class));
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(bulkResponseListener).onFailure(argumentCaptor.capture());
+        assert (argumentCaptor
+            .getValue()
+            .getMessage()
+            .equals("the bulk ingestion is empty: please check your field mapping to match your sources"));
     }
 }

@@ -28,12 +28,16 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
 
     public static final String INDEX_NAME_FIELD = "index_name";
     public static final String FIELD_MAP_FIELD = "field_map";
-    public static final String DATA_SOURCE_FIELD = "data_source";
+    public static final String INGEST_FIELDS = "ingest_fields";
     public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
+    public static final String DATA_SOURCE_FIELD = "data_source";
+
     @Getter
     private String indexName;
     @Getter
     private Map<String, Object> fieldMapping;
+    @Getter
+    private String[] ingestFields;
     @Getter
     private Map<String, Object> dataSources;
     @Getter
@@ -43,6 +47,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     public MLBatchIngestionInput(
         String indexName,
         Map<String, Object> fieldMapping,
+        String[] ingestFields,
         Map<String, Object> dataSources,
         Map<String, String> credential
     ) {
@@ -58,6 +63,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         }
         this.indexName = indexName;
         this.fieldMapping = fieldMapping;
+        this.ingestFields = ingestFields;
         this.dataSources = dataSources;
         this.credential = credential;
     }
@@ -65,6 +71,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     public static MLBatchIngestionInput parse(XContentParser parser) throws IOException {
         String indexName = null;
         Map<String, Object> fieldMapping = null;
+        String[] ingestFields = null;
         Map<String, Object> dataSources = null;
         Map<String, String> credential = new HashMap<>();
 
@@ -80,6 +87,9 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
                 case FIELD_MAP_FIELD:
                     fieldMapping = parser.map();
                     break;
+                case INGEST_FIELDS:
+                    ingestFields = parser.list().toArray(new String[0]);
+                    break;
                 case CONNECTOR_CREDENTIAL_FIELD:
                     credential = parser.mapStrings();
                     break;
@@ -91,7 +101,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLBatchIngestionInput(indexName, fieldMapping, dataSources, credential);
+        return new MLBatchIngestionInput(indexName, fieldMapping, ingestFields, dataSources, credential);
     }
 
     @Override
@@ -102,6 +112,9 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         }
         if (fieldMapping != null) {
             builder.field(FIELD_MAP_FIELD, fieldMapping);
+        }
+        if (ingestFields != null) {
+            builder.field(INGEST_FIELDS, ingestFields);
         }
         if (credential != null) {
             builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
@@ -119,6 +132,12 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         if (fieldMapping != null) {
             output.writeBoolean(true);
             output.writeMap(fieldMapping, StreamOutput::writeString, StreamOutput::writeGenericValue);
+        } else {
+            output.writeBoolean(false);
+        }
+        if (ingestFields != null) {
+            output.writeBoolean(true);
+            output.writeStringArray(ingestFields);
         } else {
             output.writeBoolean(false);
         }
@@ -140,6 +159,9 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         indexName = input.readOptionalString();
         if (input.readBoolean()) {
             fieldMapping = input.readMap(s -> s.readString(), s -> s.readGenericValue());
+        }
+        if (input.readBoolean()) {
+            ingestFields = input.readStringArray();
         }
         if (input.readBoolean()) {
             credential = input.readMap(s -> s.readString(), s -> s.readString());

@@ -15,9 +15,6 @@ import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INGEST_FIELDS;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUT_FIELD_NAMES;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUT_FIELD_NAMES;
 import static org.opensearch.ml.engine.ingest.S3DataIngestion.SOURCE;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
@@ -68,6 +65,7 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
 
     private TransportBatchIngestionAction batchAction;
     private MLBatchIngestionInput batchInput;
+    private String[] ingestFields;
 
     @Before
     public void setup() {
@@ -75,11 +73,12 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
         batchAction = new TransportBatchIngestionAction(transportService, actionFilters, client, mlTaskManager, threadPool);
 
         Map<String, Object> fieldMap = new HashMap<>();
-        fieldMap.put("input", "$.content");
-        fieldMap.put("output", "$.SageMakerOutput");
-        fieldMap.put(INPUT_FIELD_NAMES, Arrays.asList("chapter", "title"));
-        fieldMap.put(OUTPUT_FIELD_NAMES, Arrays.asList("chapter_embedding", "title_embedding"));
-        fieldMap.put(INGEST_FIELDS, Arrays.asList("$.id"));
+        fieldMap.put("chapter", "$.content[0]");
+        fieldMap.put("title", "$.content[1]");
+        fieldMap.put("chapter_embedding", "$.SageMakerOutput[0]");
+        fieldMap.put("title_embedding", "$.SageMakerOutput[1]");
+
+        ingestFields = new String[] { "$.id" };
 
         Map<String, String> credential = Map
             .of("region", "us-east-1", "access_key", "some accesskey", "secret_key", "some secret", "session_token", "some token");
@@ -91,6 +90,7 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             .builder()
             .indexName("testIndex")
             .fieldMapping(fieldMap)
+            .ingestFields(ingestFields)
             .credential(credential)
             .dataSources(dataSource)
             .build();
