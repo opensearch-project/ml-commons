@@ -53,7 +53,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.MatchPhraseQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.sdkclient.util.JsonTransformer;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -62,6 +64,7 @@ import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientDelegate;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -103,7 +106,8 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 IndexRequest.Builder<?> builder = new IndexRequest.Builder<>()
                     .index(request.index())
                     .opType(request.overwriteIfExists() ? OpType.Index : OpType.Create)
-                    .document(request.dataObject());
+                    .document(request.dataObject())
+                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
                 if (!Strings.isNullOrEmpty(request.id())) {
                     builder.id(request.id());
                 }
@@ -228,7 +232,13 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()), null);
-                JsonParser parser = mapper.jsonProvider().createParser(new StringReader(request.searchSourceBuilder().toString()));
+                // work around https://github.com/opensearch-project/opensearch-java/issues/1150
+                String json = SdkClientUtils
+                    .lowerCaseEnumValues(
+                        MatchPhraseQueryBuilder.ZERO_TERMS_QUERY_FIELD.getPreferredName(),
+                        request.searchSourceBuilder().toString()
+                    );
+                JsonParser parser = mapper.jsonProvider().createParser(new StringReader(json));
                 SearchRequest searchRequest = SearchRequest._DESERIALIZER.deserialize(parser, mapper);
                 if (Boolean.TRUE.equals(isMultiTenancyEnabled)) {
                     if (request.tenantId() == null) {

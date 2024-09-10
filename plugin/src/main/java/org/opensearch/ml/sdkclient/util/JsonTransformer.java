@@ -9,11 +9,22 @@
 
 package org.opensearch.ml.sdkclient.util;
 
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.client.json.JsonpMapper;
+import org.opensearch.client.json.JsonpSerializer;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,12 +32,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 
+import jakarta.json.Json;
+import jakarta.json.JsonReader;
+import jakarta.json.stream.JsonGenerator;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 public class JsonTransformer {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    @VisibleForTesting
     public static Map<String, AttributeValue> convertJsonObjectToDDBAttributeMap(JsonNode jsonNode) {
         Map<String, AttributeValue> item = new HashMap<>();
         Iterator<Map.Entry<String, JsonNode>> fields = jsonNode.fields();
@@ -139,5 +152,33 @@ public class JsonTransformer {
         });
         return arrayNode;
 
+    }
+
+    public static class XContentObjectJsonpSerializer implements JsonpSerializer<Object> {
+        @Override
+        public void serialize(Object obj, JsonGenerator generator, JsonpMapper mapper) {
+            if (obj instanceof ToXContentObject) {
+                serialize((ToXContentObject) obj, generator);
+            } else {
+                throw new IllegalArgumentException(
+                    "This method requires an object of type ToXContentObject, actual type is " + obj.getClass().getName()
+                );
+            }
+        }
+
+        private void serialize(ToXContentObject obj, JsonGenerator generator) {
+            try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+                obj.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                serializeString(builder.toString(), generator);
+            } catch (IOException e) {
+                throw new OpenSearchStatusException("Error parsing XContentObject", RestStatus.BAD_REQUEST);
+            }
+        }
+
+        private void serializeString(String json, JsonGenerator generator) {
+            try (JsonReader jsonReader = Json.createReader(new StringReader(json))) {
+                generator.write(jsonReader.readObject());
+            }
+        }
     }
 }
