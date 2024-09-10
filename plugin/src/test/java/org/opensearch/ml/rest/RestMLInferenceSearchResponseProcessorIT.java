@@ -257,6 +257,10 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
      * @throws Exception if any error occurs during the test
      */
     public void testMLInferenceProcessorRemoteModelStringField() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null) {
+            return;
+        }
         String createPipelineRequestBody = "{\n"
             + "  \"response_processors\": [\n"
             + "    {\n"
