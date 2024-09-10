@@ -1705,7 +1705,9 @@ public class MLModelManager {
                 chunkFiles.put(currentChunk, new File(chunkPath.toUri()));
                 retrievedChunks.getAndIncrement();
                 if (retrievedChunks.get() == totalChunks) {
-                   Queue<File> orderedChunkFiles = chunkFiles.entrySet().stream()
+                   Queue<File> orderedChunkFiles = chunkFiles
+                           .entrySet()
+                           .stream()
                            .sorted(Map.Entry.comparingByKey())
                            .map(Map.Entry::getValue)
                            .collect(Collectors.toCollection(LinkedList::new));
