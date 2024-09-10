@@ -572,8 +572,3 @@ task bwcTestSuite(type: StandaloneRestIntegTestTask) {
     dependsOn tasks.named("${baseName}#rollingUpgradeClusterTask")
     dependsOn tasks.named("${baseName}#fullRestartClusterTask")
 }
-
-forbiddenPatterns {
-    exclude '**/*.pdf'
-    exclude '**/*.jpg'
-}

@@ -28,8 +28,7 @@ public interface Llm {
     enum ModelProvider {
         OPENAI,
         BEDROCK,
-        COHERE,
-        BEDROCK_CONVERSE
+        COHERE
     }
 
     void doChatCompletion(ChatCompletionInput input, ActionListener<ChatCompletionOutput> listener);

@@ -18,8 +18,6 @@
 package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 import org.opensearch.core.ParseField;
@@ -32,7 +30,6 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
-import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 import com.google.common.base.Preconditions;
 
@@ -84,8 +81,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     // that contains the chat completion text, i.e. "answer".
     private static final ParseField LLM_RESPONSE_FIELD = new ParseField("llm_response_field");
 
-    private static final ParseField LLM_MESSAGES_FIELD = new ParseField("llm_messages");
-
     public static final int SIZE_NULL_VALUE = -1;
 
     static {
@@ -99,7 +94,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         PARSER.declareIntOrNull(GenerativeQAParameters::setInteractionSize, SIZE_NULL_VALUE, INTERACTION_SIZE);
         PARSER.declareIntOrNull(GenerativeQAParameters::setTimeout, SIZE_NULL_VALUE, TIMEOUT);
         PARSER.declareStringOrNull(GenerativeQAParameters::setLlmResponseField, LLM_RESPONSE_FIELD);
-        PARSER.declareObjectArray(GenerativeQAParameters::setMessageBlock, (p, c) -> MessageBlock.fromXContent(p), LLM_MESSAGES_FIELD);
     }
 
     @Setter
@@ -138,10 +132,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     @Getter
     private String llmResponseField;
 
-    @Setter
-    @Getter
-    private List<MessageBlock> llmMessages = new ArrayList<>();
-
     public GenerativeQAParameters(
         String conversationId,
         String llmModel,
@@ -152,32 +142,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         Integer interactionSize,
         Integer timeout,
         String llmResponseField
-    ) {
-        this(
-            conversationId,
-            llmModel,
-            llmQuestion,
-            systemPrompt,
-            userInstructions,
-            contextSize,
-            interactionSize,
-            timeout,
-            llmResponseField,
-            null
-        );
-    }
-
-    public GenerativeQAParameters(
-        String conversationId,
-        String llmModel,
-        String llmQuestion,
-        String systemPrompt,
-        String userInstructions,
-        Integer contextSize,
-        Integer interactionSize,
-        Integer timeout,
-        String llmResponseField,
-        List<MessageBlock> llmMessages
     ) {
         this.conversationId = conversationId;
         this.llmModel = llmModel;
@@ -192,9 +156,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         this.interactionSize = (interactionSize == null) ? SIZE_NULL_VALUE : interactionSize;
         this.timeout = (timeout == null) ? SIZE_NULL_VALUE : timeout;
         this.llmResponseField = llmResponseField;
-        if (llmMessages != null) {
-            this.llmMessages.addAll(llmMessages);
-        }
     }
 
     public GenerativeQAParameters(StreamInput input) throws IOException {
@@ -207,7 +168,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         this.interactionSize = input.readInt();
         this.timeout = input.readInt();
         this.llmResponseField = input.readOptionalString();
-        this.llmMessages.addAll(input.readList(MessageBlock::new));
     }
 
     @Override
@@ -221,8 +181,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             .field(CONTEXT_SIZE.getPreferredName(), this.contextSize)
             .field(INTERACTION_SIZE.getPreferredName(), this.interactionSize)
             .field(TIMEOUT.getPreferredName(), this.timeout)
-            .field(LLM_RESPONSE_FIELD.getPreferredName(), this.llmResponseField)
-            .field(LLM_MESSAGES_FIELD.getPreferredName(), this.llmMessages);
+            .field(LLM_RESPONSE_FIELD.getPreferredName(), this.llmResponseField);
     }
 
     @Override
@@ -238,7 +197,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         out.writeInt(interactionSize);
         out.writeInt(timeout);
         out.writeOptionalString(llmResponseField);
-        out.writeList(llmMessages);
     }
 
     public static GenerativeQAParameters parse(XContentParser parser) throws IOException {
@@ -264,9 +222,5 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             && (this.interactionSize == other.getInteractionSize())
             && (this.timeout == other.getTimeout())
             && Objects.equals(this.llmResponseField, other.getLlmResponseField());
-    }
-
-    public void setMessageBlock(List<MessageBlock> blockList) {
-        this.llmMessages = blockList;
     }
 }
