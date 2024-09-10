@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -32,21 +31,9 @@ import org.opensearch.core.xcontent.XContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentGenerator;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class GenerativeQAParametersTests extends OpenSearchTestCase {
-
-    private List<MessageBlock> messageList = null;
-
-    public GenerativeQAParametersTests() {
-        Map<String, ?> imageMap = Map.of("image", Map.of("format", "jpg", "url", "https://xyz.com/file.jpg"));
-        Map<String, ?> textMap = Map.of("text", "what is this");
-        Map<String, ?> contentMap = Map.of();
-        Map<String, ?> map = Map.of("role", "user", "content", List.of(textMap, imageMap));
-        MessageBlock mb = new MessageBlock(map);
-        messageList = List.of(mb);
-    }
 
     public void testGenerativeQAParameters() {
         GenerativeQAParameters params = new GenerativeQAParameters(
@@ -68,29 +55,6 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         assertEquals(params, actual);
     }
 
-    public void testGenerativeQAParametersWithLlmMessages() {
-
-        GenerativeQAParameters params = new GenerativeQAParameters(
-            "conversation_id",
-            "llm_model",
-            "llm_question",
-            "system_prompt",
-            "user_instructions",
-            null,
-            null,
-            null,
-            null,
-            this.messageList
-        );
-        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
-        extBuilder.setParams(params);
-        SearchSourceBuilder srcBulder = SearchSourceBuilder.searchSource().ext(List.of(extBuilder));
-        SearchRequest request = new SearchRequest("my_index").source(srcBulder);
-        GenerativeQAParameters actual = GenerativeQAParamUtil.getGenerativeQAParameters(request);
-        // MessageBlock messageBlock = actual.getMessageBlock();
-        assertEquals(params, actual);
-    }
-
     static class DummyStreamOutput extends StreamOutput {
 
         List<String> list = new ArrayList<>();
@@ -98,7 +62,6 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
 
         @Override
         public void writeString(String str) {
-            System.out.println("Adding string: " + str);
             list.add(str);
         }
 
@@ -160,13 +123,12 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             contextSize,
             interactionSize,
             timeout,
-            llmResponseField,
-            messageList
+            llmResponseField
         );
         StreamOutput output = new DummyStreamOutput();
         parameters.writeTo(output);
         List<String> actual = ((DummyStreamOutput) output).getList();
-        assertEquals(12, actual.size());
+        assertEquals(6, actual.size());
         assertEquals(conversationId, actual.get(0));
         assertEquals(llmModel, actual.get(1));
         assertEquals(llmQuestion, actual.get(2));
@@ -228,8 +190,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
             null,
             null,
             null,
-            null,
-            messageList
+            null
         );
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);

@@ -75,6 +75,7 @@ public class DefaultLlmImpl implements Llm {
      * @return
      */
     @Override
+
     public void doChatCompletion(ChatCompletionInput chatCompletionInput, ActionListener<ChatCompletionOutput> listener) {
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(getInputParameters(chatCompletionInput)).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
@@ -112,15 +113,14 @@ public class DefaultLlmImpl implements Llm {
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
             String messages = PromptUtil
                 .getChatCompletionPrompt(
-                    chatCompletionInput.getModelProvider(),
                     chatCompletionInput.getSystemPrompt(),
                     chatCompletionInput.getUserInstructions(),
                     chatCompletionInput.getQuestion(),
                     chatCompletionInput.getChatHistory(),
-                    chatCompletionInput.getContexts(),
-                    chatCompletionInput.getLlmMessages()
+                    chatCompletionInput.getContexts()
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
+            // log.info("Messages to LLM: {}", messages);
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK
             || chatCompletionInput.getModelProvider() == ModelProvider.COHERE
             || chatCompletionInput.getLlmResponseField() != null) {
@@ -136,19 +136,6 @@ public class DefaultLlmImpl implements Llm {
                             chatCompletionInput.getContexts()
                         )
                 );
-        } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK_CONVERSE) {
-            // Bedrock Converse API does not include the system prompt as part of the Messages block.
-            String messages = PromptUtil
-                .getChatCompletionPrompt(
-                    chatCompletionInput.getModelProvider(),
-                    null,
-                    chatCompletionInput.getUserInstructions(),
-                    chatCompletionInput.getQuestion(),
-                    chatCompletionInput.getChatHistory(),
-                    chatCompletionInput.getContexts(),
-                    chatCompletionInput.getLlmMessages()
-                );
-            inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
         } else {
             throw new IllegalArgumentException(
                 "Unknown/unsupported model provider: "
@@ -157,6 +144,7 @@ public class DefaultLlmImpl implements Llm {
             );
         }
 
+        // log.info("LLM input parameters: {}", inputParameters.toString());
         return inputParameters;
     }
 
@@ -196,20 +184,6 @@ public class DefaultLlmImpl implements Llm {
         } else if (provider == ModelProvider.COHERE) {
             answerField = "text";
             fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
-        } else if (provider == ModelProvider.BEDROCK_CONVERSE) {
-            Map output = (Map) dataAsMap.get("output");
-            Map message = (Map) output.get("message");
-            if (message != null) {
-                List content = (List) message.get("content");
-                String answer = (String) ((Map) content.get(0)).get("text");
-                answers.add(answer);
-            } else {
-                Map error = (Map) output.get("error");
-                if (error == null) {
-                    throw new RuntimeException("Unexpected output: " + output);
-                }
-                errors.add((String) error.get("message"));
-            }
         } else {
             throw new IllegalArgumentException(
                 "Unknown/unsupported model provider: " + provider + ".  You must provide a valid model provider or llm_response_field."
