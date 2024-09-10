@@ -66,7 +66,6 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1705,12 +1704,12 @@ public class MLModelManager {
                 chunkFiles.put(currentChunk, new File(chunkPath.toUri()));
                 retrievedChunks.getAndIncrement();
                 if (retrievedChunks.get() == totalChunks) {
-                   Queue<File> orderedChunkFiles = chunkFiles
-                           .entrySet()
-                           .stream()
-                           .sorted(Map.Entry.comparingByKey())
-                           .map(Map.Entry::getValue)
-                           .collect(Collectors.toCollection(LinkedList::new));
+                    Queue<File> orderedChunkFiles = chunkFiles
+                        .entrySet()
+                        .stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .map(Map.Entry::getValue)
+                        .collect(Collectors.toCollection(LinkedList::new));
                     File modelZipFile = new File(modelZip);
                     FileUtils.mergeFiles(orderedChunkFiles, modelZipFile);
                     listener.onResponse(modelZipFile);
