@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.engine.ingest;
 
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INGEST_FIELDS;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.INPUT_FIELD_NAMES;
-import static org.opensearch.ml.engine.ingest.AbstractIngestion.OUTPUT_FIELD_NAMES;
 import static org.opensearch.ml.engine.ingest.S3DataIngestion.SOURCE;
 
 import java.util.Arrays;
@@ -39,11 +36,7 @@ public class S3DataIngestionTests {
         s3DataIngestion = new S3DataIngestion(client);
 
         Map<String, Object> fieldMap = new HashMap<>();
-        fieldMap.put("input", "$.content");
-        fieldMap.put("output", "$.SageMakerOutput");
-        fieldMap.put(INPUT_FIELD_NAMES, Arrays.asList("chapter", "title"));
-        fieldMap.put(OUTPUT_FIELD_NAMES, Arrays.asList("chapter_embedding", "title_embedding"));
-        fieldMap.put(INGEST_FIELDS, Arrays.asList("$.id"));
+        fieldMap.put("chapter", "$.content[0]");
 
         Map<String, String> credential = Map
             .of("region", "us-east-1", "access_key", "some accesskey", "secret_key", "some secret", "session_token", "some token");
