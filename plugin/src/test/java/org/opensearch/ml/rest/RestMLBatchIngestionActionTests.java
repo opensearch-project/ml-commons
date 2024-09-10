@@ -97,7 +97,7 @@ public class RestMLBatchIngestionActionTests extends OpenSearchTestCase {
 
         MLBatchIngestionInput mlBatchIngestionInput = mlBatchIngestionRequest.getMlBatchIngestionInput();
         assertEquals("test batch index", mlBatchIngestionInput.getIndexName());
-        assertEquals("$.content", mlBatchIngestionInput.getFieldMapping().get("input"));
+        assertEquals("$.content[0]", mlBatchIngestionInput.getFieldMapping().get("chapter"));
         assertNotNull(mlBatchIngestionInput.getDataSources().get("source"));
         assertNotNull(mlBatchIngestionInput.getCredential());
     }
@@ -110,7 +110,7 @@ public class RestMLBatchIngestionActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLBatchIngestionAction.INSTANCE), argumentCaptor.capture(), any());
         MLBatchIngestionInput mlBatchIngestionInput = argumentCaptor.getValue().getMlBatchIngestionInput();
         assertEquals("test batch index", mlBatchIngestionInput.getIndexName());
-        assertEquals("$.content", mlBatchIngestionInput.getFieldMapping().get("input"));
+        assertEquals("$.content[0]", mlBatchIngestionInput.getFieldMapping().get("chapter"));
         assertNotNull(mlBatchIngestionInput.getDataSources().get("source"));
         assertNotNull(mlBatchIngestionInput.getCredential());
     }
