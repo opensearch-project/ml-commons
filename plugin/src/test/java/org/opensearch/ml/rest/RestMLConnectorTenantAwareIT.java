@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
@@ -174,7 +173,9 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
         map = responseToMap(response);
         assertEquals("Cohere Chat Model", map.get("name"));
 
-        // Retry these tests until they pass. Search may take some time to update, especially on DDB
+        // Retry these tests until they pass. Search requires refresh, can take 15s on DDB
+        refreshAllIndices();
+
         assertBusy(() -> {
             // Search should show only the connector for tenant
             Response restResponse = makeRequest(tenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
@@ -188,7 +189,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
                 assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
             }
-        }, 60, TimeUnit.SECONDS);
+        }, 15, TimeUnit.SECONDS);
 
         assertBusy(() -> {
             // Search should show only the connector for other tenant
@@ -203,7 +204,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
                 assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
             }
-        }, 60, TimeUnit.SECONDS);
+        }, 15, TimeUnit.SECONDS);
 
         // Search should fail without a tenant id
         if (multiTenancyEnabled) {
