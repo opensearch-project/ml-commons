@@ -9,7 +9,7 @@ import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.INGEST_THREAD_POOL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
@@ -40,6 +40,8 @@ import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -92,9 +94,11 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                     listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
                     String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
                     Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
-                    threadPool.executor(TRAIN_THREAD_POOL).execute(() -> {
-                        double successRate = ingestable.ingest(mlBatchIngestionInput);
-                        handleSuccessRate(successRate, taskId);
+                    threadPool.executor(INGEST_THREAD_POOL).execute(() -> {
+                        executeWithErrorHandling(() -> {
+                            double successRate = ingestable.ingest(mlBatchIngestionInput);
+                            handleSuccessRate(successRate, taskId);
+                        }, taskId);
                     });
                 } catch (Exception ex) {
                     log.error("Failed in batch ingestion", ex);
@@ -122,6 +126,30 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                 );
         } catch (Exception e) {
             listener.onFailure(e);
+        }
+    }
+
+    protected void executeWithErrorHandling(Runnable task, String taskId) {
+        try {
+            task.run();
+        } catch (PathNotFoundException jsonPathNotFoundException) {
+            log.error("Error in jsonParse fields", jsonPathNotFoundException);
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    Map.of(STATE_FIELD, FAILED, ERROR_FIELD, jsonPathNotFoundException.getMessage()),
+                    TASK_SEMAPHORE_TIMEOUT,
+                    true
+                );
+        } catch (Exception e) {
+            log.error("Error in ingest, failed to produce a successRate", e);
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e)),
+                    TASK_SEMAPHORE_TIMEOUT,
+                    true
+                );
         }
     }
 
