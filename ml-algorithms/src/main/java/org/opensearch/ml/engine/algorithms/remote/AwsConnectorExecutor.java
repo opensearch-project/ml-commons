@@ -6,11 +6,13 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -86,7 +88,18 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
+            SdkHttpFullRequest request;
+            switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
+                case "POST":
+                    log.debug("original payload to remote model: " + payload);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
+                    break;
+                case "GET":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
+                    break;
+                default:
+                    throw new IllegalArgumentException("unsupported http method");
+            }
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
