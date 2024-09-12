@@ -250,6 +250,7 @@ public class DDBOpenSearchClient extends AbstractSdkClient {
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
 
                 Long sequenceNumber = updateItemWithRetryOnConflict(tenantId, jsonNode, request);
+
                 String simulatedUpdateResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),
