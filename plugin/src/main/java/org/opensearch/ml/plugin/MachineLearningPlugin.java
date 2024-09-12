@@ -333,6 +333,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
     public static final String REMOTE_PREDICT_THREAD_POOL = "opensearch_ml_predict_remote";
+    public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
     public static final String ML_BASE_URI = "/_plugins/_ml";
@@ -885,6 +886,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + REMOTE_PREDICT_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder batchIngestThreadPool = new FixedExecutorBuilder(
+            settings,
+            INGEST_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            30,
+            ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -894,7 +903,8 @@ public class MachineLearningPlugin extends Plugin
                 executeThreadPool,
                 trainThreadPool,
                 predictThreadPool,
-                remotePredictThreadPool
+                remotePredictThreadPool,
+                batchIngestThreadPool
             );
     }
 

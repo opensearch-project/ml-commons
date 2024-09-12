@@ -77,6 +77,55 @@ public class AbstractIngestion implements Ingestable {
 
     /**
      * Filters fields in the map where the value contains the specified source index as a prefix.
+     * When there is only one source file, users can skip the source[] prefix
+     *
+     * @param mlBatchIngestionInput The MLBatchIngestionInput.
+     * @return A new map of <fieldName: JsonPath> for all fields to be ingested.
+     */
+    protected Map<String, Object> filterFieldMappingSoleSource(MLBatchIngestionInput mlBatchIngestionInput) {
+        Map<String, Object> fieldMap = mlBatchIngestionInput.getFieldMapping();
+        String prefix = "source[0]";
+
+        Map<String, Object> filteredFieldMap = fieldMap.entrySet().stream().filter(entry -> {
+            Object value = entry.getValue();
+            if (value instanceof String) {
+                String jsonPath = ((String) value);
+                return jsonPath.contains(prefix) || !jsonPath.startsWith("source");
+            } else if (value instanceof List) {
+                return ((List<String>) value).stream().anyMatch(val -> (val.contains(prefix) || !val.startsWith("source")));
+            }
+            return false;
+        }).collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+            Object value = entry.getValue();
+            if (value instanceof String) {
+                return getJsonPath((String) value);
+            } else if (value instanceof List) {
+                return ((List<String>) value)
+                    .stream()
+                    .filter(val -> (val.contains(prefix) || !val.startsWith("source")))
+                    .map(StringUtils::getJsonPath)
+                    .collect(Collectors.toList());
+            }
+            return null;
+        }));
+
+        String[] ingestFields = mlBatchIngestionInput.getIngestFields();
+        if (ingestFields != null) {
+            Arrays
+                .stream(ingestFields)
+                .filter(Objects::nonNull)
+                .filter(val -> (val.contains(prefix) || !val.startsWith("source")))
+                .map(StringUtils::getJsonPath)
+                .forEach(jsonPath -> {
+                    filteredFieldMap.put(obtainFieldNameFromJsonPath(jsonPath), jsonPath);
+                });
+        }
+
+        return filteredFieldMap;
+    }
+
+    /**
+     * Filters fields in the map where the value contains the specified source index as a prefix.
      *
      * @param mlBatchIngestionInput The MLBatchIngestionInput.
      * @param indexInFieldMap    The source index to filter by.
@@ -159,7 +208,7 @@ public class AbstractIngestion implements Ingestable {
         BulkRequest bulkRequest = new BulkRequest();
         sourceLines.stream().forEach(jsonStr -> {
             Map<String, Object> filteredMapping = isSoleSource
-                ? mlBatchIngestionInput.getFieldMapping()
+                ? filterFieldMappingSoleSource(mlBatchIngestionInput)
                 : filterFieldMapping(mlBatchIngestionInput, sourceIndex);
             Map<String, Object> jsonMap = processFieldMapping(jsonStr, filteredMapping);
             if (jsonMap.isEmpty()) {
@@ -174,7 +223,7 @@ public class AbstractIngestion implements Ingestable {
                 if (!jsonMap.containsKey("_id")) {
                     throw new IllegalArgumentException("The id filed must be provided to match documents for multiple sources");
                 }
-                String id = (String) jsonMap.remove("_id");
+                String id = String.valueOf(jsonMap.remove("_id"));
                 UpdateRequest updateRequest = new UpdateRequest(mlBatchIngestionInput.getIndexName(), id).doc(jsonMap).upsert(jsonMap);
                 bulkRequest.add(updateRequest);
             }

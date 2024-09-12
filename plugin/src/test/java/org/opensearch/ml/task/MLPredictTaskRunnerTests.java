@@ -447,10 +447,9 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 "output",
                 "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"array\"}}}"
             );
-        ModelTensorOutput modelTensorOutput = ModelTensorOutput
-            .builder()
-            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
-            .build();
+        ModelTensors modelTensors = ModelTensors.builder().statusCode(200).mlModelTensors(List.of(modelTensor)).statusCode(200).build();
+        modelTensors.setStatusCode(200);
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());

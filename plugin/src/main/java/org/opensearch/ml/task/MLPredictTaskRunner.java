@@ -358,13 +358,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                     && tensorOutput.getMlModelOutputs() != null
                                     && !tensorOutput.getMlModelOutputs().isEmpty()) {
                                     ModelTensors modelOutput = tensorOutput.getMlModelOutputs().get(0);
+                                    Integer statusCode = modelOutput.getStatusCode();
                                     if (modelOutput.getMlModelTensors() != null && !modelOutput.getMlModelTensors().isEmpty()) {
                                         Map<String, Object> dataAsMap = (Map<String, Object>) modelOutput
                                             .getMlModelTensors()
                                             .get(0)
                                             .getDataAsMap();
-                                        if (dataAsMap != null
-                                            && (dataAsMap.containsKey("TransformJobArn") || dataAsMap.containsKey("id"))) {
+                                        if (dataAsMap != null && statusCode != null && statusCode >= 200 && statusCode < 300) {
                                             remoteJob.putAll(dataAsMap);
                                             mlTask.setRemoteJob(remoteJob);
                                             mlTask.setTaskId(null);
