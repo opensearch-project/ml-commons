@@ -6,9 +6,14 @@
 package org.opensearch.ml.action.batch;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
@@ -16,12 +21,14 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.engine.ingest.S3DataIngestion.SOURCE;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.INGEST_THREAD_POOL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -45,6 +52,8 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+import com.jayway.jsonpath.PathNotFoundException;
+
 public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     @Mock
     private Client client;
@@ -62,6 +71,8 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     ActionListener<MLBatchIngestionResponse> actionListener;
     @Mock
     ThreadPool threadPool;
+    @Mock
+    ExecutorService executorService;
 
     private TransportBatchIngestionAction batchAction;
     private MLBatchIngestionInput batchInput;
@@ -105,9 +116,42 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             listener.onResponse(indexResponse);
             return null;
         }).when(mlTaskManager).createMLTask(isA(MLTask.class), isA(ActionListener.class));
+        doReturn(executorService).when(threadPool).executor(INGEST_THREAD_POOL);
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any(Runnable.class));
+
         batchAction.doExecute(task, mlBatchIngestionRequest, actionListener);
 
         verify(actionListener).onResponse(any(MLBatchIngestionResponse.class));
+        verify(threadPool).executor(INGEST_THREAD_POOL);
+    }
+
+    public void test_doExecute_ExecuteWithNoErrorHandling() {
+        batchAction.executeWithErrorHandling(() -> {}, "taskId");
+
+        verify(mlTaskManager, never()).updateMLTask(anyString(), isA(Map.class), anyLong(), anyBoolean());
+    }
+
+    public void test_doExecute_ExecuteWithPathNotFoundException() {
+        batchAction.executeWithErrorHandling(() -> { throw new PathNotFoundException("jsonPath not found!"); }, "taskId");
+
+        verify(mlTaskManager)
+            .updateMLTask("taskId", Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "jsonPath not found!"), TASK_SEMAPHORE_TIMEOUT, true);
+    }
+
+    public void test_doExecute_RuntimeException() {
+        batchAction.executeWithErrorHandling(() -> { throw new RuntimeException("runtime exception in the ingestion!"); }, "taskId");
+
+        verify(mlTaskManager)
+            .updateMLTask(
+                "taskId",
+                Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "runtime exception in the ingestion!"),
+                TASK_SEMAPHORE_TIMEOUT,
+                true
+            );
     }
 
     public void test_doExecute_handleSuccessRate100() {
