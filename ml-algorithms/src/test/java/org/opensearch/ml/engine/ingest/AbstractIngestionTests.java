@@ -205,6 +205,35 @@ public class AbstractIngestionTests {
     }
 
     @Test
+    public void testFilterFieldMappingSoleSource_MatchingPrefix() {
+        // Arrange
+        Map<String, Object> fieldMap = new HashMap<>();
+        fieldMap.put("question", "source[0].$.body.input[0]");
+        fieldMap.put("question_embedding", "source[0].$.response.body.data[0].embedding");
+        fieldMap.put("answer", "source[0].$.body.input[1]");
+        fieldMap.put("answer_embedding", "$.response.body.data[1].embedding");
+        fieldMap.put("_id", Arrays.asList("$.custom_id", "source[1].$.custom_id"));
+
+        MLBatchIngestionInput mlBatchIngestionInput = new MLBatchIngestionInput(
+            "indexName",
+            fieldMap,
+            ingestFields,
+            new HashMap<>(),
+            new HashMap<>()
+        );
+
+        // Act
+        Map<String, Object> result = s3DataIngestion.filterFieldMappingSoleSource(mlBatchIngestionInput);
+
+        // Assert
+        assertEquals(6, result.size());
+
+        assertEquals("$.body.input[0]", result.get("question"));
+        assertEquals("$.response.body.data[0].embedding", result.get("question_embedding"));
+        assertEquals(Arrays.asList("$.custom_id"), result.get("_id"));
+    }
+
+    @Test
     public void testProcessFieldMapping_FromSM() {
         String jsonStr =
             "{\"SageMakerOutput\":[[-0.017166402, 0.055771016],[-0.004301484,-0.042826906]],\"content\":[\"this is chapter 1\",\"harry potter\"],\"id\":1}";
